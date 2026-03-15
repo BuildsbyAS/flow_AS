@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.env
+.env.*
+
+# Old monolith / artifacts
+flow-app.zip
+flow-dashboard.jsx
+flow-dashboard.monolith.jsx
+flow.html
+claude-task-runner.sh
+task-runner-logs/
+tasks.md
+docs/
+.claude/
