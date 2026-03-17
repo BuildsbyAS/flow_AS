@@ -1,25 +1,8 @@
-// Flow — Settings View (Phase 6: Futuristic Admin Console)
+// Flow — Settings View (Phase 5+6: Admin Console Design System)
 import React, { useState, useRef, useEffect } from "react";
-import { c, display, body, mono, phaseNames, phaseColors as getPhaseColors, layout } from "../styles/theme";
-import { Badge } from "../components/shared";
+import { c, typo, phaseNames, phaseColors as getPhaseColors, layout, space, motion } from "../styles/theme";
+import { Badge, Tag, Surface, Btn, Inp, Sel, Label, TelemetryLabel, EmptyState } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
-
-/* ── style helpers ──────────────────────────────────────── */
-const fld = (mb = 3, extra = {}) => ({ fontFamily: mono, fontSize: 9, color: c.textDim, marginBottom: mb, letterSpacing: "0.08em", textTransform: "uppercase", ...extra });
-const inp = (extra = {}) => ({
-  width: "100%", padding: "9px 12px", borderRadius: 8,
-  border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text,
-  fontFamily: body, fontSize: 13, outline: "none", boxSizing: "border-box",
-  ...extra,
-});
-const sel = (extra = {}) => ({
-  ...inp(), appearance: "auto", cursor: "pointer", ...extra,
-});
-const btnStyle = (active, color = c.accent) => ({
-  padding: "8px 16px", borderRadius: 8, border: "none", cursor: active ? "pointer" : "default",
-  background: active ? color : c.surfaceAlt, color: active ? "#fff" : c.textDim,
-  fontFamily: body, fontSize: 12, fontWeight: 700,
-});
 
 /* ── Severity helper for audit ──────────────────────────── */
 const getAuditSeverity = (action) => {
@@ -241,61 +224,88 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
   /* ═══ RENDER ════════════════════════════════════════════ */
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* Header */}
+    <div style={{ display: "flex", flexDirection: "column", gap: space[5] }}>
+      {/* ── Page Header ── */}
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
-          <div style={{ fontFamily: display, fontSize: 20, fontWeight: 800, color: c.text, marginBottom: 4 }}>Settings</div>
-          <p style={{ fontFamily: body, fontSize: 13, color: c.textMid, lineHeight: 1.5, margin: 0 }}>
+          <div style={{
+            fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
+            fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
+            color: c.text, marginBottom: space[1],
+          }}>Settings</div>
+          <p style={{
+            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+            color: c.textMid, lineHeight: typo.bodyMd.lineHeight, margin: 0,
+          }}>
             Define squads, roles, people, and projects.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <button
-            onClick={() => { setSimMode(!simMode); setBulkOp(null); setBulkResult(null); setDryRunPreview(null); }}
-            className="flow-cmd-btn"
-            style={{
-              padding: "7px 14px", borderRadius: 8,
-              border: `1px solid ${simMode ? c.orange + "60" : c.border}`,
-              background: simMode ? `${c.orange}15` : "transparent",
-              color: simMode ? c.orange : c.textDim,
-              fontFamily: mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em",
-              cursor: "pointer",
-            }}
-          >
-            {simMode ? "◉ SIM ON" : "◎ SIMULATE"}
-          </button>
-        </div>
+        <Btn
+          variant={simMode ? "command" : "secondary"}
+          size="sm"
+          onClick={() => { setSimMode(!simMode); setBulkOp(null); setBulkResult(null); setDryRunPreview(null); }}
+          style={{
+            fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+            fontWeight: 700, letterSpacing: typo.monoMd.tracking,
+            ...(simMode ? {
+              borderColor: c.orange + "60",
+              background: `${c.orange}15`,
+              color: c.orange,
+            } : {}),
+          }}
+        >
+          {simMode ? "◉ SIM ON" : "◎ SIMULATE"}
+        </Btn>
       </div>
 
-      {/* Sub-tabs */}
-      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 3, background: c.surface, borderRadius: 12, padding: 4, border: `1px solid ${c.border}` }}>
-          <span style={{ fontFamily: mono, fontSize: 8, color: c.textDim, letterSpacing: "0.08em", padding: "0 6px", alignSelf: "center" }}>OPS</span>
+      {/* ── Sub-tabs ── */}
+      <div style={{ display: "flex", gap: space[2], alignItems: "center" }}>
+        <div style={{
+          display: "flex", gap: space[1], background: c.surfaceData,
+          borderRadius: layout.radiusLg, padding: space[1], border: `1px solid ${c.border}`,
+        }}>
+          <TelemetryLabel style={{ padding: `0 ${space[2]}px`, alignSelf: "center" }}>OPS</TelemetryLabel>
           {subTabs.filter(st => st.key === "people").map(st => (
-            <button key={st.key} onClick={() => setSubTab(st.key)} style={{
-              padding: "10px 12px", borderRadius: 10, border: "none", cursor: "pointer",
+            <button key={st.key} className="flow-btn" onClick={() => setSubTab(st.key)} style={{
+              padding: `${space[2]}px ${space[3]}px`, borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
               background: subTab === st.key ? c.accentDim : "transparent",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              transition: "all 0.15s",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
+              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
             }}>
-              <span style={{ fontFamily: display, fontSize: 14, fontWeight: subTab === st.key ? 700 : 500, color: subTab === st.key ? c.accent : c.textMid }}>{st.label}</span>
-              <span style={{ fontFamily: mono, fontSize: 10, color: subTab === st.key ? c.accent : c.textDim, background: subTab === st.key ? `${c.accent}15` : c.surfaceAlt, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>{st.count}</span>
+              <span style={{
+                fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+                fontWeight: subTab === st.key ? 700 : 500,
+                color: subTab === st.key ? c.accent : c.textMid,
+              }}>{st.label}</span>
+              <Tag
+                color={subTab === st.key ? c.accent : c.textMid}
+                bg={subTab === st.key ? `${c.accent}15` : c.surfaceAlt}
+              >{st.count}</Tag>
             </button>
           ))}
         </div>
-        <div style={{ width: 1, height: 28, background: c.border }} />
-        <div style={{ display: "flex", gap: 3, background: c.surface, borderRadius: 12, padding: 4, border: `1px solid ${c.border}` }}>
-          <span style={{ fontFamily: mono, fontSize: 8, color: c.textDim, letterSpacing: "0.08em", padding: "0 6px", alignSelf: "center" }}>CONFIG</span>
+        <div style={{ width: 1, height: 28, background: c.border, flexShrink: 0 }} />
+        <div style={{
+          display: "flex", gap: space[1], background: c.surfaceData,
+          borderRadius: layout.radiusLg, padding: space[1], border: `1px solid ${c.border}`,
+        }}>
+          <TelemetryLabel style={{ padding: `0 ${space[2]}px`, alignSelf: "center" }}>CONFIG</TelemetryLabel>
           {subTabs.filter(st => st.key === "squads" || st.key === "roles").map(st => (
-            <button key={st.key} onClick={() => setSubTab(st.key)} style={{
-              padding: "10px 12px", borderRadius: 10, border: "none", cursor: "pointer",
+            <button key={st.key} className="flow-btn" onClick={() => setSubTab(st.key)} style={{
+              padding: `${space[2]}px ${space[3]}px`, borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
               background: subTab === st.key ? c.accentDim : "transparent",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              transition: "all 0.15s",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
+              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
             }}>
-              <span style={{ fontFamily: display, fontSize: 14, fontWeight: subTab === st.key ? 700 : 500, color: subTab === st.key ? c.accent : c.textMid }}>{st.label}</span>
-              <span style={{ fontFamily: mono, fontSize: 10, color: subTab === st.key ? c.accent : c.textDim, background: subTab === st.key ? `${c.accent}15` : c.surfaceAlt, padding: "2px 7px", borderRadius: 4, fontWeight: 600 }}>{st.count}</span>
+              <span style={{
+                fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+                fontWeight: subTab === st.key ? 700 : 500,
+                color: subTab === st.key ? c.accent : c.textMid,
+              }}>{st.label}</span>
+              <Tag
+                color={subTab === st.key ? c.accent : c.textMid}
+                bg={subTab === st.key ? `${c.accent}15` : c.surfaceAlt}
+              >{st.count}</Tag>
             </button>
           ))}
         </div>
@@ -304,11 +314,11 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
       {/* ═══ SQUADS ═══ */}
       {subTab === "squads" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
           <div style={{ display: "flex", alignItems: "center" }}>
-            <button onClick={() => setPanel({ type: "squad", mode: "create" })} className="flow-cmd-btn flow-cmd-btn-edit" style={{ padding: "8px 16px", fontSize: 10 }}>
-              <span style={{ fontSize: 12 }}>+</span> ADD SQUAD
-            </button>
+            <Btn variant="command" size="sm" onClick={() => setPanel({ type: "squad", mode: "create" })}>
+              <span style={{ fontSize: typo.bodyMd.size }}>+</span> Add Squad
+            </Btn>
           </div>
           <div className="flow-data-grid">
             <div className="flow-data-grid-header" style={{ gridTemplateColumns: "4px 1fr 80px 80px 100px" }}>
@@ -325,18 +335,35 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                 return (
                   <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "4px 1fr 80px 80px 100px" }}>
                     <div style={{ width: 4, height: 24, borderRadius: 2, background: c.accent }} />
-                    <span style={{ fontFamily: display, fontSize: 14, fontWeight: 600, color: c.text }}>{sq}</span>
-                    <span style={{ fontFamily: mono, fontSize: 12, color: c.textMid }}>{memberCount}</span>
-                    <span style={{ fontFamily: mono, fontSize: 12, color: c.textMid }}>{projCount}</span>
-                    <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                      <button onClick={() => requestDelete("squad", i, sq)} className="flow-cmd-btn flow-cmd-btn-delete">
+                    <span style={{
+                      fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+                      fontWeight: typo.bodyLg.weight, color: c.text,
+                    }}>{sq}</span>
+                    <span style={{
+                      fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                      fontWeight: typo.monoLg.weight, color: c.textMid,
+                    }}>{memberCount}</span>
+                    <span style={{
+                      fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                      fontWeight: typo.monoLg.weight, color: c.textMid,
+                    }}>{projCount}</span>
+                    <div style={{ display: "flex", gap: space[1], justifyContent: "flex-end" }}>
+                      <Btn variant="danger" size="sm" onClick={() => requestDelete("squad", i, sq)}>
                         <span>✕</span> DELETE
-                      </button>
+                      </Btn>
                     </div>
                   </div>
                 );
               })}
-              {squads.length === 0 && <div style={{ textAlign: "center", padding: "30px 0", fontFamily: body, fontSize: 13, color: c.textDim }}>No squads defined</div>}
+              {squads.length === 0 && (
+                <EmptyState
+                  icon="📂"
+                  title="No squads defined"
+                  message="Create a squad to organize your team."
+                  action="Add Squad"
+                  onAction={() => setPanel({ type: "squad", mode: "create" })}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -345,11 +372,11 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
       {/* ═══ ROLES ═══ */}
       {subTab === "roles" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
           <div style={{ display: "flex", alignItems: "center" }}>
-            <button onClick={() => setPanel({ type: "role", mode: "create" })} className="flow-cmd-btn flow-cmd-btn-edit" style={{ padding: "8px 16px", fontSize: 10 }}>
-              <span style={{ fontSize: 12 }}>+</span> ADD ROLE
-            </button>
+            <Btn variant="command" size="sm" onClick={() => setPanel({ type: "role", mode: "create" })}>
+              <span style={{ fontSize: typo.bodyMd.size }}>+</span> Add Role
+            </Btn>
           </div>
           <div className="flow-data-grid">
             <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 80px 100px" }}>
@@ -362,17 +389,31 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                 const holderCount = people.filter(p => p.role === rl).length;
                 return (
                   <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 80px 100px" }}>
-                    <span style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: c.text }}>{rl}</span>
-                    <span style={{ fontFamily: mono, fontSize: 12, color: c.textMid }}>{holderCount}</span>
-                    <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                      <button onClick={() => requestDelete("role", i, rl)} className="flow-cmd-btn flow-cmd-btn-delete">
+                    <span style={{
+                      fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+                      fontWeight: typo.bodyLg.weight, color: c.text,
+                    }}>{rl}</span>
+                    <span style={{
+                      fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                      fontWeight: typo.monoLg.weight, color: c.textMid,
+                    }}>{holderCount}</span>
+                    <div style={{ display: "flex", gap: space[1], justifyContent: "flex-end" }}>
+                      <Btn variant="danger" size="sm" onClick={() => requestDelete("role", i, rl)}>
                         <span>✕</span> DELETE
-                      </button>
+                      </Btn>
                     </div>
                   </div>
                 );
               })}
-              {roles.length === 0 && <div style={{ textAlign: "center", padding: "30px 0", fontFamily: body, fontSize: 13, color: c.textDim }}>No roles defined</div>}
+              {roles.length === 0 && (
+                <EmptyState
+                  icon="🏷"
+                  title="No roles defined"
+                  message="Create a role to define team designations."
+                  action="Add Role"
+                  onAction={() => setPanel({ type: "role", mode: "create" })}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -381,11 +422,11 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
       {/* ═══ PEOPLE ═══ */}
       {subTab === "people" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
           <div style={{ display: "flex", alignItems: "center" }}>
-            <button onClick={() => setPanel({ type: "person", mode: "create" })} className="flow-cmd-btn flow-cmd-btn-edit" style={{ padding: "8px 16px", fontSize: 10 }}>
-              <span style={{ fontSize: 12 }}>+</span> ADD PERSON
-            </button>
+            <Btn variant="command" size="sm" onClick={() => setPanel({ type: "person", mode: "create" })}>
+              <span style={{ fontSize: typo.bodyMd.size }}>+</span> Add Person
+            </Btn>
           </div>
 
           {squads.map(sq => {
@@ -393,7 +434,17 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             if (!members.length) return null;
             return (
               <div key={sq}>
-                <div style={{ fontFamily: display, fontSize: 15, fontWeight: 800, color: c.accent, marginBottom: 6 }}>{sq} · {members.length}</div>
+                <div style={{
+                  display: "flex", alignItems: "baseline", gap: space[2],
+                  marginBottom: space[2],
+                }}>
+                  <span style={{
+                    fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+                    fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+                    color: c.accent,
+                  }}>{sq}</span>
+                  <Tag color={c.accent} bg={c.accentDim}>{members.length}</Tag>
+                </div>
                 <div className="flow-data-grid">
                   <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 1fr 100px" }}>
                     <span>Name</span>
@@ -404,12 +455,18 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                     const gi = people.indexOf(p);
                     return (
                       <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 1fr 100px" }}>
-                        <span style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: c.text }}>{p.name}</span>
-                        <span style={{ fontFamily: body, fontSize: 12, color: c.textMid }}>{p.role}</span>
-                        <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                          <button onClick={() => requestDelete("person", gi, p.name)} className="flow-cmd-btn flow-cmd-btn-delete">
+                        <span style={{
+                          fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+                          fontWeight: typo.bodyLg.weight, color: c.text,
+                        }}>{p.name}</span>
+                        <span style={{
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                          color: c.textMid,
+                        }}>{p.role}</span>
+                        <div style={{ display: "flex", gap: space[1], justifyContent: "flex-end" }}>
+                          <Btn variant="danger" size="sm" onClick={() => requestDelete("person", gi, p.name)}>
                             <span>✕</span> DELETE
-                          </button>
+                          </Btn>
                         </div>
                       </div>
                     );
@@ -418,6 +475,16 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
               </div>
             );
           })}
+
+          {people.length === 0 && (
+            <EmptyState
+              icon="👥"
+              title="No people added"
+              message="Add team members to get started."
+              action="Add Person"
+              onAction={() => setPanel({ type: "person", mode: "create" })}
+            />
+          )}
         </div>
       )}
 
@@ -426,44 +493,63 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
       {/* ═══ SIMULATION MODE — Bulk Operations ═══ */}
       {simMode && (
-        <div style={{
-          background: c.surface, borderRadius: 12, padding: "16px 22px",
-          border: `1px solid ${c.orange}25`,
+        <Surface variant="data" style={{
+          padding: `${space[4]}px ${space[5]}px`,
+          borderColor: c.orange + "25",
         }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontFamily: display, fontSize: 15, fontWeight: 700, color: c.orange }}>Simulation Mode</span>
-              <span style={{ fontFamily: mono, fontSize: 9, color: c.bg, background: c.orange, padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>SAFE PREVIEW</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[3] }}>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+              <span style={{
+                fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+                fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+                color: c.orange,
+              }}>Simulation Mode</span>
+              <Tag color={c.bg} bg={c.orange} style={{ fontWeight: 700 }}>SAFE PREVIEW</Tag>
             </div>
-            <div style={{ display: "flex", gap: 4 }}>
+            <div style={{ display: "flex", gap: space[1] }}>
               {[
                 { key: "csv", label: "CSV IMPORT" },
                 { key: "reassign", label: "REASSIGN" },
                 { key: "phase", label: "MIGRATE" },
               ].map(op => (
-                <button key={op.key} onClick={() => { setBulkOp(bulkOp === op.key ? null : op.key); setBulkResult(null); setDryRunPreview(null); }}
-                  className="flow-cmd-btn"
+                <Btn key={op.key} variant="secondary" size="sm"
+                  onClick={() => { setBulkOp(bulkOp === op.key ? null : op.key); setBulkResult(null); setDryRunPreview(null); }}
                   style={{
-                    borderColor: bulkOp === op.key ? c.orange + "60" : c.border,
-                    background: bulkOp === op.key ? `${c.orange}15` : "transparent",
-                    color: bulkOp === op.key ? c.orange : c.textDim,
+                    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                    letterSpacing: typo.monoMd.tracking, fontWeight: 700,
+                    ...(bulkOp === op.key ? {
+                      borderColor: c.orange + "60",
+                      background: `${c.orange}15`,
+                      color: c.orange,
+                    } : {}),
                   }}
-                >{op.label}</button>
+                >{op.label}</Btn>
               ))}
             </div>
           </div>
 
           {/* Result report */}
           {bulkResult && (
-            <div style={{ padding: "10px 12px", borderRadius: 8, background: c.greenDim, border: `1px solid ${c.green}25`, marginBottom: 12 }}>
-              <div style={{ fontFamily: body, fontSize: 12, fontWeight: 700, color: c.green, marginBottom: 4 }}>
+            <div style={{
+              padding: `${space[3]}px ${space[3]}px`, borderRadius: layout.radiusMd,
+              background: c.greenDim, border: `1px solid ${c.green}25`, marginBottom: space[3],
+            }}>
+              <div style={{
+                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                fontWeight: 700, color: c.green, marginBottom: space[1],
+              }}>
                 Completed: {bulkResult.success} of {bulkResult.total} succeeded
               </div>
               {bulkResult.exceptions.length > 0 && (
-                <div style={{ marginTop: 6 }}>
-                  <div style={{ fontFamily: mono, fontSize: 9, color: c.orange, marginBottom: 4 }}>EXCEPTIONS ({bulkResult.exceptions.length})</div>
+                <div style={{ marginTop: space[2] }}>
+                  <TelemetryLabel color={c.orange} style={{ marginBottom: space[1], display: "block" }}>
+                    EXCEPTIONS ({bulkResult.exceptions.length})
+                  </TelemetryLabel>
                   {bulkResult.exceptions.map((ex, i) => (
-                    <div key={i} style={{ fontFamily: body, fontSize: 11, color: c.textMid, padding: "2px 0" }}>• {ex}</div>
+                    <div key={i} style={{
+                      fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                      color: c.textMid, padding: "2px 0",
+                    }}>• {ex}</div>
                   ))}
                 </div>
               )}
@@ -472,117 +558,136 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
           {/* CSV Import */}
           {bulkOp === "csv" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ fontFamily: body, fontSize: 12, color: c.textMid }}>
-                Import people as CSV: <span style={{ fontFamily: mono, fontSize: 10, color: c.accent }}>Name, Role, Squad</span> — one per line
+            <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+              <div style={{
+                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid,
+              }}>
+                Import people as CSV: <span style={{
+                  fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.accent,
+                }}>Name, Role, Squad</span> — one per line
               </div>
-              <textarea value={csvText} onChange={e => { setCsvText(e.target.value); setDryRunPreview(null); }} placeholder={"Aisha K., Engineer, Platform\nZaid M., Designer, Consumer"} style={{
-                width: "100%", height: 100, padding: "10px 12px", borderRadius: 10,
-                border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text,
-                fontFamily: mono, fontSize: 12, outline: "none", resize: "vertical", boxSizing: "border-box",
-              }} />
+              <textarea value={csvText} onChange={e => { setCsvText(e.target.value); setDryRunPreview(null); }}
+                placeholder={"Aisha K., Engineer, Platform\nZaid M., Designer, Consumer"}
+                className="flow-input"
+                style={{
+                  width: "100%", height: 100, padding: `${space[3]}px ${space[3]}px`,
+                  borderRadius: layout.radiusMd,
+                  border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text,
+                  fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, outline: "none",
+                  resize: "vertical", boxSizing: "border-box",
+                }} />
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ fontFamily: mono, fontSize: 10, color: c.textDim }}>{csvText.trim() ? csvText.trim().split("\n").length : 0} rows</span>
-                <button onClick={dryRunCsvImport} disabled={!csvText.trim()} className="flow-cmd-btn" style={{
-                  padding: "7px 16px",
-                  borderColor: csvText.trim() ? c.orange + "60" : c.border,
-                  color: csvText.trim() ? c.orange : c.textDim,
-                  cursor: csvText.trim() ? "pointer" : "default",
-                }}>PREVIEW</button>
+                <TelemetryLabel>{csvText.trim() ? csvText.trim().split("\n").length : 0} rows</TelemetryLabel>
+                <Btn variant="command" size="sm"
+                  onClick={dryRunCsvImport}
+                  disabled={!csvText.trim()}
+                  style={csvText.trim() ? { borderColor: c.orange + "60", color: c.orange } : {}}
+                >PREVIEW</Btn>
               </div>
             </div>
           )}
 
           {/* Owner Reassign */}
           {bulkOp === "reassign" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ fontFamily: body, fontSize: 12, color: c.textMid }}>Reassign all projects from one owner to another</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto", gap: 10, alignItems: "end" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+              <div style={{
+                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid,
+              }}>Reassign all projects from one owner to another</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto", gap: space[3], alignItems: "end" }}>
                 <div>
-                  <div style={fld()}>FROM</div>
-                  <select value={reassignFrom} onChange={e => { setReassignFrom(e.target.value); setDryRunPreview(null); }} className="flow-input" style={sel()}>
+                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>FROM</TelemetryLabel>
+                  <Sel value={reassignFrom} onChange={e => { setReassignFrom(e.target.value); setDryRunPreview(null); }}>
                     <option value="">Select owner...</option>
                     {[...new Set(projects.map(p => p.owner).filter(Boolean))].sort().map(o => {
                       const cnt = projects.filter(p => p.owner === o).length;
                       return <option key={o} value={o}>{o} ({cnt})</option>;
                     })}
-                  </select>
+                  </Sel>
                 </div>
-                <span style={{ fontFamily: mono, fontSize: 14, color: c.textDim, paddingBottom: 8 }}>→</span>
+                <span style={{
+                  fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                  color: c.textDim, paddingBottom: space[2],
+                }}>→</span>
                 <div>
-                  <div style={fld()}>TO</div>
-                  <select value={reassignTo} onChange={e => { setReassignTo(e.target.value); setDryRunPreview(null); }} className="flow-input" style={sel()}>
+                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>TO</TelemetryLabel>
+                  <Sel value={reassignTo} onChange={e => { setReassignTo(e.target.value); setDryRunPreview(null); }}>
                     <option value="">Select owner...</option>
                     {people.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-                  </select>
+                  </Sel>
                 </div>
-                <button onClick={dryRunReassign} disabled={!reassignFrom || !reassignTo || reassignFrom === reassignTo}
-                  className="flow-cmd-btn" style={{
-                    padding: "7px 16px",
-                    borderColor: (reassignFrom && reassignTo && reassignFrom !== reassignTo) ? c.orange + "60" : c.border,
-                    color: (reassignFrom && reassignTo && reassignFrom !== reassignTo) ? c.orange : c.textDim,
-                    cursor: (reassignFrom && reassignTo && reassignFrom !== reassignTo) ? "pointer" : "default",
-                  }}>PREVIEW</button>
+                <Btn variant="command" size="sm"
+                  onClick={dryRunReassign}
+                  disabled={!reassignFrom || !reassignTo || reassignFrom === reassignTo}
+                  style={(reassignFrom && reassignTo && reassignFrom !== reassignTo) ? { borderColor: c.orange + "60", color: c.orange } : {}}
+                >PREVIEW</Btn>
               </div>
             </div>
           )}
 
           {/* Phase Migration */}
           {bulkOp === "phase" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ fontFamily: body, fontSize: 12, color: c.textMid }}>Migrate all projects from one phase to another</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr 1fr auto", gap: 10, alignItems: "end" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+              <div style={{
+                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid,
+              }}>Migrate all projects from one phase to another</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr 1fr auto", gap: space[3], alignItems: "end" }}>
                 <div>
-                  <div style={fld()}>FROM PHASE</div>
-                  <select value={migrateFromPhase} onChange={e => { setMigrateFromPhase(e.target.value); setDryRunPreview(null); }} className="flow-input" style={sel()}>
+                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>FROM PHASE</TelemetryLabel>
+                  <Sel value={migrateFromPhase} onChange={e => { setMigrateFromPhase(e.target.value); setDryRunPreview(null); }}>
                     <option value="">Select...</option>
                     {phaseNames.map(p => {
                       const cnt = projects.filter(pr => pr.phase === p && (!migrateSquadFilter || pr.squad === migrateSquadFilter)).length;
                       return <option key={p} value={p}>{p} ({cnt})</option>;
                     })}
-                  </select>
+                  </Sel>
                 </div>
-                <span style={{ fontFamily: mono, fontSize: 14, color: c.textDim, paddingBottom: 8 }}>→</span>
+                <span style={{
+                  fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                  color: c.textDim, paddingBottom: space[2],
+                }}>→</span>
                 <div>
-                  <div style={fld()}>TO PHASE</div>
-                  <select value={migrateToPhase} onChange={e => { setMigrateToPhase(e.target.value); setDryRunPreview(null); }} className="flow-input" style={sel()}>
+                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>TO PHASE</TelemetryLabel>
+                  <Sel value={migrateToPhase} onChange={e => { setMigrateToPhase(e.target.value); setDryRunPreview(null); }}>
                     <option value="">Select...</option>
                     {phaseNames.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                  </Sel>
                 </div>
                 <div>
-                  <div style={fld()}>SQUAD (opt.)</div>
-                  <select value={migrateSquadFilter} onChange={e => { setMigrateSquadFilter(e.target.value); setDryRunPreview(null); }} className="flow-input" style={sel()}>
+                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>SQUAD (OPT.)</TelemetryLabel>
+                  <Sel value={migrateSquadFilter} onChange={e => { setMigrateSquadFilter(e.target.value); setDryRunPreview(null); }}>
                     <option value="">All squads</option>
                     {squads.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  </Sel>
                 </div>
-                <button onClick={dryRunPhaseMigrate} disabled={!migrateFromPhase || !migrateToPhase || migrateFromPhase === migrateToPhase}
-                  className="flow-cmd-btn" style={{
-                    padding: "7px 16px",
-                    borderColor: (migrateFromPhase && migrateToPhase && migrateFromPhase !== migrateToPhase) ? c.orange + "60" : c.border,
-                    color: (migrateFromPhase && migrateToPhase && migrateFromPhase !== migrateToPhase) ? c.orange : c.textDim,
-                    cursor: (migrateFromPhase && migrateToPhase && migrateFromPhase !== migrateToPhase) ? "pointer" : "default",
-                  }}>PREVIEW</button>
+                <Btn variant="command" size="sm"
+                  onClick={dryRunPhaseMigrate}
+                  disabled={!migrateFromPhase || !migrateToPhase || migrateFromPhase === migrateToPhase}
+                  style={(migrateFromPhase && migrateToPhase && migrateFromPhase !== migrateToPhase) ? { borderColor: c.orange + "60", color: c.orange } : {}}
+                >PREVIEW</Btn>
               </div>
             </div>
           )}
 
-          {!bulkOp && <div style={{ fontFamily: body, fontSize: 12, color: c.textDim, textAlign: "center", padding: "6px 0" }}>Select an operation above</div>}
+          {!bulkOp && (
+            <div style={{
+              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+              color: c.textDim, textAlign: "center", padding: `${space[2]}px 0`,
+            }}>Select an operation above</div>
+          )}
 
           {/* ── Git-style Diff Viewer ── */}
           {dryRunPreview && (
-            <div style={{ marginTop: 14 }} className="flow-diff-viewer">
+            <div style={{ marginTop: space[3] }} className="flow-diff-viewer">
               <div className="flow-diff-header">
                 <span style={{ color: c.orange, fontWeight: 700 }}>DIFF</span>
                 <span style={{ color: c.textDim }}>|</span>
                 <span>{dryRunPreview.summary}</span>
-                <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-                  <button onClick={() => setDryRunPreview(null)} className="flow-cmd-btn flow-cmd-btn-delete" style={{ fontSize: 8 }}>DISCARD</button>
-                  <button onClick={dryRunPreview.execute} disabled={dryRunPreview.items.length === 0}
-                    className="flow-cmd-btn flow-cmd-btn-archive" style={{ fontSize: 8, opacity: dryRunPreview.items.length === 0 ? 0.4 : 1 }}>
-                    APPLY ({dryRunPreview.items.length})
-                  </button>
+                <div style={{ marginLeft: "auto", display: "flex", gap: space[2] }}>
+                  <Btn variant="danger" size="sm" onClick={() => setDryRunPreview(null)}>Discard</Btn>
+                  <Btn variant="success" size="sm"
+                    onClick={dryRunPreview.execute}
+                    disabled={dryRunPreview.items.length === 0}
+                  >Apply ({dryRunPreview.items.length})</Btn>
                 </div>
               </div>
 
@@ -617,35 +722,52 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
               )}
 
               {dryRunPreview.exceptions.length > 0 && (
-                <div style={{ padding: "8px 14px", background: `${c.orange}08`, borderTop: `1px solid ${c.orange}20` }}>
-                  <div style={{ fontFamily: mono, fontSize: 9, color: c.orange, marginBottom: 4 }}>WARNINGS ({dryRunPreview.exceptions.length})</div>
+                <div style={{
+                  padding: `${space[2]}px ${space[3]}px`,
+                  background: `${c.orange}08`, borderTop: `1px solid ${c.orange}20`,
+                }}>
+                  <TelemetryLabel color={c.orange} style={{ marginBottom: space[1], display: "block" }}>
+                    WARNINGS ({dryRunPreview.exceptions.length})
+                  </TelemetryLabel>
                   {dryRunPreview.exceptions.map((ex, i) => (
-                    <div key={i} style={{ fontFamily: body, fontSize: 11, color: c.orange, padding: "2px 0" }}>! {ex}</div>
+                    <div key={i} style={{
+                      fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                      color: c.orange, padding: "2px 0",
+                    }}>! {ex}</div>
                   ))}
                 </div>
               )}
 
               {dryRunPreview.items.length === 0 && (
-                <div className="flow-diff-line flow-diff-line-ctx" style={{ textAlign: "center", padding: "16px 0" }}>No changes to apply — check warnings</div>
+                <div className="flow-diff-line flow-diff-line-ctx" style={{
+                  textAlign: "center", padding: `${space[4]}px 0`,
+                }}>No changes to apply — check warnings</div>
               )}
             </div>
           )}
-        </div>
+        </Surface>
       )}
 
 
       {/* ═══ AUDIT LOG — Event Stream ═══ */}
       {auditLog.length > 0 && (
-        <div style={{
-          background: c.surface, borderRadius: 12, padding: "16px 22px",
-          border: `1px solid ${c.blue}25`,
+        <Surface variant="data" style={{
+          padding: `${space[4]}px ${space[5]}px`,
+          borderColor: c.blue + "25",
         }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontFamily: display, fontSize: 15, fontWeight: 700, color: c.text }}>Audit Stream</span>
-              <span style={{ fontFamily: mono, fontSize: 9, color: c.bg, background: c.blue, padding: "2px 8px", borderRadius: 4, fontWeight: 700 }}>{auditLog.length} EVENTS</span>
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: space[3],
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+              <span style={{
+                fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+                fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+                color: c.text,
+              }}>Audit Stream</span>
+              <Tag color={c.bg} bg={c.blue} style={{ fontWeight: 700 }}>{auditLog.length} EVENTS</Tag>
             </div>
-            <button onClick={() => setAuditLog([])} className="flow-cmd-btn flow-cmd-btn-delete" style={{ fontSize: 8 }}>CLEAR</button>
+            <Btn variant="danger" size="sm" onClick={() => setAuditLog([])}>Clear</Btn>
           </div>
 
           <div className="flow-audit-stream">
@@ -656,27 +778,49 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                   <div className={`flow-audit-severity-dot flow-audit-severity-dot-${severity}`} />
                   <span className="flow-audit-timestamp">{new Date(log.at).toLocaleTimeString()}</span>
                   <span className={`flow-audit-severity-${severity}`} style={{
-                    fontFamily: mono, fontSize: 9, fontWeight: 700, textTransform: "uppercase",
-                    minWidth: 80,
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                    fontWeight: 700, textTransform: "uppercase",
+                    letterSpacing: typo.monoSm.tracking, minWidth: 80,
                   }}>{log.action}</span>
-                  <span style={{ fontFamily: mono, fontSize: 9, color: c.textDim }}>{log.entity}</span>
-                  <span style={{ fontFamily: body, fontSize: 12, fontWeight: 600, color: c.text }}>{log.name}</span>
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                    letterSpacing: typo.monoSm.tracking, color: c.textDim,
+                  }}>{log.entity}</span>
+                  <span style={{
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                    fontWeight: 600, color: c.text,
+                  }}>{log.name}</span>
                   {(log.before || log.after) && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginLeft: "auto" }}>
-                      {log.before && <span style={{ fontFamily: mono, fontSize: 10, color: c.red, textDecoration: "line-through" }}>{log.before}</span>}
-                      {log.before && log.after && <span style={{ fontFamily: mono, fontSize: 10, color: c.textDim }}>→</span>}
-                      {log.after && <span style={{ fontFamily: mono, fontSize: 10, color: c.green, fontWeight: 600 }}>{log.after}</span>}
+                    <div style={{ display: "flex", alignItems: "center", gap: space[1], marginLeft: "auto" }}>
+                      {log.before && <span style={{
+                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                        color: c.red, textDecoration: "line-through",
+                      }}>{log.before}</span>}
+                      {log.before && log.after && <span style={{
+                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                        color: c.textDim,
+                      }}>→</span>}
+                      {log.after && <span style={{
+                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                        color: c.green, fontWeight: 600,
+                      }}>{log.after}</span>}
                     </div>
                   )}
                   {!log.before && !log.after && log.detail && (
-                    <span style={{ fontFamily: body, fontSize: 11, color: c.textDim, marginLeft: "auto" }}>{log.detail}</span>
+                    <span style={{
+                      fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                      color: c.textDim, marginLeft: "auto",
+                    }}>{log.detail}</span>
                   )}
-                  <span style={{ fontFamily: mono, fontSize: 9, color: c.blue }}>{log.by}</span>
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                    color: c.blue,
+                  }}>{log.by}</span>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Surface>
       )}
 
 
@@ -686,45 +830,60 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)" }} />
           <div className="flow-slide-over" onClick={e => e.stopPropagation()} style={{
             position: "relative", width: 460, height: "100%",
-            background: c.surfaceSolid, borderLeft: `1px solid ${c.border}`,
-            boxShadow: "-8px 0 30px rgba(0,0,0,0.3)",
+            background: c.surfaceOverlay, borderLeft: `1px solid ${c.border}`,
+            boxShadow: c.shadowOverlay,
             display: "flex", flexDirection: "column", overflow: "hidden",
           }}>
             {/* Panel header */}
-            <div style={{ padding: "20px 24px 16px", borderBottom: `1px solid ${c.border}`, flexShrink: 0 }}>
+            <div style={{
+              padding: `${space[5]}px ${space[6]}px ${space[4]}px`,
+              borderBottom: `1px solid ${c.border}`, flexShrink: 0,
+            }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontFamily: display, fontSize: 16, fontWeight: 700, color: c.text }}>
-                    {panel.type === "squad" ? "Add Squad" : panel.type === "role" ? "Add Role" : "Add Person"}
-                  </span>
-                </div>
-                <button onClick={closePanel} className="flow-btn" style={{
-                  width: 28, height: 28, borderRadius: 6, border: `1px solid ${c.border}`,
-                  background: "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 12, color: c.textDim,
-                }}>✕</button>
+                <span style={{
+                  fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+                  fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+                  color: c.text,
+                }}>
+                  {panel.type === "squad" ? "Add Squad" : panel.type === "role" ? "Add Role" : "Add Person"}
+                </span>
+                <Btn variant="ghost" size="sm" onClick={closePanel} style={{
+                  width: 28, height: 28, padding: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: typo.bodySm.size, color: c.textDim,
+                }}>✕</Btn>
               </div>
-
             </div>
 
             {/* Panel body */}
-            <div style={{ flex: 1, padding: "24px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{
+              flex: 1, padding: space[6], overflowY: "auto",
+              display: "flex", flexDirection: "column", gap: space[4],
+            }}>
 
               {/* Squad form */}
               {panel.type === "squad" && (
                 <div>
-                  <div style={fld()}>SQUAD NAME</div>
-                  <input value={newSquad} onChange={e => setNewSquad(e.target.value)} placeholder="New squad name..."
-                    onKeyDown={e => e.key === "Enter" && addSquad()} className="flow-input" style={inp()} autoFocus />
+                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>SQUAD NAME</TelemetryLabel>
+                  <Inp value={newSquad} onChange={e => setNewSquad(e.target.value)}
+                    placeholder="New squad name..."
+                    onKeyDown={e => e.key === "Enter" && addSquad()}
+                    autoFocus
+                    style={{ width: "100%" }}
+                  />
                 </div>
               )}
 
               {/* Role form */}
               {panel.type === "role" && (
                 <div>
-                  <div style={fld()}>ROLE NAME</div>
-                  <input value={newRole} onChange={e => setNewRole(e.target.value)} placeholder="New role / designation..."
-                    onKeyDown={e => e.key === "Enter" && addRole()} className="flow-input" style={inp()} autoFocus />
+                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>ROLE NAME</TelemetryLabel>
+                  <Inp value={newRole} onChange={e => setNewRole(e.target.value)}
+                    placeholder="New role / designation..."
+                    onKeyDown={e => e.key === "Enter" && addRole()}
+                    autoFocus
+                    style={{ width: "100%" }}
+                  />
                 </div>
               )}
 
@@ -732,20 +891,24 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
               {panel.type === "person" && (
                 <>
                   <div>
-                    <div style={fld()}>NAME</div>
-                    <input value={pName} onChange={e => setPName(e.target.value)} placeholder="Full name" className="flow-input" style={inp()} autoFocus />
+                    <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>NAME</TelemetryLabel>
+                    <Inp value={pName} onChange={e => setPName(e.target.value)}
+                      placeholder="Full name" autoFocus style={{ width: "100%" }}
+                    />
                   </div>
                   <div>
-                    <div style={fld()}>ROLE</div>
-                    <select value={pRole} onChange={e => setPRole(e.target.value)} className="flow-input" style={sel()}>
-                      <option value="">Select...</option>{roles.map((r, i) => <option key={i} value={r}>{r}</option>)}
-                    </select>
+                    <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>ROLE</TelemetryLabel>
+                    <Sel value={pRole} onChange={e => setPRole(e.target.value)} style={{ width: "100%" }}>
+                      <option value="">Select...</option>
+                      {roles.map((r, i) => <option key={i} value={r}>{r}</option>)}
+                    </Sel>
                   </div>
                   <div>
-                    <div style={fld()}>SQUAD</div>
-                    <select value={pSquad} onChange={e => setPSquad(e.target.value)} className="flow-input" style={sel()}>
-                      <option value="">Select...</option>{squads.map((s, i) => <option key={i} value={s}>{s}</option>)}
-                    </select>
+                    <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>SQUAD</TelemetryLabel>
+                    <Sel value={pSquad} onChange={e => setPSquad(e.target.value)} style={{ width: "100%" }}>
+                      <option value="">Select...</option>
+                      {squads.map((s, i) => <option key={i} value={s}>{s}</option>)}
+                    </Sel>
                   </div>
                 </>
               )}
@@ -753,19 +916,25 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             </div>
 
             {/* Panel footer */}
-            <div style={{ padding: "16px 24px", borderTop: `1px solid ${c.border}`, display: "flex", gap: 8, justifyContent: "space-between", flexShrink: 0 }}>
-              <button onClick={closePanel} className="flow-cmd-btn flow-cmd-btn-delete" style={{ padding: "8px 18px", fontSize: 10 }}>CANCEL</button>
+            <div style={{
+              padding: `${space[4]}px ${space[6]}px`,
+              borderTop: `1px solid ${c.border}`,
+              display: "flex", gap: space[2], justifyContent: "space-between", flexShrink: 0,
+            }}>
+              <Btn variant="danger" size="sm" onClick={closePanel}>Cancel</Btn>
 
-              <div style={{ display: "flex", gap: 8 }}>
-                {/* Submit buttons */}
+              <div style={{ display: "flex", gap: space[2] }}>
                 {panel.type === "squad" && (
-                  <button onClick={() => { addSquad(); closePanel(); }} className="flow-btn" style={btnStyle(!!newSquad.trim())}>Add Squad</button>
+                  <Btn variant="primary" onClick={() => { addSquad(); closePanel(); }}
+                    disabled={!newSquad.trim()}>Add Squad</Btn>
                 )}
                 {panel.type === "role" && (
-                  <button onClick={() => { addRole(); closePanel(); }} className="flow-btn" style={btnStyle(!!newRole.trim())}>Add Role</button>
+                  <Btn variant="primary" onClick={() => { addRole(); closePanel(); }}
+                    disabled={!newRole.trim()}>Add Role</Btn>
                 )}
                 {panel.type === "person" && (
-                  <button onClick={() => { addPerson(); closePanel(); }} className="flow-btn" style={btnStyle(pName.trim() && pRole && pSquad)}>Add Person</button>
+                  <Btn variant="primary" onClick={() => { addPerson(); closePanel(); }}
+                    disabled={!(pName.trim() && pRole && pSquad)}>Add Person</Btn>
                 )}
               </div>
             </div>
@@ -786,21 +955,33 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             : "Mark project as completed?";
         const confirmLabel = isDelete ? "Delete" : "Yes, mark done";
         return (
-          <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, background: "rgba(0,0,0,0.5)" }} onClick={() => setConfirmAction(null)}>
+          <div style={{
+            position: "fixed", inset: 0, display: "flex", alignItems: "center",
+            justifyContent: "center", zIndex: 200, background: "rgba(0,0,0,0.5)",
+          }} onClick={() => setConfirmAction(null)}>
             <div onClick={e => e.stopPropagation()} style={{
-              background: c.surfaceSolid, borderRadius: 16, padding: "24px 28px", width: 420,
+              background: c.surfaceOverlay, borderRadius: layout.radiusLg + 4, // 16px
+              padding: `${space[6]}px ${space[7] - 4}px`, // 24px 28px
+              width: 420,
               border: `1px solid ${confirmAction.blocked ? c.red + "60" : c.border}`,
-              boxShadow: `0 20px 60px rgba(0,0,0,0.4)`,
+              boxShadow: c.shadowOverlay,
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: space[4] }}>
                 <div style={{
-                  width: 36, height: 36, borderRadius: 10,
-                  background: confirmAction.blocked ? (c.redDim || `${c.red}10`) : isDone ? c.greenDim : (c.orangeDim || `${c.orange}10`),
+                  width: 36, height: 36, borderRadius: layout.radiusMd + 2,
+                  background: confirmAction.blocked ? c.redDim : isDone ? c.greenDim : c.orangeDim,
                   display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
                 }}>{icon}</div>
                 <div>
-                  <div style={{ fontFamily: display, fontSize: 16, fontWeight: 700, color: c.text }}>{title}</div>
-                  <div style={{ fontFamily: mono, fontSize: 12, color: c.accent, fontWeight: 600 }}>{confirmAction.name}</div>
+                  <div style={{
+                    fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+                    fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+                    color: c.text,
+                  }}>{title}</div>
+                  <div style={{
+                    fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                    fontWeight: typo.monoLg.weight, color: c.accent,
+                  }}>{confirmAction.name}</div>
                 </div>
               </div>
 
@@ -808,48 +989,67 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                 <div style={{
                   background: `${confirmAction.blocked ? c.red : c.orange}08`,
                   border: `1px solid ${confirmAction.blocked ? c.red : c.orange}20`,
-                  borderRadius: 10, padding: "10px 12px", marginBottom: 16,
+                  borderRadius: layout.radiusMd + 2, padding: `${space[3]}px ${space[3]}px`,
+                  marginBottom: space[4],
                 }}>
-                  <div style={{ fontFamily: body, fontSize: 11, fontWeight: 700, color: confirmAction.blocked ? c.red : c.orange, marginBottom: 6 }}>
+                  <div style={{
+                    fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                    fontWeight: 700, color: confirmAction.blocked ? c.red : c.orange,
+                    marginBottom: space[2],
+                  }}>
                     {confirmAction.blocked ? "Hard-blocked — resolve dependencies first:" : "Dependencies found:"}
                   </div>
                   {confirmAction.deps.map((d, i) => (
-                    <div key={i} style={{ marginBottom: 4 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <span style={{ color: confirmAction.blocked ? c.red : c.orange, fontSize: 10 }}>•</span>
-                        <span style={{ fontFamily: body, fontSize: 12, color: confirmAction.blocked ? c.red : c.orange }}>{d.text}</span>
+                    <div key={i} style={{ marginBottom: space[1] }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                        <span style={{ color: confirmAction.blocked ? c.red : c.orange, fontSize: 12 }}>•</span>
+                        <span style={{
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                          color: confirmAction.blocked ? c.red : c.orange,
+                        }}>{d.text}</span>
                       </div>
                       {d.items && d.items.length > 0 && (
-                        <div style={{ paddingLeft: 16, marginTop: 2 }}>
+                        <div style={{ paddingLeft: space[4], marginTop: 2 }}>
                           {d.items.slice(0, 5).map((item, j) => (
-                            <div key={j} style={{ fontFamily: mono, fontSize: 10, color: c.textDim, padding: "1px 0" }}>{item}</div>
+                            <div key={j} style={{
+                              fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                              color: c.textDim, padding: "1px 0",
+                            }}>{item}</div>
                           ))}
-                          {d.items.length > 5 && <div style={{ fontFamily: mono, fontSize: 10, color: c.textDim }}>...and {d.items.length - 5} more</div>}
+                          {d.items.length > 5 && (
+                            <div style={{
+                              fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                              color: c.textDim,
+                            }}>...and {d.items.length - 5} more</div>
+                          )}
                         </div>
                       )}
                     </div>
                   ))}
-                  <div style={{ fontFamily: body, fontSize: 11, color: c.textMid, marginTop: 8 }}>
+                  <div style={{
+                    fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                    color: c.textMid, marginTop: space[2],
+                  }}>
                     {confirmAction.blocked ? "Reassign or remove all dependencies before deleting." : "This cannot be undone."}
                   </div>
                 </div>
               )}
 
               {confirmAction.deps.length === 0 && (
-                <div style={{ fontFamily: body, fontSize: 13, color: c.textMid, marginBottom: 16 }}>
+                <div style={{
+                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                  color: c.textMid, marginBottom: space[4],
+                }}>
                   {isDelete ? "This action cannot be undone. Are you sure?" : "Are you sure you want to mark this project as completed?"}
                 </div>
               )}
 
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button onClick={() => setConfirmAction(null)} className="flow-cmd-btn flow-cmd-btn-delete" style={{ padding: "8px 20px", fontSize: 10 }}>
-                  {confirmAction.blocked ? "CLOSE" : "CANCEL"}
-                </button>
+              <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
+                <Btn variant="secondary" size="sm" onClick={() => setConfirmAction(null)}>
+                  {confirmAction.blocked ? "Close" : "Cancel"}
+                </Btn>
                 {!confirmAction.blocked && (
-                  <button onClick={executeConfirmAction} className="flow-btn" style={{
-                    padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
-                    background: accentColor, fontFamily: body, fontSize: 13, fontWeight: 700, color: "#fff",
-                  }}>{confirmLabel}</button>
+                  <Btn variant="danger" onClick={executeConfirmAction}>{confirmLabel}</Btn>
                 )}
               </div>
             </div>

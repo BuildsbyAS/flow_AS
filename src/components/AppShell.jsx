@@ -1,7 +1,10 @@
-// Flow — App Shell (simplified)
-// Single header: Logo · Nav · Cycle · CTA · Search · Theme
+// Flow — App Shell (two-layer header)
+// Layer 1: Logo · Primary Nav · Utility (search, theme)
+// Layer 2: Week controls · Filters · Contextual state
 import React from "react";
-import { c, display, body, mono } from "../styles/theme";
+import { c, typo, layout, space, motion } from "../styles/theme";
+import { FilterChip, Btn } from "./shared";
+import FlowLogo from "./FlowLogo";
 
 /* ════════════════════════════════════════════════════════════════════
    NAV
@@ -63,9 +66,10 @@ export function getAttentionItems(commitments, projects) {
 
 
 /* ════════════════════════════════════════════════════════════════════
-   HEADER — redesigned sharp futuristic bar
-   52px. Logo stands out. Tabs are clear. Date is styled.
-   [Logo] [Nav tabs] ····· [attention] | [date badge · CTA] [🔍] [◐]
+   HEADER — two-layer shell
+   Layer 1 (48px): [Logo] | [Nav tabs] ····· [🔍] [◐]
+   Layer 2 (36px): [Week ◂ date ▸] | [Filters ▾▾▾ Apply Clear] ····· [chips]
+   Detail mode:    Layer 1 shows breadcrumb, Layer 2 hidden
    ════════════════════════════════════════════════════════════════════ */
 export function Header({
   weekLabel, weekOffset, onWeekPrev, onWeekNext, onLogoClick,
@@ -78,7 +82,7 @@ export function Header({
   allOwners, allSquads, allPeople,
 }) {
 
-  const showFilterBar = !detailLabel;
+  const showContextBar = !detailLabel;
   const hasPendingChanges = pendingFilters && globalFilters && (
     pendingFilters.owner !== globalFilters.owner ||
     pendingFilters.squad !== globalFilters.squad ||
@@ -87,85 +91,85 @@ export function Header({
 
   return (
     <>
+    {/* ═══ LAYER 1 — Primary navigation bar ═══ */}
     <header className="flow-header" style={{
       height: 52, display: "flex", alignItems: "center",
-      padding: "0 20px", gap: 0,
-      background: `linear-gradient(180deg, ${c.surfaceSolid} 0%, ${c.bg} 100%)`,
-      borderBottom: showFilterBar ? "none" : `1px solid ${c.border}`,
+      padding: `0 ${space[5]}px`,
+      background: c.surfaceSolid,
+      borderBottom: `1px solid ${c.border}`,
       position: "sticky", top: 0, zIndex: 50,
-      overflow: "hidden",
     }}>
+
+      {/* ── Accent edge — top of shell ── */}
+      <div className="flow-header-accent-edge" style={{
+        position: "absolute", top: 0, left: 0, right: 0, height: 1,
+        background: `linear-gradient(90deg, ${c.accent}00 0%, ${c.accent}35 20%, ${c.cyan}25 50%, ${c.purple}20 80%, ${c.accent}00 100%)`,
+        pointerEvents: "none",
+      }} />
 
       {/* ── Logo ── */}
       <div onClick={onLogoClick} className="flow-logo-group" style={{
-        display: "flex", alignItems: "center", gap: 8,
-        cursor: "pointer", marginRight: 20, flexShrink: 0,
+        display: "flex", alignItems: "center", gap: space[2] + 2,
+        cursor: "pointer", marginRight: space[5], flexShrink: 0,
       }}>
-        <div style={{
-          width: 28, height: 28, borderRadius: 8,
-          background: `linear-gradient(135deg, ${c.accent}18, ${c.cyan}12)`,
-          border: `1px solid ${c.accent}30`,
+        <div className="flow-logo-mark" style={{
+          flexShrink: 0, position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
-          flexShrink: 0,
         }}>
-          <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
-            <path d="M6 16 C6 10,12 6,16 12 C20 18,26 10,26 16 C26 22,20 26,16 20 C12 14,6 22,6 16Z"
-              stroke={c.accent} strokeWidth="2.8" fill="none" strokeLinecap="round" />
-          </svg>
+          <FlowLogo size={30} />
         </div>
         <span style={{
-          fontFamily: display, fontSize: 16, fontWeight: 800,
-          color: c.text, letterSpacing: "-0.04em",
+          fontFamily: typo.displaySm.font, fontSize: 16,
+          fontWeight: 800, color: c.text, letterSpacing: "-0.05em",
+          textShadow: `0 0 20px ${c.accent}15`,
         }}>Flow</span>
       </div>
 
       {/* ── Vertical separator ── */}
-      <div style={{ width: 1, height: 24, background: c.border, marginRight: 16, flexShrink: 0 }} />
+      <div style={{ width: 1, height: 28, background: `linear-gradient(180deg, ${c.border}00, ${c.border}, ${c.border}00)`, marginRight: space[3], flexShrink: 0 }} />
 
-      {/* ── Nav tabs (or breadcrumb when in detail) ── */}
+      {/* ── Nav tabs (or breadcrumb in detail mode) ── */}
       {detailLabel ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <span onClick={onBack} className="flow-breadcrumb" style={{
-            fontFamily: body, fontSize: 13, color: c.textMid, cursor: "pointer", flexShrink: 0,
-          }}>← {breadcrumbLabel}</span>
-          <span style={{ fontFamily: mono, fontSize: 10, color: c.textDim }}>/</span>
-          <span style={{
-            fontFamily: display, fontSize: 13, fontWeight: 700, color: c.text,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>{detailLabel}</span>
-        </div>
+        <DetailBreadcrumb
+          breadcrumbLabel={breadcrumbLabel}
+          detailLabel={detailLabel}
+          onBack={onBack}
+        />
       ) : (
-        <nav style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
+        <nav className="flow-nav-rail" style={{ display: "flex", alignItems: "stretch", gap: 2, flexShrink: 0, height: "100%" }}>
           {NAV.map(tab => {
             const active = activeTab === tab.key;
             return (
               <button key={tab.key} onClick={() => onTabSwitch(tab.key)} className="flow-header-tab" style={{
-                padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
-                background: active ? c.accentDim : "transparent",
-                fontFamily: body, fontSize: 13, fontWeight: active ? 700 : 500,
-                color: active ? c.accent : c.textMid,
-                display: "flex", alignItems: "center", gap: 5,
+                padding: `0 ${space[3] + 2}px`, borderRadius: 0,
+                border: "none", cursor: "pointer",
+                background: active ? `linear-gradient(180deg, ${c.accent}08 0%, ${c.accent}14 100%)` : "transparent",
+                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                fontWeight: active ? 700 : 500,
+                color: active ? c.text : c.textMid,
+                display: "flex", alignItems: "center", gap: 6,
                 position: "relative",
-                transition: "all 0.15s ease",
+                transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                borderLeft: active ? `1px solid ${c.accent}15` : "1px solid transparent",
+                borderRight: active ? `1px solid ${c.accent}15` : "1px solid transparent",
               }}>
-                <span style={{
-                  fontFamily: mono, fontSize: 9, fontWeight: 700,
-                  color: active ? c.accent : c.textDim,
-                  width: 14, height: 14, borderRadius: 4,
-                  background: active ? `${c.accent}15` : c.surfaceAlt,
-                  border: `1px solid ${active ? c.accent + "30" : c.border}`,
-                  display: "inline-flex", alignItems: "center", justifyContent: "center",
-                  lineHeight: 1, flexShrink: 0,
-                  transition: "all 0.15s ease",
-                }}>{tab.num}</span>
                 {tab.label}
-                {/* Active indicator bar */}
+                {/* Numeric shortcut hint — subtle hotkey */}
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: 9,
+                  fontWeight: 500, letterSpacing: typo.monoSm.tracking,
+                  color: c.textDim,
+                  opacity: active ? 0.5 : 0.3,
+                  lineHeight: 1, flexShrink: 0,
+                  transition: `opacity ${motion.interaction.duration}`,
+                }}>{tab.num}</span>
+                {/* Active indicator — bottom bar with glow */}
                 {active && (
                   <div style={{
-                    position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)",
-                    width: "60%", height: 2, borderRadius: 1,
+                    position: "absolute", bottom: -1, left: "15%",
+                    width: "70%", height: 2, borderRadius: 1,
                     background: c.accent,
-                    boxShadow: `0 1px 4px ${c.accent}40`,
+                    boxShadow: `0 0 8px ${c.accent}60, 0 1px 3px ${c.accent}40`,
                   }} />
                 )}
               </button>
@@ -175,133 +179,125 @@ export function Header({
       )}
 
       {/* ── Spacer ── */}
-      <div style={{ flex: 1, minWidth: 8 }} />
+      <div style={{ flex: 1, minWidth: space[2] }} />
 
-      {/* ── Right cluster: date · CTA | search · theme ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-
-        {/* Week navigator — prev / label / next */}
-        {!detailLabel && (
-          <div className="flow-week-nav" style={{
-            display: "flex", alignItems: "center", gap: 2,
-            borderRadius: 8, border: `1px solid ${c.border}`,
-            background: c.surfaceAlt, overflow: "hidden",
-          }}>
-            <button onClick={onWeekPrev} className="flow-btn" style={{
-              padding: "4px 8px", border: "none", background: "transparent",
-              cursor: "pointer", display: "flex", alignItems: "center",
-              color: c.textMid, transition: "color 0.15s",
-            }} title="Previous week">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M10 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <div style={{
-              padding: "3px 8px",
-              borderLeft: `1px solid ${c.border}`, borderRight: `1px solid ${c.border}`,
-              display: "flex", alignItems: "center", gap: 5,
-            }}>
-              <span style={{
-                fontFamily: mono, fontSize: 10, fontWeight: 600,
-                color: c.textDim, letterSpacing: "0.04em",
-              }}>WK</span>
-              <span style={{
-                fontFamily: mono, fontSize: 11, fontWeight: 700,
-                color: weekOffset === 0 ? c.text : c.accent,
-                letterSpacing: "0.02em", whiteSpace: "nowrap",
-              }}>{weekLabel}</span>
-              {weekOffset !== 0 && (
-                <span style={{
-                  fontFamily: mono, fontSize: 8, fontWeight: 700,
-                  color: c.accent, padding: "1px 4px", borderRadius: 3,
-                  background: `${c.accent}12`, border: `1px solid ${c.accent}25`,
-                  letterSpacing: "0.04em",
-                }}>PAST</span>
-              )}
-            </div>
-            <button onClick={weekOffset < 0 ? onWeekNext : undefined} className="flow-btn" style={{
-              padding: "4px 8px", border: "none", background: "transparent",
-              cursor: weekOffset < 0 ? "pointer" : "default",
-              display: "flex", alignItems: "center",
-              color: weekOffset < 0 ? c.textMid : c.textDim,
-              opacity: weekOffset < 0 ? 1 : 0.3,
-              transition: "color 0.15s",
-            }} title="Next week">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
-        )}
-
-        {/* Separator */}
-        <div style={{ width: 1, height: 20, background: c.border, flexShrink: 0 }} />
-
-        {/* Search trigger */}
+      {/* ── Utility cluster: search · theme ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
         <CompactSearch onClick={onCmdOpen} />
-
-        {/* Theme toggle */}
         <button onClick={onToggleTheme} title="Toggle theme (D)" className="flow-theme-toggle" style={{
-          width: 32, height: 16, borderRadius: 8, border: `1px solid ${c.border}`, cursor: "pointer",
+          width: 30, height: 15, borderRadius: layout.radiusMd, border: `1px solid ${c.border}`,
+          cursor: "pointer",
           background: darkMode
             ? `linear-gradient(90deg, ${c.accent}30, ${c.accent}15)`
             : c.surfaceAlt,
           position: "relative", flexShrink: 0,
-          transition: "all 0.2s ease",
+          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
         }}>
           <div style={{
-            width: 12, height: 12, borderRadius: "50%",
+            width: 11, height: 11, borderRadius: "50%",
             background: darkMode ? c.accent : c.textMid,
             position: "absolute", top: 1,
-            left: darkMode ? 18 : 2,
-            transition: "all 0.2s ease",
-            boxShadow: darkMode ? `0 0 6px ${c.accent}50` : "none",
+            left: darkMode ? 17 : 2,
+            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+            boxShadow: darkMode ? `0 0 5px ${c.accent}50` : "none",
           }} />
         </button>
       </div>
     </header>
 
-    {/* ═══ GLOBAL FILTER BAR — sticky below header ═══ */}
-    {showFilterBar && (
-      <div className="flow-filter-bar" style={{
-        height: 40, display: "flex", alignItems: "center",
-        padding: "0 20px", gap: 8,
-        background: c.surfaceSolid,
+    {/* ═══ LAYER 2 — Context bar (week + filters) ═══ */}
+    {showContextBar && (
+      <div className="flow-context-bar" style={{
+        height: 38, display: "flex", alignItems: "center",
+        padding: `0 ${space[5]}px`, gap: space[2],
+        background: `linear-gradient(180deg, ${c.surfaceSolid}F0 0%, ${c.bg}E8 100%)`,
         borderBottom: `1px solid ${c.border}`,
         position: "sticky", top: 52, zIndex: 49,
+        boxShadow: `0 1px 4px ${c.bg}80`,
       }}>
-        {/* Filter icon */}
-        <span style={{
-          fontFamily: mono, fontSize: 10, fontWeight: 700,
-          color: globalFilterCount > 0 ? c.accent : c.textDim,
-          letterSpacing: "0.06em", textTransform: "uppercase",
-          display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
-        }}>
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.7 }}>
-            <path d="M1 3h14M4 8h8M6 13h4" stroke={globalFilterCount > 0 ? c.accent : c.textDim} strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-          Filters
-        </span>
 
+        {/* ── Week navigator (tactical) ── */}
+        <div className="flow-week-nav" style={{
+          display: "flex", alignItems: "center",
+          borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+          background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.surfaceAlt}B0 100%)`,
+          overflow: "hidden", flexShrink: 0,
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+        }}>
+          <button onClick={onWeekPrev} className="flow-btn" style={{
+            padding: `2px ${space[1] + 2}px`, border: "none", background: "transparent",
+            cursor: "pointer", display: "flex", alignItems: "center",
+            color: c.textMid, transition: `color ${motion.interaction.duration}`,
+          }} title="Previous week">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <path d="M10 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <div style={{
+            padding: `2px ${space[2]}px`,
+            borderLeft: `1px solid ${c.border}`, borderRight: `1px solid ${c.border}`,
+            display: "flex", alignItems: "center", gap: 4,
+          }}>
+            <span style={{
+              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+              fontWeight: typo.monoSm.weight,
+              color: c.textDim, letterSpacing: typo.monoSm.tracking,
+            }}>WK</span>
+            <span style={{
+              fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, fontWeight: 600,
+              color: weekOffset === 0 ? c.textMid : c.accent,
+              whiteSpace: "nowrap",
+            }}>{weekLabel}</span>
+            {weekOffset !== 0 && (
+              <span style={{
+                fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+                color: c.accent, padding: "1px 3px", borderRadius: layout.radiusTag,
+                background: `${c.accent}12`, border: `1px solid ${c.accent}25`,
+                letterSpacing: typo.monoSm.tracking, lineHeight: 1,
+              }}>PAST</span>
+            )}
+          </div>
+          <button onClick={weekOffset < 0 ? onWeekNext : undefined} className="flow-btn" style={{
+            padding: `2px ${space[1] + 2}px`, border: "none", background: "transparent",
+            cursor: weekOffset < 0 ? "pointer" : "default",
+            display: "flex", alignItems: "center",
+            color: weekOffset < 0 ? c.textMid : c.textDim,
+            opacity: weekOffset < 0 ? 1 : 0.3,
+            transition: `color ${motion.interaction.duration}`,
+          }} title="Next week">
+            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
+              <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+
+        {/* ── Separator between week and filters ── */}
         <div style={{ width: 1, height: 18, background: c.border, flexShrink: 0 }} />
 
-        {/* Owner dropdown */}
+        {/* ── Filter cluster ── */}
+        <span style={{
+          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+          fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
+          color: globalFilterCount > 0 ? c.accent : c.textDim,
+          display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
+        }}>
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.7 }}>
+            <path d="M1 3h14M4 8h8M6 13h4" stroke={globalFilterCount > 0 ? c.accent : c.textDim} strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </span>
+
         <FilterSelect
           label="Owner"
           value={pendingFilters?.owner || ""}
           onChange={v => setPendingFilters(f => ({ ...f, owner: v }))}
           options={allOwners || []}
         />
-
-        {/* Squad dropdown */}
         <FilterSelect
           label="Squad"
           value={pendingFilters?.squad || ""}
           onChange={v => setPendingFilters(f => ({ ...f, squad: v }))}
           options={allSquads || []}
         />
-
-        {/* Person dropdown */}
         <FilterSelect
           label="Person"
           value={pendingFilters?.person || ""}
@@ -309,51 +305,35 @@ export function Header({
           options={allPeople || []}
         />
 
-        {/* Apply button */}
-        <button
+        <Btn
+          variant={hasPendingChanges ? "primary" : "secondary"}
+          size="sm"
           onClick={applyFilters}
           disabled={!hasPendingChanges}
-          className="flow-btn"
-          style={{
-            padding: "4px 14px", borderRadius: 6, border: "none",
-            background: hasPendingChanges ? c.accent : c.surfaceAlt,
-            color: hasPendingChanges ? "#fff" : c.textDim,
-            fontFamily: body, fontSize: 11, fontWeight: 700,
-            cursor: hasPendingChanges ? "pointer" : "default",
-            opacity: hasPendingChanges ? 1 : 0.5,
-            transition: "all 0.15s ease",
-            flexShrink: 0,
-          }}
-        >Apply</button>
+          style={{ flexShrink: 0, padding: `2px ${space[2]}px`, fontSize: typo.bodyXs.size }}
+        >Apply</Btn>
 
-        {/* Clear button — only visible when filters are active */}
         {globalFilterCount > 0 && (
-          <button
+          <Btn
+            variant="ghost"
+            size="sm"
             onClick={clearGlobalFilters}
-            className="flow-btn"
-            style={{
-              padding: "4px 10px", borderRadius: 6, border: `1px solid ${c.border}`,
-              background: "transparent", cursor: "pointer",
-              fontFamily: body, fontSize: 11, fontWeight: 600,
-              color: c.textMid, display: "flex", alignItems: "center", gap: 4,
-              flexShrink: 0,
-              transition: "all 0.15s ease",
-            }}
+            style={{ flexShrink: 0, padding: `2px ${space[2]}px`, fontSize: typo.bodyXs.size, display: "flex", alignItems: "center", gap: 3 }}
           >
             Clear
             <span style={{
-              fontFamily: mono, fontSize: 9, fontWeight: 700,
+              fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
               color: c.accent, background: c.accentDim,
-              padding: "1px 5px", borderRadius: 4,
+              padding: "0px 4px", borderRadius: layout.radiusTag + 1, lineHeight: 1.4,
             }}>{globalFilterCount}</span>
-          </button>
+          </Btn>
         )}
 
         <div style={{ flex: 1 }} />
 
-        {/* Active filter summary (right side) */}
+        {/* Active filter chips (right-aligned) */}
         {globalFilterCount > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[1] + 2, flexShrink: 0 }}>
             {globalFilters.owner && <FilterChip label={`Owner: ${globalFilters.owner}`} />}
             {globalFilters.squad && <FilterChip label={`Squad: ${globalFilters.squad}`} />}
             {globalFilters.person && <FilterChip label={`Person: ${globalFilters.person}`} />}
@@ -367,7 +347,62 @@ export function Header({
 
 
 /* ════════════════════════════════════════════════════════════════════
-   FILTER DROPDOWN — custom styled dropdown for filter bar
+   DETAIL BREADCRUMB — structured breadcrumb for detail pages
+   Shows parent section and detail title with clear hierarchy
+   ════════════════════════════════════════════════════════════════════ */
+function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: space[2], minWidth: 0, flex: 1 }}>
+      {/* Back link — parent section */}
+      <span onClick={onBack} className="flow-breadcrumb" style={{
+        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+        fontWeight: 500, color: c.textMid, cursor: "pointer", flexShrink: 0,
+        display: "flex", alignItems: "center", gap: 5,
+        transition: `all ${motion.interaction.duration}`,
+        padding: `3px ${space[2]}px 3px ${space[2] - 2}px`,
+        borderRadius: layout.radiusSm,
+        border: `1px solid transparent`,
+      }}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.6 }}>
+          <path d="M10 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {breadcrumbLabel}
+      </span>
+
+      {/* Separator — chevron */}
+      <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.3, flexShrink: 0 }}>
+        <path d="M6 4l4 4-4 4" stroke={c.textDim} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+
+      {/* Detail title — sub-system entry */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: space[2],
+        padding: `3px ${space[3]}px`,
+        borderRadius: layout.radiusSm,
+        background: `linear-gradient(135deg, ${c.accent}08, ${c.cyan}06)`,
+        border: `1px solid ${c.accent}18`,
+        minWidth: 0,
+      }}>
+        <div style={{
+          width: 5, height: 5, borderRadius: "50%",
+          background: c.accent,
+          boxShadow: `0 0 6px ${c.accent}50`,
+          flexShrink: 0,
+        }} />
+        <span style={{
+          fontFamily: typo.displaySm.font, fontSize: 14,
+          fontWeight: 700, color: c.text,
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          minWidth: 0,
+        }}>{detailLabel}</span>
+      </div>
+    </div>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   FILTER DROPDOWN — custom styled dropdown for context bar
    ════════════════════════════════════════════════════════════════════ */
 function FilterSelect({ label, value, onChange, options }) {
   const [open, setOpen] = React.useState(false);
@@ -393,20 +428,27 @@ function FilterSelect({ label, value, onChange, options }) {
       <button
         onClick={() => { setOpen(!open); setSearch(""); }}
         style={{
-          padding: "4px 10px 4px 8px", borderRadius: 6, height: 28,
+          padding: `2px ${space[2]}px 2px ${space[2] - 2}px`,
+          borderRadius: layout.radiusSm, height: 24,
           border: `1px solid ${value ? c.accent + "40" : c.border}`,
           background: value ? c.accentDim : c.surfaceAlt,
           color: value ? c.accent : c.textMid,
-          fontFamily: body, fontSize: 11, fontWeight: value ? 600 : 500,
-          cursor: "pointer", minWidth: 90, maxWidth: 160,
-          display: "flex", alignItems: "center", gap: 4,
-          transition: "all 0.15s ease", boxSizing: "border-box",
+          fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+          fontWeight: value ? 600 : 500,
+          cursor: "pointer", minWidth: 80, maxWidth: 150,
+          display: "flex", alignItems: "center", gap: space[1],
+          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+          boxSizing: "border-box",
         }}
       >
         <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {value || label}
         </span>
-        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>
+        <svg width="7" height="4" viewBox="0 0 8 5" fill="none" style={{
+          flexShrink: 0,
+          transform: open ? "rotate(180deg)" : "none",
+          transition: `transform ${motion.interaction.duration}`,
+        }}>
           <path d="M1 1l3 3 3-3" stroke={value ? c.accent : c.textDim} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>
@@ -415,16 +457,16 @@ function FilterSelect({ label, value, onChange, options }) {
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0,
-          minWidth: 200, maxHeight: 320, borderRadius: 8,
-          background: c.surfaceSolid, border: `1px solid ${c.border}`,
-          boxShadow: "0 8px 30px rgba(0,0,0,0.4)",
+          minWidth: 200, maxHeight: 320, borderRadius: layout.radiusMd,
+          background: c.surfaceOverlay, border: `1px solid ${c.border}`,
+          boxShadow: c.shadowOverlay,
           zIndex: 100, overflow: "hidden",
           display: "flex", flexDirection: "column",
           animation: "fadeScaleIn 0.12s ease-out",
         }}>
           {/* Search input (only if many options) */}
           {options.length > 5 && (
-            <div style={{ padding: "6px 8px", borderBottom: `1px solid ${c.border}` }}>
+            <div style={{ padding: `${space[2] - 2}px ${space[2]}px`, borderBottom: `1px solid ${c.border}` }}>
               <input
                 autoFocus
                 placeholder={`Search ${label.toLowerCase()}…`}
@@ -435,9 +477,11 @@ function FilterSelect({ label, value, onChange, options }) {
                   if (e.key === "Enter" && filtered.length === 1) { onChange(filtered[0]); setOpen(false); setSearch(""); }
                 }}
                 style={{
-                  width: "100%", padding: "5px 8px", border: `1px solid ${c.border}`,
-                  borderRadius: 4, background: c.surfaceAlt, color: c.text,
-                  fontFamily: body, fontSize: 11, outline: "none", boxSizing: "border-box",
+                  width: "100%", padding: `5px ${space[2]}px`,
+                  border: `1px solid ${c.border}`, borderRadius: layout.radiusTag + 1,
+                  background: c.surfaceAlt, color: c.text,
+                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                  outline: "none", boxSizing: "border-box",
                 }}
               />
             </div>
@@ -450,8 +494,9 @@ function FilterSelect({ label, value, onChange, options }) {
               onClick={() => { onChange(""); setOpen(false); setSearch(""); }}
               className="flow-dropdown-item"
               style={{
-                padding: "7px 12px", cursor: "pointer",
-                fontFamily: body, fontSize: 11, color: !value ? c.accent : c.textDim,
+                padding: `7px ${space[3]}px`, cursor: "pointer",
+                fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                color: !value ? c.accent : c.textDim,
                 fontWeight: !value ? 600 : 400,
                 background: !value ? `${c.accent}08` : "transparent",
                 borderBottom: `1px solid ${c.border}`,
@@ -464,21 +509,24 @@ function FilterSelect({ label, value, onChange, options }) {
                 onClick={() => { onChange(opt); setOpen(false); setSearch(""); }}
                 className="flow-dropdown-item"
                 style={{
-                  padding: "7px 12px", cursor: "pointer",
-                  fontFamily: body, fontSize: 11.5,
+                  padding: `7px ${space[3]}px`, cursor: "pointer",
+                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
                   color: opt === value ? c.accent : c.text,
                   fontWeight: opt === value ? 600 : 400,
                   background: opt === value ? `${c.accent}08` : "transparent",
-                  display: "flex", alignItems: "center", gap: 6,
+                  display: "flex", alignItems: "center", gap: space[2] - 2,
                 }}
               >
-                {opt === value && <span style={{ fontSize: 9, color: c.accent }}>●</span>}
+                {opt === value && <span style={{ fontSize: 11, color: c.accent }}>●</span>}
                 {opt}
               </div>
             ))}
 
             {filtered.length === 0 && (
-              <div style={{ padding: "12px", fontFamily: body, fontSize: 11, color: c.textDim, textAlign: "center" }}>
+              <div style={{
+                padding: `${space[3]}px`, fontFamily: typo.bodyXs.font,
+                fontSize: typo.bodyXs.size, color: c.textDim, textAlign: "center",
+              }}>
                 No matches
               </div>
             )}
@@ -490,21 +538,6 @@ function FilterSelect({ label, value, onChange, options }) {
 }
 
 /* ════════════════════════════════════════════════════════════════════
-   FILTER CHIP — active filter indicator (right side of filter bar)
-   ════════════════════════════════════════════════════════════════════ */
-function FilterChip({ label }) {
-  return (
-    <span style={{
-      fontFamily: mono, fontSize: 9, fontWeight: 600,
-      color: c.accent, background: c.accentDim,
-      padding: "2px 8px", borderRadius: 4,
-      border: `1px solid ${c.accent}25`,
-      letterSpacing: "0.02em", whiteSpace: "nowrap",
-    }}>{label}</span>
-  );
-}
-
-/* ════════════════════════════════════════════════════════════════════
    COMPACT SEARCH — click trigger for command palette
    ════════════════════════════════════════════════════════════════════ */
 function CompactSearch({ onClick }) {
@@ -512,23 +545,31 @@ function CompactSearch({ onClick }) {
     <div className="flow-hide-mobile flow-search-trigger" onClick={onClick} style={{
       position: "relative", width: 140, cursor: "pointer",
       display: "flex", alignItems: "center",
-      padding: "5px 10px", gap: 7,
-      borderRadius: 8, border: `1px solid ${c.border}`,
-      background: c.surfaceAlt,
-      transition: "all 0.15s ease",
+      padding: `4px ${space[2] + 2}px`, gap: 7,
+      borderRadius: layout.radiusMd, border: `1px solid ${c.border}`,
+      background: `linear-gradient(135deg, ${c.surfaceAlt} 0%, ${c.surfaceAlt}C0 100%)`,
+      transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.02)`,
     }}>
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.45, flexShrink: 0 }}>
+        <circle cx="7" cy="7" r="5" stroke={c.textDim} strokeWidth="1.5" />
+        <path d="M11 11l3 3" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
       <span style={{
-        fontFamily: body, fontSize: 12, color: c.textDim,
+        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+        color: c.textDim,
         flex: 1, whiteSpace: "nowrap", overflow: "hidden",
         userSelect: "none",
-      }}>Search...</span>
+      }}>Search</span>
       <span style={{
-        fontFamily: mono, fontSize: 9, fontWeight: 700,
+        fontFamily: typo.monoSm.font, fontSize: 9,
+        fontWeight: 600,
         color: c.textDim, background: c.surface,
-        border: `1px solid ${c.border}`, padding: "1px 6px", borderRadius: 4,
-        lineHeight: 1.3, flexShrink: 0,
+        border: `1px solid ${c.border}`, padding: "1px 5px",
+        borderRadius: layout.radiusTag + 1,
+        lineHeight: 1.4, flexShrink: 0,
+        boxShadow: `0 1px 0 ${c.border}`,
       }}>F</span>
     </div>
   );
 }
-

@@ -1,7 +1,7 @@
 // Flow — Focus View (Phase-driven: Planning → Locked → Closing)
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { c, display, body, mono, layout, motion, phaseNames, typeConfig, phaseColors as getPhaseColors, density } from "../styles/theme";
-import { Badge, Tag, Surface, Inp, Sel } from "../components/shared";
+import { c, layout, motion, space, typo, phaseNames, typeConfig, phaseColors as getPhaseColors, density, btnVariants, entityColors, colWidths } from "../styles/theme";
+import { Badge, Tag, Surface, Inp, TextArea, ChoiceGroup, Sel, Btn, TelemetryLabel, SummaryTile, Th as SharedTh, MetricCompact, EntityLink, VDivider, SectionDivider } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
 
 // ─── ANIMATED KPI COUNTER ─────────────────────────────────────
@@ -21,44 +21,90 @@ const FocusKpi = ({ value, label, color, delay = 0 }) => {
     return () => { clearTimeout(timeout); cancelAnimationFrame(frame); };
   }, [value, delay]);
   return (
-    <div className="flow-focus-kpi" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, animationDelay: `${delay}ms` }}>
-      <span style={{ fontFamily: display, fontSize: 28, fontWeight: 800, color, letterSpacing: "-0.03em", lineHeight: 1 }}>{displayVal}</span>
-      <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 600, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase" }}>{label}</span>
+    <div className="flow-focus-kpi" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: space[1], animationDelay: `${delay}ms` }}>
+      <span style={{ fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size, fontWeight: typo.displayXl.weight, color, letterSpacing: typo.displayXl.tracking, lineHeight: typo.displayXl.lineHeight }}>{displayVal}</span>
+      <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.textMid, letterSpacing: "0" }}>{label}</span>
     </div>
   );
 };
 
-// ─── SUMMARY TILE — compact inline tile for unified summary ───
-const SummaryTile = ({ value, label, color, active, onClick }) => (
-  <div
-    onClick={onClick}
-    className="flow-glass-tile"
-    style={{
-      display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-      padding: "10px 12px", minWidth: 56, borderRadius: 8, cursor: onClick ? "pointer" : "default",
-      background: active ? `${color}12` : "transparent",
-      border: `1px solid ${active ? color + "40" : "transparent"}`,
-      transition: "all 0.15s ease",
-    }}
-  >
-    <span style={{
-      fontFamily: display, fontSize: 20, fontWeight: 800, color: active ? color : (value > 0 ? c.text : c.textDim),
-      lineHeight: 1, letterSpacing: "-0.02em",
-    }}>{value}</span>
-    <span style={{
-      fontFamily: body, fontSize: 10, fontWeight: 700, color: active ? color : c.textMid,
-      letterSpacing: "0.02em", whiteSpace: "nowrap",
-    }}>{label}</span>
-  </div>
-);
 
-// ─── SUMMARY METRIC — for secondary KPIs ───
-const SummaryMetric = ({ value, label, color }) => (
-  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "10px 8px", minWidth: 48 }}>
-    <span style={{ fontFamily: display, fontSize: 18, fontWeight: 800, color, lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</span>
-    <span style={{ fontFamily: mono, fontSize: 8, fontWeight: 600, color: c.textDim, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{label}</span>
-  </div>
-);
+// ─── PROJECT SEARCH/SELECT — supports typing project ID ──────────
+const ProjectSearchSelect = ({ projects, value, onChange, placeholder }) => {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  const selected = projects.find(p => p.id === value);
+  const lq = query.toLowerCase();
+  const filtered = query ? projects.filter(p =>
+    p.id.toLowerCase().includes(lq) || p.name.toLowerCase().includes(lq)
+  ) : projects;
+
+  useEffect(() => {
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  if (selected) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+        <div style={{
+          flex: 1, display: "flex", alignItems: "center", gap: space[2],
+          padding: `${space[2]}px ${space[3]}px`, borderRadius: layout.radiusSm,
+          background: c.surfaceAlt, border: `1px solid ${c.border}`,
+        }}>
+          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: entityColors().project }}>{selected.id}</span>
+          <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, color: c.text }}>{selected.name}</span>
+        </div>
+        <Btn variant="ghost" size="sm" onClick={() => { onChange(""); setQuery(""); }}>Change</Btn>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <Inp
+        value={query}
+        onChange={e => { setQuery(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder={placeholder || "Search by name or ID..."}
+        style={{ width: "100%" }}
+      />
+      {open && filtered.length > 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
+          maxHeight: 200, overflowY: "auto",
+          background: c.surfaceOverlay, border: `1px solid ${c.border}`,
+          borderRadius: layout.radiusSm, marginTop: 2,
+          boxShadow: c.shadowOverlay,
+        }}>
+          {filtered.map(p => (
+            <div key={p.id} onClick={() => { onChange(p.id); setQuery(""); setOpen(false); }}
+              className="flow-row" style={{
+                padding: `${space[2]}px ${space[3]}px`, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: space[2],
+                transition: `background ${motion.interaction.duration}`,
+              }}>
+              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: entityColors().project, minWidth: 36 }}>{p.id}</span>
+              <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.text, flex: 1 }}>{p.name}</span>
+              {p.phase && <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textDim, textTransform: "uppercase" }}>{p.phase}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      {open && query && filtered.length === 0 && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 20,
+          padding: `${space[3]}px`, background: c.surfaceOverlay,
+          border: `1px solid ${c.border}`, borderRadius: layout.radiusSm, marginTop: 2,
+          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim,
+          textAlign: "center",
+        }}>No projects match "{query}"</div>
+      )}
+    </div>
+  );
+};
 
 // ═══ FOCUS VIEW ═════════════════════════════════════════════════
 const HumansView = ({ commitments, setCommitments, projects, people, setDetailLabel, setGoBack, setIsLocked, searchRef, globalFilters = {} }) => {
@@ -289,17 +335,10 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
   // ── Sort helpers ──
   const toggleSort = (col) => { if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortCol(col); setSortDir("asc"); } };
   const sortIcon = (col) => sortCol === col ? (sortDir === "asc" ? " \u2191" : " \u2193") : "";
-  const dp = { cellPad: "4px 6px", headerPad: "8px 6px" };
 
   const Th = ({ col, children, style: s }) => (
-    <th onClick={() => toggleSort(col)} style={{
-      padding: dp.headerPad, textAlign: "left", fontFamily: body, fontSize: 12, fontWeight: 700,
-      letterSpacing: "0.05em", cursor: "pointer", userSelect: "none",
-      borderBottom: `1px solid ${c.border}`,
-      background: c.bg, color: sortCol === col ? c.accent : c.text,
-      transition: "color 0.2s", position: "sticky", top: 0, zIndex: 2,
-      textTransform: "uppercase", whiteSpace: "nowrap", ...s,
-    }}>{children}{sortIcon(col)}</th>
+    <SharedTh col={col} sortKey={sortCol} sortDir={sortDir} onSort={toggleSort}
+      style={s}>{children}</SharedTh>
   );
 
   // ═══ PEOPLE QUEUE (list view) ═══
@@ -313,59 +352,74 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        {/* ── Sticky control bar — stays in place while list scrolls ── */}
-        <div className="flow-focus-sticky" style={{ position: "sticky", top: 92, zIndex: 10, background: c.bg, display: "flex", flexDirection: "column", gap: 12, paddingBottom: 12 }}>
-        {/* UNIFIED SUMMARY — status tiles + KPIs in one strip (Pulse-style) */}
-        <div className="flow-mission-grid" style={{ padding: "12px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", position: "relative", zIndex: 1 }}>
+        {/* ── Sticky command surface — matches Pulse pattern ── */}
+        <div style={{
+          position: "sticky", top: 92, zIndex: 10,
+          background: c.bg, paddingBottom: space[3],
+          display: "flex", flexDirection: "column", gap: space[3] - 2,
+        }}>
+
+        {/* UNIFIED SUMMARY — status tiles + KPIs + progress in one strip */}
+        <div className="flow-mission-grid" style={{ padding: `${space[3]}px ${space[4]}px` }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: space[1],
+            flexWrap: "wrap", position: "relative", zIndex: 1,
+          }}>
             {/* Status tiles — clickable filters */}
             <SummaryTile value={locked} label="Locked" color={c.green} active={filterStatus === "locked"} onClick={() => { setFilterStatus(filterStatus === "locked" ? null : "locked"); setRowAnimKey(k => k + 1); }} />
-            <SummaryTile value={filled} label="Ready" color={c.blue} active={filterStatus === "ready"} onClick={() => { setFilterStatus(filterStatus === "ready" ? null : "ready"); setRowAnimKey(k => k + 1); }} />
+            <SummaryTile value={filled} label="Ready" color={c.cyan} active={filterStatus === "ready"} onClick={() => { setFilterStatus(filterStatus === "ready" ? null : "ready"); setRowAnimKey(k => k + 1); }} />
             <SummaryTile value={partial} label="Partial" color={c.orange} active={filterStatus === "partial"} onClick={() => { setFilterStatus(filterStatus === "partial" ? null : "partial"); setRowAnimKey(k => k + 1); }} />
             <SummaryTile value={empty} label="Empty" color={c.red} active={filterStatus === "empty"} onClick={() => { setFilterStatus(filterStatus === "empty" ? null : "empty"); setRowAnimKey(k => k + 1); }} />
 
-            {/* Divider */}
-            <div style={{ width: 1, height: 36, background: c.border, flexShrink: 0, margin: "0 6px" }} />
+            <VDivider />
 
             {/* KPI metrics */}
-            <SummaryMetric value={total} label="Team" color={c.text} />
-            <SummaryMetric value={`${pctLocked}%`} label="Locked" color={pctLocked === 100 ? c.green : pctLocked >= 50 ? c.accent : c.textDim} />
+            <MetricCompact value={total} label="Team" color={c.text} />
+            <MetricCompact value={`${pctLocked}%`} label="Locked" color={pctLocked === 100 ? c.green : pctLocked >= 50 ? c.accent : c.textDim} />
 
-            {/* Divider */}
-            <div style={{ width: 1, height: 36, background: c.border, flexShrink: 0, margin: "0 6px" }} />
+            <VDivider />
 
-            {/* Progress bar */}
-            <div style={{ flex: 1, minWidth: 120, display: "flex", flexDirection: "column", gap: 4, justifyContent: "center" }}>
-              <div style={{ height: 8, background: c.surfaceAlt, borderRadius: 4, overflow: "hidden" }}>
+            {/* Progress bar — lock readiness */}
+            <div style={{ flex: 1, minWidth: 120, display: "flex", alignItems: "center", gap: space[2] }}>
+              <TelemetryLabel style={{ flexShrink: 0 }}>PROGRESS</TelemetryLabel>
+              <div style={{ flex: 1, height: 6, background: c.surfaceAlt, borderRadius: layout.radiusTag, overflow: "hidden" }}>
                 <div style={{ display: "flex", height: "100%" }}>
-                  <div style={{ width: `${total > 0 ? (locked / total) * 100 : 0}%`, background: c.green, transition: "width 0.6s cubic-bezier(0.22, 1, 0.36, 1)" }} />
-                  <div style={{ width: `${total > 0 ? (filled / total) * 100 : 0}%`, background: c.blue, transition: "width 0.6s cubic-bezier(0.22, 1, 0.36, 1)" }} />
-                  <div style={{ width: `${total > 0 ? (partial / total) * 100 : 0}%`, background: c.orange, transition: "width 0.6s cubic-bezier(0.22, 1, 0.36, 1)" }} />
+                  <div style={{ width: `${total > 0 ? (locked / total) * 100 : 0}%`, background: c.green, transition: `width 0.6s ${motion.interaction.easing}` }} />
+                  <div style={{ width: `${total > 0 ? (filled / total) * 100 : 0}%`, background: c.cyan, transition: `width 0.6s ${motion.interaction.easing}` }} />
+                  <div style={{ width: `${total > 0 ? (partial / total) * 100 : 0}%`, background: c.orange, transition: `width 0.6s ${motion.interaction.easing}` }} />
                 </div>
               </div>
+              <span style={{
+                fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                fontWeight: 800, letterSpacing: typo.monoMd.tracking, flexShrink: 0,
+                color: pctLocked === 100 ? c.green : pctLocked >= 50 ? c.accent : c.textMid,
+              }}>{pctLocked}%</span>
             </div>
           </div>
         </div>
 
-        {/* VIEW MODE TOGGLE — People / Commitments (Pulse-style) */}
-        <div style={{ display: "flex", gap: 2, background: c.accentDim, borderRadius: 10, padding: 3 }}>
+        {/* VIEW MODE TOGGLE — matches Pulse segmented control */}
+        <div style={{
+          display: "flex", gap: 2,
+          background: c.accentDim, borderRadius: layout.radiusMd, padding: 3,
+        }}>
           {[{ key: "people", label: "People" }, { key: "summary", label: "Commitments" }].map(v => (
             <button key={v.key} onClick={() => { setViewMode(v.key); setRowAnimKey(k => k + 1); setSortCol("squad"); setSortDir("asc"); }} style={{
-              flex: 1, padding: "8px 16px", borderRadius: 8, border: "none", cursor: "pointer",
+              flex: 1, padding: `${space[2]}px ${space[4]}px`,
+              borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
               background: viewMode === v.key ? c.accent : "transparent",
-              fontFamily: body, fontSize: 12.5, fontWeight: viewMode === v.key ? 700 : 500,
-              color: viewMode === v.key ? "#fff" : c.accent,
-              transition: "all 0.15s",
-              boxShadow: viewMode === v.key ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+              fontWeight: viewMode === v.key ? 700 : 500,
+              color: viewMode === v.key ? c.textCrit : c.accent,
+              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+              boxShadow: viewMode === v.key ? `0 1px 3px ${c.shadow}` : "none",
             }}>{v.label}</button>
           ))}
         </div>
 
-        </div>{/* end sticky bar */}
+        </div>{/* end sticky command surface */}
 
-        {/* ═══════════════════════════════════════════════════════════
-            VIEW CONTENT — Tables matching Pulse style
-            ═══════════════════════════════════════════════════════════ */}
+        {/* ═══ VIEW CONTENT ═══ */}
 
         {/* Commitments table — flat rows, one per locked commitment item */}
         {viewMode === "summary" && (() => {
@@ -413,56 +467,56 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
           });
 
           return (
-            <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, overflow: "hidden", background: "transparent", boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
+            <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, overflow: "hidden", background: "transparent", boxShadow: c.shadowCard }}>
               <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "68vh", background: "transparent", borderRadius: layout.radius }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                   <thead>
                     <tr>
-                      <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: 60 }}>Squad</Th>
-                      <Th col="person" style={{ minWidth: 120, borderLeft: `1px dotted ${c.border}` }}>Person</Th>
-                      <Th col="project" style={{ minWidth: 100, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
-                      <Th col="title" style={{ minWidth: 180, borderLeft: `1px dotted ${c.border}` }}>Focus</Th>
-                      <Th col="type" style={{ minWidth: 64, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Type</Th>
-                      <Th col="stage" style={{ minWidth: 70, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Stage</Th>
-                      <Th col="status" style={{ minWidth: 80, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>
+                      <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
+                      <Th col="person" style={{ minWidth: colWidths.person.min, borderLeft: `1px dotted ${c.border}` }}>Person</Th>
+                      <Th col="project" style={{ minWidth: colWidths.identity.min, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
+                      <Th col="title" style={{ minWidth: colWidths.focus.min, borderLeft: `1px dotted ${c.border}` }}>Focus</Th>
+                      <Th col="type" style={{ minWidth: colWidths.status.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Type</Th>
+                      <Th col="stage" style={{ minWidth: colWidths.phase.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Stage</Th>
+                      <Th col="status" style={{ minWidth: colWidths.status.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>
                     </tr>
                   </thead>
                   <tbody key={rowAnimKey}>
                     {sortedItems.length === 0 && (
-                      <tr><td colSpan={7} style={{ textAlign: "center", padding: "30px 0", fontFamily: body, fontSize: 13, color: c.textDim }}>No locked commitments yet</td></tr>
+                      <tr><td colSpan={7} style={{ textAlign: "center", padding: `${space[7]}px 0`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No locked commitments yet</td></tr>
                     )}
                     {sortedItems.map((it, ri) => {
                       const pObj = people.find(p => p.name === it.person);
                       const proj = projects.find(pr => pr.id === it.project);
-                      const statusColors = {
-                        WIP: c.accent, Completed: c.green, Carry: c.blue,
+                      const outcomeColors = {
+                        WIP: c.cyan, Completed: c.green, Carry: c.cyan,
                         "Completed+Carry": c.orange, Blocked: c.red,
-                        Deprioritized: c.textDim, Buffer: c.accent,
+                        Deprioritized: c.textDim, Buffer: c.purple,
                       };
-                      const sClr = statusColors[it._status] || c.textDim;
+                      const sClr = outcomeColors[it._status] || c.textDim;
                       return (
                         <tr key={`${it.person}-${it.project}-${ri}`} className="flow-row" style={{
-                          animation: `rowSlideIn 0.3s cubic-bezier(0.16,1,0.3,1) both`,
+                          animation: `rowSlideIn 0.3s ${motion.interaction.easing} both`,
                           animationDelay: `${Math.min(ri * 20, 600)}ms`,
                           opacity: it._status === "Deprioritized" ? 0.55 : 1,
                         }}>
-                          <td style={{ padding: dp.cellPad, fontFamily: body, fontSize: 11, fontWeight: 600, color: c.textMid, borderBottom: `1px dotted ${c.border}`, position: "sticky", left: 0, background: c.bg, zIndex: 1 }}>{pObj?.squad || "—"}</td>
-                          <td style={{ padding: dp.cellPad, borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
-                            <span onClick={() => { const idx = commitments.findIndex(cm => cm.person === it.person); if (idx >= 0) openPerson(idx); }} style={{ fontFamily: body, fontSize: 12, fontWeight: 600, color: c.text, cursor: "pointer", textDecoration: "underline", textDecorationColor: c.textMid + "40", textUnderlineOffset: 2 }}>{it.person}</span>
+                          <td style={{ padding: `${space[2]}px ${space[3]}px`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, borderBottom: `1px dotted ${c.border}`, position: "sticky", left: 0, background: c.bg, zIndex: 1 }}>{pObj?.squad || "\u2014"}</td>
+                          <td style={{ padding: `${space[2]}px ${space[3]}px`, borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
+                            <EntityLink type="person" onClick={() => { const idx = commitments.findIndex(cm => cm.person === it.person); if (idx >= 0) openPerson(idx); }} underline style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600 }}>{it.person}</EntityLink>
                           </td>
-                          <td style={{ padding: dp.cellPad, borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
-                            <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: c.accent }}>{it.project}</span>
-                            {proj && <span style={{ fontFamily: body, fontSize: 11, fontWeight: 500, color: c.text, marginLeft: 5 }}>{proj.name}</span>}
+                          <td style={{ padding: `${space[2]}px ${space[3]}px`, borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
+                            <EntityLink type="project" style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700 }}>{it.project}</EntityLink>
+                            {proj && <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.text, marginLeft: space[1] }}>{proj.name}</span>}
                           </td>
-                          <td style={{ padding: dp.cellPad, borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}`, fontFamily: body, fontSize: 11, color: c.text, textDecoration: it._status === "Deprioritized" ? "line-through" : "none" }}>{it.title}</td>
-                          <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
-                            <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
+                          <td style={{ padding: `${space[2]}px ${space[3]}px`, borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.text, textDecoration: it._status === "Deprioritized" ? "line-through" : "none" }}>{it.title}</td>
+                          <td style={{ padding: `${space[2]}px ${space[3]}px`, textAlign: "center", borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
+                            <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{tc[it.type]?.label || it.type}</Badge>
                           </td>
-                          <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
-                            {it.stage ? <Tag color={pc[it.stage] || c.textMid} bg={`${pc[it.stage] || c.textMid}15`}>{it.stage}</Tag> : <span style={{ fontFamily: mono, fontSize: 10, color: c.textDim }}>—</span>}
+                          <td style={{ padding: `${space[2]}px ${space[3]}px`, textAlign: "center", borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
+                            {it.stage ? <Badge color={pc[it.stage] || c.textMid} bg={`${pc[it.stage] || c.textMid}15`}>{it.stage}</Badge> : <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>{"\u2014"}</span>}
                           </td>
-                          <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
-                            <Tag color={sClr} bg={`${sClr}15`}>{it._status}</Tag>
+                          <td style={{ padding: `${space[2]}px ${space[3]}px`, textAlign: "center", borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
+                            <Badge color={sClr} bg={`${sClr}15`}>{it._status}</Badge>
                           </td>
                         </tr>
                       );
@@ -474,9 +528,15 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
           );
         })()}
 
-        {/* People table — one row per person, sortable columns (Pulse-style) */}
+        {/* People table — grouped by operational status */}
         {viewMode === "people" && (() => {
-          const statusColors = { Locked: c.green, Ready: c.blue, Partial: c.orange, Empty: c.red };
+          const commitStatusColors = { Locked: c.green, Ready: c.cyan, Partial: c.orange, Empty: c.red };
+          const groupOrder = [
+            { key: "Locked", label: "Locked", color: c.green, icon: "●" },
+            { key: "Ready", label: "Ready to Lock", color: c.cyan, icon: "◉" },
+            { key: "Partial", label: "Partial", color: c.orange, icon: "◐" },
+            { key: "Empty", label: "Empty", color: c.red, icon: "○" },
+          ];
           // Build rows with status info
           const rows = filtered.map(cm => {
             const pObj = people.find(p => p.name === cm.person);
@@ -486,53 +546,53 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
             return { cm, pObj, filledCount, status, realIdx: commitments.indexOf(cm) };
           });
 
-          // Apply status filter from tiles
-          const statusFiltered = filterStatus ? rows.filter(r => r.status.toLowerCase() === filterStatus) : rows;
-
           // Sort within each group
           const sortRows = (arr) => [...arr].sort((a, b) => {
             let va, vb;
             if (sortCol === "person") { va = a.cm.person; vb = b.cm.person; }
             else if (sortCol === "role") { va = a.pObj?.role || ""; vb = b.pObj?.role || ""; }
-            else if (sortCol === "status") { va = a.status; vb = b.status; }
             else if (sortCol === "filled") { va = a.filledCount; vb = b.filledCount; }
             else { va = a.pObj?.squad || ""; vb = b.pObj?.squad || ""; }
             if (typeof va === "number") return sortDir === "asc" ? va - vb : vb - va;
             return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
           });
 
-          // Group by status in display order
-          const statusOrder = ["Locked", "Ready", "Partial", "Empty"];
-          const grouped = statusOrder.map(st => ({
-            status: st,
-            color: statusColors[st],
-            rows: sortRows(statusFiltered.filter(r => r.status === st)),
+          // When a status filter is active, show only that group flat; otherwise show grouped sections
+          const activeFilter = filterStatus;
+          const groupsToRender = activeFilter
+            ? groupOrder.filter(g => g.key.toLowerCase() === activeFilter)
+            : groupOrder;
+
+          // Build grouped data
+          const groupedData = groupsToRender.map(g => ({
+            ...g,
+            rows: sortRows(rows.filter(r => r.status === g.key)),
           })).filter(g => g.rows.length > 0);
 
-          let globalRi = 0;
+          let globalRowIdx = 0;
 
           return (
-            <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, overflow: "hidden", background: "transparent", boxShadow: "0 2px 12px rgba(0,0,0,0.08)" }}>
+            <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, overflow: "hidden", background: "transparent", boxShadow: c.shadowCard }}>
               <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "68vh", background: "transparent", borderRadius: layout.radius }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
                   <thead>
                     <tr>
-                      <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: 60 }}>Squad</Th>
-                      <Th col="person" style={{ minWidth: 130, borderLeft: `1px dotted ${c.border}` }}>Person</Th>
-                      <Th col="role" style={{ minWidth: 90, borderLeft: `1px dotted ${c.border}` }}>Role</Th>
-                      <Th col="filled" style={{ minWidth: 80, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Filled</Th>
-                      <Th col="status" style={{ minWidth: 70, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>
+                      <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
+                      <Th col="person" style={{ minWidth: colWidths.person.min }}>Person</Th>
+                      <Th col="role" style={{ minWidth: colWidths.role.min }}>Role</Th>
+                      <Th col="filled" style={{ minWidth: colWidths.metric.min, textAlign: "center" }}>Filled</Th>
+                      <Th col="status" style={{ minWidth: colWidths.status.min, textAlign: "center" }}>Status</Th>
                     </tr>
                   </thead>
                   <tbody key={rowAnimKey}>
-                    {grouped.length === 0 && (
-                      <tr><td colSpan={5} style={{ textAlign: "center", padding: "30px 0", fontFamily: body, fontSize: 13, color: c.textDim }}>No one found</td></tr>
+                    {groupedData.length === 0 && (
+                      <tr><td colSpan={5} style={{ textAlign: "center", padding: `${space[7]}px 0`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No one found</td></tr>
                     )}
-                    {grouped.map(group => {
-                      const sectionRows = group.rows.map(row => {
-                        const ri = globalRi++;
+                    {groupedData.map((group) => {
+                      const sectionRows = group.rows.map((row) => {
+                        const ri = globalRowIdx++;
                         const isFocused = kbActive && ri === focusIdx;
-                        const sColor = statusColors[row.status] || c.textDim;
+                        const sColor = commitStatusColors[row.status] || c.textDim;
                         return (
                           <tr
                             key={row.cm.person}
@@ -541,53 +601,66 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
                             style={{
                               cursor: "pointer",
                               background: isFocused ? c.surfaceAlt : "transparent",
-                              transition: "background 0.15s",
-                              animation: `rowSlideIn 0.3s cubic-bezier(0.16,1,0.3,1) both`,
+                              transition: `background ${motion.interaction.duration} ${motion.interaction.easing}`,
+                              animation: `rowSlideIn 0.3s ${motion.interaction.easing} both`,
                               animationDelay: `${Math.min(ri * 20, 600)}ms`,
                             }}
                           >
-                            <td style={{ padding: dp.cellPad, fontFamily: body, fontSize: 11, fontWeight: 600, color: c.textMid, borderBottom: `1px dotted ${c.border}`, position: "sticky", left: 0, background: c.bg, zIndex: 1 }}>{row.pObj?.squad || "—"}</td>
-                            <td style={{ padding: dp.cellPad, borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
-                              <span style={{ fontFamily: body, fontSize: 12, fontWeight: 600, color: c.text, cursor: "pointer", textDecoration: "underline", textDecorationColor: c.textMid + "40", textUnderlineOffset: 2 }}>{row.cm.person}</span>
+                            <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, borderBottom: `1px solid ${c.border}08`, position: "sticky", left: 0, background: isFocused ? c.surfaceAlt : c.bg, zIndex: 1 }}>{row.pObj?.squad || "\u2014"}</td>
+                            <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, borderBottom: `1px solid ${c.border}08` }}>
+                              <EntityLink type="person" style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: typo.bodyLg.weight }}>{row.cm.person}</EntityLink>
                             </td>
-                            <td style={{ padding: dp.cellPad, borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}`, fontFamily: body, fontSize: 11, fontWeight: 500, color: c.textMid }}>{row.pObj?.role || "—"}</td>
-                            <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                            <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, borderBottom: `1px solid ${c.border}08`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.textMid }}>{row.pObj?.role || "\u2014"}</td>
+                            <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, textAlign: "center", borderBottom: `1px solid ${c.border}08` }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: space[1] }}>
                                   {[0, 1, 2].map(si => (
                                     <div key={si} style={{
                                       width: 14, height: 4, borderRadius: 2,
                                       background: si < row.filledCount ? sColor : c.surfaceAlt,
                                       border: si < row.filledCount ? "none" : `1px solid ${c.border}`,
-                                      transition: "all 0.3s",
+                                      transition: `all ${motion.critical.duration} ${motion.critical.easing}`,
                                     }} />
                                   ))}
                                 </div>
-                                <span style={{ fontFamily: mono, fontSize: 10, fontWeight: 700, color: sColor }}>{row.filledCount}/3</span>
+                                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, color: sColor }}>{row.filledCount}/3</span>
                               </div>
                             </td>
-                            <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: `1px dotted ${c.border}`, borderLeft: `1px dotted ${c.border}` }}>
-                              <Tag color={sColor} bg={`${sColor}15`}>{row.status}</Tag>
+                            <td style={{ padding: `${space[2] + 2}px ${space[3]}px`, textAlign: "center", borderBottom: `1px solid ${c.border}08` }}>
+                              <Badge color={sColor} bg={`${sColor}15`}>{row.status}</Badge>
                             </td>
                           </tr>
                         );
                       });
+
                       return [
-                        <tr key={`section-${group.status}`}>
-                          <td colSpan={5} style={{
-                            padding: "10px 8px 6px",
-                            fontFamily: mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-                            color: group.color, background: `${group.color}08`,
-                            borderBottom: `1px solid ${group.color}20`,
-                            borderTop: `1px solid ${group.color}15`,
-                          }}>
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: group.color, display: "inline-block", opacity: 0.7 }} />
-                              {group.status.toUpperCase()}
-                              <span style={{ fontWeight: 500, color: c.textDim, letterSpacing: "0.02em" }}>{group.rows.length}</span>
-                            </span>
-                          </td>
-                        </tr>,
+                        /* Section header row */
+                        !activeFilter && (
+                          <tr key={`section-${group.key}`}>
+                            <td colSpan={5} style={{
+                              padding: `${space[2] + 2}px ${space[3]}px`,
+                              background: `${group.color}06`,
+                              borderBottom: `1px solid ${group.color}18`,
+                              borderTop: `1px solid ${group.color}12`,
+                            }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                                <div style={{
+                                  width: 6, height: 6, borderRadius: "50%",
+                                  background: group.color, boxShadow: `0 0 6px ${group.color}40`,
+                                }} />
+                                <span style={{
+                                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                                  fontWeight: 700, color: group.color, letterSpacing: "0",
+                                }}>{group.label}</span>
+                                <span style={{
+                                  fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                                  fontWeight: typo.monoMd.weight, color: group.color,
+                                  opacity: 0.7,
+                                }}>{group.rows.length}</span>
+                              </div>
+                            </td>
+                          </tr>
+                        ),
                         ...sectionRows,
                       ];
                     })}
@@ -617,7 +690,7 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
   // Current week frame label
   const weekEnd = new Date(base);
   weekEnd.setDate(weekEnd.getDate() + 6);
-  const weekLabel = `${base.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  const weekLabel = `${base.toLocaleDateString("en-US", { month: "short", day: "numeric" })} \u2013 ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   // Closing phase: track outcomes
   const activeItems = person.items
@@ -634,681 +707,610 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
 
   // Phase badge config
   const phaseBadge = {
-    planning: { label: "Planning Week", color: c.accent, bg: c.accentDim },
-    locked: { label: "Week Locked", color: c.green, bg: c.greenDim },
-    closing: { label: "Closing Week", color: c.orange, bg: c.orangeDim },
+    planning: { label: "Planning", color: c.accent, bg: c.accentDim },
+    locked: { label: "Locked", color: c.green, bg: c.greenDim },
+    closing: { label: "Closing", color: c.orange, bg: c.orangeDim },
   }[phase];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
 
-      {/* ═══ COMPACT HEADER — left: identity, right: week + actions ═══ */}
-      <div className="flow-neon-card flow-focus-hero" style={{
-        background: c.surface, padding: "12px 16px",
-        border: `1px solid ${c.border}`,
-        boxShadow: `0 2px 12px ${c.shadow}`,
+      {/* ═══ DETAIL HEADER — two-line layout ═══ */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: `${space[3]}px ${space[4]}px`,
+        background: c.surface, border: `1px solid ${phase === "locked" ? c.green + "15" : c.border}`,
+        borderRadius: layout.radius, position: "relative", overflow: "hidden",
       }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, position: "relative", zIndex: 2 }}>
-          {/* LEFT — avatar + name + badges + status */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0, flex: 1 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: "50%", background: c.accentDim,
-              border: `2px solid ${c.accent}50`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: display, fontSize: 13, fontWeight: 800, color: c.accent,
-              flexShrink: 0,
-            }}>{person.person.charAt(0)}</div>
-            <div style={{ fontFamily: display, fontSize: 16, fontWeight: 800, color: c.text, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{person.person}</div>
+        {/* Green bottom highlight for locked phase */}
+        {phase === "locked" && (
+          <div style={{
+            position: "absolute", bottom: 0, left: 0, right: 0, height: 2,
+            background: `linear-gradient(90deg, ${c.green}, ${c.green}18)`,
+            boxShadow: `0 0 16px ${c.green}30`,
+          }} />
+        )}
+
+        {/* Left: Avatar + Name (line 1) + Role·Squad (line 2) */}
+        <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: "50%",
+            background: c.accentDim, border: `2px solid ${c.accent}40`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontWeight: 800, fontSize: 14, color: c.accent, flexShrink: 0,
+          }}>{person.person.charAt(0)}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <span style={{
+              fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+              fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking, color: c.text,
+            }}>{person.person}</span>
             {personMeta && (
-              <>
-                <Badge color={c.accent} bg={c.accentDim}>{personMeta.role}</Badge>
-                <Badge color={c.orange} bg={c.orangeDim}>{personMeta.squad}</Badge>
-              </>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.textMid }}>
+                {personMeta.role} · {personMeta.squad}
+              </span>
             )}
-            {/* Inline status indicator */}
+          </div>
+        </div>
+
+        {/* Right: Status indicators + action (top row) + date (bottom row) */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: space[1] }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+            {/* Planning: progress bars + ready/filled text + Lock button */}
             {phase === "planning" && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 4, flexShrink: 0 }}>
-                <div style={{ display: "flex", gap: 2 }}>
+              <>
+                <div style={{ display: "flex", gap: 3 }}>
                   {[0, 1, 2].map(si => (
                     <div key={si} style={{
-                      width: 14, height: 3, borderRadius: 2,
+                      width: 18, height: 4, borderRadius: 2,
                       background: si < readyCount ? c.green : c.surfaceAlt,
                       border: si < readyCount ? "none" : `1px solid ${c.border}`,
                     }} />
                   ))}
                 </div>
-                <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 600, color: canLock ? c.green : c.textDim }}>
-                  {canLock ? "Ready" : `${readyCount}/3`}
-                </span>
-              </div>
-            )}
-            {phase === "closing" && (
-              <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 600, color: weekComplete ? c.green : c.textMid, marginLeft: 4, flexShrink: 0 }}>
-                {weekComplete ? "All resolved" : `${fullyResolved}/${activeItems.length} resolved`}
-              </span>
-            )}
-          </div>
-
-          {/* RIGHT — week label + phase badge + action buttons */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-            {/* Week label */}
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                <rect x="1" y="3" width="14" height="12" rx="2" stroke={c.textDim} strokeWidth="1.3" fill="none" />
-                <line x1="1" y1="7" x2="15" y2="7" stroke={c.textDim} strokeWidth="1.3" />
-                <line x1="5" y1="1" x2="5" y2="5" stroke={c.textDim} strokeWidth="1.3" strokeLinecap="round" />
-                <line x1="11" y1="1" x2="11" y2="5" stroke={c.textDim} strokeWidth="1.3" strokeLinecap="round" />
-              </svg>
-              <span style={{ fontFamily: body, fontSize: 11, fontWeight: 600, color: c.textMid }}>{weekLabel}</span>
-            </div>
-
-            {/* Phase badge */}
-            <div className={phase === "locked" ? "flow-focus-lock-glow" : ""} style={{
-              padding: "4px 10px", borderRadius: 6,
-              background: phaseBadge.bg,
-              border: `1px solid ${phaseBadge.color}30`,
-              display: "flex", alignItems: "center", gap: 5,
-            }}>
-              <div style={{ width: 6, height: 6, borderRadius: "50%", background: phaseBadge.color, boxShadow: phase === "locked" ? `0 0 6px ${c.green}60` : "none" }} />
-              <span style={{ fontFamily: body, fontSize: 10, fontWeight: 600, color: phaseBadge.color }}>{phaseBadge.label}</span>
-            </div>
-
-            {/* Action buttons */}
-            {phase === "planning" && (
-              <button onClick={() => { if (!canLock) return; setConfirmAction("lock"); }} className="flow-btn" style={{
-                padding: "5px 14px", borderRadius: 6, border: "none", cursor: canLock ? "pointer" : "default",
-                background: canLock ? `linear-gradient(135deg, ${c.green}20, ${c.green}40)` : c.surfaceAlt,
-                color: canLock ? c.green : c.textDim,
-                fontFamily: display, fontSize: 11, fontWeight: 700, letterSpacing: "0.04em",
-                opacity: canLock ? 1 : 0.5, transition: "all 0.15s",
-              }}>
-                <span style={{ display: "flex", alignItems: "center", gap: 5 }}>Lock Week <kbd style={{ fontFamily: mono, fontSize: 8, opacity: 0.6 }}>L</kbd></span>
-              </button>
-            )}
-            {phase === "locked" && person.lockedAt && (
-              <span style={{ fontFamily: body, fontSize: 10, fontWeight: 500, color: c.textDim }}>
-                {person.lockedAt}
-              </span>
-            )}
-            {phase === "locked" && (
-              <>
-                <button onClick={() => setClosingMode(true)} className="flow-btn" style={{
-                  padding: "5px 14px", borderRadius: 6, border: "none", cursor: "pointer",
-                  background: `linear-gradient(135deg, ${c.accent}20, ${c.accent}40)`,
-                  color: c.accent, fontFamily: display, fontSize: 11, fontWeight: 700, transition: "all 0.15s",
-                }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 5 }}>Finish <kbd style={{ fontFamily: mono, fontSize: 8, opacity: 0.6 }}>F</kbd></span>
-                </button>
-                <button onClick={() => { if (canUnlock) setConfirmAction("unlock"); }} className="flow-btn" style={{
-                  padding: "4px 10px", borderRadius: 5, border: `1px solid ${canUnlock ? c.border : c.orange + "25"}`,
-                  background: canUnlock ? "transparent" : c.orange + "08",
-                  cursor: canUnlock ? "pointer" : "default",
-                  fontFamily: body, fontSize: 10, fontWeight: 500, color: canUnlock ? c.textDim : c.orange,
-                  opacity: canUnlock ? 1 : 0.8, transition: "all 0.15s",
-                }}>
-                  {canUnlock ? (
-                    <span style={{ display: "flex", alignItems: "center", gap: 3 }}>Unlock <kbd style={{ fontFamily: mono, fontSize: 7, opacity: 0.5 }}>U</kbd></span>
-                  ) : (
-                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      <svg width="9" height="9" viewBox="0 0 16 16" fill="none"><rect x="3" y="7" width="10" height="8" rx="2" stroke={c.orange} strokeWidth="1.5" fill="none" /><path d="M5 7V5a3 3 0 0 1 6 0v2" stroke={c.orange} strokeWidth="1.5" fill="none" strokeLinecap="round" /></svg>
-                      <span style={{ fontFamily: mono, fontSize: 8 }}>{lockCountdown}</span>
-                    </span>
-                  )}
-                </button>
+                {readyCount > 0 && (
+                  <span style={{
+                    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                    fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking,
+                    color: canLock ? c.green : c.textDim,
+                  }}>{canLock ? "READY TO LOCK" : `${readyCount}/3 FILLED`}</span>
+                )}
+                <Btn variant="success" size="sm" disabled={!canLock} onClick={() => { if (canLock) setConfirmAction("lock"); }}>
+                  Lock Week <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, opacity: 0.6 }}>L</kbd>
+                </Btn>
               </>
             )}
+            {/* Locked: Locked pill with timer + Finish button */}
+            {phase === "locked" && (
+              <>
+                <div style={{
+                  display: "flex", alignItems: "center", gap: space[1] + 2,
+                  padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
+                  background: `${c.green}08`, border: `1px solid ${c.green}25`,
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.green, boxShadow: `0 0 6px ${c.green}60` }} />
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.green, textTransform: "uppercase" }}>Locked</span>
+                  {lockCountdown && (
+                    <>
+                      <div style={{ width: 1, height: 12, background: `${c.green}20` }} />
+                      <svg width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.5 }}>
+                        <rect x="3" y="7" width="10" height="8" rx="2" stroke={c.green} strokeWidth="1.5" fill="none" />
+                        <path d="M5 7V5a3 3 0 0 1 6 0v2" stroke={c.green} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                      </svg>
+                      <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.green, opacity: 0.7 }}>{lockCountdown}</span>
+                    </>
+                  )}
+                </div>
+                <Btn variant="primary" size="sm" onClick={() => setClosingMode(true)}>
+                  Finish <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, opacity: 0.6 }}>F</kbd>
+                </Btn>
+              </>
+            )}
+            {/* Closing: progress bars + resolved text + Closing pill + Back button */}
             {phase === "closing" && (
-              <button onClick={() => setClosingMode(false)} className="flow-btn" style={{
-                padding: "4px 12px", borderRadius: 5, border: `1px solid ${c.border}`,
-                background: "transparent", cursor: "pointer",
-                fontFamily: body, fontSize: 10, fontWeight: 500, color: c.textDim,
-              }}>Back to Locked</button>
+              <>
+                <div style={{ display: "flex", gap: 3 }}>
+                  {activeItems.map((_, i) => (
+                    <div key={i} style={{
+                      width: 18, height: 4, borderRadius: 2,
+                      background: i < fullyResolved ? c.green : c.surfaceAlt,
+                      border: i < fullyResolved ? "none" : `1px solid ${c.border}`,
+                    }} />
+                  ))}
+                </div>
+                <span style={{
+                  fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                  fontWeight: typo.monoMd.weight, color: weekComplete ? c.green : c.textMid,
+                }}>{weekComplete ? "ALL RESOLVED" : `${fullyResolved}/${activeItems.length} RESOLVED`}</span>
+                <div style={{
+                  padding: `3px ${space[2] + 2}px`, borderRadius: layout.radiusSm,
+                  background: `${c.orange}08`, border: `1px solid ${c.orange}25`,
+                  display: "flex", alignItems: "center", gap: space[1],
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.orange }} />
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.orange, textTransform: "uppercase" }}>Closing</span>
+                </div>
+                <Btn variant="ghost" size="sm" onClick={() => setClosingMode(false)}>Back to Locked</Btn>
+              </>
             )}
           </div>
+          {/* Date range — bottom row */}
+          <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, fontWeight: 400, color: c.textDim }}>{weekLabel}</span>
         </div>
       </div>
 
-      {/* ═══ TASK CARDS — 2x2 grid ═══════════════════════════════ */}
-      <div style={{ display: "grid", gridTemplateColumns: phase === "planning" ? "1fr" : "1fr 1fr", gap: 8 }}>
-        {person.items.map((item, idx) => {
-          const isD = person.deselected === idx;
-          const projObj = projects.find(p => p.id === item.project);
-          const isEmpty = !item.project && !item.title.trim();
-          const outcome = item.outcome;
-          const isFocused = idx === detailFocus;
-          const outcomeColor = outcome === "done" ? c.green : outcome === "carry" ? c.blue : outcome === "blocked" ? c.red : outcome === "done_carry" ? c.orange : null;
-          const tCfg = tc[item.type] || {};
+      {/* ═══ PLANNING PHASE — Dot Navigation + Spotlight ═══ */}
+      {phase === "planning" && (() => {
+        const spotItem = person.items[detailFocus];
+        const spotProj = projects.find(p => p.id === spotItem?.project);
+        const spotEmpty = !spotItem?.project && !(spotItem?.title || "").trim();
+        const spotHasProject = !!spotItem?.project;
+        const spotHasTitle = !!(spotItem?.title || "").trim();
+        const spotIsDepri = person.deselected === detailFocus;
+        const slotFilled = person.items.map((it, idx) =>
+          person.deselected !== idx && !!it.project && !!(it.title || "").trim()
+        );
+        // Show Deprioritize only when editing an existing commitment (not first visit)
+        const showDepri = spotHasProject && spotHasTitle;
 
-          // ── DEPRIORITIZED TASK — collapsed ──
-          if (isD) return (
-            <div key={idx} className="flow-neon-card flow-card-archived" style={{
-              background: c.surfaceAlt,
-              border: `1px solid ${c.red}15`,
-              padding: "8px 12px",
-              opacity: 0.4,
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, position: "relative", zIndex: 2, minWidth: 0 }}>
-                <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: c.textDim }}>{idx + 1}</span>
-                {item.title.trim() && <span style={{ fontFamily: body, fontSize: 11, color: c.textDim, textDecoration: "line-through", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</span>}
-                <span style={{
-                  fontFamily: mono, fontSize: 8, fontWeight: 700, color: c.red,
-                  background: c.redDim, padding: "2px 6px", borderRadius: 3,
-                  letterSpacing: "0.06em", flexShrink: 0,
-                }}>DEPRI</span>
-              </div>
-              {phase === "planning" && (
-                <button onClick={() => toggleDeselect(idx)} className="flow-btn" style={{
-                  padding: "3px 8px", borderRadius: 4, border: `1px solid ${c.border}`,
-                  background: "transparent", cursor: "pointer", fontFamily: body, fontSize: 10, fontWeight: 500, color: c.textDim,
-                  position: "relative", zIndex: 2, flexShrink: 0,
-                }}>Restore</button>
-              )}
+        return (
+          <>
+            {/* ── Dot Navigation ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], margin: `${space[4]}px auto ${space[3]}px`, width: "fit-content" }}>
+              {[0, 1, 2].map((di) => {
+                const filled = slotFilled[di];
+                const active = di === detailFocus;
+                const depri = person.deselected === di;
+                return (
+                  <React.Fragment key={di}>
+                    {di > 0 && <div style={{ width: 20, height: 1, background: c.border }} />}
+                    <div onClick={() => { if (!depri) setDetailFocus(di); }} style={{
+                      width: 36, height: 36, borderRadius: "50%",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 13, fontWeight: 800, cursor: depri ? "default" : "pointer",
+                      position: "relative",
+                      transition: `all 0.2s ${motion.interaction.easing}`,
+                      ...(depri ? { background: "transparent", border: `2px solid ${c.red}20`, color: c.textDim, opacity: 0.35 }
+                        : active ? { background: `${c.accent}15`, border: `2px solid ${c.accent}`, color: c.accent, boxShadow: `0 0 20px ${c.accent}25`, transform: "scale(1.12)" }
+                        : filled ? { background: `${c.green}10`, border: `2px solid ${c.green}30`, color: c.green }
+                        : { background: "transparent", border: `2px solid ${c.border}`, color: c.textDim }),
+                    }}>
+                      {di + 1}
+                      {filled && !depri && (
+                        <div style={{ position: "absolute", bottom: -2, right: -2, width: 14, height: 14, borderRadius: "50%", background: c.green, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, color: c.bg, fontWeight: 900 }}>{"\u2713"}</div>
+                      )}
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+              <div style={{ width: 20, height: 0, borderTop: `1px dashed ${c.purple}25` }} />
+              <div style={{
+                width: 36, height: 36, borderRadius: "50%",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, fontWeight: 800, border: `2px dashed ${c.purple}30`,
+                color: c.purple, background: "transparent", opacity: bufferActive ? 1 : 0.4,
+                cursor: "default",
+              }}>B</div>
             </div>
-          );
 
-          // ── PLANNING PHASE — editable task cards ──
-          if (phase === "planning") {
-            // Empty slot
-            if (isEmpty) return (
-              <div key={idx} className={`flow-neon-card flow-task-card${isFocused ? " flow-neon-active" : ""}`} style={{
-                background: "transparent", border: `1.5px dashed ${c.border}`,
-                padding: "12px 16px",
+            {/* ── Spotlight Card ── */}
+            {spotIsDepri ? (
+              <div style={{
+                maxWidth: 640, margin: "0 auto", width: "100%",
+                background: c.surfaceAlt, border: `1px solid ${c.red}15`,
+                borderRadius: layout.radius + 2, padding: `${space[3]}px ${space[4]}px`,
+                opacity: 0.45, display: "flex", alignItems: "center", justifyContent: "space-between",
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8, position: "relative", zIndex: 2 }}>
-                  <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 800, color: c.textDim }}>{idx + 1}</span>
-                  <span style={{ fontFamily: display, fontSize: 13, fontWeight: 600, color: c.textDim }}>Task {idx + 1}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: c.textDim }}>{detailFocus + 1}</span>
+                  {(spotItem.title || "").trim() && <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, textDecoration: "line-through" }}>{spotItem.title}</span>}
+                  <Badge color={c.red} bg={c.redDim}>Depri</Badge>
                 </div>
-                <div style={{ position: "relative", zIndex: 2 }}>
-                  <Sel value="" onChange={e => {
-                    updateItem(idx, "project", e.target.value);
-                    const p = projects.find(pr => pr.id === e.target.value);
-                    if (p) updateItem(idx, "stage", p.phase);
-                  }} style={{ width: "100%", fontSize: 12, fontWeight: 600, padding: "8px 12px" }}>
-                    <option value="">Select project...</option>
-                    {projects.map(p => <option key={p.id} value={p.id}>{p.id} — {p.name}</option>)}
-                  </Sel>
-                </div>
-              </div>
-            );
-
-            // Filled slot — editable (full-width single-column)
-            return (
-              <div key={idx} className={`flow-neon-card flow-task-card${isFocused ? " flow-neon-active" : ""}`} style={{
-                background: c.surface,
-                border: `1px solid ${c.border}`,
-                borderLeft: `3px solid ${item.project ? c.accent + "60" : c.border}`,
-                padding: "14px 16px",
-                transition: "all 0.2s ease",
-              }}>
-                {/* Card header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, position: "relative", zIndex: 2 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 800, color: c.textMid }}>{idx + 1}</span>
-                    {projObj
-                      ? <span style={{ fontFamily: display, fontSize: 15, fontWeight: 700, color: c.text }}>{projObj.name}</span>
-                      : <span style={{ fontFamily: display, fontSize: 14, fontWeight: 600, color: c.textDim }}>Task {idx + 1}</span>
-                    }
-                    {projObj && <span style={{ fontFamily: mono, fontSize: 10, fontWeight: 600, color: c.textDim }}>{projObj.id}</span>}
-                  </div>
-                  <button onClick={() => toggleDeselect(idx)} className="flow-btn" style={{
-                    padding: "4px 10px", borderRadius: 4, border: `1px solid ${c.border}`,
-                    background: "transparent", cursor: "pointer",
-                    fontFamily: body, fontSize: 10, fontWeight: 500, color: c.textDim,
-                  }}>Change Priority</button>
-                </div>
-
-                {/* Project + Description — side by side for full-width layout */}
-                <div style={{ display: "flex", gap: 10, marginBottom: 10, position: "relative", zIndex: 2 }}>
-                  <div style={{ width: 220, flexShrink: 0 }}>
-                    <Sel value={item.project} onChange={e => {
-                      updateItem(idx, "project", e.target.value);
-                      const p = projects.find(pr => pr.id === e.target.value);
-                      if (p && !item.stage) updateItem(idx, "stage", p.phase);
-                    }} style={{ width: "100%", fontSize: 12, fontWeight: 600, padding: "8px 12px", color: item.project ? c.text : c.textDim }}>
-                      <option value="">Select project...</option>
-                      {projects.map(p => <option key={p.id} value={p.id}>{p.id} — {p.name}</option>)}
-                    </Sel>
-                    {!item.project && item.title.trim() && (
-                      <span className="flow-validation-msg" style={{ fontFamily: body, fontSize: 10, color: c.orange, marginTop: 3, display: "block" }}>Select a project</span>
-                    )}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <textarea
-                      value={item.title}
-                      onChange={e => updateItem(idx, "title", e.target.value)}
-                      placeholder="What will you deliver this week?"
-                      className="flow-input"
-                      rows={1}
-                      style={{
-                        width: "100%", padding: "8px 12px", borderRadius: 6,
-                        border: `1px solid ${c.border}`, background: c.surfaceAlt,
-                        color: c.text, fontFamily: body, fontSize: 13, fontWeight: 500,
-                        lineHeight: 1.4, outline: "none", boxSizing: "border-box",
-                        resize: "vertical", minHeight: 36,
-                      }}
-                    />
-                    {!item.title.trim() && item.project && (
-                      <span className="flow-validation-msg" style={{ fontFamily: body, fontSize: 10, color: c.orange, marginTop: 3, display: "block" }}>Describe what you're delivering</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Selectors — all on one row: STAGE · TYPE · WEEKS */}
-                <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", position: "relative", zIndex: 2 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, color: c.textDim, letterSpacing: "0.06em", marginRight: 3 }}>STAGE</span>
-                    {phaseNames.map(s => {
-                      const active = item.stage === s;
-                      const sColor = pc[s] || c.textDim;
-                      return (
-                        <button key={s} onClick={() => updateItem(idx, "stage", s)} className="flow-btn" style={{
-                          padding: "4px 8px", borderRadius: 4,
-                          border: `1px solid ${active ? sColor + "40" : c.border}`,
-                          background: active ? sColor + "12" : "transparent",
-                          color: active ? sColor : c.textDim,
-                          fontFamily: mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
-                          cursor: "pointer", transition: "all 0.15s",
-                        }}>{s}</button>
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, color: c.textDim, letterSpacing: "0.06em", marginRight: 3 }}>TYPE</span>
-                    {["BUILD", "JAM", "COMMIT", "BLOCKED"].map(t => {
-                      const active = item.type === t;
-                      const cfg = tc[t] || {};
-                      return (
-                        <button key={t} onClick={() => updateItem(idx, "type", t)} className="flow-btn" style={{
-                          padding: "4px 8px", borderRadius: 4,
-                          border: `1px solid ${active ? cfg.color + "40" : c.border}`,
-                          background: active ? cfg.bg : "transparent",
-                          color: active ? cfg.color : c.textDim,
-                          fontFamily: mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
-                          cursor: "pointer", transition: "all 0.15s",
-                        }}>{t}</button>
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, color: c.textDim, letterSpacing: "0.06em", marginRight: 3 }}>WEEKS</span>
-                    {[1, 2, 3, 4].map(w => {
-                      const active = (item.duration || 1) === w;
-                      return (
-                        <button key={w} onClick={() => updateItem(idx, "duration", w)} className="flow-btn" style={{
-                          padding: "4px 8px", borderRadius: 4,
-                          border: `1px solid ${active ? c.accent + "40" : c.border}`,
-                          background: active ? c.accentDim : "transparent",
-                          color: active ? c.accent : c.textDim,
-                          fontFamily: mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
-                          cursor: "pointer", transition: "all 0.15s",
-                        }}>{w}w</button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          // ── LOCKED PHASE — read-only task cards ──
-          if (phase === "locked") {
-            if (isEmpty) return null; // hide empty slots when locked
-            const stageColor = pc[item.stage] || c.textDim;
-
-            return (
-              <div key={idx} className="flow-neon-card flow-task-card" style={{
-                background: c.surface,
-                border: `1px solid ${c.border}`,
-                borderLeft: `3px solid ${item.project ? c.accent + "30" : c.border}`,
-                padding: "10px 12px",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, position: "relative", zIndex: 2 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 800, color: c.textMid }}>{idx + 1}</span>
-                    {projObj && <span style={{ fontFamily: display, fontSize: 13, fontWeight: 700, color: c.text }}>{projObj.name}</span>}
-                    {item.stage && (
-                      <span style={{
-                        fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                        color: stageColor, background: stageColor + "12",
-                        padding: "2px 7px", borderRadius: 4,
-                      }}>{item.stage}</span>
-                    )}
-                    {item.type && (
-                      <span style={{
-                        fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                        color: tCfg.color || c.textDim, background: tCfg.bg || c.surfaceAlt,
-                        padding: "2px 7px", borderRadius: 4,
-                      }}>{item.type}</span>
-                    )}
-                    {(item.duration || 1) > 1 && (
-                      <span style={{
-                        fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                        color: c.accent, background: c.accentDim,
-                        padding: "2px 7px", borderRadius: 4,
-                      }}>{item.duration}w</span>
-                    )}
-                  </div>
-                </div>
-                <div style={{
-                  fontFamily: body, fontSize: 12, fontWeight: 500, color: c.text, lineHeight: 1.5,
-                  whiteSpace: "pre-wrap", position: "relative", zIndex: 2,
-                }}>{item.title}</div>
-              </div>
-            );
-          }
-
-          // ── CLOSING PHASE — read-only + inline outcome controls ──
-          if (phase === "closing") {
-            if (isEmpty) return null;
-            const stageColor = pc[item.stage] || c.textDim;
-            const showDoneCarry = (item.weeksRemaining || item.duration || 1) > 1;
-            const carryColor = outcome === "done_carry" ? c.orange : c.blue;
-
-            return (
-              <div key={idx} className="flow-neon-card flow-task-card" style={{
-                background: outcome ? `${outcomeColor}06` : c.surface,
-                border: `1px solid ${outcome ? outcomeColor + "25" : c.border}`,
-                borderLeft: `3px solid ${outcomeColor || c.accent + "30"}`,
-                padding: "10px 12px",
-                transition: "all 0.2s ease",
-              }}>
-                {/* Card header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6, position: "relative", zIndex: 2 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 800, color: outcomeColor || c.textMid }}>{idx + 1}</span>
-                    {projObj && <span style={{ fontFamily: display, fontSize: 13, fontWeight: 700, color: c.text }}>{projObj.name}</span>}
-                    {item.stage && (
-                      <span style={{
-                        fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                        color: stageColor, background: stageColor + "12",
-                        padding: "2px 7px", borderRadius: 4,
-                      }}>{item.stage}</span>
-                    )}
-                    {item.type && (
-                      <span style={{
-                        fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                        color: tCfg.color || c.textDim, background: tCfg.bg || c.surfaceAlt,
-                        padding: "2px 7px", borderRadius: 4,
-                      }}>{item.type}</span>
-                    )}
-                    {(item.duration || 1) > 1 && (
-                      <span style={{
-                        fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                        color: c.accent, background: c.accentDim,
-                        padding: "2px 7px", borderRadius: 4,
-                      }}>{item.weeksRemaining || item.duration}w left</span>
-                    )}
-                  </div>
-                  {(outcome === "carry" || outcome === "done_carry") && item.carryTo && (() => {
-                    const d = new Date(item.carryTo + "T00:00:00");
-                    return (
-                      <span style={{
-                        fontFamily: mono, fontSize: 9, fontWeight: 600, color: carryColor,
-                        padding: "2px 7px", borderRadius: 4, background: outcome === "done_carry" ? c.orangeDim : c.blueDim,
-                      }}>{"\u2192"} {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                    );
-                  })()}
-                </div>
-
-                {/* Deliverable text */}
-                <div style={{
-                  fontFamily: body, fontSize: 12, fontWeight: 500, color: c.text, lineHeight: 1.5,
-                  whiteSpace: "pre-wrap", position: "relative", zIndex: 2,
-                  textDecoration: (outcome === "done" || outcome === "done_carry") ? `line-through ${outcomeColor}60` : "none",
-                  marginBottom: outcome === "blocked" && item.blockedReason ? 0 : 10,
-                }}>{item.title}</div>
-
-                {/* Blocked reason inline display */}
-                {outcome === "blocked" && item.blockedReason && (
-                  <div style={{
-                    margin: "6px 0 10px", padding: "6px 10px", borderRadius: 6,
-                    background: c.red + "0A", border: `1px solid ${c.red}20`,
-                    position: "relative", zIndex: 2,
-                  }}>
-                    <span style={{ fontFamily: mono, fontSize: 8, fontWeight: 800, color: c.red, letterSpacing: "0.1em" }}>BLOCKER</span>
-                    <div style={{ fontFamily: body, fontSize: 11, fontWeight: 400, color: c.textMid, marginTop: 2, lineHeight: 1.4 }}>{item.blockedReason}</div>
-                  </div>
-                )}
-
-                {/* Outcome buttons — Completed / Carry / Completed+Carry / Blocked */}
-                <div style={{ display: "flex", gap: 4, position: "relative", zIndex: 2 }}>
-                  {[
-                    { val: "done", label: "Completed", clr: c.green },
-                    { val: "carry", label: "Carry", clr: c.blue },
-                    ...(showDoneCarry ? [{ val: "done_carry", label: "Completed+Carry", clr: c.orange }] : []),
-                    { val: "blocked", label: "Blocked", clr: c.red },
-                  ].map(btn => {
-                    const active = outcome === btn.val;
-                    return (
-                      <button key={btn.val} onClick={() => updateOutcome(idx, btn.val)} className="flow-btn flow-outcome-btn" style={{
-                        flex: 1, padding: "6px 6px", borderRadius: 6, cursor: "pointer",
-                        background: active ? `linear-gradient(135deg, ${btn.clr}20, ${btn.clr}12)` : c.surfaceAlt,
-                        border: `1.5px solid ${active ? btn.clr + "40" : c.border}`,
-                        fontFamily: display, fontSize: 10, fontWeight: 700,
-                        color: active ? btn.clr : c.textDim,
-                        boxShadow: active ? `0 0 16px ${btn.clr}10` : "none",
-                        transition: "all 0.15s",
-                      }}>{btn.label}</button>
-                    );
-                  })}
-                </div>
-
-                {/* Carry-to picker — for carry and done_carry */}
-                {(outcome === "carry" || outcome === "done_carry") && (
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 6, marginTop: 8,
-                    paddingTop: 8, borderTop: `1px solid ${c.border}`,
-                    position: "relative", zIndex: 2, flexWrap: "wrap",
-                  }}>
-                    <span style={{ fontFamily: body, fontSize: 10, fontWeight: 500, color: c.textDim, whiteSpace: "nowrap" }}>Carry to</span>
-                    {weeks.map(wk => {
-                      const sel = item.carryTo === wk.value;
-                      return (
-                        <button key={wk.value} onClick={() => updateCarryTo(idx, wk.value)} className="flow-btn" style={{
-                          padding: "3px 8px", borderRadius: 4,
-                          border: `1px solid ${sel ? carryColor : c.border}`,
-                          background: sel ? (outcome === "done_carry" ? c.orangeDim : c.blueDim) : "transparent",
-                          color: sel ? carryColor : c.textMid,
-                          fontFamily: body, fontSize: 10, fontWeight: sel ? 700 : 500,
-                          cursor: "pointer", transition: "all 0.15s",
-                        }}>{wk.label}</button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          }
-
-          return null;
-        })}
-
-        {/* ═══ BUFFER CARD ═══════════════════════════════════════ */}
-        {phase === "planning" && (
-          <div className={`flow-neon-card flow-task-card${bufferActive ? " flow-card-buffer-slide" : ""}`} style={{
-            background: bufferActive ? c.surface : "transparent",
-            border: bufferActive ? `1px solid ${c.border}` : `1.5px dashed ${c.border}`,
-            borderLeft: `3px solid ${bufferActive ? c.accent + "60" : c.border}`,
-            padding: bufferActive ? "14px 16px" : "10px 16px",
-            opacity: bufferActive ? 1 : 0.5,
-            transition: "all 0.2s ease",
-          }}>
-            {!bufferActive ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, position: "relative", zIndex: 2 }}>
-                <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 800, color: c.textDim }}>B</span>
-                <span style={{ fontFamily: display, fontSize: 14, fontWeight: 600, color: c.textDim }}>Buffer Task</span>
-                <span style={{ fontFamily: body, fontSize: 11, color: c.textDim, marginLeft: 4 }}>{"\u2014"} use {"\u21C5"} to enable</span>
+                <Btn variant="ghost" size="sm" onClick={() => toggleDeselect(detailFocus)}>Restore</Btn>
               </div>
             ) : (
-              <div style={{ position: "relative", zIndex: 2 }}>
-                {/* Buffer header */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 800, color: c.textMid }}>B</span>
-                    <span style={{ fontFamily: display, fontSize: 15, fontWeight: 700, color: c.text }}>Buffer</span>
-                    <span style={{
-                      fontFamily: mono, fontSize: 10, fontWeight: 700, color: c.accent,
-                      background: c.accentDim, padding: "3px 8px", borderRadius: 4,
-                      letterSpacing: "0.06em",
-                    }}>REPLACING TASK {person.deselected + 1}</span>
+              <div style={{
+                maxWidth: 640, margin: "0 auto", width: "100%",
+                background: spotEmpty ? `${c.accent}02` : c.surface,
+                border: spotEmpty ? `1.5px dashed ${c.accent}20` : `1px solid ${c.border}`,
+                borderRadius: layout.radius + 2, padding: `${space[6]}px`,
+                display: "flex", flexDirection: "column", gap: space[4],
+              }}>
+                {/* Spotlight header — number badge + project name or placeholder */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: layout.radiusMd,
+                      background: `${c.accent}10`, border: `1px solid ${c.accent}25`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 14, fontWeight: 800, color: c.accent, flexShrink: 0,
+                    }}>{detailFocus + 1}</div>
+                    <div>
+                      <div style={{
+                        fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
+                        fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
+                        color: spotProj ? c.text : c.textMid,
+                      }}>{spotProj ? spotProj.name : `Commitment ${detailFocus + 1}`}</div>
+                      {spotProj ? (
+                        <div style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, color: c.textDim, marginTop: 2 }}>
+                          <span style={{ color: entityColors().project }}>{spotProj.id}</span> · {spotProj.phase || ""}
+                        </div>
+                      ) : (
+                        <div style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textDim, marginTop: 2 }}>Start by picking a project</div>
+                      )}
+                    </div>
                   </div>
-                  <button onClick={() => toggleDeselect(person.deselected)} className="flow-btn" style={{
-                    padding: "4px 10px", borderRadius: 4, border: `1px solid ${c.border}`,
-                    background: "transparent", cursor: "pointer",
-                    fontFamily: body, fontSize: 10, fontWeight: 500, color: c.textDim,
-                  }}>Restore</button>
+                  {showDepri && <Btn variant="ghost" size="sm" onClick={() => toggleDeselect(detailFocus)}>Deprioritize</Btn>}
                 </div>
 
-                {/* Project + Description — side by side */}
-                <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 220, flexShrink: 0 }}>
-                    <Sel value={person.bufferProject || ""} onChange={e => updatePerson("bufferProject", e.target.value)}
-                      style={{ width: "100%", fontSize: 12, fontWeight: 600, padding: "8px 12px", color: person.bufferProject ? c.text : c.textDim }}>
-                      <option value="">Select project...</option>
-                      {projects.map(p => <option key={p.id} value={p.id}>{p.id} — {p.name}</option>)}
-                    </Sel>
+                {/* Project search */}
+                <div>
+                  <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>
+                    {spotHasProject ? "Project" : "Which project are you working on?"}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <textarea
-                      value={person.buffer}
-                      onChange={e => updatePerson("buffer", e.target.value)}
-                      placeholder="What will you deliver this week?"
-                      className="flow-input"
-                      rows={1}
-                      style={{
-                        width: "100%", padding: "8px 12px", borderRadius: 6,
-                        border: `1px solid ${c.border}`, background: c.surfaceAlt,
-                        color: c.text, fontFamily: body, fontSize: 13, fontWeight: 500,
-                        lineHeight: 1.4, outline: "none", boxSizing: "border-box",
-                        resize: "vertical", minHeight: 36,
-                      }}
+                  <ProjectSearchSelect
+                    projects={projects}
+                    value={spotItem.project}
+                    onChange={val => {
+                      updateItem(detailFocus, "project", val);
+                      const p = projects.find(pr => pr.id === val);
+                      if (p && !spotItem.stage) updateItem(detailFocus, "stage", p.phase);
+                    }}
+                    placeholder="Search by name or ID (e.g. X21)..."
+                  />
+                  {!spotHasProject && (
+                    <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginTop: 3 }}>Type to search across all active projects</div>
+                  )}
+                </div>
+
+                {/* Deliverable — appears after project */}
+                {spotHasProject && (
+                  <div>
+                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>What are you delivering this week?</div>
+                    <TextArea
+                      value={spotItem.title}
+                      onChange={e => updateItem(detailFocus, "title", e.target.value)}
+                      placeholder="Describe the deliverable..."
+                      rows={3}
                     />
+                    <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginTop: 3 }}>Be specific about the outcome, not just the task</div>
                   </div>
-                </div>
+                )}
 
-                {/* Selectors — all on one row: STAGE · TYPE · WEEKS */}
-                <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, color: c.textDim, letterSpacing: "0.06em", marginRight: 3 }}>STAGE</span>
-                    {phaseNames.map(s => {
-                      const active = person.bufferStage === s;
-                      const sColor = pc[s] || c.textDim;
-                      return (
-                        <button key={s} onClick={() => updatePerson("bufferStage", s)} className="flow-btn" style={{
-                          padding: "4px 8px", borderRadius: 4,
-                          border: `1px solid ${active ? sColor + "40" : c.border}`,
-                          background: active ? sColor + "12" : "transparent",
-                          color: active ? sColor : c.textDim,
-                          fontFamily: mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
-                          cursor: "pointer", transition: "all 0.15s",
-                        }}>{s}</button>
-                      );
-                    })}
+                {/* Stage + Type (side by side) + Weeks — unlocked after deliverable */}
+                {spotHasProject && spotHasTitle && (
+                  <>
+                    <div style={{ display: "flex", gap: space[4] }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Stage</div>
+                        <ChoiceGroup options={phaseNames.map(s => ({ value: s, label: s, color: pc[s] || c.textDim }))} value={spotItem.stage} onChange={val => updateItem(detailFocus, "stage", val)} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Type</div>
+                        <ChoiceGroup mono options={["BUILD", "JAM", "COMMIT", "BLOCKED"].map(t => ({ value: t, label: tc[t]?.label || t, color: (tc[t] || {}).color, bg: (tc[t] || {}).bg }))} value={spotItem.type} onChange={val => updateItem(detailFocus, "type", val)} />
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Estimated timeline</div>
+                      <ChoiceGroup mono options={[1, 2, 3, 4].map(w => ({ value: w, label: `${w} ${w === 1 ? "week" : "weeks"}` }))} value={spotItem.duration || 1} onChange={val => updateItem(detailFocus, "duration", val)} />
+                    </div>
+                  </>
+                )}
+
+                {/* Locked hint — fill deliverable to unlock rest */}
+                {spotHasProject && !spotHasTitle && (
+                  <div style={{
+                    padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusMd,
+                    background: c.surfaceAlt, border: `1px dashed ${c.border}`,
+                    display: "flex", alignItems: "center", gap: space[2], opacity: 0.45,
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round"><path d="M8 3v10M4 7l4-4 4 4"/></svg>
+                    <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textDim }}>Fill in the deliverable to unlock Stage, Type, and Weeks</span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, color: c.textDim, letterSpacing: "0.06em", marginRight: 3 }}>TYPE</span>
-                    {["BUILD", "JAM", "COMMIT", "BLOCKED"].map(t => {
-                      const active = person.bufferType === t;
-                      const cfg = tc[t] || {};
-                      return (
-                        <button key={t} onClick={() => updatePerson("bufferType", t)} className="flow-btn" style={{
-                          padding: "4px 8px", borderRadius: 4,
-                          border: `1px solid ${active ? cfg.color + "40" : c.border}`,
-                          background: active ? cfg.bg : "transparent",
-                          color: active ? cfg.color : c.textDim,
-                          fontFamily: mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
-                          cursor: "pointer", transition: "all 0.15s",
-                        }}>{t}</button>
-                      );
-                    })}
+                )}
+
+                {/* Empty state — no project yet */}
+                {spotEmpty && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: `${space[6]}px 0`, opacity: 0.12 }}>
+                    <div style={{ textAlign: "center" }}>
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                      <div style={{ fontSize: 12, marginTop: 4, color: c.textDim }}>Select a project to start planning</div>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, color: c.textDim, letterSpacing: "0.06em", marginRight: 3 }}>WEEKS</span>
-                    {[1, 2, 3, 4].map(w => {
-                      const active = (person.bufferDuration || 1) === w;
-                      return (
-                        <button key={w} onClick={() => updatePerson("bufferDuration", w)} className="flow-btn" style={{
-                          padding: "4px 8px", borderRadius: 4,
-                          border: `1px solid ${active ? c.accent + "40" : c.border}`,
-                          background: active ? c.accentDim : "transparent",
-                          color: active ? c.accent : c.textDim,
-                          fontFamily: mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em",
-                          cursor: "pointer", transition: "all 0.15s",
-                        }}>{w}w</button>
-                      );
-                    })}
-                  </div>
-                </div>
+                )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Buffer in locked/closing phase — show if active */}
-        {(phase === "locked" || phase === "closing") && bufferActive && person.buffer.trim() && (() => {
-          const bufProjObj = projects.find(p => p.id === person.bufferProject);
-          const bufStageCl = pc[person.bufferStage] || c.textDim;
-          const bufTypeCfg = tc[person.bufferType] || {};
-          return (
-            <div className="flow-neon-card flow-task-card" style={{
-              background: c.surface,
-              border: `1px solid ${c.border}`,
-              borderLeft: `3px solid ${c.accent}30`,
-              padding: "10px 12px",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, position: "relative", zIndex: 2, flexWrap: "wrap" }}>
-                <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 800, color: c.textMid }}>B</span>
-                {bufProjObj && <span style={{ fontFamily: display, fontSize: 13, fontWeight: 700, color: c.text }}>{bufProjObj.name}</span>}
-                {person.bufferStage && (
-                  <span style={{
-                    fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                    color: bufStageCl, background: bufStageCl + "12",
-                    padding: "2px 7px", borderRadius: 4,
-                  }}>{person.bufferStage}</span>
-                )}
-                {person.bufferType && (
-                  <span style={{
-                    fontFamily: mono, fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                    color: bufTypeCfg.color || c.textDim, background: bufTypeCfg.bg || c.surfaceAlt,
-                    padding: "2px 7px", borderRadius: 4,
-                  }}>{person.bufferType}</span>
-                )}
-                <span style={{
-                  fontFamily: mono, fontSize: 9, fontWeight: 700, color: c.accent,
-                  background: c.accentDim, padding: "2px 7px", borderRadius: 4,
-                  letterSpacing: "0.06em",
-                }}>BUFFER</span>
-              </div>
+            {/* ── Buffer Card (planning phase) ── */}
+            {bufferActive && (
               <div style={{
-                fontFamily: body, fontSize: 12, fontWeight: 500, color: c.text, lineHeight: 1.5,
-                whiteSpace: "pre-wrap", position: "relative", zIndex: 2,
-              }}>{person.buffer}</div>
-            </div>
-          );
-        })()}
-      </div>
+                maxWidth: 640, margin: `${space[3]}px auto 0`, width: "100%",
+                background: c.surface, border: `1px solid ${c.border}`, borderLeft: `3px solid ${c.purple}60`,
+                borderRadius: layout.radius + 2, padding: `${space[5]}px ${space[6]}px`,
+                display: "flex", flexDirection: "column", gap: space[3],
+              }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: space[2] }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                    <div style={{
+                      width: 28, height: 28, borderRadius: layout.radiusSm,
+                      background: c.purpleDim, border: `1px solid ${c.purple}30`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 800, color: c.purple,
+                    }}>B</div>
+                    <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Buffer</span>
+                    <Badge color={c.purple} bg={c.purpleDim}>Replacing #{person.deselected + 1}</Badge>
+                  </div>
+                  <Btn variant="ghost" size="sm" onClick={() => toggleDeselect(person.deselected)}>Restore original</Btn>
+                </div>
+                <div>
+                  <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Project</div>
+                  <ProjectSearchSelect projects={projects} value={person.bufferProject || ""} onChange={val => updatePerson("bufferProject", val)} placeholder="Search by name or ID..." />
+                </div>
+                {!!person.bufferProject && (
+                  <div>
+                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>What are you working on?</div>
+                    <TextArea value={person.buffer} onChange={e => updatePerson("buffer", e.target.value)} placeholder="Describe the deliverable or commitment..." rows={2} />
+                  </div>
+                )}
+                {!!person.bufferProject && !!(person.buffer || "").trim() && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+                    <div style={{ display: "flex", gap: space[4] }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Stage</div>
+                        <ChoiceGroup options={phaseNames.map(s => ({ value: s, label: s, color: pc[s] || c.textDim }))} value={person.bufferStage} onChange={val => updatePerson("bufferStage", val)} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Type</div>
+                        <ChoiceGroup mono options={["BUILD", "JAM", "COMMIT", "BLOCKED"].map(t => ({ value: t, label: tc[t]?.label || t, color: (tc[t] || {}).color, bg: (tc[t] || {}).bg }))} value={person.bufferType} onChange={val => updatePerson("bufferType", val)} />
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Estimated timeline</div>
+                      <ChoiceGroup mono options={[1, 2, 3, 4].map(w => ({ value: w, label: `${w} ${w === 1 ? "week" : "weeks"}` }))} value={person.bufferDuration || 1} onChange={val => updatePerson("bufferDuration", val)} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        );
+      })()}
+
+      {/* ═══ LOCKED PHASE — stacked cards, no dot nav ═══ */}
+      {phase === "locked" && (
+        <div style={{ maxWidth: 640, margin: `${space[4]}px auto 0`, width: "100%", display: "flex", flexDirection: "column", gap: space[3] + 2 }}>
+          {person.items.map((item, idx) => {
+            if (person.deselected === idx) return null;
+            if (!item.project && !(item.title || "").trim()) return null;
+            const projObj = projects.find(p => p.id === item.project);
+            const stageColor = pc[item.stage] || c.textDim;
+            const tCfg = tc[item.type] || {};
+            return (
+              <div key={idx} style={{
+                background: c.surface, border: `1px solid ${c.border}`,
+                borderRadius: layout.radius, padding: `${space[4] + 2}px ${space[5] + 2}px`,
+                display: "flex", flexDirection: "column", gap: space[2] + 2,
+              }}>
+                {/* Header: number badge (gold) + ID (gold) + name + week badge */}
+                <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: layout.radiusSm,
+                    background: `${entityColors().project}10`, border: `1px solid ${entityColors().project}20`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800, color: entityColors().project,
+                  }}>{idx + 1}</div>
+                  {projObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: entityColors().project }}>{projObj.id}</span>}
+                  {projObj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{projObj.name}</span>}
+                  <span style={{
+                    marginLeft: "auto", fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                    fontWeight: 600, letterSpacing: "0.03em", color: c.textMid,
+                    padding: `3px ${space[2] + 2}px`, borderRadius: layout.radiusSm,
+                    background: c.surfaceAlt, border: `1px solid ${c.border}`,
+                  }}>{item.duration || 1}w</span>
+                </div>
+                {/* Subtle inset divider between header and deliverable */}
+                <div style={{ marginLeft: 34, marginRight: 12, height: 1, background: "rgba(255,255,255,0.06)" }} />
+                {/* Deliverable */}
+                <div style={{
+                  fontFamily: typo.bodyLg.font, fontSize: 15, fontWeight: 500,
+                  color: c.text, lineHeight: 1.5, paddingLeft: 34,
+                }}>{item.title}</div>
+                {/* Stage + Type badges */}
+                <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, flexWrap: "wrap", paddingLeft: 34 }}>
+                  {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
+                  {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(tCfg.color || c.textDim)}15` }}>{tCfg.label || item.type}</Badge>}
+                </div>
+              </div>
+            );
+          })}
+          {/* Buffer card in locked phase */}
+          {bufferActive && person.buffer.trim() && (() => {
+            const bufProjObj = projects.find(p => p.id === person.bufferProject);
+            const bufStageCl = pc[person.bufferStage] || c.textDim;
+            const bufTypeCfg = tc[person.bufferType] || {};
+            return (
+              <div style={{
+                background: c.surface, border: `1px solid ${c.border}`,
+                borderRadius: layout.radius, padding: `${space[4] + 2}px ${space[5] + 2}px`,
+                display: "flex", flexDirection: "column", gap: space[2] + 2,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                  <div style={{
+                    width: 24, height: 24, borderRadius: layout.radiusSm,
+                    background: c.purpleDim, border: `1px solid ${c.purple}20`,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800, color: c.purple,
+                  }}>B</div>
+                  {bufProjObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: entityColors().project }}>{bufProjObj.id}</span>}
+                  {bufProjObj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{bufProjObj.name}</span>}
+                  <Badge color={c.purple} bg={c.purpleDim} style={{ marginLeft: "auto" }}>Buffer</Badge>
+                </div>
+                <div style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size - 1, fontWeight: 500, color: c.text, lineHeight: 1.5, paddingLeft: 34, paddingTop: space[2], borderTop: `1px solid ${c.border}08` }}>{person.buffer}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, paddingLeft: 34 }}>
+                  {person.bufferStage && <Badge color={bufStageCl} bg={bufStageCl + "10"}>{person.bufferStage}</Badge>}
+                  {person.bufferType && <Badge color={bufTypeCfg.color || c.textDim} bg={bufTypeCfg.bg || c.surfaceAlt}>{bufTypeCfg.label || person.bufferType}</Badge>}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ═══ CLOSING PHASE — card + extension pattern ═══ */}
+      {phase === "closing" && (
+        <div style={{ maxWidth: 640, margin: `${space[4]}px auto 0`, width: "100%", display: "flex", flexDirection: "column", gap: space[2] + 2 }}>
+          {person.items.map((item, idx) => {
+            if (person.deselected === idx) return null;
+            if (!item.project && !(item.title || "").trim()) return null;
+            const projObj = projects.find(p => p.id === item.project);
+            const stageColor = pc[item.stage] || c.textDim;
+            const tCfg = tc[item.type] || {};
+            const outcome = item.outcome;
+            const outcomeColor = outcome === "done" ? c.green : outcome === "carry" ? c.cyan : outcome === "blocked" ? c.red : outcome === "done_carry" ? c.orange : null;
+            const showDoneCarry = (item.weeksRemaining || item.duration || 1) > 1;
+            const carryColor = outcome === "done_carry" ? c.orange : c.cyan;
+            const wrapBg = outcome === "done" || outcome === "done_carry" ? `${c.green}02` : outcome === "carry" ? `${c.cyan}02` : outcome === "blocked" ? `${c.red}02` : c.surface;
+            const wrapBorder = outcome === "done" || outcome === "done_carry" ? `${c.green}12` : outcome === "carry" ? `${c.cyan}12` : outcome === "blocked" ? `${c.red}12` : c.border;
+
+            return (
+              <div key={idx} style={{
+                borderRadius: layout.radius, overflow: "hidden",
+                border: `1px solid ${wrapBorder}`, background: wrapBg,
+                transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+              }}>
+                {/* Card inner — info only */}
+                <div style={{ padding: `${space[4] + 2}px ${space[5] + 2}px`, display: "flex", flexDirection: "column", gap: space[2] }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: layout.radiusSm,
+                      background: outcomeColor ? `${outcomeColor}12` : `${c.accent}08`,
+                      border: `1px solid ${outcomeColor ? outcomeColor + "20" : c.accent + "15"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800,
+                      color: outcomeColor || c.accent,
+                    }}>{outcome === "done" || outcome === "done_carry" ? "\u2713" : outcome === "carry" ? "\u2192" : outcome === "blocked" ? "!" : idx + 1}</div>
+                    <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: entityColors().project }}>{projObj?.id}</span>
+                    <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{projObj?.name}</span>
+                    <span style={{
+                      marginLeft: "auto", fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                      fontWeight: 600, color: c.textMid, padding: `3px ${space[2] + 2}px`,
+                      borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}`,
+                    }}>{item.weeksRemaining || item.duration || 1}w</span>
+                  </div>
+                  <div style={{
+                    fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size - 1, fontWeight: 500,
+                    color: (outcome === "done" || outcome === "done_carry") ? c.textMid : c.text,
+                    lineHeight: 1.5, paddingLeft: 34,
+                    textDecoration: (outcome === "done" || outcome === "done_carry") ? "line-through" : "none",
+                  }}>{item.title}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, paddingLeft: 34 }}>
+                    {item.stage && <Badge color={stageColor} bg={stageColor + "10"}>{item.stage}</Badge>}
+                    {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt}>{tCfg.label || item.type}</Badge>}
+                  </div>
+                  {/* Blocked reason */}
+                  {outcome === "blocked" && item.blockedReason && (
+                    <Surface compact variant="data" style={{ borderLeft: `3px solid ${c.red}`, marginLeft: 34 }}>
+                      <TelemetryLabel color={c.red} style={{ marginBottom: 2 }}>Blocker</TelemetryLabel>
+                      <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, lineHeight: typo.bodySm.lineHeight }}>{item.blockedReason}</div>
+                    </Surface>
+                  )}
+                </div>
+                {/* Extension layer — outcome buttons */}
+                <div style={{
+                  padding: `${space[3]}px ${space[5] + 2}px ${space[3] + 2}px`,
+                  background: "rgba(255,255,255,0.015)",
+                  borderTop: `1px solid rgba(255,255,255,0.06)`,
+                  display: "flex", flexDirection: "column", gap: space[2],
+                }}>
+                  <div style={{ display: "flex", gap: space[1], flexWrap: "wrap" }}>
+                    {[
+                      { val: "done", label: "Completed", clr: c.green },
+                      { val: "carry", label: "Carry", clr: c.cyan },
+                      ...(showDoneCarry ? [{ val: "done_carry", label: "Comp + Carry", clr: c.orange }] : []),
+                      { val: "blocked", label: "Blocked", clr: c.red },
+                    ].map(btn => {
+                      const active = outcome === btn.val;
+                      return (
+                        <button key={btn.val} onClick={() => updateOutcome(idx, btn.val)} style={{
+                          padding: `5px 10px`, borderRadius: layout.radiusSm,
+                          fontSize: typo.monoSm.size, fontWeight: 600, fontFamily: typo.monoSm.font,
+                          border: `1px solid ${active ? btn.clr + "30" : c.border}`,
+                          background: active ? `${btn.clr}10` : "transparent",
+                          color: active ? btn.clr : c.textDim,
+                          cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                        }}>
+                          {active && <span>{btn.val === "blocked" ? "!" : "\u2713"}</span>}
+                          {btn.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Carry-to row */}
+                  {(outcome === "carry" || outcome === "done_carry") && (
+                    <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: carryColor, textTransform: "uppercase" }}>Carry to</span>
+                      {weeks.map(wk => {
+                        const sel = item.carryTo === wk.value;
+                        return (
+                          <button key={wk.value} onClick={() => updateCarryTo(idx, wk.value)} style={{
+                            padding: `4px ${space[2] + 2}px`, borderRadius: layout.radiusTag + 1,
+                            fontSize: typo.monoSm.size, fontWeight: 600, fontFamily: typo.monoSm.font,
+                            border: `1px solid ${sel ? carryColor + "30" : c.border}`,
+                            background: sel ? `${carryColor}10` : "transparent",
+                            color: sel ? carryColor : c.textDim,
+                            cursor: "pointer",
+                            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                          }}>{wk.label}</button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ═══ LOCK GATE — blocker list or ready indicator ═══════ */}
+      {phase === "planning" && lockBlockers.length > 0 && (
+        <Surface compact style={{ maxWidth: 640, margin: "0 auto", width: "100%", borderLeft: `3px solid ${c.orange}`, background: c.surfaceAlt }}>
+          <TelemetryLabel color={c.orange} style={{ marginBottom: space[2] }}>Lock Blockers</TelemetryLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
+            {lockBlockers.map((b, i) => (
+              <div key={i} style={{
+                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight,
+                color: c.textMid, lineHeight: typo.bodySm.lineHeight,
+                display: "flex", alignItems: "center", gap: space[2],
+              }}>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.orange, fontWeight: 700 }}>!</span>
+                {b}
+              </div>
+            ))}
+          </div>
+        </Surface>
+      )}
 
       {/* ═══ CLOSE WEEK BAR ════════════════════════════════════ */}
       {phase === "closing" && (
-        <div style={{
-          background: weekComplete ? `linear-gradient(135deg, ${c.green}12, ${c.green}06)` : c.surfaceAlt,
-          border: `1px solid ${weekComplete ? c.green + "30" : c.border}`,
-          borderRadius: 8, padding: "14px 18px",
+        <Surface compact style={{
+          maxWidth: 640, margin: "0 auto", width: "100%",
+          background: weekComplete ? `${c.green}08` : c.surfaceAlt,
+          borderLeft: `3px solid ${weekComplete ? c.green : c.border}`,
           display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
           <div>
-            <div style={{ fontFamily: display, fontSize: 14, fontWeight: 800, color: weekComplete ? c.green : c.textMid, letterSpacing: "-0.01em" }}>
+            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking, color: weekComplete ? c.green : c.textMid }}>
               {weekComplete ? "All commitments resolved" : `${fullyResolved}/${activeItems.length} resolved`}
             </div>
-            <div style={{ fontFamily: body, fontSize: 11, color: c.textDim, marginTop: 2 }}>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginTop: 2 }}>
               {weekComplete ? "Ready to close this week" : "Resolve all items to close the week"}
             </div>
           </div>
-          <button
+          <Btn
+            variant="success"
             disabled={!weekComplete}
             onClick={() => {
-              // Auto-carry: copy carried tasks to target week
               setCommitments(prev => {
                 const next = [...prev];
                 const p = { ...next[activePerson] };
@@ -1316,123 +1318,105 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
                   it.title.trim() && p.deselected !== idx &&
                   (it.outcome === "carry" || it.outcome === "done_carry") && it.carryTo
                 );
-                // For each carried item, find or create commitment for same person in target week
                 carriedItems.forEach(item => {
                   const newItem = {
-                    title: item.title,
-                    type: item.type,
-                    project: item.project,
-                    stage: item.stage,
+                    title: item.title, type: item.type, project: item.project, stage: item.stage,
                     duration: item.outcome === "done_carry" ? Math.max(1, (item.weeksRemaining || 1)) : (item.duration || 1),
-                    outcome: null,
-                    carryTo: null,
-                    blockedReason: "",
-                    carriedFrom: weekLabel,
+                    outcome: null, carryTo: null, blockedReason: "", carriedFrom: weekLabel,
                   };
-                  // Find existing commitment for this person in target week or add to current
-                  // Since we don't have multi-week storage yet, we mark items for carry-forward
                   const existingIdx = next.findIndex(c => c.person === p.person && c !== p);
                   if (existingIdx === -1) {
-                    // Add as a new commitment entry for this person (future week)
-                    next.push({
-                      person: p.person,
-                      items: [newItem, { title: "", type: "", project: "", stage: "", duration: 1 }, { title: "", type: "", project: "", stage: "", duration: 1 }],
-                      buffer: "",
-                      deselected: -1,
-                      weekStart: item.carryTo,
-                    });
+                    next.push({ person: p.person, items: [newItem, { title: "", type: "", project: "", stage: "", duration: 1 }, { title: "", type: "", project: "", stage: "", duration: 1 }], buffer: "", deselected: -1, weekStart: item.carryTo });
                   } else {
-                    // Add to first empty slot or append
-                    const target = { ...next[existingIdx] };
-                    const targetItems = [...target.items];
+                    const target = { ...next[existingIdx] }; const targetItems = [...target.items];
                     const emptyIdx = targetItems.findIndex(t => !t.title.trim());
-                    if (emptyIdx !== -1) {
-                      targetItems[emptyIdx] = newItem;
-                    } else {
-                      targetItems.push(newItem);
-                    }
-                    target.items = targetItems;
-                    next[existingIdx] = target;
+                    if (emptyIdx !== -1) targetItems[emptyIdx] = newItem; else targetItems.push(newItem);
+                    target.items = targetItems; next[existingIdx] = target;
                   }
                 });
-                // Mark the person's week as closed
-                p.closedAt = new Date().toISOString();
-                next[activePerson] = p;
-                return next;
+                p.closedAt = new Date().toISOString(); next[activePerson] = p; return next;
               });
               setClosingMode(false);
             }}
-            className="flow-btn"
-            style={{
-              padding: "8px 20px", borderRadius: 8, cursor: weekComplete ? "pointer" : "not-allowed",
-              background: weekComplete ? `linear-gradient(135deg, ${c.green}, ${c.green}CC)` : c.surfaceAlt,
-              border: `1px solid ${weekComplete ? c.green : c.border}`,
-              fontFamily: display, fontSize: 13, fontWeight: 700,
-              color: weekComplete ? "#fff" : c.textDim,
-              opacity: weekComplete ? 1 : 0.5,
-              transition: "all 0.2s",
-            }}>Close Week</button>
-        </div>
+          >Close Week</Btn>
+        </Surface>
       )}
 
       {/* ═══ CONFIRMATION MODAL (Lock / Unlock) ═══════════════════ */}
       {confirmAction && (
         <div style={{ position: "fixed", inset: 0, zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          {/* Backdrop — opaque to fully block content behind */}
+          {/* Backdrop with blur */}
           <div onClick={() => setConfirmAction(null)} style={{
-            position: "absolute", inset: 0, background: "#000",
+            position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
           }} />
           {/* Dialog */}
-          <div style={{
+          <Surface variant="overlay" style={{
             position: "relative", zIndex: 1,
-            background: c.surface,
             border: `1px solid ${confirmAction === "lock" ? c.green + "40" : c.orange + "40"}`,
-            borderRadius: 14, padding: "24px 28px", width: 460, maxWidth: "90vw",
-            boxShadow: `0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px ${c.border}`,
+            borderRadius: layout.radiusLg + 2, padding: `${space[6]}px ${space[7] - 4}px`, width: 460, maxWidth: "90vw",
+            boxShadow: c.shadowOverlay,
           }}>
-            <div style={{ fontFamily: display, fontSize: 17, fontWeight: 700, color: c.text, marginBottom: 8 }}>
+            <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, color: c.text, marginBottom: space[2] }}>
               {confirmAction === "lock" ? "Lock this week?" : "Unlock this week?"}
             </div>
-            <div style={{ fontFamily: body, fontSize: 13, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: 10 }}>
+            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: space[3] }}>
               {confirmAction === "lock"
-                ? "Once locked, tasks become read-only and you will not be able to unlock or edit for the next 6 hours. This prevents frequent changes and keeps your team aligned."
+                ? `You're locking ${activeItems.length} commitments for the week of ${weekLabel}. Once locked, your plan is set and visible to your team.`
                 : "Tasks will become editable again. Any changes made will be updated in the system."}
             </div>
             {confirmAction === "lock" && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8,
-                background: c.orange + "0A", border: `1px solid ${c.orange}20`, marginBottom: 16,
+              <Surface compact variant="data" style={{
+                display: "flex", alignItems: "center", gap: space[2],
+                borderLeft: `3px solid ${c.orange}`, marginBottom: space[4],
               }}>
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
                   <circle cx="8" cy="8" r="7" stroke={c.orange} strokeWidth="1.3" fill="none" />
                   <line x1="8" y1="4" x2="8" y2="9" stroke={c.orange} strokeWidth="1.5" strokeLinecap="round" />
                   <circle cx="8" cy="11.5" r="0.8" fill={c.orange} />
                 </svg>
-                <span style={{ fontFamily: body, fontSize: 12, fontWeight: 500, color: c.orange }}>
+                <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.orange }}>
                   6-hour lock cooldown — no edits during this period
                 </span>
+              </Surface>
+            )}
+            {/* Commitment summary for lock confirmation */}
+            {confirmAction === "lock" && (
+              <div style={{
+                padding: `${space[3]}px ${space[3] + 2}px`, borderRadius: layout.radiusMd,
+                background: c.surfaceAlt, border: `1px solid ${c.border}`, marginBottom: space[5],
+                display: "flex", flexDirection: "column", gap: space[1] + 2,
+              }}>
+                <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: "0.04em", color: c.textDim, textTransform: "uppercase", marginBottom: 2 }}>Your commitments</div>
+                {person.items.map((it, ci) => {
+                  if (person.deselected === ci || !it.title.trim()) return null;
+                  const proj = projects.find(p => p.id === it.project);
+                  const tC = tc[it.type] || {};
+                  return (
+                    <div key={ci} style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: layout.radiusSm,
+                        background: `${c.accent}08`, display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 10, fontWeight: 800, color: c.accent,
+                      }}>{ci + 1}</div>
+                      <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.text, flex: 1 }}>{proj?.name || it.project}</span>
+                      {it.type && <Badge color={tC.color || c.textDim} bg={tC.bg || c.surfaceAlt} style={{ marginLeft: "auto" }}>{tC.label || it.type}</Badge>}
+                    </div>
+                  );
+                })}
               </div>
             )}
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: confirmAction === "lock" ? 0 : 16 }}>
-              <button onClick={() => setConfirmAction(null)} className="flow-btn" style={{
-                padding: "8px 18px", borderRadius: 8, border: `1px solid ${c.border}`,
-                background: "transparent", cursor: "pointer",
-                fontFamily: body, fontSize: 13, fontWeight: 500, color: c.textDim,
-              }}>Cancel</button>
-              <button onClick={() => {
+            <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end", marginTop: confirmAction === "lock" ? 0 : space[4] }}>
+              <Btn variant="ghost" onClick={() => setConfirmAction(null)}>Cancel</Btn>
+              <Btn variant={confirmAction === "lock" ? "success" : "secondary"} onClick={() => {
                 if (confirmAction === "lock") handleLock();
                 else handleUnlock();
                 setConfirmAction(null);
-              }} className="flow-btn" style={{
-                padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
-                background: confirmAction === "lock"
-                  ? `linear-gradient(135deg, ${c.green}30, ${c.green}50)`
-                  : `linear-gradient(135deg, ${c.orange}30, ${c.orange}50)`,
-                fontFamily: display, fontSize: 13, fontWeight: 700,
-                color: confirmAction === "lock" ? c.green : c.orange,
-              }}>{confirmAction === "lock" ? "Yes, Lock Week" : "Yes, Unlock"}</button>
+              }} style={confirmAction === "unlock" ? { borderColor: c.orange + "40", color: c.orange } : {}}>
+                {confirmAction === "lock" ? "Yes, Lock Week" : "Yes, Unlock"}
+              </Btn>
             </div>
-          </div>
+          </Surface>
         </div>
       )}
 
@@ -1440,53 +1424,39 @@ const HumansView = ({ commitments, setCommitments, projects, people, setDetailLa
       {blockedModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={() => { setBlockedModal(null); setBlockedText(""); }} style={{
-            position: "absolute", inset: 0, background: "#000",
+            position: "absolute", inset: 0, background: c.shadow,
           }} />
-          <div style={{
+          <Surface variant="overlay" style={{
             position: "relative", zIndex: 1,
-            background: c.surface,
             border: `1px solid ${c.red}40`,
-            borderRadius: 14, padding: "24px 28px", width: 460, maxWidth: "90vw",
-            boxShadow: `0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px ${c.border}`,
+            borderRadius: layout.radiusLg + 2, padding: `${space[6]}px ${space[7] - 4}px`, width: 460, maxWidth: "90vw",
+            boxShadow: c.shadowOverlay,
           }}>
-            <div style={{ fontFamily: display, fontSize: 17, fontWeight: 700, color: c.text, marginBottom: 8 }}>
+            <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, color: c.text, marginBottom: space[2] }}>
               Why is this blocked?
             </div>
-            <div style={{ fontFamily: body, fontSize: 13, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: 12 }}>
+            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: space[3] }}>
               Describe the blocker so your team knows what needs to be resolved.
             </div>
-            <textarea
-              autoFocus
-              value={blockedText}
-              onChange={e => setBlockedText(e.target.value)}
-              placeholder="e.g. Waiting on API access from platform team..."
-              className="flow-input"
-              rows={3}
-              style={{
-                width: "100%", padding: "10px 12px", borderRadius: 8,
-                border: `1.5px solid ${c.red}30`, background: c.surfaceAlt,
-                color: c.text, fontFamily: body, fontSize: 13, fontWeight: 400,
-                lineHeight: 1.5, outline: "none", boxSizing: "border-box",
-                resize: "vertical", minHeight: 60,
-              }}
-            />
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
-              <button onClick={() => { setBlockedModal(null); setBlockedText(""); }} className="flow-btn" style={{
-                padding: "8px 18px", borderRadius: 8, border: `1px solid ${c.border}`,
-                background: "transparent", cursor: "pointer",
-                fontFamily: body, fontSize: 13, fontWeight: 500, color: c.textDim,
-              }}>Cancel</button>
-              <button onClick={saveBlockedReason} disabled={!blockedText.trim()} className="flow-btn" style={{
-                padding: "8px 20px", borderRadius: 8, border: "none", cursor: blockedText.trim() ? "pointer" : "not-allowed",
-                background: blockedText.trim()
-                  ? `linear-gradient(135deg, ${c.red}30, ${c.red}50)`
-                  : c.surfaceAlt,
-                fontFamily: display, fontSize: 13, fontWeight: 700,
-                color: blockedText.trim() ? c.red : c.textDim,
-                opacity: blockedText.trim() ? 1 : 0.5,
-              }}>Mark Blocked</button>
+            <div style={{ marginBottom: space[3] }}>
+              <TelemetryLabel color={c.red} style={{ marginBottom: space[1] }}>Blocker Description</TelemetryLabel>
+              <TextArea
+                autoFocus
+                value={blockedText}
+                onChange={e => setBlockedText(e.target.value)}
+                placeholder="e.g. Waiting on API access from platform team..."
+                rows={3}
+                style={{
+                  padding: `${space[3] - 2}px ${space[3]}px`, borderRadius: layout.radiusMd,
+                  border: `1.5px solid ${c.red}30`, fontWeight: 400, minHeight: 84,
+                }}
+              />
             </div>
-          </div>
+            <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => { setBlockedModal(null); setBlockedText(""); }}>Cancel</Btn>
+              <Btn variant="danger" disabled={!blockedText.trim()} onClick={saveBlockedReason}>Mark Blocked</Btn>
+            </div>
+          </Surface>
         </div>
       )}
     </div>

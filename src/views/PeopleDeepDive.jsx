@@ -1,7 +1,7 @@
-// Flow — People Deep Dive (Phase 5: Telemetry Panel, Energy Bars, Signal Cards, Terminal Log, Coaching Console)
+// Flow — People Deep Dive (Phase 4: Coaching Console, Signal Cards, Terminal Log, Telemetry Hero)
 import React, { useState, useEffect, useRef } from "react";
-import { c, display, body, mono, motion, layout, phaseNames, typeConfig, phaseColors as getPhaseColors, outcomeConfig } from "../styles/theme";
-import { Badge, Tag, EmptyState } from "../components/shared";
+import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, outcomeConfig, entityColors } from "../styles/theme";
+import { Tag, EmptyState, Surface, Label, Btn, Sel, StatCell } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
 import { weekConfig } from "../data/seed";
 
@@ -92,135 +92,6 @@ function computePersonData(person, commitments, projects, history) {
   };
 }
 
-function computePatternFlags(personData) {
-  const { currentItems, weeklyData, deselectedItems, hasBuffer, cm, thisWeekTypes, tc } = personData;
-  const flags = [];
-
-  if (currentItems.length > 0 && currentItems.every(it => it.type === "JAM")) {
-    const jamItems = currentItems.map(it => it.title || it.project).filter(Boolean);
-    flags.push({
-      id: "always-jam", severity: "warning", icon: "⚡", color: tc.JAM.color,
-      label: "All JAM, no BUILD", desc: "Every commitment is collaboration — no direct delivery this week",
-      evidence: jamItems.map(t => ({ text: t, week: "This wk" })),
-    });
-  } else if (currentItems.length > 0 && !currentItems.some(it => it.type === "BUILD")) {
-    flags.push({
-      id: "no-build", severity: "info", icon: "🔨", color: tc.BUILD.color,
-      label: "No BUILD items", desc: "No delivery-focused commitments — review priority mix",
-      evidence: currentItems.map(it => ({ text: `${it.type}: ${it.title || it.project}`, week: "This wk" })),
-    });
-  }
-
-  const blockedWeeks = weeklyData.filter(w => w.types.BLOCKED > 0);
-  if (blockedWeeks.length >= 2) {
-    const evidence = [];
-    blockedWeeks.forEach(w => {
-      w.items.filter(it => it.type === "BLOCKED").forEach(it => {
-        evidence.push({ text: it.task || it.title || it.project || "Blocked item", week: w.week });
-      });
-    });
-    flags.push({
-      id: "chronic-blocked", severity: "critical", icon: "🚧", color: tc.BLOCKED.color,
-      label: "Chronic blocker", desc: `Blocked in ${blockedWeeks.length} of ${weeklyData.length} weeks`,
-      evidence,
-    });
-  }
-
-  if (deselectedItems.length > 0 || hasBuffer) {
-    const evidence = [];
-    deselectedItems.forEach(d => evidence.push({ text: `Dropped: ${d.title || d.project}`, week: "This wk" }));
-    if (hasBuffer && cm) evidence.push({ text: `Buffer swap: ${cm.buffer}`, week: "This wk" });
-    flags.push({
-      id: "scope-churn", severity: "warning", icon: "↩", color: c.orange,
-      label: "Scope churn", desc: "Changed commitments mid-week — watch for overcommit pattern",
-      evidence,
-    });
-  }
-
-  if (weeklyData.length >= 3) {
-    const recent = weeklyData[weeklyData.length - 1].total;
-    const earlier = weeklyData[weeklyData.length - 3].total;
-    if (earlier > 0 && recent === 0) {
-      flags.push({
-        id: "declining", severity: "warning", icon: "📉", color: c.orange,
-        label: "Activity drop", desc: `Had ${earlier} items two weeks ago, 0 now`,
-        evidence: [{ text: `${weeklyData[weeklyData.length - 3].week}: ${earlier} items → This wk: ${recent}`, week: "" }],
-      });
-    }
-  }
-
-  if (currentItems.length >= 2) {
-    const projCounts = {};
-    currentItems.forEach(it => { if (it.project) projCounts[it.project] = (projCounts[it.project] || 0) + 1; });
-    const topProj = Object.entries(projCounts).sort((a, b) => b[1] - a[1])[0];
-    if (topProj && topProj[1] >= 2 && topProj[1] === currentItems.length) {
-      flags.push({
-        id: "single-project", severity: "info", icon: "🎯", color: c.blue,
-        label: "Single-project focus", desc: `All ${topProj[1]} items on ${topProj[0]} — bus factor risk`,
-        evidence: currentItems.map(it => ({ text: `${it.type}: ${it.title || "—"}`, week: "This wk" })),
-      });
-    }
-  }
-
-  return flags;
-}
-
-/* ── Coaching recommendations engine ──────────────────────── */
-function generateCoachingPrompts(data, flags, personObj) {
-  const prompts = [];
-  const { currentItems, weeklyData, thisWeekTypes, weeksActive } = data;
-
-  // Momentum-based
-  const recent = weeklyData[weeklyData.length - 1]?.total || 0;
-  const prev = weeklyData.length >= 2 ? weeklyData[weeklyData.length - 2].total : 0;
-  if (recent > prev && prev > 0) {
-    prompts.push({ icon: "▲", color: c.green, text: `Momentum rising — ${recent} items vs ${prev} last week. Maintain cadence.` });
-  } else if (recent < prev && prev > 0) {
-    prompts.push({ icon: "▼", color: c.orange, text: `Activity dipped from ${prev} to ${recent}. Check for blockers or capacity issues.` });
-  }
-
-  // Type-mix coaching
-  if (thisWeekTypes.BLOCKED > 0) {
-    prompts.push({ icon: "!", color: c.red, text: `${thisWeekTypes.BLOCKED} blocked item${thisWeekTypes.BLOCKED > 1 ? "s" : ""} — escalate or find alternate path.` });
-  }
-  if (thisWeekTypes.JAM > 0 && thisWeekTypes.BUILD === 0 && currentItems.length > 0) {
-    prompts.push({ icon: "~", color: c.orange, text: "All collaboration, no delivery. Consider shifting one JAM to a BUILD commitment." });
-  }
-  if (currentItems.length === 0) {
-    prompts.push({ icon: "?", color: c.textMid, text: "No commitments declared. Check in on capacity and priorities." });
-  }
-
-  // Reliability coaching
-  const reliabilityPct = weeklyData.length > 0 ? Math.round((weeksActive / weeklyData.length) * 100) : 0;
-  if (reliabilityPct >= 90) {
-    prompts.push({ icon: "✓", color: c.green, text: `${reliabilityPct}% reliability — consistently delivering. Candidate for stretch goals.` });
-  } else if (reliabilityPct < 60 && weeklyData.length >= 3) {
-    prompts.push({ icon: "⚠", color: c.red, text: `${reliabilityPct}% reliability — inconsistent activity. Recommend 1:1 capacity review.` });
-  }
-
-  // Flag-based
-  flags.forEach(f => {
-    if (f.id === "chronic-blocked") {
-      prompts.push({ icon: "→", color: f.color, text: "Recurring blockers detected. Consider dependency mapping session." });
-    }
-    if (f.id === "scope-churn") {
-      prompts.push({ icon: "→", color: f.color, text: "Scope changes mid-week. Review estimation process or commitment sizing." });
-    }
-  });
-
-  return prompts;
-}
-
-/* ── Momentum calculation ─────────────────────────────────── */
-function getMomentum(weeklyData) {
-  if (weeklyData.length < 2) return { direction: "flat", delta: 0 };
-  const curr = weeklyData[weeklyData.length - 1].total;
-  const prev = weeklyData[weeklyData.length - 2].total;
-  const delta = curr - prev;
-  if (delta > 0) return { direction: "up", delta };
-  if (delta < 0) return { direction: "down", delta };
-  return { direction: "flat", delta: 0 };
-}
 
 
 /* ═══════════════════════════════════════════════════════════ */
@@ -236,7 +107,6 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   const [fRole, setFRole] = useState(initParams.get("role") || "");
   const [focusIdx, setFocusIdx] = useState(0);
   const [kbActive, setKbActive] = useState(false);
-  const [expandedFlags, setExpandedFlags] = useState({});
   const localSearchRef = useRef(null);
 
   useEffect(() => {
@@ -278,22 +148,21 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
 
   const goBackToList = () => {
     setSelectedPerson(null);
-    setExpandedFlags({});
+    setKbActive(false);
     if (setDetailLabel) setDetailLabel(null);
     if (setGoBack) setGoBack(null);
   };
 
   const openPerson = (name) => {
     setSelectedPerson(name);
-    setExpandedFlags({});
     if (setDetailLabel) setDetailLabel(name);
-    if (setGoBack) setGoBack(() => goBackToList);
+    if (setGoBack) setGoBack(goBackToList);
   };
 
   useEffect(() => {
     if (initialPerson && setDetailLabel) {
       setDetailLabel(initialPerson);
-      if (setGoBack) setGoBack(() => goBackToList);
+      if (setGoBack) setGoBack(goBackToList);
     }
   }, []);
 
@@ -314,34 +183,32 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   if (!selectedPerson) {
     let flatIdx = 0;
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {/* Sticky filter bar — top: 92 to clear header (52) + filter bar (40) */}
-        <div style={{ position: "sticky", top: 92, zIndex: 10, background: c.bg, paddingTop: 4, paddingBottom: 8 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "12px 16px", background: c.surface, borderRadius: 12, border: `1px solid ${c.border}` }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+        {/* Sticky filter bar */}
+        <div style={{ position: "sticky", top: 92, zIndex: 10, background: c.bg, paddingTop: space[1], paddingBottom: space[2] }}>
+        <Surface variant="panel" style={{ display: "flex", gap: space[2], alignItems: "center", flexWrap: "wrap", padding: `${space[3]}px ${space[4]}px` }}>
           <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
             <input ref={localSearchRef} value={search} onChange={e => { setSearch(e.target.value); setFocusIdx(0); }} className="flow-input"
               placeholder="Search by name..."
-              style={{ width: "100%", padding: "10px 16px 10px 38px", borderRadius: 10, border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text, fontFamily: body, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`, borderRadius: layout.radiusMd, border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, outline: "none", boxSizing: "border-box" }} />
             <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: c.textMid, pointerEvents: "none" }}>🔍</span>
             <span className="flow-search-hint">/</span>
           </div>
-          <select value={fSquad} onChange={e => setFSquad(e.target.value)} className="flow-input"
-            style={{ minWidth: 110, fontSize: 12, background: c.surfaceAlt, padding: "10px 12px", borderRadius: 10, border: `1px solid ${c.border}`, color: c.text, fontFamily: body }}>
+          <Sel value={fSquad} onChange={e => setFSquad(e.target.value)} style={{ minWidth: 110, fontSize: typo.bodySm.size }}>
             <option value="">All squads</option>
             {allSquads.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <select value={fRole} onChange={e => setFRole(e.target.value)} className="flow-input"
-            style={{ minWidth: 130, fontSize: 12, background: c.surfaceAlt, padding: "10px 12px", borderRadius: 10, border: `1px solid ${c.border}`, color: c.text, fontFamily: body }}>
+          </Sel>
+          <Sel value={fRole} onChange={e => setFRole(e.target.value)} style={{ minWidth: 130, fontSize: typo.bodySm.size }}>
             <option value="">All roles</option>
             {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
-          </select>
+          </Sel>
           {activeFilters > 0 && (
-            <button onClick={() => { setSearch(""); setFSquad(""); setFRole(""); }} className="flow-btn" style={{ padding: "8px 16px", borderRadius: 10, border: `1px solid ${c.accent}40`, background: c.accentDim, cursor: "pointer", fontFamily: body, fontSize: 12, fontWeight: 600, color: c.accent }}>
-              <kbd style={{ fontFamily: mono, fontSize: 9, color: c.accent, background: "transparent", padding: "0 2px", border: "none", marginRight: 3 }}>C</kbd>Clear ({activeFilters})
-            </button>
+            <Btn variant="command" size="sm" onClick={() => { setSearch(""); setFSquad(""); setFRole(""); }}>
+              <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.accent, background: "transparent", padding: "0 2px", border: "none", marginRight: 3 }}>C</kbd>Clear ({activeFilters})
+            </Btn>
           )}
-          <span style={{ fontFamily: mono, fontSize: 11, color: c.textDim, marginLeft: "auto" }}>{filtered.length}<span style={{ color: c.textDim + "80" }}>/{people.length}</span></span>
-        </div>
+          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textMid, marginLeft: "auto" }}>{filtered.length}<span style={{ color: c.textMid + "80" }}>/{people.length}</span></span>
+        </Surface>
         </div>
 
         {/* People grouped by squad */}
@@ -350,45 +217,56 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
           flatIdx += members.length;
           return (
             <div key={squad}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, marginTop: 16 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[3], marginTop: space[4] }}>
                 <div style={{ width: 4, height: 20, borderRadius: 3, background: c.accent }} />
-                <span style={{ fontFamily: display, fontSize: 17, fontWeight: 800, color: c.accent }}>{squad}</span>
-                <span style={{ fontFamily: mono, fontSize: 11, color: c.textDim, fontWeight: 500 }}>{members.length}</span>
+                <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking, color: c.accent }}>{squad}</span>
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textMid, fontWeight: typo.monoMd.weight }}>{members.length}</span>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: space[3] }}>
                 {members.map((p, gi) => {
                   const cm = commitments.find(x => x.person === p.name);
                   const items = cm ? cm.items.filter((_, idx) => cm.deselected !== idx) : [];
-                  const types = {};
-                  items.forEach(it => { types[it.type] = (types[it.type] || 0) + 1; });
                   const hasDeselect = cm && cm.deselected >= 0;
                   const isFocused = kbActive && (startIdx + gi) === focusIdx;
+
+                  // Quick reliability preview
+                  const personWeeks = weekConfig.historyWeeks;
+                  let activeWks = 0;
+                  personWeeks.forEach(w => {
+                    const active = Object.values(history).some(ph =>
+                      ph.some(wk => wk.week === w && wk.entries.some(e => e.person === p.name))
+                    );
+                    if (active) activeWks++;
+                  });
+                  if (items.length > 0) activeWks++;
+                  const relPct = personWeeks.length > 0 ? Math.round((activeWks / (personWeeks.length + 1)) * 100) : 0;
 
                   return (
                     <div key={gi} className={`flow-row${isFocused ? " flow-kb-focus" : ""}`} onClick={() => openPerson(p.name)} style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "14px 18px", background: isFocused ? c.accentDim : c.surface, borderRadius: 12, cursor: "pointer",
+                      padding: `${space[4]}px ${space[5]}px`, background: isFocused ? c.accentDim : c.surface,
+                      borderRadius: layout.radius, cursor: "pointer",
                       border: `1px solid ${isFocused ? c.accent + "40" : c.border}`,
-                      transition: "all 0.15s",
+                      transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0, flex: 1 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: c.accentDim, border: `1.5px solid ${c.accent}30`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: display, fontSize: 15, fontWeight: 700, color: c.accent, flexShrink: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: space[4], minWidth: 0, flex: 1 }}>
+                        <div style={{ width: space[8], height: space[8], borderRadius: "50%", background: c.accentDim, border: `1.5px solid ${c.accent}30`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.accent, flexShrink: 0 }}>
                           {p.name.charAt(0)}
                         </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontFamily: display, fontSize: 16, fontWeight: 800, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: "-0.02em", lineHeight: 1.2 }}>{p.name}</div>
-                          <div style={{ fontFamily: body, fontSize: 12, fontWeight: 500, color: c.textMid, marginTop: 3, lineHeight: 1.2 }}>
-                            {p.role}<span style={{ color: c.textDim, margin: "0 5px" }}>·</span><span style={{ color: c.textDim }}>{p.squad}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                            <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: typo.displaySm.tracking, lineHeight: typo.displaySm.lineHeight }}>{p.name}</span>
+                            {hasDeselect && <span style={{ fontSize: 12, color: c.orange }} title="Scope churn">↩</span>}
                           </div>
-                          <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 6 }}>
-                            {hasDeselect && <span style={{ fontSize: 10, color: c.orange, marginRight: 2 }} title="Scope churn">↩</span>}
-                            {items.length === 0 ? (
-                              <span style={{ fontFamily: mono, fontSize: 10, color: c.textDim }}>No commitments</span>
-                            ) : Object.entries(types).map(([t, n]) => (
-                              <Tag key={t} color={tc[t]?.color} bg={tc[t]?.bg} style={{ padding: "2px 6px", fontSize: 10 }}>{n}{t.charAt(0)}</Tag>
-                            ))}
+                          <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.textMid, marginTop: space[1], lineHeight: 1.2 }}>
+                            {p.role}
                           </div>
                         </div>
+                      </div>
+                      {/* Reliability indicator */}
+                      <div style={{ textAlign: "center", flexShrink: 0, marginLeft: space[3] }}>
+                        <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: relPct >= 80 ? c.green : relPct >= 50 ? c.orange : c.red, lineHeight: 1 }}>{relPct}%</div>
+                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginTop: space[1] }}>Reliability</div>
                       </div>
                     </div>
                   );
@@ -408,294 +286,98 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
 
   const personObj = people.find(p => p.name === selectedPerson);
   const data = computePersonData(selectedPerson, commitments, projects, history);
-  const flags = computePatternFlags(data);
-  const coachPrompts = generateCoachingPrompts(data, flags, personObj);
-  const momentum = getMomentum(data.weeklyData);
   const { currentItems, weeklyData, scopeChurnEvents } = data;
 
   const allPersonProjects = Object.keys(data.projectMap);
-  const maxWeekTotal = Math.max(...weeklyData.map(w => w.total), 1);
   const reliabilityPct = weeklyData.length > 0 ? Math.round((data.weeksActive / weeklyData.length) * 100) : 0;
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+  // Last 4 weeks summary data
+  const last4 = weeklyData.filter(w => !w.isCurrent).slice(-4);
+  const last4Total = last4.reduce((s, w) => s + w.total, 0);
+  const last4Active = last4.filter(w => w.total > 0).length;
+  const last4Projects = new Set();
+  last4.forEach(w => w.items.forEach(it => { if (it.project) last4Projects.add(it.project); }));
 
-      {/* ═══ PROFILE TELEMETRY PANEL ═══════════════════════ */}
-      <div className="flow-telemetry-panel" style={{ padding: "24px 28px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20, position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
+
+      {/* ═══ PROFILE HEADER ═══════════════════════════════ */}
+      <div className="flow-telemetry-panel" style={{ padding: `${space[6]}px ${space[7]}px` }}>
+        {/* Person identity — dominant read */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: space[5], position: "relative", zIndex: 1 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[4] }}>
             <div style={{
-              width: 56, height: 56, borderRadius: "50%",
+              width: space[7] + space[6], height: space[7] + space[6], borderRadius: "50%",
               background: `linear-gradient(135deg, ${c.accentDim}, ${c.purple}15)`,
               border: `2px solid ${c.accent}40`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: display, fontSize: 22, fontWeight: 700, color: c.accent,
+              fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, color: c.accent,
             }}>{selectedPerson.charAt(0)}</div>
             <div>
-              <div style={{ fontFamily: display, fontSize: 26, fontWeight: 800, color: c.text, letterSpacing: "-0.03em" }}>{selectedPerson}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
-                {personObj && <span style={{ fontFamily: body, fontSize: 14, fontWeight: 600, color: c.textMid }}>{personObj.role}</span>}
-                {personObj && <span style={{ fontFamily: mono, fontSize: 11, color: c.textDim }}>·</span>}
-                {personObj && <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: c.accent }}>{personObj.squad}</span>}
+              <div style={{ fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size, fontWeight: typo.displayXl.weight, color: c.text, letterSpacing: typo.displayXl.tracking, lineHeight: 1.15 }}>{selectedPerson}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2] }}>
+                {personObj && <span style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: typo.bodyLg.weight, color: c.textMid }}>{personObj.role}</span>}
+                {personObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>·</span>}
+                {personObj && <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, letterSpacing: typo.monoLg.tracking, color: c.accent }}>{personObj.squad}</span>}
               </div>
             </div>
           </div>
 
-          {/* Momentum arrow */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 10, background: c.surface, border: `1px solid ${c.border}` }}>
-            <span className={`flow-momentum-${momentum.direction}`} style={{
-              fontFamily: display, fontSize: 20, fontWeight: 800,
-            }}>
-              {momentum.direction === "up" ? "▲" : momentum.direction === "down" ? "▼" : "—"}
-            </span>
-            <div>
-              <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 700, color: c.textDim, letterSpacing: "0.06em" }}>MOMENTUM</div>
-              <div style={{
-                fontFamily: display, fontSize: 14, fontWeight: 700,
-                color: momentum.direction === "up" ? c.green : momentum.direction === "down" ? c.red : c.textDim,
-              }}>
-                {momentum.direction === "up" ? `+${momentum.delta}` : momentum.direction === "down" ? `${momentum.delta}` : "Steady"}
-              </div>
-            </div>
+          {/* Reliability highlight */}
+          <div style={{ textAlign: "center", padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusMd, background: reliabilityPct >= 80 ? c.greenDim : reliabilityPct >= 50 ? c.orangeDim : c.redDim, border: `1px solid ${(reliabilityPct >= 80 ? c.green : reliabilityPct >= 50 ? c.orange : c.red)}20` }}>
+            <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, color: reliabilityPct >= 80 ? c.green : reliabilityPct >= 50 ? c.orange : c.red, lineHeight: 1 }}>{reliabilityPct}%</div>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginTop: space[1] }}>Reliability</div>
           </div>
         </div>
 
-        {/* Telemetry metrics */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, position: "relative", zIndex: 1, borderTop: `1px solid ${c.border}`, paddingTop: 20 }}>
-          {[
-            { label: "THIS WEEK", value: currentItems.length, color: c.text },
-            { label: "PROJECTS", value: allPersonProjects.length, color: c.accent },
-            { label: "RELIABILITY", value: `${reliabilityPct}%`, color: reliabilityPct >= 80 ? c.green : reliabilityPct >= 50 ? c.orange : c.red, highlight: true },
-            { label: "WEEKS ACTIVE", value: `${data.weeksActive}/${weeklyData.length}`, color: c.text },
-          ].map((m, i) => (
-            <div key={i} style={{
-              textAlign: "center", padding: "14px 8px", borderRadius: 10,
-              background: m.highlight ? (reliabilityPct >= 80 ? c.greenDim : reliabilityPct >= 50 ? c.orangeDim : c.redDim) : "transparent",
-              border: m.highlight ? `1px solid ${m.color}20` : "none",
-            }}>
-              <div style={{ fontFamily: display, fontSize: 28, fontWeight: 800, color: m.color, letterSpacing: "-0.02em", lineHeight: 1 }}>{m.value}</div>
-              <div style={{ fontFamily: mono, fontSize: 10, color: c.textDim, letterSpacing: "0.08em", marginTop: 6, textTransform: "uppercase" }}>{m.label}</div>
-            </div>
-          ))}
+        {/* Last 4 weeks — directly below identity */}
+        <div style={{ borderTop: `1px solid ${c.border}`, paddingTop: space[4], position: "relative", zIndex: 1 }}>
+          <Label style={{ marginBottom: space[3] }}>Last 4 Weeks</Label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: space[3] }}>
+            <StatCell value={`${last4Active}/${last4.length}`} label="Active weeks" color={c.text} style={{ textAlign: "left" }} />
+            <StatCell value={last4Total} label="Commitments" color={c.accent} style={{ textAlign: "left" }} />
+            <StatCell value={`${reliabilityPct}%`} label="Reliability" color={reliabilityPct >= 80 ? c.green : reliabilityPct >= 50 ? c.orange : c.red} style={{ textAlign: "left" }} />
+            <StatCell value={last4Projects.size} label="Projects" color={c.text} style={{ textAlign: "left" }} />
+          </div>
         </div>
       </div>
 
 
-      {/* ═══ STACKED ENERGY BARS — work mix ════════════════ */}
-      <div style={{ background: c.surface, borderRadius: 14, padding: "20px 24px", border: `1px solid ${c.border}` }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <div style={{ fontFamily: display, fontSize: 16, fontWeight: 700, color: c.text }}>Energy Mix</div>
-          <div style={{ display: "flex", gap: 12 }}>
-            {["BUILD", "JAM", "COMMIT", "BLOCKED"].map(t => (
-              <div key={t} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 2, background: tc[t]?.color }} />
-                <span style={{ fontFamily: mono, fontSize: 9, color: c.textDim }}>{t}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* ═══ THIS WEEK SUMMARY (with scope churn if present) ═ */}
+      <Surface variant="panel" style={{ padding: `${space[4]}px ${space[5]}px` }}>
+        <Label style={{ marginBottom: space[3] }}>This Week</Label>
         {currentItems.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {["BUILD", "JAM", "COMMIT", "BLOCKED"].map((t, ti) => {
-              const n = data.thisWeekTypes[t] || 0;
-              const pct = Math.round(n / currentItems.length * 100);
-              if (n === 0) return null;
-              return (
-                <div key={t} style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: tc[t]?.color, width: 64, flexShrink: 0 }}>{t}</span>
-                  <div className="flow-energy-bar-track" style={{ flex: 1 }}>
-                    <div className="flow-energy-bar-fill" style={{
-                      "--bar-width": `${pct}%`,
-                      width: `${pct}%`,
-                      background: `linear-gradient(90deg, ${tc[t]?.color}80, ${tc[t]?.color})`,
-                      animationDelay: `${ti * 0.1}s`,
-                    }}>
-                      <span className="flow-energy-bar-pct">{pct}%</span>
-                    </div>
-                  </div>
-                  <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 700, color: tc[t]?.color, width: 30, textAlign: "right", flexShrink: 0 }}>{n}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>
+              {currentItems.length} commitment{currentItems.length !== 1 ? "s" : ""} across {new Set(currentItems.map(it => it.project).filter(Boolean)).size} project{new Set(currentItems.map(it => it.project).filter(Boolean)).size !== 1 ? "s" : ""}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
+              {currentItems.map((it, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[1]}px ${space[3]}px`, background: c.surfaceAlt, borderRadius: layout.radiusMd, border: `1px solid ${c.border}` }}>
+                  <Tag color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Tag>
+                  {it.project && (
+                    <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", it.project); }}
+                      style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: entityColors().project, cursor: "pointer" }}>
+                      {it.project}
+                    </span>
+                  )}
+                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.text }}>{it.title || "—"}</span>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         ) : (
-          <div style={{ padding: "8px 0", fontFamily: body, fontSize: 13, color: c.textDim }}>No commitments this week</div>
+          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No commitments this week</div>
         )}
-      </div>
-
-
-      {/* ═══ SIGNAL CARDS — pattern flags with severity waveform ═══ */}
-      {flags.length > 0 && (
-        <div>
-          <div style={{ fontFamily: display, fontSize: 16, fontWeight: 700, color: c.text, marginBottom: 10 }}>Signal Flags</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {flags.map((flag, fi) => {
-              const isExpanded = !!expandedFlags[flag.id];
-              const sevClass = flag.severity === "critical" ? "flow-signal-critical" : flag.severity === "warning" ? "flow-signal-warning" : "flow-signal-info";
-              return (
-                <div key={flag.id}
-                  className={`flow-signal-card ${sevClass}`}
-                  onClick={() => setExpandedFlags(prev => ({ ...prev, [flag.id]: !prev[flag.id] }))}
-                  style={{ animationDelay: `${fi * 0.1}s` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px" }}>
-                    <span style={{ fontSize: 16 }}>{flag.icon}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontFamily: display, fontSize: 14, fontWeight: 700, color: flag.color }}>{flag.label}</span>
-                        <span style={{
-                          fontFamily: mono, fontSize: 9, fontWeight: 700,
-                          padding: "2px 6px", borderRadius: 4,
-                          background: flag.severity === "critical" ? c.redDim : flag.severity === "warning" ? c.orangeDim : c.blueDim,
-                          color: flag.color, textTransform: "uppercase",
-                        }}>{flag.severity}</span>
-                      </div>
-                      <div style={{ fontFamily: body, fontSize: 12, color: c.textMid, marginTop: 3 }}>{flag.desc}</div>
-                    </div>
-                    {flag.evidence.length > 0 && (
-                      <span style={{ fontFamily: mono, fontSize: 12, color: c.textDim, transition: "transform 0.2s", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>▾</span>
-                    )}
-                  </div>
-                  {/* Expanded evidence */}
-                  {isExpanded && flag.evidence.length > 0 && (
-                    <div className="flow-signal-expand" style={{ padding: "0 16px 12px", borderTop: `1px solid ${c.border}` }}>
-                      {flag.evidence.map((ev, ei) => (
-                        <div key={ei} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: ei < flag.evidence.length - 1 ? `1px solid ${c.border}40` : "none" }}>
-                          <span style={{ fontFamily: mono, fontSize: 10, color: flag.color }}>→</span>
-                          <span style={{ fontFamily: body, fontSize: 12, color: c.text, flex: 1 }}>{ev.text}</span>
-                          {ev.week && <span style={{ fontFamily: mono, fontSize: 9, color: c.textDim }}>{ev.week}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {flags.length === 0 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: c.greenDim, borderRadius: 10, border: `1px solid ${c.green}20` }}>
-          <span style={{ fontSize: 15, color: c.green }}>✓</span>
-          <span style={{ fontFamily: display, fontSize: 14, fontWeight: 700, color: c.green }}>No signals flagged</span>
-          <span style={{ fontFamily: body, fontSize: 12, color: c.textMid }}>— Healthy commitment mix and consistent activity</span>
-        </div>
-      )}
-
-
-      {/* ═══ TERMINAL LOG STREAM — weekly timeline ═════════ */}
-      <div className="flow-terminal-log">
-        <div className="flow-terminal-header">
-          <div className="flow-terminal-dot" style={{ background: c.red }} />
-          <div className="flow-terminal-dot" style={{ background: c.orange }} />
-          <div className="flow-terminal-dot" style={{ background: c.green }} />
-          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600, color: c.textMid, marginLeft: 8 }}>timeline@{selectedPerson.split(" ")[0].toLowerCase()}</span>
-          <span style={{ fontFamily: mono, fontSize: 10, color: c.textDim, marginLeft: "auto" }}>{weeklyData.length} weeks</span>
-        </div>
-        <div style={{ padding: "8px 0", maxHeight: 400, overflowY: "auto" }}>
-          {[...weeklyData].reverse().filter(w => w.total > 0).length > 0 ? (
-            [...weeklyData].reverse().filter(w => w.total > 0).map((w, wi) => (
-              <React.Fragment key={wi}>
-                {/* Week separator */}
-                <div style={{ padding: "8px 16px 4px", display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontFamily: mono, fontSize: 10, fontWeight: 700, color: w.isCurrent ? c.accent : c.textDim }}>
-                    {w.isCurrent ? "▸ THIS WEEK" : `▸ ${w.week.toUpperCase()}`}
-                  </span>
-                  <div style={{ flex: 1, height: 1, background: c.border }} />
-                  <span style={{ fontFamily: mono, fontSize: 9, color: c.textDim }}>{w.total} entries</span>
-                </div>
-                {w.items.map((entry, ei) => {
-                  const projObj = projects.find(p => p.id === entry.project);
-                  return (
-                    <div key={`${wi}-${ei}`} className="flow-terminal-line" style={{ animationDelay: `${(wi * 3 + ei) * 0.04}s` }}>
-                      {/* Type marker */}
-                      <span style={{
-                        width: 6, height: 6, borderRadius: "50%",
-                        background: tc[entry.type]?.color || c.textDim,
-                        boxShadow: `0 0 6px ${tc[entry.type]?.color || c.textDim}40`,
-                        flexShrink: 0, marginTop: 5,
-                      }} />
-                      {/* Timestamp */}
-                      <span style={{ fontFamily: mono, fontSize: 10, color: c.textDim, flexShrink: 0, width: 52, marginTop: 1 }}>
-                        {w.isCurrent ? "now" : w.week.split(" ")[0].substring(0, 3)}
-                      </span>
-                      {/* Type badge */}
-                      <span style={{
-                        fontFamily: mono, fontSize: 9, fontWeight: 700,
-                        color: tc[entry.type]?.color, background: tc[entry.type]?.bg,
-                        padding: "2px 6px", borderRadius: 3, flexShrink: 0,
-                      }}>{entry.type}</span>
-                      {/* Project */}
-                      <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", entry.project); }}
-                        style={{ fontFamily: mono, fontSize: 11, fontWeight: 600, color: c.accent, cursor: "pointer", flexShrink: 0 }}>
-                        {entry.project}
-                      </span>
-                      {/* Stage */}
-                      <span style={{ fontFamily: mono, fontSize: 9, color: pc[entry.stage] || c.textDim, fontWeight: 600, flexShrink: 0 }}>
-                        {entry.stage}
-                      </span>
-                      {/* Task */}
-                      <span style={{ fontFamily: body, fontSize: 12, color: c.textMid, flex: 1, minWidth: 0 }}>
-                        {entry.title || entry.task || "—"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))
-          ) : (
-            <div style={{ padding: "20px 16px", textAlign: "center", fontFamily: mono, fontSize: 12, color: c.textDim }}>
-              $ no activity logged<span className="flow-terminal-cursor" />
-            </div>
-          )}
-          {/* Terminal prompt */}
-          {[...weeklyData].reverse().filter(w => w.total > 0).length > 0 && (
-            <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontFamily: mono, fontSize: 11, color: c.accent }}>$</span>
-              <span className="flow-terminal-cursor" />
-            </div>
-          )}
-        </div>
-      </div>
-
-
-      {/* ═══ COACHING CONSOLE — animated recommendations ═══ */}
-      {coachPrompts.length > 0 && (
-        <div className="flow-coaching-console">
-          <div style={{ padding: "14px 20px", borderBottom: `1px solid ${c.accent}15`, display: "flex", alignItems: "center", gap: 8, position: "relative", zIndex: 1 }}>
-            <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: c.accent }}>$</span>
-            <span style={{ fontFamily: display, fontSize: 15, fontWeight: 700, color: c.text }}>Coaching Console</span>
-            <span style={{ fontFamily: mono, fontSize: 10, color: c.textDim, marginLeft: "auto" }}>{coachPrompts.length} recommendation{coachPrompts.length !== 1 ? "s" : ""}</span>
-          </div>
-          <div style={{ padding: "12px 20px", display: "flex", flexDirection: "column", gap: 8, position: "relative", zIndex: 1 }}>
-            {coachPrompts.map((prompt, pi) => (
-              <div key={pi} className="flow-coach-prompt" style={{ animationDelay: `${pi * 0.1}s` }}>
-                <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "8px 12px", borderRadius: 8, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>
-                  <span style={{
-                    fontFamily: mono, fontSize: 14, fontWeight: 800,
-                    color: prompt.color, flexShrink: 0, width: 18, textAlign: "center", marginTop: 1,
-                  }}>{prompt.icon}</span>
-                  <span style={{ fontFamily: body, fontSize: 13, color: c.text, lineHeight: 1.5 }}>{prompt.text}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-
-      {/* ═══ SCOPE CHURN ══════════════════════════════════ */}
-      {scopeChurnEvents.length > 0 && (
-        <div style={{ padding: "8px 0" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 4, fontFamily: body, fontSize: 11, color: c.textMid, lineHeight: 1.5 }}>
-            <span style={{ color: c.orange, fontSize: 10 }}>↩</span>
-            <span style={{ fontWeight: 600, color: c.textMid }}>Scope churn this week:</span>
+        {scopeChurnEvents.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: space[1], padding: `${space[2]}px ${space[3]}px`, marginTop: space[3], background: c.orangeDim, borderRadius: layout.radiusMd, border: `1px solid ${c.orange}15`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.5 }}>
+            <span style={{ color: c.orange, fontWeight: 600 }}>↩ Scope churn:</span>
             {scopeChurnEvents.map((ev, i) => (
               <span key={i} style={{ display: "inline-flex", alignItems: "baseline", gap: 3 }}>
                 <span>{ev.label}</span>
                 {ev.project && (
                   <span onClick={() => { if (onNavigate) onNavigate("projects", ev.project); }}
-                    style={{ fontFamily: mono, fontSize: 10, color: c.accent, cursor: "pointer", textDecoration: "underline", textDecorationColor: c.accent + "40" }}>
+                    style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: entityColors().project, cursor: "pointer", textDecoration: "underline", textDecorationColor: entityColors().project + "40" }}>
                     {ev.project}
                   </span>
                 )}
@@ -703,8 +385,68 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
               </span>
             ))}
           </div>
+        )}
+      </Surface>
+
+
+      {/* ═══ TIMELINE ═══════════════════════════════════════ */}
+      <div className="flow-terminal-log">
+        <div className="flow-terminal-header">
+          <div className="flow-terminal-dot" style={{ background: c.red }} />
+          <div className="flow-terminal-dot" style={{ background: c.orange }} />
+          <div className="flow-terminal-dot" style={{ background: c.green }} />
+          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size + 1, fontWeight: 600, color: c.textMid, marginLeft: space[2] }}>timeline@{selectedPerson.split(" ")[0].toLowerCase()}</span>
+          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim, marginLeft: "auto" }}>{weeklyData.length} weeks</span>
         </div>
-      )}
+        <div style={{ padding: `${space[2]}px 0`, maxHeight: 420, overflowY: "auto" }}>
+          {[...weeklyData].reverse().filter(w => w.total > 0).length > 0 ? (
+            [...weeklyData].reverse().filter(w => w.total > 0).map((w, wi) => (
+              <React.Fragment key={wi}>
+                {/* Week separator */}
+                <div style={{ padding: `${space[2]}px ${space[4]}px ${space[1]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
+                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: w.isCurrent ? c.accent : c.textDim }}>
+                    {w.isCurrent ? "▸ This week" : `▸ ${w.week}`}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: w.isCurrent ? `${c.accent}30` : c.border }} />
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{w.total} {w.total === 1 ? "entry" : "entries"}</span>
+                </div>
+                {w.items.map((entry, ei) => (
+                  <div key={`${wi}-${ei}`} className="flow-terminal-line" style={{
+                    animationDelay: `${(wi * 3 + ei) * 0.04}s`,
+                    opacity: w.isCurrent ? 1 : 0.8,
+                  }}>
+                    <span style={{
+                      width: 6, height: 6, borderRadius: "50%",
+                      background: tc[entry.type]?.color || c.textDim,
+                      boxShadow: w.isCurrent ? `0 0 6px ${tc[entry.type]?.color || c.textDim}40` : "none",
+                      flexShrink: 0, marginTop: 5,
+                    }} />
+                    <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", entry.project); }}
+                      style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: entityColors().project, cursor: "pointer", flexShrink: 0, width: 64 }}>
+                      {entry.project}
+                    </span>
+                    <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg}>{entry.type}</Tag>
+                    <Tag color={pc[entry.stage] || c.textDim} bg={(pc[entry.stage] || c.textDim) + "12"}>{entry.stage}</Tag>
+                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: w.isCurrent ? c.text : c.textMid, flex: 1, minWidth: 0 }}>
+                      {entry.title || entry.task || "—"}
+                    </span>
+                  </div>
+                ))}
+              </React.Fragment>
+            ))
+          ) : (
+            <div style={{ padding: `${space[5]}px ${space[4]}px`, textAlign: "center", fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.textDim }}>
+              $ no activity logged<span className="flow-terminal-cursor" />
+            </div>
+          )}
+          {[...weeklyData].reverse().filter(w => w.total > 0).length > 0 && (
+            <div style={{ padding: `${space[2]}px ${space[4]}px`, display: "flex", alignItems: "center", gap: space[1] + 2 }}>
+              <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.accent }}>$</span>
+              <span className="flow-terminal-cursor" />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

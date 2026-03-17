@@ -1,87 +1,17 @@
-// Flow — Summary View (full-page weekly summary tab)
-// Mirrors Pulse design language: mission-grid strip, compact tiles, dotted-border tables
+// Flow — Summary View (Phase 2: full design-system compliance)
+// Weekly operating snapshot — polished, cinematic, analytical
 import React, { useState, useMemo } from "react";
-import { c, display, body, mono, typeConfig, layout } from "../styles/theme";
+import { c, typo, space, layout, motion, typeConfig, colWidths } from "../styles/theme";
+import { Surface, Label, DeltaIndicator, VDivider, TelemetryLabel, MetricCompact, SummaryTile } from "../components/shared";
 import { weekConfig } from "../data/seed";
-
-// ─── Delta token (matches Pulse DeltaToken) ──────────────────
-const Delta = ({ current, previous }) => {
-  if (previous === null || previous === undefined) return null;
-  const diff = current - previous;
-  if (diff === 0) return null;
-  const up = diff > 0;
-  const clr = up ? c.green : c.red;
-  return (
-    <span style={{
-      fontFamily: mono, fontSize: 9, fontWeight: 700, color: clr,
-      display: "inline-flex", alignItems: "center", gap: 1,
-    }}>
-      <span style={{ fontSize: 6 }}>{up ? "▲" : "▼"}</span>{up ? "+" : ""}{diff}
-    </span>
-  );
-};
-
-// ─── Summary Tile (matches Pulse SummaryTile) ────────────────
-const Tile = ({ value, label, color, prevValue, active }) => (
-  <div style={{
-    display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-    padding: "10px 12px", minWidth: 56, borderRadius: 8, cursor: "default",
-    background: active ? `${color}12` : "transparent",
-    border: active ? `1px solid ${color}40` : "1px solid transparent",
-    transition: "all 0.15s",
-  }}>
-    <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-      <span style={{
-        fontFamily: display, fontSize: 20, fontWeight: 800, color: value > 0 ? color : c.textDim,
-        lineHeight: 1, letterSpacing: "-0.02em",
-      }}>{value}</span>
-      {prevValue !== undefined && <Delta current={value} previous={prevValue} />}
-    </div>
-    <span style={{
-      fontFamily: body, fontSize: 10, fontWeight: 700,
-      color: active ? color : c.textMid, letterSpacing: "0.02em", whiteSpace: "nowrap",
-    }}>{label}</span>
-  </div>
-);
-
-// ─── Summary Metric (matches Pulse SummaryMetric) ────────────
-const Metric = ({ value, label, color, prevValue }) => (
-  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "10px 8px", minWidth: 48 }}>
-    <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-      <span style={{
-        fontFamily: display, fontSize: 18, fontWeight: 800, color,
-        lineHeight: 1, letterSpacing: "-0.02em",
-      }}>{value}</span>
-      {prevValue !== undefined && <Delta current={value} previous={prevValue} />}
-    </div>
-    <span style={{
-      fontFamily: mono, fontSize: 8, fontWeight: 600, color: c.textDim,
-      letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap",
-    }}>{label}</span>
-  </div>
-);
-
-// ─── Vertical divider (matches Pulse summary strip) ──────────
-const VDivider = () => (
-  <div style={{ width: 1, height: 36, background: c.border, margin: "0 6px", flexShrink: 0 }} />
-);
-
-// ─── Section label (mono uppercase, Pulse-style) ─────────────
-const SectionLabel = ({ children, color }) => (
-  <span style={{
-    fontFamily: mono, fontSize: 9, fontWeight: 700,
-    color: color || c.textDim, letterSpacing: "0.08em",
-    textTransform: "uppercase",
-  }}>{children}</span>
-);
 
 
 // ═══════════════════════════════════════════════════════════════
-// SVG CHART COMPONENTS — Pulse-themed
+// SVG CHART COMPONENTS — token-compliant
 // ═══════════════════════════════════════════════════════════════
 
 const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300, height = 170 }) => {
-  const padTop = 30, padBot = 24, padLR = 20;
+  const padTop = space[7], padBot = space[6], padLR = space[5];
   const chartW = width - padLR * 2;
   const chartH = height - padTop - padBot;
   const max = Math.max(...data, 1) * 1.12;
@@ -90,14 +20,13 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
 
   return (
     <div style={{ flex: 1, minWidth: 180 }}>
-      <SectionLabel>{title}</SectionLabel>
-      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ marginTop: 8 }}>
+      <TelemetryLabel>{title}</TelemetryLabel>
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ marginTop: space[2] }}>
         <defs>
           <filter id={`glow-${title.replace(/\s/g,"")}`}>
             <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color} floodOpacity="0.35" />
           </filter>
         </defs>
-        {/* Baseline */}
         <line x1={padLR} y1={padTop + chartH} x2={width - padLR} y2={padTop + chartH}
           stroke={c.border} strokeWidth={0.5} />
         {data.map((val, i) => {
@@ -110,13 +39,13 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
               <rect x={x} y={y} width={barW} height={barH} rx={4}
                 fill={color} opacity={active ? 0.95 : 0.22}
                 filter={active ? `url(#glow-${title.replace(/\s/g,"")})` : undefined}
-                style={{ transition: "all 0.3s ease" }} />
+                style={{ transition: `all ${motion.critical.duration} ${motion.critical.easing}` }} />
               <text x={x + barW / 2} y={y - 8} textAnchor="middle"
                 fill={active ? color : c.textDim}
-                style={{ fontFamily: mono, fontSize: active ? 12 : 10, fontWeight: 700 }}>{val}</text>
+                style={{ fontFamily: typo.monoLg.font, fontSize: active ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700 }}>{val}</text>
               <text x={x + barW / 2} y={height - 4} textAnchor="middle"
                 fill={active ? c.textMid : c.textDim}
-                style={{ fontFamily: mono, fontSize: 9, fontWeight: active ? 600 : 400 }}>{labels[i]}</text>
+                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: active ? 600 : 400 }}>{labels[i]}</text>
             </g>
           );
         })}
@@ -126,7 +55,7 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
 };
 
 const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, width = 300, height = 170 }) => {
-  const padTop = 30, padBot = 24, padLR = 24;
+  const padTop = space[7], padBot = space[6], padLR = space[6];
   const chartW = width - padLR * 2;
   const chartH = height - padTop - padBot;
   const max = Math.max(...data, 1) * 1.1;
@@ -143,8 +72,8 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
 
   return (
     <div style={{ flex: 1, minWidth: 180 }}>
-      <SectionLabel>{title}</SectionLabel>
-      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ marginTop: 8 }}>
+      <TelemetryLabel>{title}</TelemetryLabel>
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ marginTop: space[2] }}>
         <defs>
           <linearGradient id={`area-${title.replace(/\s/g,"")}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity={0.12} />
@@ -154,12 +83,9 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
             <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color} floodOpacity="0.4" />
           </filter>
         </defs>
-        {/* Baseline */}
         <line x1={padLR} y1={padTop + chartH} x2={width - padLR} y2={padTop + chartH}
           stroke={c.border} strokeWidth={0.5} />
-        {/* Area fill with gradient */}
         <polygon points={areaPath} fill={`url(#area-${title.replace(/\s/g,"")})`} />
-        {/* Line */}
         <polyline points={linePath} fill="none" stroke={color} strokeWidth={2}
           strokeLinecap="round" strokeLinejoin="round" opacity={0.8} />
         {pts.map((p, i) => {
@@ -172,10 +98,10 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
                 filter={active ? `url(#dotglow-${title.replace(/\s/g,"")})` : undefined} />
               <text x={p.x} y={p.y - 12} textAnchor="middle"
                 fill={active ? color : c.textDim}
-                style={{ fontFamily: mono, fontSize: active ? 12 : 10, fontWeight: 700 }}>{p.val}{suffix}</text>
+                style={{ fontFamily: typo.monoLg.font, fontSize: active ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700 }}>{p.val}{suffix}</text>
               <text x={p.x} y={height - 4} textAnchor="middle"
                 fill={active ? c.textMid : c.textDim}
-                style={{ fontFamily: mono, fontSize: 9, fontWeight: active ? 600 : 400 }}>{labels[i]}</text>
+                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: active ? 600 : 400 }}>{labels[i]}</text>
             </g>
           );
         })}
@@ -185,7 +111,7 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
 };
 
 const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 200 }) => {
-  const padTop = 12, padBot = 28, padLR = 20;
+  const padTop = space[3], padBot = space[7], padLR = space[5];
   const width = 700;
   const chartW = width - padLR * 2;
   const chartH = height - padTop - padBot;
@@ -199,7 +125,6 @@ const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 200 }) =
   return (
     <div>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-        {/* Baseline */}
         <line x1={padLR} y1={padTop + chartH} x2={width - padLR} y2={padTop + chartH}
           stroke={c.border} strokeWidth={0.5} />
         {weekLabels.map((label, wi) => {
@@ -215,25 +140,31 @@ const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 200 }) =
                 return segH > 0 ? (
                   <rect key={s.label} x={x} y={yOffset} width={barW} height={segH} rx={3}
                     fill={s.color} opacity={active ? 0.95 : 0.22}
-                    style={{ transition: "all 0.3s ease" }} />
+                    style={{ transition: `all ${motion.critical.duration} ${motion.critical.easing}` }} />
                 ) : null;
               })}
               <text x={x + barW / 2} y={padTop + chartH - (weekTotals[wi] / maxTotal) * chartH - 8}
                 textAnchor="middle" fill={active ? c.text : c.textDim}
-                style={{ fontFamily: mono, fontSize: active ? 12 : 10, fontWeight: 700 }}>{weekTotals[wi]}</text>
+                style={{ fontFamily: typo.monoLg.font, fontSize: active ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700 }}>{weekTotals[wi]}</text>
               <text x={x + barW / 2} y={height - 6} textAnchor="middle"
                 fill={active ? c.textMid : c.textDim}
-                style={{ fontFamily: mono, fontSize: 9, fontWeight: active ? 600 : 400 }}>{label}</text>
+                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: active ? 600 : 400 }}>{label}</text>
             </g>
           );
         })}
       </svg>
-      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 8 }}>
+      <div style={{ display: "flex", gap: space[5] - 2, flexWrap: "wrap", marginTop: space[2] }}>
         {series.map(s => (
-          <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div key={s.label} style={{ display: "flex", alignItems: "center", gap: space[2] - 2 }}>
             <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color }} />
-            <span style={{ fontFamily: body, fontSize: 11, fontWeight: 500, color: c.textMid }}>{s.label}</span>
-            <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: s.color }}>
+            <span style={{
+              fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+              fontWeight: typo.bodyXs.weight, color: c.textMid,
+            }}>{s.label}</span>
+            <span style={{
+              fontFamily: typo.monoLg.font, fontSize: typo.bodyXs.size,
+              fontWeight: 700, color: s.color,
+            }}>
               {s.values.reduce((a, b) => a + b, 0)}
             </span>
           </div>
@@ -245,7 +176,7 @@ const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 200 }) =
 
 
 // ═══════════════════════════════════════════════════════════════
-// COMPUTE METRICS
+// COMPUTE METRICS — business logic (unchanged)
 // ═══════════════════════════════════════════════════════════════
 function computeWeekMetrics(weekKey, { history, commitments, projects, people }) {
   const totalProjects = projects.length;
@@ -387,24 +318,28 @@ const SummaryView = ({ history, commitments, projects, people }) => {
     { label: "Blocked", color: tc.BLOCKED?.color || c.red, values: allMetrics.map(m => m.blockedCount) },
   ];
 
-  // ─── Table helpers (Pulse-style) ───
+  // ─── Table helpers (token-compliant) ───
   const thStyle = {
-    padding: "8px 6px", textAlign: "left", fontFamily: body, fontSize: 10,
-    fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
+    padding: `${space[2]}px ${space[2] - 2}px`, textAlign: "left",
+    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+    fontWeight: 600, letterSpacing: "0",
     color: c.textMid, borderBottom: `1px solid ${c.border}`,
     background: c.bg, position: "sticky", top: 0, zIndex: 2,
     whiteSpace: "nowrap",
   };
   const tdBase = {
-    padding: "6px 6px", fontFamily: mono, fontSize: 12, fontWeight: 600,
+    padding: `${space[2] - 2}px ${space[2] - 2}px`,
+    fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+    fontWeight: typo.monoLg.weight,
     textAlign: "center", borderBottom: `1px dotted ${c.border}`,
   };
   const pctPill = (val, color, muted) => (
     <span style={{
-      fontFamily: mono, fontSize: 10, fontWeight: 700,
+      fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+      fontWeight: 700,
       color: muted ? c.textDim : color,
       background: muted ? "transparent" : `${color}10`,
-      padding: "2px 6px", borderRadius: layout.radiusSm,
+      padding: `2px ${space[2] - 2}px`, borderRadius: layout.radiusSm,
     }}>{val}%</span>
   );
 
@@ -415,78 +350,99 @@ const SummaryView = ({ history, commitments, projects, people }) => {
           STICKY HEADER — Week selector + Mission Grid
           ═══════════════════════════════════════════════════════════ */}
       <div style={{
-        position: "sticky", top: 92, zIndex: 10, background: c.bg, paddingBottom: 12,
+        position: "sticky", top: 92, zIndex: 10,
+        background: c.bg, paddingBottom: space[3],
       }}>
 
-        {/* Week selector — Pulse toggle style */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        {/* Week selector */}
+        <div style={{ display: "flex", alignItems: "center", gap: space[3] - 2, marginBottom: space[3] }}>
           <div style={{
-            display: "flex", gap: 2, background: c.accentDim, borderRadius: 10, padding: 3,
+            display: "flex", gap: 2, background: c.accentDim,
+            borderRadius: layout.radiusMd, padding: 3,
           }}>
             {weeks.map(w => (
               <button key={w.key} onClick={() => setSelectedWeek(w.key)} style={{
-                padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer",
+                padding: `${space[2] - 2}px ${space[3]}px`,
+                borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
                 background: selectedWeek === w.key ? c.accent : "transparent",
-                color: selectedWeek === w.key ? "#fff" : c.accent,
-                fontFamily: mono, fontSize: 11, fontWeight: selectedWeek === w.key ? 700 : 500,
-                whiteSpace: "nowrap", transition: "all 0.15s",
-                boxShadow: selectedWeek === w.key ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
-                display: "flex", alignItems: "center", gap: 4,
+                color: selectedWeek === w.key ? c.textCrit : c.accent,
+                fontFamily: typo.monoMd.font, fontSize: typo.bodyXs.size,
+                fontWeight: selectedWeek === w.key ? 700 : 500,
+                letterSpacing: typo.monoMd.tracking,
+                whiteSpace: "nowrap",
+                transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                boxShadow: selectedWeek === w.key ? `0 1px 3px ${c.shadow}` : "none",
+                display: "flex", alignItems: "center", gap: space[1],
               }}>
                 {w.label}
                 {w.isCurrent && (
                   <span style={{
-                    fontSize: 7, fontWeight: 700, padding: "1px 4px", borderRadius: 3,
-                    background: selectedWeek === w.key ? "rgba(255,255,255,0.25)" : `${c.accent}30`,
-                    color: selectedWeek === w.key ? "#fff" : c.accent,
+                    fontSize: typo.monoSm.size, fontWeight: 700,
+                    padding: `1px ${space[1]}px`, borderRadius: layout.radiusTag,
+                    background: selectedWeek === w.key ? `${c.textCrit}25` : `${c.accent}30`,
+                    color: selectedWeek === w.key ? c.textCrit : c.accent,
                   }}>NOW</span>
                 )}
               </button>
             ))}
           </div>
           {prev && (
-            <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 600, color: c.textDim }}>
+            <span style={{
+              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+              fontWeight: typo.monoSm.weight, color: c.textDim,
+            }}>
               vs {prev.label}
             </span>
           )}
         </div>
 
-        {/* Mission Grid — single strip with all metrics */}
-        <div className="flow-mission-grid" style={{ padding: "12px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", position: "relative", zIndex: 1 }}>
+        {/* Mission Grid — hero strip with group labels */}
+        <div className="flow-mission-grid" style={{ padding: `${space[3]}px ${space[4]}px` }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: space[1],
+            flexWrap: "wrap", position: "relative", zIndex: 1,
+          }}>
             {/* Projects group */}
-            <Tile value={metrics.totalProjects} label="Total" color={c.text} />
-            <Tile value={metrics.activeProjects} label="Active" color={c.green} prevValue={prev?.activeProjects} active />
-            <Tile value={metrics.noActionProjects} label="No action" color={c.orange} prevValue={prev?.noActionProjects} />
-            <Tile value={metrics.shippedCount} label="Shipped" color={c.green} prevValue={prev?.shippedCount} />
+            <TelemetryLabel style={{ marginRight: space[1] }}>Projects</TelemetryLabel>
+            <SummaryTile value={metrics.totalProjects} label="Total" color={c.text} />
+            <SummaryTile value={metrics.activeProjects} label="Active" color={c.green} prevValue={prev?.activeProjects} active />
+            <SummaryTile value={metrics.noActionProjects} label="No action" color={c.orange} prevValue={prev?.noActionProjects} />
+            <SummaryTile value={metrics.shippedCount} label="Shipped" color={c.green} prevValue={prev?.shippedCount} />
 
             <VDivider />
 
             {/* Focus metrics */}
-            <Metric value={metrics.totalCommits} label="Commits" color={c.text} prevValue={prev?.totalCommits} />
-            <Metric value={metrics.blockedCount} label="Blocked" color={metrics.blockedCount > 0 ? c.red : c.textDim} prevValue={prev?.blockedCount} />
-            <Metric value={metrics.deliveryRate} label="Build %" color={metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red} />
+            <TelemetryLabel style={{ marginRight: space[1] }}>Focus</TelemetryLabel>
+            <MetricCompact value={metrics.totalCommits} label="Commits" color={c.text} prevValue={prev?.totalCommits} />
+            <MetricCompact value={metrics.blockedCount} label="Blocked" color={metrics.blockedCount > 0 ? c.red : c.textDim} prevValue={prev?.blockedCount} />
+            <MetricCompact value={metrics.deliveryRate} label="Build %" color={metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red} />
 
             <VDivider />
 
             {/* People metrics */}
-            <Metric value={metrics.totalPeople} label="People" color={c.text} />
-            <Metric value={metrics.peopleWithTasks} label="Active" color={c.blue} prevValue={prev?.peopleWithTasks} />
+            <TelemetryLabel style={{ marginRight: space[1] }}>People</TelemetryLabel>
+            <MetricCompact value={metrics.totalPeople} label="Total" color={c.text} />
+            <MetricCompact value={metrics.peopleWithTasks} label="Active" color={c.cyan} prevValue={prev?.peopleWithTasks} />
 
             <VDivider />
 
-            {/* Delivery Rate bar — matches Pulse RiskLevelBar pattern */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 120 }}>
-              <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 700, color: c.textDim, letterSpacing: "0.1em", flexShrink: 0 }}>DELIVERY</span>
-              <div style={{ flex: 1, height: 6, borderRadius: 3, background: c.surfaceAlt, overflow: "hidden" }}>
+            {/* Delivery Rate bar */}
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], flex: 1, minWidth: 120 }}>
+              <TelemetryLabel style={{ flexShrink: 0 }}>Delivery</TelemetryLabel>
+              <div style={{
+                flex: 1, height: 6, borderRadius: layout.radiusTag,
+                background: c.surfaceAlt, overflow: "hidden",
+              }}>
                 <div style={{
-                  width: `${Math.min(100, metrics.deliveryRate)}%`, height: "100%", borderRadius: 3,
+                  width: `${Math.min(100, metrics.deliveryRate)}%`, height: "100%",
+                  borderRadius: layout.radiusTag,
                   background: `linear-gradient(90deg, ${metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red}80, ${metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red})`,
-                  transition: "width 0.6s cubic-bezier(0.22, 1, 0.36, 1)",
+                  transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
                 }} />
               </div>
               <span style={{
-                fontFamily: mono, fontSize: 10, fontWeight: 800, letterSpacing: "0.06em", flexShrink: 0,
+                fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                fontWeight: 800, letterSpacing: typo.monoMd.tracking, flexShrink: 0,
                 color: metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red,
               }}>{metrics.deliveryRate}%</span>
             </div>
@@ -497,34 +453,28 @@ const SummaryView = ({ history, commitments, projects, people }) => {
       {/* ═══════════════════════════════════════════════════════════
           CHARTS
           ═══════════════════════════════════════════════════════════ */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: space[4], marginTop: space[1] }}>
 
         {/* ── Projects — bar charts ── */}
-        <div style={{
-          borderRadius: layout.radius, border: `1px solid ${c.border}`,
-          background: "transparent", padding: "14px 16px", overflow: "hidden",
-        }}>
-          <SectionLabel color={c.green}>Projects — Week over Week</SectionLabel>
-          <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
+        <Surface variant="data" style={{ padding: `${space[4] - 2}px ${space[4]}px`, overflow: "hidden" }}>
+          <Label style={{ color: c.green }}>Projects — Week over Week</Label>
+          <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
             <MiniBarChart title="Active" color={c.green}
               data={allMetrics.map(m => m.activeProjects)} labels={weekLabels}
               highlightIndex={selectedIdx} />
             <MiniBarChart title="No Action" color={c.orange}
               data={allMetrics.map(m => m.noActionProjects)} labels={weekLabels}
               highlightIndex={selectedIdx} />
-            <MiniBarChart title="Shipped" color={c.blue}
+            <MiniBarChart title="Shipped" color={c.cyan}
               data={allMetrics.map(m => m.shippedCount)} labels={weekLabels}
               highlightIndex={selectedIdx} />
           </div>
-        </div>
+        </Surface>
 
         {/* ── Focus — sparklines + stacked bar ── */}
-        <div style={{
-          borderRadius: layout.radius, border: `1px solid ${c.border}`,
-          background: "transparent", padding: "14px 16px", overflow: "hidden",
-        }}>
-          <SectionLabel color={c.accent}>Focus — Week over Week</SectionLabel>
-          <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
+        <Surface variant="data" style={{ padding: `${space[4] - 2}px ${space[4]}px`, overflow: "hidden" }}>
+          <Label style={{ color: c.accent }}>Focus — Week over Week</Label>
+          <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
             <SparkLine title="Delivery Rate" color={c.green} suffix="%"
               data={pctDone} labels={weekLabels} highlightIndex={selectedIdx} />
             <SparkLine title="Blocked %" color={c.red} suffix="%"
@@ -532,66 +482,60 @@ const SummaryView = ({ history, commitments, projects, people }) => {
             <SparkLine title="Carried %" color={c.accent} suffix="%"
               data={pctCarried} labels={weekLabels} highlightIndex={selectedIdx} />
           </div>
-          <div style={{ marginTop: 16 }}>
-            <SectionLabel>Commit Breakdown</SectionLabel>
-            <div style={{ marginTop: 8 }}>
+          <div style={{ marginTop: space[4] }}>
+            <Label>Commit Breakdown</Label>
+            <div style={{ marginTop: space[2] }}>
               <StackedBarChart series={commitSeries} weekLabels={weekLabels} highlightIndex={selectedIdx} />
             </div>
           </div>
-        </div>
+        </Surface>
 
         {/* ── People — bar + sparkline ── */}
-        <div style={{
-          borderRadius: layout.radius, border: `1px solid ${c.border}`,
-          background: "transparent", padding: "14px 16px", overflow: "hidden",
-        }}>
-          <SectionLabel color={c.blue}>People — Week over Week</SectionLabel>
-          <div style={{ display: "flex", gap: 20, marginTop: 12 }}>
-            <MiniBarChart title="Active People" color={c.blue}
+        <Surface variant="data" style={{ padding: `${space[4] - 2}px ${space[4]}px`, overflow: "hidden" }}>
+          <Label style={{ color: c.cyan }}>People — Week over Week</Label>
+          <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
+            <MiniBarChart title="Active People" color={c.cyan}
               data={allMetrics.map(m => m.peopleWithTasks)} labels={weekLabels}
               highlightIndex={selectedIdx} />
             <SparkLine title="Committed" color={c.purple}
               data={allMetrics.map(m => m.committedPeople)} labels={weekLabels}
               highlightIndex={selectedIdx} />
           </div>
-        </div>
+        </Surface>
 
         {/* ═══════════════════════════════════════════════════════════
-            SQUAD BREAKDOWN — Pulse-style table
+            SQUAD BREAKDOWN — data table
             ═══════════════════════════════════════════════════════════ */}
-        <div style={{
-          borderRadius: layout.radius, border: `1px solid ${c.border}`,
-          overflow: "hidden", boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-        }}>
-          <div style={{ overflowX: "auto", background: "transparent", borderRadius: layout.radius }}>
+        <Surface variant="data" compact style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto", borderRadius: layout.radius }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
               <thead>
                 {/* Group label row */}
                 <tr>
                   <th style={{ ...thStyle, borderBottom: "none", paddingBottom: 0 }} />
-                  <th colSpan={4} style={{ ...thStyle, borderBottom: `2px solid ${c.green}30`, paddingBottom: 4, textAlign: "center" }}>
-                    <SectionLabel color={c.green}>Projects</SectionLabel>
+                  <th colSpan={4} style={{ ...thStyle, borderBottom: `2px solid ${c.green}30`, paddingBottom: space[1], textAlign: "center" }}>
+                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.green }}>Projects</span>
                   </th>
-                  <th colSpan={4} style={{ ...thStyle, borderBottom: `2px solid ${c.accent}30`, paddingBottom: 4, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>
-                    <SectionLabel color={c.accent}>Focus</SectionLabel>
+                  <th colSpan={4} style={{ ...thStyle, borderBottom: `2px solid ${c.accent}30`, paddingBottom: space[1], textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>
+                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.accent }}>Focus</span>
                   </th>
-                  <th colSpan={2} style={{ ...thStyle, borderBottom: `2px solid ${c.blue}30`, paddingBottom: 4, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>
-                    <SectionLabel color={c.blue}>People</SectionLabel>
+                  <th colSpan={2} style={{ ...thStyle, borderBottom: `2px solid ${c.cyan}30`, paddingBottom: space[1], textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>
+                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.cyan }}>People</span>
                   </th>
                 </tr>
                 {/* Column header row */}
                 <tr>
-                  <th style={{ ...thStyle, textAlign: "left", minWidth: 90 }}>Squad</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 48 }}>Active</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 48 }}>No Act.</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 40 }}>Ship</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 50 }}>% Act.</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 40, borderLeft: `1px dotted ${c.border}` }}>Total</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 50 }}>% Comp.</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 50 }}>% Blk.</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 50 }}>% Carry</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 40, borderLeft: `1px dotted ${c.border}` }}>Total</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: 50 }}>% Active</th>
+                  <th style={{ ...thStyle, textAlign: "left", minWidth: colWidths.squad.min }}>Squad</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>Active</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>No Act.</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>Ship</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Act.</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min, borderLeft: `1px dotted ${c.border}` }}>Total</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Comp.</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Blk.</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Carry</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min, borderLeft: `1px dotted ${c.border}` }}>Total</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Active</th>
                 </tr>
               </thead>
               <tbody>
@@ -612,10 +556,14 @@ const SummaryView = ({ history, commitments, projects, people }) => {
 
                   return (
                     <tr key={sq} className="flow-row" style={{
-                      animation: `rowSlideIn 0.3s cubic-bezier(0.16,1,0.3,1) both`,
+                      animation: `rowSlideIn 0.3s ${motion.critical.easing} both`,
                       animationDelay: `${Math.min(i * 30, 300)}ms`,
                     }}>
-                      <td style={{ ...tdBase, textAlign: "left", fontFamily: body, fontSize: 12, fontWeight: 600, color: c.text }}>
+                      <td style={{
+                        ...tdBase, textAlign: "left",
+                        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                        fontWeight: 600, color: c.text,
+                      }}>
                         {sq}
                       </td>
                       <td style={{ ...tdBase, color: c.green }}>{d.activeProjects}</td>
@@ -634,7 +582,7 @@ const SummaryView = ({ history, commitments, projects, people }) => {
               </tbody>
             </table>
           </div>
-        </div>
+        </Surface>
 
       </div>
     </div>

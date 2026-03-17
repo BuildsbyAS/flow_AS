@@ -1,5 +1,5 @@
 import React from "react";
-import { c, motion, mono } from "../styles/theme";
+import { c, motion, mono, body } from "../styles/theme";
 
 const AnimStyles = () => (
   <style>{`
@@ -536,7 +536,7 @@ const AnimStyles = () => (
       align-items: center;
       justify-content: center;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 9px;
+      font-size: 11px;
       font-weight: 700;
       transition: all 0.3s ${motion.interaction.easing};
       position: relative;
@@ -611,7 +611,7 @@ const AnimStyles = () => (
       border: 1px solid ${c.border};
       box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
+      font-size: 11px;
       color: ${c.text};
       white-space: nowrap;
       pointer-events: none;
@@ -666,7 +666,7 @@ const AnimStyles = () => (
       background: ${c.red}20;
       border: 1px solid ${c.red}40;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 700;
       color: ${c.red};
       animation: escalationBounce 2s ${motion.ambient.easing} infinite;
@@ -784,7 +784,7 @@ const AnimStyles = () => (
       opacity: 0;
       transition: opacity 0.15s;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 700;
       color: ${c.bg};
       text-shadow: 0 1px 2px rgba(0,0,0,0.3);
@@ -955,12 +955,12 @@ const AnimStyles = () => (
       z-index: 2;
     }
     .flow-data-grid-header span {
-      font-family: ${mono};
-      font-size: 9px;
-      font-weight: 700;
-      color: ${c.textDim};
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
+      font-family: ${body};
+      font-size: 13px;
+      font-weight: 600;
+      color: ${c.textMid};
+      text-transform: none;
+      letter-spacing: 0;
     }
     .flow-data-grid-row {
       display: grid;
@@ -1009,11 +1009,11 @@ const AnimStyles = () => (
       align-items: center;
       justify-content: center;
       font-family: ${mono};
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 700;
       border: 2px solid ${c.border};
       background: ${c.surface};
-      color: ${c.textDim};
+      color: ${c.textMid};
       transition: all 0.2s;
       flex-shrink: 0;
       cursor: pointer;
@@ -1053,8 +1053,8 @@ const AnimStyles = () => (
       padding: 8px 14px;
       background: ${c.surfaceAlt};
       border-bottom: 1px solid ${c.border};
-      color: ${c.textDim};
-      font-size: 10px;
+      color: ${c.textMid};
+      font-size: 11px;
       font-weight: 600;
       display: flex;
       align-items: center;
@@ -1063,7 +1063,7 @@ const AnimStyles = () => (
     .flow-diff-hunk {
       padding: 2px 14px;
       color: ${c.blue};
-      font-size: 10px;
+      font-size: 11px;
       background: ${c.blueDim || `${c.blue}10`};
       border-bottom: 1px solid ${c.border}40;
     }
@@ -1107,9 +1107,9 @@ const AnimStyles = () => (
     }
     .flow-audit-timestamp {
       font-family: ${mono};
-      font-size: 9px;
+      font-size: 11px;
       color: ${c.bg};
-      background: ${c.textDim};
+      background: ${c.textMid};
       padding: 2px 7px;
       border-radius: 4px;
       white-space: nowrap;
@@ -1160,16 +1160,20 @@ const AnimStyles = () => (
       background: transparent;
       cursor: pointer;
       font-family: ${mono};
-      font-size: 9px;
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      text-transform: none;
       transition: all 0.15s;
       white-space: nowrap;
     }
     .flow-cmd-btn:hover {
       border-color: ${c.borderHover};
       background: ${c.surfaceAlt};
+    }
+    .flow-cmd-btn:focus-visible {
+      outline: 2px solid ${c.accent}80;
+      outline-offset: 2px;
     }
     .flow-cmd-btn-edit {
       color: ${c.blue};
@@ -1419,9 +1423,9 @@ const AnimStyles = () => (
       top: 50%;
       transform: translateY(-50%);
       font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
-      color: ${c.textDim};
+      color: ${c.textMid};
       background: ${c.surfaceAlt};
       border: 1px solid ${c.border};
       padding: 1px 6px;
@@ -1570,8 +1574,8 @@ const AnimStyles = () => (
       align-items: center;
       gap: 3px;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 9px;
-      color: ${c.textDim};
+      font-size: 11px;
+      color: ${c.textMid};
       opacity: 0;
       transition: opacity ${motion.interaction.duration};
       pointer-events: none;

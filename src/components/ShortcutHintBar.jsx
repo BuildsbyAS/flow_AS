@@ -1,5 +1,6 @@
 import React from "react";
-import { c, body, mono } from "../styles/theme";
+import { c, typo, layout, space } from "../styles/theme";
+import { KbdHint } from "./shared";
 
 /**
  * ShortcutHintBar — fixed bar at bottom showing contextual keyboard shortcuts.
@@ -59,22 +60,14 @@ const ShortcutHintBar = ({ activeTab, hasDetail, isLocked, visible }) => {
   return (
     <div style={{
       position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
-      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-      padding: "8px 20px",
+      display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] - 2,
+      padding: `${space[2]}px ${space[5]}px`,
       background: c.surfaceSolid,
       borderTop: `1px solid ${c.border}`,
       opacity: 0.9,
     }}>
       {hints.map((h, i) => (
-        <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <kbd style={{
-            fontFamily: mono, fontSize: 10, fontWeight: 600, color: c.textMid,
-            background: c.surfaceAlt, border: `1px solid ${c.border}`,
-            padding: "2px 7px", borderRadius: 4, lineHeight: 1.4,
-            boxShadow: `0 1px 0 ${c.border}`,
-          }}>{h.keys}</kbd>
-          <span style={{ fontFamily: body, fontSize: 10, color: c.textDim, marginRight: 6 }}>{h.label}</span>
-        </div>
+        <KbdHint key={i} keys={[h.keys]} label={h.label} style={{ marginRight: space[2] - 2 }} />
       ))}
     </div>
   );

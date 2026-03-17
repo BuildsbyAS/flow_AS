@@ -1,879 +1,796 @@
-// Flow — Projects Deep Dive (Phase 4: Command Card, Pipeline, Sparklines, Evidence Feed, Overdue)
-import React, { useState, useEffect, useRef } from "react";
-import { c, display, body, mono, motion, layout, phaseNames, typeConfig, phaseColors } from "../styles/theme";
-import { Badge, Tag, Label, Inp, Sel, EmptyState } from "../components/shared";
+// Flow — Projects View (Rebuild v2: Pulse structural model + PeopleDeepDive history model)
+// Two states: Registry (Pulse-style table with tabs) → Project Deep Dive (PeopleDeepDive-style)
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { c, typo, space, layout, motion, phaseNames, typeConfig, phaseColors as getPhaseColors, statusColors, entityColors, colWidths } from "../styles/theme";
+import { Badge, Tag, Surface, Label, Btn, EmptyState, TelemetryLabel, SectionDivider, StatCell, MetricCompact, SummaryTile, VDivider, Th as SharedTh } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
 import { weekConfig } from "../data/seed";
 
-// ═══ PHASE PIPELINE — animated phase nodes with glowing current ══════
-const PhasePipeline = ({ currentPhase }) => {
-  const pc = phaseColors();
-  const curIdx = phaseNames.indexOf(currentPhase);
-  return (
-    <div className="flow-phase-pipeline" style={{ padding: "4px 0" }}>
-      {phaseNames.map((ph, i) => {
-        const done = i < curIdx;
-        const active = i === curIdx;
-        const future = i > curIdx;
-        const color = pc[ph] || c.textDim;
-        return (
-          <React.Fragment key={ph}>
-            {i > 0 && (
-              <div className="flow-phase-connector" style={{
-                background: done ? `linear-gradient(90deg, ${pc[phaseNames[i-1]]}, ${color})` : `${c.border}`,
-                opacity: done ? 0.8 : 0.3,
-              }} />
-            )}
-            <div className={`flow-phase-node${active ? " flow-phase-node-active" : ""}`} style={{
-              background: done ? `${color}30` : active ? `${color}25` : c.surfaceAlt,
-              border: `2px solid ${done || active ? color : c.border}`,
-              color: done || active ? color : c.textDim,
-              opacity: future ? 0.4 : 1,
-            }}>
-              {done ? "✓" : i + 1}
-            </div>
-          </React.Fragment>
-        );
-      })}
-    </div>
-  );
+/* ══════════════════════════════════════════════════════════════════
+   HELPERS
+   ══════════════════════════════════════════════════════════════════ */
+const ensureStatus = (p) => ({ ...p, status: p.status || "active" });
+
+const daysBetween = (a, b) => {
+  if (!a || !b) return 0;
+  return Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);
 };
 
-// ═══ TIMELINE BAR — animated marker + overdue scan pulse ═════════════
-const TimelineBar = ({ pctElapsed, overdue, remaining, startDate, endDate }) => {
-  const fillColor = overdue ? c.red : pctElapsed > 75 ? c.orange : c.green;
-  return (
-    <div style={{ marginTop: 16 }}>
-      <div className={`flow-timeline-bar${overdue ? " flow-timeline-overdue" : ""}`}>
-        <div className="flow-timeline-fill" style={{
-          width: `${Math.min(pctElapsed, 100)}%`,
-          background: overdue
-            ? `linear-gradient(90deg, ${c.red}80, ${c.red})`
-            : `linear-gradient(90deg, ${fillColor}40, ${fillColor})`,
-        }}>
-          {/* Animated marker at tip */}
-          <div className="flow-timeline-marker" style={{
-            right: -5,
-            background: fillColor,
-            boxShadow: `0 0 10px ${fillColor}60`,
-          }} />
-        </div>
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-        <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 500, color: c.textMid }}>{startDate}</span>
-        <span style={{ fontFamily: mono, fontSize: 12, color: overdue ? c.red : remaining < 14 ? c.orange : c.textDim, fontWeight: overdue ? 700 : 500 }}>
-          {overdue ? `${Math.abs(remaining)}d overdue` : `${remaining}d left`}
-        </span>
-        <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 500, color: overdue ? c.red : c.textMid }}>{endDate}</span>
-      </div>
-    </div>
-  );
-};
+// statusColors imported from theme.js
 
-// ═══ SPARKLINE STRIP — hover tooltips + motion-traced bars ═══════════
-const SparklineStrip = ({ weeklyActivity, maxActivity }) => {
-  return (
-    <div className="flow-sparkline-strip" style={{ height: 48, padding: "0 4px" }}>
-      {weeklyActivity.map((w, i) => {
-        const h = Math.max(4, (w.count / maxActivity) * 44);
-        const barColor = w.current ? c.accent : w.count > 0 ? c.accent + "60" : c.surfaceAlt;
-        return (
-          <div key={i} className="flow-spark-bar" style={{
-            flex: 1,
-            height: h,
-            background: w.current
-              ? `linear-gradient(0deg, ${c.accent}40, ${c.accent})`
-              : barColor,
-            animationDelay: `${i * 0.06}s`,
-            borderBottom: w.current ? `2px solid ${c.accent}` : "none",
-          }}>
-            <div className="flow-spark-tooltip">
-              <div>{w.week}</div>
-              <div style={{ color: w.current ? c.accent : c.textMid, fontWeight: 700 }}>{w.count} tasks</div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
+const WEEK_LABELS = [...weekConfig.historyWeeks, "This wk"];
 
-// ═══ EVIDENCE FEED — chronological animated cards ════════════════════
-const EvidenceCard = ({ item, index, proj, tc, pc, onNavigate, isCurrentWeek }) => {
-  const cm = item._cm;
-  const itemOutcome = cm ? cm.items.find(ci => ci.project === proj.id && ci.title === item.title)?.outcome : null;
-  const oc = itemOutcome === "done" ? c.green : itemOutcome === "partial" ? c.orange : itemOutcome === "carry" ? c.blue : c.accent;
-  return (
-    <div className={`flow-evidence-card${isCurrentWeek ? " flow-evidence-card-pulse" : ""}`}
-      style={{ animationDelay: `${index * 0.06}s` }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            width: 24, height: 24, borderRadius: "50%",
-            background: isCurrentWeek ? c.accentDim : c.surfaceAlt,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: display, fontSize: 10, fontWeight: 700,
-            color: isCurrentWeek ? c.accent : c.textDim, flexShrink: 0,
-          }}>{item.person.charAt(0)}</div>
-          <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("people", item.person); }}
-            style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: c.text, cursor: "pointer" }}>
-            {item.person}
-          </span>
-          <Badge color={tc[item.type]?.color} bg={tc[item.type]?.bg}>{item.type}</Badge>
-          <span style={{ fontFamily: mono, fontSize: 11, color: pc[item.stage || proj.phase] || c.textDim, fontWeight: 600 }}>
-            {item.stage || proj.phase}
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {itemOutcome && <Tag color={oc} bg={`${oc}15`}>{itemOutcome.toUpperCase()}</Tag>}
-          {/* Timeline dot */}
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: oc, boxShadow: `0 0 6px ${oc}40` }} />
-        </div>
-      </div>
-      <div style={{
-        fontFamily: body, fontSize: 13, color: c.textMid, lineHeight: 1.5,
-        paddingLeft: 32,
-        textDecoration: itemOutcome === "done" ? `line-through ${c.green}60` : "none",
-      }}>{item.title || "—"}</div>
-    </div>
-  );
-};
+/* ══════════════════════════════════════════════════════════════════
+   DATA DERIVATION — full-history metrics per project
+   ══════════════════════════════════════════════════════════════════ */
+function deriveProjectMetrics(projects, commitments, history) {
+  const pc = getPhaseColors();
+  const tc = typeConfig();
+  const map = {};
 
-// ═══ PROJECTS VIEW ══════════════════════════════════════════════
-const ProjectsView = ({ projects, setProjects, commitments, people, history, onNavigate, initialId, setDetailLabel, setGoBack, searchRef }) => {
-  const [selectedId, setSelectedId] = useState(initialId || null);
+  for (const proj of projects) {
+    const id = proj.id;
+    const m = {
+      historyTotal: 0, thisWeekTotal: 0, totalCommits: 0,
+      phaseBreakdown: { PRD: 0, Design: 0, Engineering: 0, QA: 0 },
+      typeBreakdown: { BUILD: 0, JAM: 0, COMMIT: 0, BLOCKED: 0 },
+      people: new Set(),
+      lastActivity: null,
+      weeklyData: [],
+      isBlocked: false,
+      endingSoon: false,
+      overdue: false,
+    };
 
-  // ── URL-addressable filters (persistent + shareable) ──
-  const initParams = useRef(new URLSearchParams(window.location.search)).current;
-  const [search, setSearch] = useState(initParams.get("q") || "");
-  const [fSquad, setFSquad] = useState(initParams.get("squad") || "");
-  const [fPhase, setFPhase] = useState(initParams.get("phase") || "");
-  const [fOwner, setFOwner] = useState(initParams.get("owner") || "");
-  const [fStatus, setFStatus] = useState(initParams.get("status") || "active");
+    // History data
+    const projHist = history[id] || [];
+    for (const wk of projHist) {
+      const entries = wk.entries || [];
+      if (entries.length > 0) {
+        m.lastActivity = wk.week;
+        m.historyTotal += entries.length;
+        const weekEntries = [];
+        for (const e of entries) {
+          if (e.person) m.people.add(e.person);
+          const stage = e.stage || "PRD";
+          if (m.phaseBreakdown[stage] !== undefined) m.phaseBreakdown[stage]++;
+          if (m.typeBreakdown[e.type] !== undefined) m.typeBreakdown[e.type]++;
+          weekEntries.push(e);
+        }
+        m.weeklyData.push({ week: wk.week, entries: weekEntries });
+      }
+    }
+
+    // Current-week commitments
+    const currentItems = [];
+    commitments.forEach(cm => {
+      cm.items.forEach((it, idx) => {
+        if (cm.deselected !== idx && it.project === id) {
+          currentItems.push({ ...it, person: cm.person });
+          m.people.add(cm.person);
+          m.thisWeekTotal++;
+          const stage = it.stage || "PRD";
+          if (m.phaseBreakdown[stage] !== undefined) m.phaseBreakdown[stage]++;
+          if (m.typeBreakdown[it.type] !== undefined) m.typeBreakdown[it.type]++;
+          if (it.type === "BLOCKED") m.isBlocked = true;
+        }
+      });
+    });
+    if (currentItems.length > 0) {
+      m.lastActivity = "This wk";
+      m.weeklyData.push({ week: "This wk", entries: currentItems, isCurrent: true });
+    }
+
+    m.totalCommits = m.historyTotal + m.thisWeekTotal;
+    m.peopleList = [...m.people];
+
+    // Risk flags
+    const daysToEnd = daysBetween(weekConfig.today, proj.endDate);
+    if (daysToEnd <= 14 && daysToEnd > 0 && proj.status !== "complete") m.endingSoon = true;
+    if (daysToEnd < 0 && proj.status !== "complete") m.overdue = true;
+
+    map[id] = m;
+  }
+  return map;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   SORT — mirrors Pulse sort pattern
+   ══════════════════════════════════════════════════════════════════ */
+function sortList(list, key, dir, metrics) {
+  if (!key) return [...list].sort((a, b) => (a.squad || "").localeCompare(b.squad || "") || (a.name || "").localeCompare(b.name || ""));
+  const d = dir === "asc" ? 1 : -1;
+  return [...list].sort((a, b) => {
+    switch (key) {
+      case "squad": return d * (a.squad || "").localeCompare(b.squad || "");
+      case "project": return d * (a.name || "").localeCompare(b.name || "");
+      case "owner": return d * (a.owner || "").localeCompare(b.owner || "");
+      case "status": return d * (a.status || "active").localeCompare(b.status || "active");
+      case "phase": return d * (phaseNames.indexOf(a.phase) - phaseNames.indexOf(b.phase));
+      case "total": return d * ((metrics[a.id]?.totalCommits || 0) - (metrics[b.id]?.totalCommits || 0));
+      case "thisWk": return d * ((metrics[a.id]?.thisWeekTotal || 0) - (metrics[b.id]?.thisWeekTotal || 0));
+      case "people": return d * ((metrics[a.id]?.peopleList.length || 0) - (metrics[b.id]?.peopleList.length || 0));
+      case "last": {
+        const order = { "This wk": 5, "Mar 3": 4, "Feb 24": 3, "Feb 17": 2, "Feb 10": 1 };
+        return d * ((order[metrics[a.id]?.lastActivity] || 0) - (order[metrics[b.id]?.lastActivity] || 0));
+      }
+      case "timeline": return d * (daysBetween(weekConfig.today, a.endDate) - daysBetween(weekConfig.today, b.endDate));
+      default: return 0;
+    }
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MAIN EXPORT
+   ══════════════════════════════════════════════════════════════════ */
+export default function ProjectsView({
+  projects: rawProjects, setProjects, commitments, people, history,
+  initialId, onNavigate, setDetailLabel, setGoBack, searchRef, globalFilters = {},
+}) {
+  const projects = useMemo(() => rawProjects.map(ensureStatus), [rawProjects]);
+  const metrics = useMemo(() => deriveProjectMetrics(projects, commitments, history), [projects, commitments, history]);
+
+  const [selectedProject, setSelectedProject] = useState(initialId || null);
+  const [activeTab, setActiveTab] = useState("active");
+  const [search, setSearch] = useState("");
+  const [sortKey, setSortKey] = useState("squad");
+  const [sortDir, setSortDir] = useState("asc");
+  const [hoveredProject, setHoveredProject] = useState(null);
   const [focusIdx, setFocusIdx] = useState(0);
   const [kbActive, setKbActive] = useState(false);
   const localSearchRef = useRef(null);
 
-  // ── New project form ──
-  const [showNewForm, setShowNewForm] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newSquad, setNewSquad] = useState("");
-  const [newOwner, setNewOwner] = useState("");
-  const [newPhase, setNewPhase] = useState("PRD");
-
-  // ── Confirmation modal ──
-  const [confirmAction, setConfirmAction] = useState(null);
-  const [toast, setToast] = useState(null);
-
-  // Sync filters → URL
-  useEffect(() => {
-    if (selectedId) return;
-    const p = new URLSearchParams();
-    if (search) p.set("q", search);
-    if (fSquad) p.set("squad", fSquad);
-    if (fPhase) p.set("phase", fPhase);
-    if (fOwner) p.set("owner", fOwner);
-    if (fStatus !== "active") p.set("status", fStatus);
-    const qs = p.toString();
-    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
-    window.history.replaceState(null, "", url);
-  }, [search, fSquad, fPhase, fOwner, fStatus, selectedId]);
-
-  const tc = typeConfig();
-  const pc = phaseColors();
-
-  const calcAge = (d) => d ? Math.max(0, Math.ceil((new Date(weekConfig.today) - new Date(d)) / 86400000)) : 0;
-  const calcPlanned = (s, e) => (s && e) ? Math.max(0, Math.ceil((new Date(e) - new Date(s)) / 86400000)) : 0;
-  const calcRemaining = (e) => e ? Math.ceil((new Date(e) - new Date(weekConfig.today)) / 86400000) : null;
-
-  const allItems = commitments.flatMap(cm =>
-    cm.items.filter((_, idx) => cm.deselected !== idx).map(it => ({ ...it, person: cm.person, _cm: cm }))
-  );
-
-  const allSquads = [...new Set(projects.map(p => p.squad).filter(Boolean))].sort();
-  const allOwners = [...new Set(projects.map(p => p.owner).filter(Boolean))].sort();
-
-  const projActivity = {};
-  allItems.forEach(it => { if (it.project && it.title?.trim()) projActivity[it.project] = (projActivity[it.project] || 0) + 1; });
-
-  const activeFilters = [fSquad, fPhase, fOwner, search, fStatus !== "active" ? fStatus : ""].filter(Boolean).length;
-  const withTasksCount = projects.filter(p => !p.done && projActivity[p.id] > 0).length;
-  const noTasksCount = projects.filter(p => !p.done && !projActivity[p.id]).length;
-  const doneCount = projects.filter(p => p.done).length;
-
-  const filtered = projects.filter(p => {
-    if (fStatus === "active" && p.done) return false;
-    if (fStatus === "done" && !p.done) return false;
-    if (fStatus === "has_tasks" && (!projActivity[p.id] || p.done)) return false;
-    if (fStatus === "no_tasks" && (projActivity[p.id] > 0 || p.done)) return false;
-    if (fSquad && p.squad !== fSquad) return false;
-    if (fPhase && p.phase !== fPhase) return false;
-    if (fOwner && p.owner !== fOwner) return false;
-    if (search) { const q = search.toLowerCase(); if (!p.id.toLowerCase().includes(q) && !p.name.toLowerCase().includes(q)) return false; }
-    return true;
-  });
-
-  const flatFiltered = [];
-  const phaseGroups = {};
-  phaseNames.forEach(ph => { phaseGroups[ph] = []; });
-  filtered.forEach(p => { if (phaseGroups[p.phase]) phaseGroups[p.phase].push(p); });
-  phaseNames.forEach(ph => { flatFiltered.push(...(phaseGroups[ph] || [])); });
-
+  // Wire searchRef
   useEffect(() => {
     if (searchRef) searchRef.current = localSearchRef.current;
-  }, [searchRef, selectedId]);
+  }, [searchRef, selectedProject]);
 
-  const proj = selectedId ? projects.find(p => p.id === selectedId) : null;
-
-  const goBackToList = () => {
-    setSelectedId(null);
+  // ── Breadcrumb / detail mode (copied from PeopleDeepDive pattern) ──
+  const goBackToList = useCallback(() => {
+    setSelectedProject(null);
     if (setDetailLabel) setDetailLabel(null);
     if (setGoBack) setGoBack(null);
-  };
-  const openProject = (id) => {
+  }, [setDetailLabel, setGoBack]);
+
+  const openProject = useCallback((id) => {
+    setSelectedProject(id);
     const p = projects.find(pr => pr.id === id);
-    setSelectedId(id); setSearch("");
-    if (setDetailLabel) setDetailLabel(p ? `${p.id} ${p.name}` : id);
+    if (p && setDetailLabel) setDetailLabel(`${p.id} / ${p.name}`);
     if (setGoBack) setGoBack(goBackToList);
-  };
+  }, [projects, setDetailLabel, setGoBack, goBackToList]);
 
   useEffect(() => {
-    if (initialId && setDetailLabel) {
+    if (initialId) {
       const p = projects.find(pr => pr.id === initialId);
-      setDetailLabel(p ? `${p.id} ${p.name}` : initialId);
+      if (p && setDetailLabel) setDetailLabel(`${p.id} / ${p.name}`);
       if (setGoBack) setGoBack(goBackToList);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keyboard: list
-  useKeyboard(!proj ? [
-    { key: "ArrowUp", fn: () => { setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } },
-    { key: "ArrowDown", fn: () => { setKbActive(true); setFocusIdx(i => Math.min(flatFiltered.length - 1, i + 1)); } },
-    { key: "Enter", fn: () => { if (flatFiltered[focusIdx]) openProject(flatFiltered[focusIdx].id); } },
-    { key: "c", fn: () => { setSearch(""); setFSquad(""); setFPhase(""); setFOwner(""); setFStatus("active"); } },
-  ] : [], [flatFiltered.length, focusIdx, selectedId]);
+  // ── Filter (search + global) ──
+  const filtered = useMemo(() => {
+    let list = projects;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(p =>
+        p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) ||
+        (p.owner || "").toLowerCase().includes(q) || (p.squad || "").toLowerCase().includes(q)
+      );
+    }
+    if (globalFilters.owner) list = list.filter(p => p.owner === globalFilters.owner);
+    if (globalFilters.squad) list = list.filter(p => p.squad === globalFilters.squad);
+    if (globalFilters.person) {
+      list = list.filter(p => metrics[p.id]?.people.has(globalFilters.person));
+    }
+    return list;
+  }, [projects, search, globalFilters, metrics]);
+
+  // ── Tab splits ──
+  const tabProjects = useMemo(() => {
+    let list;
+    switch (activeTab) {
+      case "active": list = filtered.filter(p => p.status === "active" || p.status === "blocked"); break;
+      case "complete": list = filtered.filter(p => p.status === "complete"); break;
+      case "deprioritized": list = filtered.filter(p => p.status === "deprioritized"); break;
+      default: list = filtered;
+    }
+    return sortList(list, sortKey, sortDir, metrics);
+  }, [filtered, activeTab, sortKey, sortDir, metrics]);
+
+  // ── KPI summary (from filtered data) ──
+  const summary = useMemo(() => {
+    const active = filtered.filter(p => p.status === "active" || p.status === "blocked");
+    const complete = filtered.filter(p => p.status === "complete");
+    const depri = filtered.filter(p => p.status === "deprioritized");
+    const blockedCount = active.filter(p => p.status === "blocked" || metrics[p.id]?.isBlocked).length;
+    const totalCommits = filtered.reduce((s, p) => s + (metrics[p.id]?.totalCommits || 0), 0);
+    const avgPeople = filtered.length > 0 ? Math.round(filtered.reduce((s, p) => s + (metrics[p.id]?.peopleList.length || 0), 0) / filtered.length) : 0;
+    return { active: active.length, complete: complete.length, depri: depri.length, all: filtered.length, blockedCount, totalCommits, avgPeople };
+  }, [filtered, metrics]);
+
+  // ── Sort handler (Pulse pattern) ──
+  const toggleSort = useCallback((col) => {
+    if (sortKey === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(col); setSortDir("asc"); }
+  }, [sortKey]);
+  const sortIcon = (col) => sortKey === col ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+
+  // ── Keyboard ──
+  useKeyboard([
+    { key: "Escape", fn: () => { if (selectedProject) goBackToList(); }, force: true },
+    { key: "ArrowUp", fn: () => { if (!selectedProject) { setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } } },
+    { key: "ArrowDown", fn: () => { if (!selectedProject) { setKbActive(true); setFocusIdx(i => Math.min(tabProjects.length - 1, i + 1)); } } },
+    { key: "Enter", fn: () => { if (!selectedProject && tabProjects[focusIdx]) openProject(tabProjects[focusIdx].id); } },
+  ], [selectedProject, goBackToList, tabProjects.length, focusIdx]);
 
   useEffect(() => {
-    if (focusIdx >= flatFiltered.length && flatFiltered.length > 0) setFocusIdx(flatFiltered.length - 1);
-  }, [flatFiltered.length, focusIdx]);
+    if (focusIdx >= tabProjects.length && tabProjects.length > 0) setFocusIdx(tabProjects.length - 1);
+  }, [tabProjects.length, focusIdx]);
 
-  // ── New project helpers ──
-  const nextPrId = () => {
-    const nums = projects.map(p => parseInt(p.id.replace("X", ""), 10));
-    return `X${String((nums.length ? Math.max(...nums) : 0) + 1).padStart(2, "0")}`;
-  };
-  const handleCreateProject = () => {
-    if (!newName.trim()) return;
-    const newId = nextPrId();
-    setProjects(prev => [...prev, {
-      id: newId, name: newName.trim(), owner: newOwner, squad: newSquad,
-      startDate: "", endDate: "", phase: newPhase, ship: false, done: false,
-    }]);
-    setNewName(""); setNewOwner(""); setNewSquad(""); setNewPhase("PRD");
-    setShowNewForm(false);
-    setToast({ id: newId, name: newName.trim() });
-    setTimeout(() => setToast(null), 3500);
-  };
+  const pc = getPhaseColors();
+  const sc = statusColors();
+  const tc = typeConfig();
+  const ec = entityColors();
 
-  // ═══ PROJECT LIST ═════════════════════════════════════════════
-  if (!proj) {
-    let flatIdx = 0;
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {/* Sticky top section — top: 92 to clear header (52) + filter bar (40) */}
-        <div style={{ position: "sticky", top: 92, zIndex: 10, background: c.bg, paddingTop: 4, paddingBottom: 8, display: "flex", flexDirection: "column", gap: 12 }}>
-        {/* Status filter pills */}
-        <div style={{ display: "flex", gap: 4, background: c.surface, borderRadius: 14, padding: 5, border: `1px solid ${c.border}`, alignItems: "center" }}>
-          {[
-            { key: "active", label: "Active", count: withTasksCount + noTasksCount },
-            { key: "has_tasks", label: "Has tasks", count: withTasksCount, color: c.green },
-            { key: "no_tasks", label: "No tasks", count: noTasksCount, color: noTasksCount > 0 ? c.orange : c.textDim },
-            { key: "done", label: "Completed", count: doneCount, color: c.green },
-            { key: "all", label: "All", count: projects.length },
-          ].map(f => {
-            const active = fStatus === f.key;
-            return (
-            <button key={f.key} onClick={() => setFStatus(f.key)} style={{
-              padding: "10px 16px", borderRadius: 10, cursor: "pointer",
-              border: active ? `1px solid ${c.accentMid}` : "1px solid transparent",
-              background: active ? c.accentMid : "transparent",
-              fontFamily: body, fontSize: 13, fontWeight: active ? 700 : 500,
-              color: active ? c.textCrit : c.textMid,
-              boxShadow: active ? `0 1px 4px ${c.shadow}` : "none",
-              transition: "all 0.15s", display: "flex", alignItems: "center", gap: 7,
-            }}>
-              {f.label}
-              <span style={{
-                fontFamily: mono, fontSize: 11, fontWeight: 700,
-                color: active ? c.textCrit : (f.color || c.textDim),
-                background: active ? "rgba(255,255,255,0.15)" : "transparent",
-                padding: active ? "1px 6px" : "0", borderRadius: 6,
-              }}>{f.count}</span>
-            </button>
-            );
-          })}
-          <button onClick={() => setShowNewForm(v => !v)} className="flow-btn" style={{
-            marginLeft: "auto", padding: "10px 16px", borderRadius: 10,
-            border: `1px solid ${c.accent}40`, background: showNewForm ? c.accent : c.accentDim,
-            fontFamily: body, fontSize: 13, fontWeight: 700, color: showNewForm ? "#fff" : c.accent,
-            cursor: "pointer", display: "flex", alignItems: "center", gap: 6, flexShrink: 0,
-            transition: "all 0.15s",
-          }}>+ New Project</button>
-        </div>
+  // ═══════════════════════════════════════════════════════════
+  // DETAIL STATE — Project Deep Dive
+  // ═══════════════════════════════════════════════════════════
+  if (selectedProject) {
+    const proj = projects.find(p => p.id === selectedProject);
+    if (!proj) return <EmptyState icon="🔍" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
+    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} onNavigate={onNavigate} goBack={goBackToList} pc={pc} sc={sc} tc={tc} ec={ec} />;
+  }
 
-        {/* Inline new project form */}
-        {showNewForm && (
+  // ═══════════════════════════════════════════════════════════
+  // REGISTRY STATE — Pulse structural model
+  // ═══════════════════════════════════════════════════════════
+
+  const TABS = [
+    { key: "active", label: "Active Projects", count: summary.active, color: c.cyan },
+    { key: "complete", label: "Completed Projects", count: summary.complete, color: c.green },
+    { key: "deprioritized", label: "Deprioritized Projects", count: summary.depri, color: c.orange },
+    { key: "all", label: "All Projects", count: summary.all, color: c.text },
+  ];
+
+  // ── Shared Th wrapper ──
+  const Th = ({ col, children, style: s }) => (
+    <SharedTh col={col} sortKey={sortKey} sortDir={sortDir} onSort={toggleSort}
+      style={s}>{children}</SharedTh>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+
+      {/* ═══════════════════════════════════════════════════════════
+          STICKY TOP — summary + tabs (Pulse pattern)
+          ═══════════════════════════════════════════════════════════ */}
+      <div style={{
+        position: "sticky", top: 92, zIndex: 10,
+        background: c.bg, paddingBottom: space[3],
+        display: "flex", flexDirection: "column", gap: space[3] - 2,
+      }}>
+
+        {/* SUMMARY STRIP — Pulse-style SummaryTile + MetricCompact + VDivider */}
+        <div className="flow-mission-grid" style={{ padding: `${space[3]}px ${space[4]}px` }}>
           <div style={{
-            background: c.surface, borderRadius: 12, border: `1px solid ${c.accent}30`,
-            padding: 16, display: "flex", flexDirection: "column", gap: 12,
+            display: "flex", alignItems: "center", gap: space[1],
+            flexWrap: "wrap", position: "relative", zIndex: 1,
           }}>
-            <div style={{ fontFamily: display, fontSize: 15, fontWeight: 700, color: c.text }}>New Project</div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <Inp value={newName} onChange={e => setNewName(e.target.value)} placeholder="Project name" style={{ flex: 2, minWidth: 180 }} />
-              <Sel value={newSquad} onChange={e => setNewSquad(e.target.value)} style={{ flex: 1, minWidth: 110 }}>
-                <option value="">Squad</option>
-                {allSquads.map(s => <option key={s} value={s}>{s}</option>)}
-              </Sel>
-              <Sel value={newOwner} onChange={e => setNewOwner(e.target.value)} style={{ flex: 1, minWidth: 130 }}>
-                <option value="">Owner</option>
-                {allOwners.map(o => <option key={o} value={o}>{o}</option>)}
-              </Sel>
-              <Sel value={newPhase} onChange={e => setNewPhase(e.target.value)} style={{ flex: 1, minWidth: 110 }}>
-                {phaseNames.map(p => <option key={p} value={p}>{p}</option>)}
-              </Sel>
-            </div>
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => { setShowNewForm(false); setNewName(""); setNewSquad(""); setNewOwner(""); setNewPhase("PRD"); }} className="flow-btn" style={{
-                padding: "8px 16px", borderRadius: 8, border: `1px solid ${c.border}`,
-                background: "transparent", cursor: "pointer", fontFamily: body, fontSize: 13, fontWeight: 500, color: c.textDim,
-              }}>Cancel</button>
-              <button onClick={handleCreateProject} disabled={!newName.trim()} className="flow-btn" style={{
-                padding: "8px 20px", borderRadius: 8, border: "none", cursor: newName.trim() ? "pointer" : "not-allowed",
-                background: newName.trim() ? `linear-gradient(135deg, ${c.accent}, ${c.accent}CC)` : c.surfaceAlt,
-                fontFamily: display, fontSize: 13, fontWeight: 700, color: newName.trim() ? "#fff" : c.textDim,
-                transition: "all 0.15s",
-              }}>Create</button>
-            </div>
-          </div>
-        )}
+            {/* Status tiles — clickable, switch tab */}
+            <SummaryTile
+              value={summary.active} label="Active" color={c.cyan}
+              active={activeTab === "active"}
+              onClick={() => setActiveTab("active")}
+            />
+            <SummaryTile
+              value={summary.complete} label="Complete" color={c.green}
+              active={activeTab === "complete"}
+              onClick={() => setActiveTab("complete")}
+            />
+            <SummaryTile
+              value={summary.depri} label="Depri" color={c.orange}
+              active={activeTab === "deprioritized"}
+              onClick={() => setActiveTab("deprioritized")}
+            />
+            <SummaryTile
+              value={summary.all} label="All" color={c.text}
+              active={activeTab === "all"}
+              onClick={() => setActiveTab("all")}
+            />
 
-        {/* Filter bar */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 0, background: c.surface, borderRadius: 12, border: `1px solid ${c.border}`, overflow: "hidden" }}>
-          <div style={{ padding: "12px 16px", display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ position: "relative", flex: 1 }}>
-              <input ref={localSearchRef} value={search} onChange={e => { setSearch(e.target.value); setFocusIdx(0); }} className="flow-input"
-                placeholder="Search projects by ID or name..."
-                style={{ width: "100%", padding: "11px 14px 11px 40px", borderRadius: 10, border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text, fontFamily: body, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-              <span style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: c.textMid, pointerEvents: "none" }}>🔍</span>
-              <span className="flow-search-hint">/</span>
-            </div>
-            <span style={{ fontFamily: mono, fontSize: 11, color: c.textDim, flexShrink: 0 }}>{filtered.length}<span style={{ color: c.textDim + "80" }}>/{projects.length}</span></span>
-          </div>
-          <div style={{ padding: "8px 16px 10px", display: "flex", gap: 8, alignItems: "center", borderTop: `1px solid ${c.border}` }}>
-            <Sel value={fSquad} onChange={e => setFSquad(e.target.value)} style={{ minWidth: 110, fontSize: 12, padding: "8px 10px", borderRadius: 8 }}>
-              <option value="">All squads</option>
-              {allSquads.map(s => <option key={s} value={s}>{s}</option>)}
-            </Sel>
-            <Sel value={fPhase} onChange={e => setFPhase(e.target.value)} style={{ minWidth: 110, fontSize: 12, padding: "8px 10px", borderRadius: 8 }}>
-              <option value="">All phases</option>
-              {phaseNames.map(p => <option key={p} value={p}>{p}</option>)}
-            </Sel>
-            <Sel value={fOwner} onChange={e => setFOwner(e.target.value)} style={{ minWidth: 130, fontSize: 12, padding: "8px 10px", borderRadius: 8 }}>
-              <option value="">All owners</option>
-              {allOwners.map(o => <option key={o} value={o}>{o}</option>)}
-            </Sel>
-            {activeFilters > 0 && (
-              <button onClick={() => { setSearch(""); setFSquad(""); setFPhase(""); setFOwner(""); setFStatus("active"); }} className="flow-btn" style={{ padding: "7px 12px", borderRadius: 8, border: `1px solid ${c.accent}40`, background: c.accentDim, cursor: "pointer", fontFamily: body, fontSize: 12, fontWeight: 600, color: c.accent, marginLeft: "auto" }}>
-                <kbd style={{ fontFamily: mono, fontSize: 9, color: c.accent, background: "transparent", padding: "0 2px", border: "none", marginRight: 3 }}>C</kbd>Clear ({activeFilters})
-              </button>
-            )}
+            <VDivider />
+
+            {/* KPI metrics */}
+            <MetricCompact value={summary.totalCommits} label="Total Commits" color={c.text} />
+            <MetricCompact value={summary.blockedCount} label="Blocked" color={summary.blockedCount > 0 ? c.red : c.textDim} />
+            <MetricCompact value={summary.avgPeople} label="Avg People" color={c.accent} />
           </div>
         </div>
+
+        {/* TAB SWITCHER — Pulse segmented toggle pattern */}
+        <div style={{
+          display: "flex", gap: 2,
+          background: c.accentDim, borderRadius: layout.radiusMd, padding: 3,
+        }}>
+          {TABS.map(tab => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
+              flex: 1, padding: `${space[2]}px ${space[4]}px`,
+              borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
+              background: activeTab === tab.key ? c.accent : "transparent",
+              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+              fontWeight: activeTab === tab.key ? 700 : 500,
+              color: activeTab === tab.key ? c.textCrit : c.accent,
+              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+              boxShadow: activeTab === tab.key ? `0 1px 3px ${c.shadow}` : "none",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
+            }}>
+              {tab.label}
+              <span style={{
+                fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
+                padding: "1px 5px", borderRadius: layout.radiusTag + 1,
+                background: activeTab === tab.key ? "rgba(255,255,255,0.2)" : `${c.accent}15`,
+                color: activeTab === tab.key ? c.textCrit : c.accent,
+              }}>{tab.count}</span>
+            </button>
+          ))}
         </div>
 
-        {/* Projects grouped by phase */}
-        {phaseNames.map(ph => {
-          const group = phaseGroups[ph];
-          if (!group || group.length === 0) return null;
-          const startIdx = flatIdx;
-          flatIdx += group.length;
-          return (
-            <div key={ph}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, marginTop: 2 }}>
-                <div style={{ width: 3, height: 16, borderRadius: 2, background: pc[ph] }} />
-                <span style={{ fontFamily: display, fontSize: 14, fontWeight: 800, color: pc[ph] }}>{ph}</span>
-                <span style={{ fontFamily: mono, fontSize: 10, color: c.textDim, fontWeight: 500 }}>{group.length}</span>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 6 }}>
-                {group.map((p, gi) => {
-                  const act = projActivity[p.id] || 0;
-                  const isDone = !!p.done;
-                  const isFocused = kbActive && (startIdx + gi) === focusIdx;
+        {/* SEARCH — Pulse-aligned */}
+        <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+          <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+            <input ref={localSearchRef} value={search} onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
+              className="flow-input"
+              placeholder="Search projects by name, ID, owner, or squad..."
+              style={{
+                width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`,
+                borderRadius: layout.radiusMd, border: `1px solid ${c.border}`,
+                background: c.surfaceAlt, color: c.text,
+                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                outline: "none", boxSizing: "border-box",
+              }} />
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: c.textMid, pointerEvents: "none" }}>🔍</span>
+          </div>
+          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textMid, whiteSpace: "nowrap", flexShrink: 0 }}>
+            {tabProjects.length}<span style={{ color: c.textMid + "80" }}>/{filtered.length}</span>
+          </span>
+        </div>
+      </div>
+      {/* end sticky top */}
+
+      {/* ═══════════════════════════════════════════════════════════
+          REGISTRY TABLE — Pulse table architecture
+          ═══════════════════════════════════════════════════════════ */}
+      {tabProjects.length === 0 ? (
+        <EmptyState icon="📂" title="No projects" message={search ? "No projects match your search." : `No ${activeTab === "all" ? "" : activeTab + " "}projects found.`}
+          action={search ? "Clear search" : null} onAction={() => setSearch("")} />
+      ) : (
+        <Surface variant="data" compact style={{ padding: 0, overflow: "hidden", boxShadow: c.shadowCard }}>
+          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "68vh", borderRadius: layout.radius }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
+              <thead>
+                <tr>
+                  <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
+                  <Th col="project" style={{ minWidth: colWidths.identity.min, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
+                  <Th col="owner" style={{ minWidth: colWidths.owner.min, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
+                  <Th col="status" style={{ minWidth: colWidths.status.min, borderLeft: `1px dotted ${c.border}` }}>Status</Th>
+                  <Th col="phase" style={{ minWidth: colWidths.phase.min, borderLeft: `1px dotted ${c.border}` }}>Phase</Th>
+                  <Th col="total" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Total</Th>
+                  <Th col="thisWk" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>This Wk</Th>
+                  <Th col="people" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>People</Th>
+                  <Th col="last" style={{ minWidth: colWidths.date.min, borderLeft: `1px dotted ${c.border}` }}>Last</Th>
+                  <Th col="timeline" style={{ minWidth: colWidths.timeline.min, borderLeft: `1px dotted ${c.border}` }}>Timeline</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {tabProjects.map((proj, fi) => {
+                  const m = metrics[proj.id] || {};
+                  const sCfg = sc[proj.status] || sc.active;
+                  const allocated = daysBetween(proj.startDate, proj.endDate);
+                  const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, weekConfig.today), allocated));
+                  const pct = allocated > 0 ? Math.round((elapsed / allocated) * 100) : 0;
+                  const isFocused = kbActive && fi === focusIdx;
+                  const isHovered = hoveredProject === proj.id;
+                  const isDimmed = activeTab === "all" && (proj.status === "complete" || proj.status === "deprioritized");
+
                   return (
-                    <div key={p.id} className={`flow-row${isFocused ? " flow-kb-focus" : ""}`} onClick={() => openProject(p.id)} style={{
-                      padding: "10px 12px", background: isFocused ? c.surfaceAlt : isDone ? `${c.green}08` : c.surface, borderRadius: 8, cursor: "pointer",
-                      border: `1px solid ${isDone ? c.green + "25" : c.border}`, borderLeft: `3px solid ${isDone ? c.green : pc[ph]}`,
-                      opacity: isDone ? 0.6 : 1, transition: "all 0.15s",
+                    <tr key={proj.id}
+                      className={`flow-row${isFocused ? " flow-kb-focus" : ""}`}
+                      onMouseEnter={() => setHoveredProject(proj.id)}
+                      onMouseLeave={() => setHoveredProject(null)}
+                      onClick={() => openProject(proj.id)}
+                      style={{
+                        cursor: "pointer",
+                        background: isFocused ? `${c.accent}08` : isHovered ? c.surfaceAlt : "transparent",
+                        opacity: isDimmed ? 0.65 : 1,
+                        transition: `background ${motion.interaction.duration}`,
+                        animation: `rowSlideIn 0.3s ${motion.critical.easing} both`,
+                        animationDelay: `${Math.min(fi * 30, 600)}ms`,
+                      }}
+                    >
+                      {/* Squad — sticky left (Pulse pattern) */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`,
+                        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                        fontWeight: 600, color: c.textMid,
+                        borderBottom: `1px dotted ${c.border}`,
+                        position: "sticky", left: 0, background: c.bg, zIndex: 1,
+                      }}>{proj.squad}</td>
+
+                      {/* Project — ID + Name compound (Pulse pattern) */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`,
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <span style={{
+                            fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                            fontWeight: 700, color: ec.project, flexShrink: 0,
+                          }}>{proj.id}</span>
+                          <span style={{
+                            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                            fontWeight: 600, color: isHovered ? ec.project : c.text,
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            transition: `color ${motion.interaction.duration}`,
+                          }}>{proj.name}</span>
+                          {m.isBlocked && <Badge color={c.red} bg={c.redDim} style={{ flexShrink: 0 }}>!</Badge>}
+                          {proj.ship && <span style={{ fontSize: 12, flexShrink: 0 }} title="Shipped">🚀</span>}
+                        </div>
+                      </td>
+
+                      {/* Owner */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`,
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                        fontWeight: 500, color: proj.owner ? c.textMid : c.red,
+                        whiteSpace: "nowrap",
+                      }}>{proj.owner || "—"}</td>
+
+                      {/* Status */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`,
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                      }}>
+                        <Badge color={sCfg.color} bg={sCfg.bg}>{sCfg.label}</Badge>
+                      </td>
+
+                      {/* Phase */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`,
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                      }}>
+                        <Badge color={pc[proj.phase] || c.textDim} bg={`${pc[proj.phase] || c.textDim}18`}>{proj.phase}</Badge>
+                      </td>
+
+                      {/* Total commits */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                        color: m.totalCommits > 0 ? c.text : c.textDim, fontWeight: 600,
+                      }}>{m.totalCommits || "—"}</td>
+
+                      {/* This week */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                        color: m.thisWeekTotal > 0 ? c.cyan : c.textDim,
+                      }}>{m.thisWeekTotal || "—"}</td>
+
+                      {/* People */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                        color: m.peopleList?.length > 0 ? c.text : c.textDim,
+                      }}>{m.peopleList?.length || "—"}</td>
+
+                      {/* Last activity */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`,
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                        color: m.lastActivity === "This wk" ? c.cyan : m.lastActivity ? c.textMid : c.textDim,
+                        fontWeight: m.lastActivity === "This wk" ? 700 : 500,
+                      }}>{m.lastActivity || "—"}</td>
+
+                      {/* Timeline — compact dates + progress bar */}
+                      <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`,
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                      }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>
+                            {proj.startDate?.slice(5)} → {proj.endDate?.slice(5)}
+                          </span>
+                          <div style={{ height: 3, borderRadius: 2, background: c.border, overflow: "hidden" }}>
+                            <div style={{
+                              height: "100%", borderRadius: 2, width: `${Math.min(pct, 100)}%`,
+                              background: m.overdue ? c.red : pct > 85 ? c.orange : c.green,
+                            }} />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Surface>
+      )}
+    </div>
+  );
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   PROJECT DEEP DIVE — PeopleDeepDive structural model
+   De-cluttered: hero → history → ledger → supporting metadata
+   ══════════════════════════════════════════════════════════════════ */
+function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, onNavigate, goBack, pc, sc, tc, ec }) {
+  const sCfg = sc[proj.status] || sc.active;
+  const allocated = daysBetween(proj.startDate, proj.endDate);
+  const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, weekConfig.today), allocated));
+
+  // Build full weekly matrix for phase timeline
+  const weekPhaseMatrix = useMemo(() => {
+    const allWeeks = WEEK_LABELS;
+    const matrix = {};
+    for (const w of allWeeks) {
+      matrix[w] = { PRD: [], Design: [], Engineering: [], QA: [] };
+    }
+    const projHist = history[proj.id] || [];
+    for (const wk of projHist) {
+      if (matrix[wk.week]) {
+        for (const e of wk.entries) {
+          const stage = e.stage || "PRD";
+          if (matrix[wk.week][stage]) matrix[wk.week][stage].push(e);
+        }
+      }
+    }
+    commitments.forEach(cm => {
+      cm.items.forEach((it, idx) => {
+        if (cm.deselected !== idx && it.project === proj.id) {
+          const stage = it.stage || "PRD";
+          if (matrix["This wk"]?.[stage]) matrix["This wk"][stage].push({ ...it, person: cm.person });
+        }
+      });
+    });
+    return matrix;
+  }, [proj.id, history, commitments]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
+
+      {/* ═══ HERO — Telemetry Panel (PeopleDeepDive pattern) ═══ */}
+      <div className="flow-telemetry-panel" style={{ padding: `${space[6]}px ${space[7]}px` }}>
+        {/* Tier 1: Project identity — dominant read */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: space[5], position: "relative", zIndex: 1 }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: space[2] }}>
+              <span style={{
+                fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size + 2,
+                fontWeight: 700, color: ec.project,
+              }}>{proj.id}</span>
+              <span style={{
+                fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size,
+                fontWeight: typo.displayXl.weight, color: c.text,
+                letterSpacing: typo.displayXl.tracking, lineHeight: 1.15,
+              }}>{proj.name}</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+              <Badge color={sCfg.color} bg={sCfg.bg}>{sCfg.label}</Badge>
+              <Badge color={pc[proj.phase] || c.textDim} bg={`${pc[proj.phase] || c.textDim}18`}>{proj.phase}</Badge>
+              {proj.ship && <Badge color={c.green} bg={c.greenDim}>🚀 Shipped</Badge>}
+              {m.isBlocked && <Badge color={c.red} bg={c.redDim}>Blocked</Badge>}
+              {m.overdue && <Badge color={c.red} bg={c.redDim}>Overdue</Badge>}
+              {m.endingSoon && <Badge color={c.orange} bg={c.orangeDim}>Ending soon</Badge>}
+            </div>
+          </div>
+        </div>
+
+        {/* Tier 2: Stat rail — key metrics (PeopleDeepDive StatCell grid) */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: space[3],
+          position: "relative", zIndex: 1, borderTop: `1px solid ${c.border}`, paddingTop: space[5],
+        }}>
+          <StatCell value={m.totalCommits} label="Total Commits" color={c.text} />
+          <StatCell value={m.thisWeekTotal} label="This Week" color={c.cyan} />
+          <StatCell value={m.peopleList?.length || 0} label="Contributors" color={c.accent} />
+          <StatCell value={m.lastActivity || "—"} label="Last Active" color={m.lastActivity === "This wk" ? c.cyan : c.textMid} />
+          <StatCell value={`${allocated}d`} label="Duration" color={c.text} />
+        </div>
+      </div>
+
+      {/* ═══ SUPPORTING META — compact secondary surface ═══ */}
+      <Surface variant="panel" style={{ padding: `${space[4]}px ${space[5]}px` }}>
+        <div style={{ display: "flex", gap: space[5], flexWrap: "wrap" }}>
+          <MetaItem label="Owner" value={proj.owner} />
+          <MetaItem label="Squad" value={proj.squad} />
+          <MetaItem label="Start" value={proj.startDate} />
+          <MetaItem label="End" value={proj.endDate} />
+          <MetaItem label="Elapsed" value={`${elapsed}d / ${allocated}d`} />
+        </div>
+      </Surface>
+
+      {/* ═══ PHASE TIMELINE — roadmap lane ═══ */}
+      <Surface compact>
+        <Label>Phase Timeline</Label>
+        <div style={{ overflowX: "auto" }}>
+          {/* Week headers */}
+          <div style={{ display: "grid", gridTemplateColumns: `80px repeat(${WEEK_LABELS.length}, 1fr)`, gap: 2, marginBottom: space[1] }}>
+            <span />
+            {WEEK_LABELS.map(w => (
+              <span key={w} style={{
+                fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                color: w === "This wk" ? c.cyan : c.textDim, textAlign: "center",
+                fontWeight: w === "This wk" ? 700 : 500,
+              }}>{w}</span>
+            ))}
+          </div>
+          {/* Phase rows */}
+          {phaseNames.map(phase => {
+            const color = pc[phase] || c.textDim;
+            return (
+              <div key={phase} style={{
+                display: "grid", gridTemplateColumns: `80px repeat(${WEEK_LABELS.length}, 1fr)`,
+                gap: 2, marginBottom: 4,
+              }}>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color, display: "flex", alignItems: "center" }}>{phase}</span>
+                {WEEK_LABELS.map(w => {
+                  const entries = weekPhaseMatrix[w]?.[phase] || [];
+                  const hasActivity = entries.length > 0;
+                  return (
+                    <div key={w} style={{
+                      height: 30, borderRadius: 3,
+                      background: hasActivity ? `${color}25` : `${c.border}20`,
+                      borderLeft: hasActivity ? `3px solid ${color}` : "none",
+                      display: "flex", alignItems: "center", justifyContent: "center",
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-                          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: c.accent, flexShrink: 0 }}>{p.id}</span>
-                          <span style={{ fontFamily: body, fontSize: 13, fontWeight: 700, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: isDone ? `line-through ${c.green}` : "none" }}>{p.name}</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0, marginLeft: 8 }}>
-                          {isDone && <Tag color={c.green} bg={c.greenDim}>✓</Tag>}
-                          {!isDone && act === 0 && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", border: `1.5px solid ${c.orange}` }} />}
-                          {!isDone && act > 0 && <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: c.green }} />}
-                          {p.ship && <span style={{ fontSize: 11 }}>🚀</span>}
-                        </div>
-                      </div>
+                      {hasActivity && (
+                        <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color, fontWeight: 700 }}>{entries.length}</span>
+                      )}
                     </div>
                   );
                 })}
               </div>
-            </div>
-          );
-        })}
-        {filtered.length === 0 && <EmptyState icon="📦" title="No projects match" message="Adjust filters or search to find projects." action="Clear filters" onAction={() => { setSearch(""); setFSquad(""); setFPhase(""); setFOwner(""); setFStatus("active"); }} />}
-        {toast && (
-          <div style={{
-            position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
-            background: c.surfaceSolid, border: `1px solid ${c.green}50`,
-            borderRadius: 12, padding: "14px 22px", display: "flex", alignItems: "center", gap: 10,
-            boxShadow: `0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px ${c.green}20`, animation: "fadeInUp 0.25s ease-out",
-          }}>
-            <span style={{ fontSize: 16 }}>✓</span>
-            <span style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: c.text }}>
-              Project <span style={{ fontFamily: mono, fontWeight: 700, color: c.green }}>{toast.id}</span> "{toast.name}" created
-            </span>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ═══ PROJECT DEEP DIVE ════════════════════════════════════════
-  const age = calcAge(proj.startDate);
-  const planned = calcPlanned(proj.startDate, proj.endDate);
-  const remaining = calcRemaining(proj.endDate);
-  const overdue = remaining !== null && remaining < 0;
-  const pctElapsed = planned > 0 ? Math.min((age / planned) * 100, 100) : 0;
-  const projItems = allItems.filter(it => it.project === proj.id);
-  const projPeople = [...new Set(projItems.map(it => it.person))];
-  const projHistory = history[proj.id] || [];
-
-  const projTypeCounts = {};
-  projItems.forEach(it => { projTypeCounts[it.type] = (projTypeCounts[it.type] || 0) + 1; });
-
-  const plannedCount = commitments.reduce((s, cm) => s + cm.items.filter(it => it.project === proj.id && it.title.trim()).length, 0);
-  const committedCount = projItems.length;
-  const completedCount = commitments.reduce((s, cm) => s + cm.items.filter((it, idx) => cm.deselected !== idx && it.project === proj.id && it.outcome === "done").length, 0);
-  const partialCount = commitments.reduce((s, cm) => s + cm.items.filter((it, idx) => cm.deselected !== idx && it.project === proj.id && it.outcome === "partial").length, 0);
-
-  const updateProjectField = (field, val) => {
-    if (!setProjects) return;
-    setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, [field]: val } : p));
-  };
-
-  const requestPhaseChange = (newPhase) => {
-    setConfirmAction({
-      label: `Move "${proj.name}" from ${proj.phase} to ${newPhase}?`,
-      detail: "This will update the project's phase across all views.",
-      color: pc[newPhase] || c.accent,
-      onConfirm: () => updateProjectField("phase", newPhase),
-    });
-  };
-
-  const requestMarkDone = () => {
-    setConfirmAction({
-      label: proj.done ? `Reopen "${proj.name}"?` : `Mark "${proj.name}" as completed?`,
-      detail: proj.done ? "This project will become active again." : "This project will be moved to completed status.",
-      color: proj.done ? c.orange : c.green,
-      onConfirm: () => updateProjectField("done", !proj.done),
-    });
-  };
-
-  // ── Activity trend (history weeks + current) ──
-  const weeklyActivity = [];
-  weekConfig.historyWeeks.forEach(w => {
-    const wkHist = projHistory.find(h => h.week === w);
-    weeklyActivity.push({ week: w, count: wkHist ? wkHist.entries.length : 0, current: false });
-  });
-  weeklyActivity.push({ week: weekConfig.weekOf, count: projItems.length, current: true });
-  const maxActivity = Math.max(...weeklyActivity.map(w => w.count), 1);
-
-  const prevWeekCount = weeklyActivity.length >= 2 ? weeklyActivity[weeklyActivity.length - 2].count : 0;
-  const trendDelta = projItems.length - prevWeekCount;
-
-  // Escalation level for overdue
-  const escalationLevel = overdue ? (Math.abs(remaining) > 14 ? "CRITICAL" : Math.abs(remaining) > 7 ? "HIGH" : "WATCH") : null;
-
-  // ── Build per-week type breakdown for the chart ──
-  const weeklyTyped = weeklyActivity.map(w => {
-    const typeCounts = { BUILD: 0, JAM: 0, COMMIT: 0, BLOCKED: 0 };
-    if (w.current) {
-      projItems.forEach(it => { if (typeCounts[it.type] !== undefined) typeCounts[it.type]++; });
-    } else {
-      const wkHist = projHistory.find(h => h.week === w.week);
-      if (wkHist) wkHist.entries.forEach(e => { if (typeCounts[e.type] !== undefined) typeCounts[e.type]++; });
-    }
-    return { ...w, ...typeCounts, total: w.count };
-  });
-  const chartMax = Math.max(...weeklyTyped.map(w => w.total), 1);
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-      {/* ═══ OVERDUE THIN BANNER (top) ═════════════════════════════ */}
-      {overdue && (
-        <div className="flow-overdue-banner" style={{
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-          padding: "8px 16px", borderRadius: 10,
-          background: `linear-gradient(90deg, ${c.red}18, ${c.red}10)`,
-          border: `1px solid ${c.red}35`,
-        }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.red, boxShadow: `0 0 8px ${c.red}`, animation: "pulse 2s infinite" }} />
-          <span style={{ fontFamily: display, fontSize: 13, fontWeight: 800, color: c.red, letterSpacing: "0.04em" }}>
-            OVERDUE BY {Math.abs(remaining)} {Math.abs(remaining) === 1 ? "DAY" : "DAYS"}
-          </span>
-          <span style={{ fontFamily: mono, fontSize: 12, color: c.red, opacity: 0.7 }}>deadline {proj.endDate}</span>
-          <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: 6, background: `${c.red}20`, fontFamily: mono, fontSize: 11, fontWeight: 700, color: c.red }}>
-            {escalationLevel}
-          </div>
+            );
+          })}
         </div>
-      )}
+      </Surface>
 
-      {/* ═══ PROJECT COMMAND CARD ═════════════════════════════════ */}
-      <div className="flow-command-card" style={{ padding: "24px 28px" }}>
-        {/* Title row */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-              <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 700, color: c.accent, background: c.accentDim, padding: "3px 10px", borderRadius: 6, letterSpacing: "0.03em" }}>{proj.id}</span>
-              {proj.ship && <span style={{ fontSize: 14, opacity: 0.8 }}>🚀</span>}
+      {/* ═══ ACTIVITY TIMELINE DIVIDER ═══ */}
+      <SectionDivider label="Activity Timeline" count={m.weeklyData.length + " weeks"} />
+
+      {/* ═══ ACTIVITY LEDGER — Terminal Log (PeopleDeepDive pattern) ═══ */}
+      <div className="flow-terminal-log" style={{ opacity: 0.9 }}>
+        <div className="flow-terminal-header">
+          <div className="flow-terminal-dot" style={{ background: c.red }} />
+          <div className="flow-terminal-dot" style={{ background: c.orange }} />
+          <div className="flow-terminal-dot" style={{ background: c.green }} />
+          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size + 1, fontWeight: 600, color: c.textMid, marginLeft: space[2] }}>
+            timeline@{proj.id.toLowerCase()}
+          </span>
+          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim, marginLeft: "auto" }}>
+            {m.weeklyData.length} weeks
+          </span>
+        </div>
+        <div style={{ padding: `${space[2]}px 0`, maxHeight: 500, overflowY: "auto" }}>
+          {m.weeklyData.length === 0 ? (
+            <div style={{ padding: `${space[5]}px ${space[4]}px`, textAlign: "center", fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.textDim }}>
+              $ no activity logged<span className="flow-terminal-cursor" />
             </div>
-            <div style={{ fontFamily: display, fontSize: 28, fontWeight: 800, color: c.text, letterSpacing: "-0.03em", lineHeight: 1.2 }}>{proj.name}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600, color: c.textDim, letterSpacing: "0.04em" }}>OWNER</span>
-                <span style={{ fontFamily: body, fontSize: 14, fontWeight: 600, color: c.text }}>{proj.owner}</span>
-              </div>
-              <div style={{ width: 1, height: 14, background: c.border }} />
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600, color: c.textDim, letterSpacing: "0.04em" }}>SQUAD</span>
-                <span style={{ fontFamily: body, fontSize: 14, fontWeight: 600, color: c.textMid }}>{proj.squad}</span>
-              </div>
-              {projPeople.length > 0 && (<>
-                <div style={{ width: 1, height: 14, background: c.border }} />
-                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                  <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600, color: c.textDim, letterSpacing: "0.04em" }}>CONTRIBUTORS</span>
-                  <span style={{ fontFamily: body, fontSize: 14, fontWeight: 600, color: c.accent }}>{projPeople.length}</span>
+          ) : (
+            [...m.weeklyData].reverse().map((wk, wi) => (
+              <React.Fragment key={wi}>
+                {/* Week separator — current week emphasized */}
+                <div style={{ padding: `${space[2]}px ${space[4]}px ${space[1]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
+                  <span style={{
+                    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                    fontWeight: 700, color: wk.isCurrent ? c.accent : c.textDim,
+                  }}>
+                    {wk.isCurrent ? "▸ THIS WEEK" : `▸ ${wk.week.toUpperCase()}`}
+                  </span>
+                  <div style={{ flex: 1, height: 1, background: wk.isCurrent ? `${c.accent}30` : c.border }} />
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{wk.entries.length} entries</span>
                 </div>
-              </>)}
+                {wk.entries.map((entry, ei) => (
+                  <div key={`${wi}-${ei}`} className="flow-terminal-line" style={{
+                    animationDelay: `${(wi * 3 + ei) * 0.04}s`,
+                    opacity: wk.isCurrent ? 1 : 0.8,
+                  }}>
+                    <span style={{
+                      width: 6, height: 6, borderRadius: "50%",
+                      background: tc[entry.type]?.color || c.textDim,
+                      boxShadow: wk.isCurrent ? `0 0 6px ${tc[entry.type]?.color || c.textDim}40` : "none",
+                      flexShrink: 0, marginTop: 5,
+                    }} />
+                    <span style={{
+                      fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                      color: c.textDim, flexShrink: 0, width: 52, marginTop: 1,
+                    }}>
+                      {wk.isCurrent ? "now" : wk.week.split(" ")[0].substring(0, 3)}
+                    </span>
+                    <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg}>{entry.type}</Tag>
+                    <Tag color={pc[entry.stage] || c.textDim} bg={(pc[entry.stage] || c.textDim) + "12"}>{entry.stage || "—"}</Tag>
+                    <span style={{
+                      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                      color: wk.isCurrent ? c.text : c.textMid, flex: 1, minWidth: 0,
+                    }}>
+                      {entry.task || entry.title || "—"}
+                    </span>
+                    <span onClick={(e) => { e.stopPropagation(); onNavigate && onNavigate("people", entry.person); }}
+                      style={{
+                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                        fontWeight: typo.monoLg.weight, color: c.cyan, cursor: "pointer", flexShrink: 0,
+                      }}>
+                      {entry.person}
+                    </span>
+                  </div>
+                ))}
+              </React.Fragment>
+            ))
+          )}
+          {m.weeklyData.length > 0 && (
+            <div style={{ padding: `${space[2]}px ${space[4]}px`, display: "flex", alignItems: "center", gap: space[1] + 2 }}>
+              <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.accent }}>$</span>
+              <span className="flow-terminal-cursor" />
             </div>
-          </div>
+          )}
+        </div>
+      </div>
 
-          {/* Actions + Duration metrics cluster */}
-          <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "flex-start" }}>
-            <button onClick={requestMarkDone} className="flow-btn" style={{
-              padding: "8px 16px", borderRadius: 8, cursor: "pointer",
-              border: `1px solid ${proj.done ? c.orange + "40" : c.green + "40"}`,
-              background: proj.done ? `${c.orange}10` : `${c.green}10`,
-              fontFamily: display, fontSize: 12, fontWeight: 700,
-              color: proj.done ? c.orange : c.green,
-              transition: "all 0.15s", whiteSpace: "nowrap",
-              alignSelf: "center",
-            }}>{proj.done ? "↺ Reopen" : "✓ Mark Complete"}</button>
-            {[
-              { label: "PLANNED", value: `${planned}d`, color: c.textMid, desc: "total duration" },
-              { label: "ELAPSED", value: `${age}d`, color: age > planned ? c.red : c.text, desc: "days since start" },
-              { label: "REMAINING", value: overdue ? `−${Math.abs(remaining)}d` : `${remaining}d`, color: overdue ? c.red : remaining < 14 ? c.orange : c.green, desc: overdue ? "past deadline" : "until deadline" },
-            ].map((m, i) => (
-              <div key={i} style={{ textAlign: "center", padding: "8px 14px", background: m.color === c.red ? `${c.red}08` : "transparent", borderRadius: 10, border: `1px solid ${m.color === c.red ? c.red + "20" : c.border}`, minWidth: 72 }}>
-                <div style={{ fontFamily: display, fontSize: 22, fontWeight: 800, color: m.color, lineHeight: 1 }}>{m.value}</div>
-                <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: c.textDim, letterSpacing: "0.06em", marginTop: 4 }}>{m.label}</div>
-              </div>
+      {/* ═══ PEOPLE INVOLVED ═══ */}
+      {m.peopleList?.length > 0 && (
+        <Surface compact>
+          <Label>People Involved</Label>
+          <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
+            {m.peopleList.map(name => (
+              <span key={name} onClick={() => onNavigate && onNavigate("people", name)} style={{
+                fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                fontWeight: 500, color: c.cyan, cursor: "pointer",
+                padding: `3px ${space[2]}px`,
+                background: c.cyanDim, borderRadius: layout.radiusPill,
+              }}>{name}</span>
             ))}
           </div>
-        </div>
+        </Surface>
+      )}
 
-        {/* Phase pipeline — animated nodes */}
-        <div style={{ marginBottom: 4 }}>
-          <div style={{ fontFamily: mono, fontSize: 12, fontWeight: 700, color: c.textDim, letterSpacing: "0.1em", marginBottom: 10 }}>PHASE PIPELINE</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <PhasePipeline currentPhase={proj.phase} />
-            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-              <Sel value={proj.phase} onChange={e => { if (e.target.value !== proj.phase) requestPhaseChange(e.target.value); }}
-                style={{ fontSize: 12, padding: "6px 10px", borderRadius: 6, minWidth: 110, fontWeight: 700, color: pc[proj.phase] || c.textMid }}>
-                {phaseNames.map(p => <option key={p} value={p}>{p}</option>)}
-              </Sel>
-              <span style={{ fontFamily: mono, fontSize: 12, color: c.textDim }}>({phaseNames.indexOf(proj.phase) + 1}/{phaseNames.length})</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Timeline progress bar with animated marker */}
-        <TimelineBar
-          pctElapsed={pctElapsed}
-          overdue={overdue}
-          remaining={remaining}
-          startDate={proj.startDate}
-          endDate={proj.endDate}
-        />
-      </div>
-
-      {/* ═══ WEEK-ON-WEEK COMMIT CHART ════════════════════════════ */}
-      {(() => {
-        const totalAllWeeks = weeklyTyped.reduce((s, w) => s + w.total, 0);
-        const typeTotals = ["BUILD", "JAM", "COMMIT", "BLOCKED"].map(t => ({
-          type: t, label: tc[t]?.label, color: tc[t]?.color, bg: tc[t]?.bg,
-          count: weeklyTyped.reduce((s, w) => s + (w[t] || 0), 0),
-        })).filter(t => t.count > 0);
-        return (
-      <div style={{ background: c.surface, borderRadius: 14, border: `1px solid ${c.border}`, overflow: "hidden" }}>
-        {/* Header */}
-        <div style={{ padding: "18px 24px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontFamily: display, fontSize: 17, fontWeight: 800, color: c.text }}>Commit Activity</span>
-            <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: c.text, opacity: 0.55 }}>
-              {totalAllWeeks} commits · {weeklyTyped.length} weeks
-            </span>
-          </div>
-        </div>
-
-        {/* Type summary pills */}
-        <div style={{ padding: "14px 24px 16px", display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {typeTotals.map(t => (
-            <div key={t.type} style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: `${t.color}12`, border: `1px solid ${t.color}30`,
-              borderRadius: 8, padding: "5px 12px",
-            }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: t.color }} />
-              <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 700, color: t.color }}>{t.count}</span>
-              <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600, color: c.textDim }}>{t.type}</span>
+      {/* ═══ PHASE BREAKDOWN — compact secondary ═══ */}
+      <Surface variant="panel" style={{ padding: `${space[4]}px ${space[5]}px` }}>
+        <Label style={{ marginBottom: space[2] }}>Phase Breakdown</Label>
+        <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
+          {phaseNames.map(ph => m.phaseBreakdown[ph] > 0 && (
+            <div key={ph} style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: pc[ph] }} />
+              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: pc[ph], fontWeight: 700 }}>{ph}</span>
+              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text }}>{m.phaseBreakdown[ph]}</span>
             </div>
           ))}
         </div>
-
-        {/* Chart area with gridlines */}
-        <div style={{ padding: "0 24px 6px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <div style={{ position: "relative", minWidth: weeklyTyped.length * 100 }}>
-            {/* Horizontal gridlines — offset to cover only the bar zone */}
-            <div style={{ position: "absolute", left: 0, right: 0, top: 28, bottom: 0, display: "flex", flexDirection: "column", justifyContent: "space-between", pointerEvents: "none" }}>
-              {[0, 1, 2, 3].map(i => (
-                <div key={i} style={{ borderBottom: `1px solid ${c.border}`, opacity: i === 3 ? 0.8 : 0.3, width: "100%" }} />
-              ))}
-            </div>
-            {/* Bars — extra top padding so count labels never clip */}
-            <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 228, paddingTop: 28, position: "relative", zIndex: 1 }}>
-              {weeklyTyped.map((w, i) => {
-                const barH = w.total > 0 ? Math.max(24, (w.total / chartMax) * 180) : 6;
-                const types = ["BUILD", "JAM", "COMMIT", "BLOCKED"];
-                const segments = types.map(t => ({ type: t, count: w[t], pct: w.total > 0 ? (w[t] / w.total) * 100 : 0 })).filter(s => s.count > 0);
-                const isCurrent = w.current;
-                return (
-                  <div key={i} style={{ flex: 1, minWidth: 80, display: "flex", flexDirection: "column", alignItems: "center", gap: 0 }}>
-                    {/* Count label */}
-                    <span style={{
-                      fontFamily: display, fontSize: 16, fontWeight: 800, marginBottom: 6,
-                      color: isCurrent ? c.accent : w.total > 0 ? c.text : c.textDim,
-                    }}>
-                      {w.total}
-                    </span>
-                    {/* Stacked bar */}
-                    <div style={{
-                      width: "70%", maxWidth: 56, height: barH, borderRadius: 8, overflow: "hidden",
-                      display: "flex", flexDirection: "column",
-                      border: isCurrent ? `2px solid ${c.accent}` : "none",
-                      background: w.total === 0 ? `${c.border}40` : "transparent",
-                      boxShadow: isCurrent ? `0 0 20px ${c.accent}25, 0 4px 12px ${c.accent}15` : `0 2px 8px rgba(0,0,0,0.15)`,
-                      transition: "all 0.3s ease",
-                    }}>
-                      {segments.map((seg, si) => (
-                        <div key={si} style={{
-                          flex: seg.pct, background: tc[seg.type]?.color,
-                          opacity: isCurrent ? 1 : 0.75,
-                          transition: "opacity 0.2s ease",
-                        }} title={`${seg.count} ${seg.type}`} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Week labels row */}
-        <div style={{ padding: "8px 24px 4px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <div style={{ display: "flex", gap: 6, minWidth: weeklyTyped.length * 100 }}>
-            {weeklyTyped.map((w, i) => (
-              <div key={i} style={{ flex: 1, minWidth: 80, textAlign: "center" }}>
-                <span style={{
-                  fontFamily: mono, fontSize: 12, fontWeight: w.current ? 700 : 600,
-                  color: w.current ? c.accent : c.text,
-                }}>
-                  {w.week.length > 6 ? w.week.split(",")[0] : w.week}
-                </span>
-                {w.current && (
-                  <div style={{ width: 4, height: 4, borderRadius: "50%", background: c.accent, margin: "4px auto 0", boxShadow: `0 0 6px ${c.accent}` }} />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Type breakdown per week - compact row */}
-        <div style={{ padding: "6px 24px 16px", overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-          <div style={{ display: "flex", gap: 6, minWidth: weeklyTyped.length * 100 }}>
-            {weeklyTyped.map((w, i) => {
-              const types = ["BUILD", "JAM", "COMMIT", "BLOCKED"];
-              const segments = types.map(t => ({ type: t, count: w[t] })).filter(s => s.count > 0);
-              return (
-                <div key={i} style={{ flex: 1, minWidth: 80, display: "flex", justifyContent: "center", gap: 4, flexWrap: "wrap" }}>
-                  {segments.map((seg, si) => (
-                    <span key={si} style={{
-                      fontFamily: mono, fontSize: 11, fontWeight: 700, lineHeight: 1,
-                      color: tc[seg.type]?.color, background: `${tc[seg.type]?.color}15`,
-                      padding: "3px 6px", borderRadius: 4,
-                    }}>
-                      {seg.count}{seg.type.charAt(0)}
-                    </span>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-        );
-      })()}
-
-      {/* ═══ EVIDENCE FEED — current week ════════════════════════ */}
-      <div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 10, height: 10, borderRadius: "50%", background: c.accent, boxShadow: `0 0 8px ${c.accent}50` }} />
-            <span style={{ fontFamily: display, fontSize: 16, fontWeight: 800, color: c.accent }}>Evidence Feed</span>
-            <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: c.text, opacity: 0.6 }}>{weekConfig.weekOf}</span>
-          </div>
-          <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 600, color: c.text, opacity: 0.5 }}>{projItems.length} item{projItems.length !== 1 ? "s" : ""}</span>
-        </div>
-        {projItems.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {projItems.map((it, i) => (
-              <EvidenceCard key={i} item={it} index={i} proj={proj} tc={tc} pc={pc} onNavigate={onNavigate} isCurrentWeek={true} />
-            ))}
-          </div>
-        ) : (
-          <div style={{ padding: "24px", textAlign: "center", fontFamily: body, fontSize: 13, color: c.textDim, background: c.surface, borderRadius: 10, border: `1px dashed ${c.border}` }}>No commitments this week</div>
-        )}
-      </div>
-
-      {/* ═══ HISTORY — week-on-week timeline ═══════════════════════ */}
-      {projHistory.length > 0 && (
-        <div style={{ marginTop: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14, paddingTop: 14, borderTop: `1px solid ${c.border}` }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontFamily: display, fontSize: 16, fontWeight: 800, color: c.text }}>History</span>
-              <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: c.text, opacity: 0.5 }}>{projHistory.length} week{projHistory.length !== 1 ? "s" : ""}</span>
-            </div>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {[...projHistory].reverse().map((wk, wi) => {
-              const wkTypeCounts = {};
-              wk.entries.forEach(e => { wkTypeCounts[e.type] = (wkTypeCounts[e.type] || 0) + 1; });
-              return (
-                <div key={wi} style={{ position: "relative", paddingLeft: 24, paddingBottom: 20 }}>
-                  {/* Vertical connector line */}
-                  {wi < projHistory.length - 1 && (
-                    <div style={{ position: "absolute", left: 7, top: 14, bottom: 0, width: 2, background: `linear-gradient(to bottom, ${c.accent}30, ${c.border})` }} />
-                  )}
-                  {/* Timeline node */}
-                  <div style={{ position: "absolute", left: 0, top: 2, width: 16, height: 16, borderRadius: "50%", background: c.surface, border: `2px solid ${c.accent}50`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.accent, opacity: 0.6 }} />
-                  </div>
-                  {/* Week header */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                    <span style={{ fontFamily: display, fontSize: 14, fontWeight: 700, color: c.text }}>Week of {wk.week}</span>
-                    <span style={{ fontFamily: mono, fontSize: 12, color: c.text, fontWeight: 600, opacity: 0.5 }}>{wk.entries.length} item{wk.entries.length !== 1 ? "s" : ""}</span>
-                    <div style={{ display: "flex", gap: 4, marginLeft: "auto" }}>
-                      {Object.entries(wkTypeCounts).map(([t, n]) => (
-                        <Tag key={t} color={tc[t]?.color} bg={tc[t]?.bg}>{n} {t}</Tag>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Entry cards — Name → Task → Tags */}
-                  <div style={{ background: c.surface, borderRadius: 10, border: `1px solid ${c.border}`, overflow: "hidden" }}>
-                    {wk.entries.map((entry, ei) => (
-                      <div key={ei} style={{
-                        display: "flex", alignItems: "center", gap: 10,
-                        padding: "10px 14px",
-                        borderTop: ei > 0 ? `1px solid ${c.border}` : "none",
-                        transition: "background 0.15s",
-                      }}
-                        onMouseEnter={e => e.currentTarget.style.background = c.surfaceAlt}
-                        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                      >
-                        {/* Avatar */}
-                        <div style={{
-                          width: 24, height: 24, borderRadius: "50%", background: c.accentDim,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          fontFamily: display, fontSize: 10, fontWeight: 700, color: c.accent, flexShrink: 0,
-                        }}>{entry.person.charAt(0)}</div>
-                        {/* Person name */}
-                        <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("people", entry.person); }}
-                          style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: c.text, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
-                          {entry.person}
-                        </span>
-                        {/* Task description */}
-                        <span style={{ fontFamily: body, fontSize: 13, color: c.textMid, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{entry.task}</span>
-                        {/* Tags: type + stage */}
-                        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                          <Badge color={tc[entry.type]?.color} bg={tc[entry.type]?.bg}>{entry.type}</Badge>
-                          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600, color: pc[entry.stage] || c.textDim, padding: "2px 7px", borderRadius: 4, background: (pc[entry.stage] || c.textDim) + "12" }}>{entry.stage}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ═══ CONFIRMATION MODAL ═══════════════════════════════════ */}
-      {confirmAction && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div onClick={() => setConfirmAction(null)} style={{ position: "absolute", inset: 0, background: "#000", opacity: 0.6 }} />
-          <div style={{
-            position: "relative", zIndex: 1, background: c.surface,
-            border: `1px solid ${(confirmAction.color || c.accent) + "40"}`,
-            borderRadius: 14, padding: "24px 28px", width: 420, maxWidth: "90vw",
-            boxShadow: `0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px ${c.border}`,
-          }}>
-            <div style={{ fontFamily: display, fontSize: 17, fontWeight: 700, color: c.text, marginBottom: 8 }}>Confirm Change</div>
-            <div style={{ fontFamily: body, fontSize: 14, fontWeight: 600, color: c.text, lineHeight: 1.6, marginBottom: 6 }}>{confirmAction.label}</div>
-            <div style={{ fontFamily: body, fontSize: 13, color: c.textMid, lineHeight: 1.6, marginBottom: 16 }}>{confirmAction.detail}</div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-              <button onClick={() => setConfirmAction(null)} className="flow-btn" style={{
-                padding: "8px 18px", borderRadius: 8, border: `1px solid ${c.border}`,
-                background: "transparent", cursor: "pointer", fontFamily: body, fontSize: 13, fontWeight: 500, color: c.textDim,
-              }}>Cancel</button>
-              <button onClick={() => { confirmAction.onConfirm(); setConfirmAction(null); }} className="flow-btn" style={{
-                padding: "8px 20px", borderRadius: 8, border: "none", cursor: "pointer",
-                background: `linear-gradient(135deg, ${confirmAction.color || c.accent}, ${(confirmAction.color || c.accent)}CC)`,
-                fontFamily: display, fontSize: 13, fontWeight: 700, color: "#fff",
-              }}>Yes, Confirm</button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Surface>
     </div>
   );
-};
+}
 
-export default ProjectsView;
+/* ── Small inline helper ── */
+function MetaItem({ label, value }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <TelemetryLabel>{label}</TelemetryLabel>
+      <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.text }}>{value}</span>
+    </div>
+  );
+}
