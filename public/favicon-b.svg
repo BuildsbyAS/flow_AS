@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#0B1120"/>
+  <!-- Thin orbit ring -->
+  <circle cx="16" cy="16" r="9" fill="none" stroke="white" stroke-width="0.4" opacity="0.15"/>
+  <!-- Cyan dot -->
+  <circle cx="16" cy="7" r="2.5" fill="#00F0FF" opacity="0.9"/>
+  <!-- Pink dot -->
+  <circle cx="23.8" cy="20.5" r="2.3" fill="#FF2D78" opacity="0.9"/>
+  <!-- Green dot -->
+  <circle cx="8.2" cy="20.5" r="2.1" fill="#39FF14" opacity="0.9"/>
+</svg>

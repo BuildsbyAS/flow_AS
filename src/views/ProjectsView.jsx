@@ -2,7 +2,7 @@
 // Two states: Registry (Pulse-style table with tabs) → Project Deep Dive (PeopleDeepDive-style)
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { c, typo, space, layout, motion, phaseNames, typeConfig, phaseColors as getPhaseColors, statusColors, entityColors, colWidths } from "../styles/theme";
-import { Badge, Tag, Surface, Label, Btn, EmptyState, TelemetryLabel, SectionDivider, StatCell, MetricCompact, SummaryTile, VDivider, Th as SharedTh } from "../components/shared";
+import { Badge, Tag, Surface, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, SectionDivider, StatCell, MetricCompact, SummaryTile, VDivider, Th as SharedTh } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
 import { weekConfig } from "../data/seed";
 
@@ -14,6 +14,13 @@ const ensureStatus = (p) => ({ ...p, status: p.status || "active" });
 const daysBetween = (a, b) => {
   if (!a || !b) return 0;
   return Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);
+};
+
+const fmtDate = (d) => {
+  if (!d) return "—";
+  const [, m, day] = d.split("-");
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[parseInt(m, 10) - 1]} ${parseInt(day, 10)}`;
 };
 
 // statusColors imported from theme.js
@@ -32,8 +39,8 @@ function deriveProjectMetrics(projects, commitments, history) {
     const id = proj.id;
     const m = {
       historyTotal: 0, thisWeekTotal: 0, totalCommits: 0,
-      phaseBreakdown: { PRD: 0, Design: 0, Engineering: 0, QA: 0 },
-      typeBreakdown: { BUILD: 0, JAM: 0, COMMIT: 0, BLOCKED: 0 },
+      phaseBreakdown: { PRD: 0, Design: 0, Dev: 0, QA: 0 },
+      typeBreakdown: { BUILD: 0, JAM: 0, BLOCKED: 0 },
       people: new Set(),
       lastActivity: null,
       weeklyData: [],
@@ -126,6 +133,7 @@ function sortList(list, key, dir, metrics) {
 export default function ProjectsView({
   projects: rawProjects, setProjects, commitments, people, history,
   initialId, onNavigate, setDetailLabel, setGoBack, searchRef, globalFilters = {},
+  isHistorical, selectedWeekKey,
 }) {
   const projects = useMemo(() => rawProjects.map(ensureStatus), [rawProjects]);
   const metrics = useMemo(() => deriveProjectMetrics(projects, commitments, history), [projects, commitments, history]);
@@ -138,6 +146,8 @@ export default function ProjectsView({
   const [hoveredProject, setHoveredProject] = useState(null);
   const [focusIdx, setFocusIdx] = useState(0);
   const [kbActive, setKbActive] = useState(false);
+  const [searchGlow, setSearchGlow] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
   const localSearchRef = useRef(null);
 
   // Wire searchRef
@@ -205,7 +215,8 @@ export default function ProjectsView({
     const blockedCount = active.filter(p => p.status === "blocked" || metrics[p.id]?.isBlocked).length;
     const totalCommits = filtered.reduce((s, p) => s + (metrics[p.id]?.totalCommits || 0), 0);
     const avgPeople = filtered.length > 0 ? Math.round(filtered.reduce((s, p) => s + (metrics[p.id]?.peopleList.length || 0), 0) / filtered.length) : 0;
-    return { active: active.length, complete: complete.length, depri: depri.length, all: filtered.length, blockedCount, totalCommits, avgPeople };
+    const avgAge = active.length > 0 ? Math.round(active.reduce((s, p) => s + daysBetween(p.startDate, weekConfig.today), 0) / active.length) : 0;
+    return { active: active.length, complete: complete.length, depri: depri.length, all: filtered.length, blockedCount, totalCommits, avgPeople, avgAge };
   }, [filtered, metrics]);
 
   // ── Sort handler (Pulse pattern) ──
@@ -217,11 +228,12 @@ export default function ProjectsView({
 
   // ── Keyboard ──
   useKeyboard([
-    { key: "Escape", fn: () => { if (selectedProject) goBackToList(); }, force: true },
-    { key: "ArrowUp", fn: () => { if (!selectedProject) { setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } } },
-    { key: "ArrowDown", fn: () => { if (!selectedProject) { setKbActive(true); setFocusIdx(i => Math.min(tabProjects.length - 1, i + 1)); } } },
-    { key: "Enter", fn: () => { if (!selectedProject && tabProjects[focusIdx]) openProject(tabProjects[focusIdx].id); } },
-  ], [selectedProject, goBackToList, tabProjects.length, focusIdx]);
+    { key: "Escape", fn: () => { if (selectedProject) goBackToList(); else if (search) { setSearch(""); setFocusIdx(0); localSearchRef.current?.blur(); setKbActive(false); } else if (document.activeElement === localSearchRef.current) { localSearchRef.current.blur(); setKbActive(false); } else if (kbActive) { setKbActive(false); } }, force: true },
+    { key: "ArrowUp", fn: () => { if (!selectedProject) { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } }, force: true },
+    { key: "ArrowDown", fn: () => { if (!selectedProject) { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.min(tabProjects.length - 1, i + 1)); } }, force: true },
+    { key: "Enter", fn: () => { if (!selectedProject && kbActive && tabProjects[focusIdx]) openProject(tabProjects[focusIdx].id); }, force: true },
+    { key: "/", fn: (e) => { if (!selectedProject) { e.preventDefault(); localSearchRef.current?.focus(); setSearchGlow(true); setKbActive(false); setTimeout(() => setSearchGlow(false), 1200); } }, force: true },
+  ], [selectedProject, goBackToList, tabProjects.length, focusIdx, kbActive]);
 
   useEffect(() => {
     if (focusIdx >= tabProjects.length && tabProjects.length > 0) setFocusIdx(tabProjects.length - 1);
@@ -238,7 +250,7 @@ export default function ProjectsView({
   if (selectedProject) {
     const proj = projects.find(p => p.id === selectedProject);
     if (!proj) return <EmptyState icon="🔍" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
-    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} onNavigate={onNavigate} goBack={goBackToList} pc={pc} sc={sc} tc={tc} ec={ec} />;
+    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} setProjects={setProjects} people={people} onNavigate={onNavigate} goBack={goBackToList} pc={pc} sc={sc} tc={tc} ec={ec} />;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -246,10 +258,10 @@ export default function ProjectsView({
   // ═══════════════════════════════════════════════════════════
 
   const TABS = [
-    { key: "active", label: "Active Projects", count: summary.active, color: c.cyan },
-    { key: "complete", label: "Completed Projects", count: summary.complete, color: c.green },
-    { key: "deprioritized", label: "Deprioritized Projects", count: summary.depri, color: c.orange },
-    { key: "all", label: "All Projects", count: summary.all, color: c.text },
+    { key: "active", label: "Active", count: summary.active, color: c.cyan },
+    { key: "complete", label: "Completed", count: summary.complete, color: c.green },
+    { key: "deprioritized", label: "Deprioritized", count: summary.depri, color: c.orange },
+    { key: "all", label: "All", count: summary.all, color: c.text },
   ];
 
   // ── Shared Th wrapper ──
@@ -259,36 +271,36 @@ export default function ProjectsView({
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 128px)", marginBottom: -60 }}>
 
       {/* ═══════════════════════════════════════════════════════════
-          STICKY TOP — summary + tabs (Pulse pattern)
+          FROZEN TOP — summary + tabs (never scrolls)
           ═══════════════════════════════════════════════════════════ */}
       <div style={{
-        position: "sticky", top: 92, zIndex: 10,
-        background: c.bg, paddingBottom: space[3],
+        flexShrink: 0,
+        paddingBottom: space[3],
         display: "flex", flexDirection: "column", gap: space[3] - 2,
       }}>
 
-        {/* SUMMARY STRIP — Pulse-style SummaryTile + MetricCompact + VDivider */}
+        {/* SUMMARY STRIP — full-width grid */}
         <div className="flow-mission-grid" style={{ padding: `${space[3]}px ${space[4]}px` }}>
           <div style={{
-            display: "flex", alignItems: "center", gap: space[1],
-            flexWrap: "wrap", position: "relative", zIndex: 1,
+            display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto 1fr 1fr 1fr 1fr",
+            alignItems: "center", gap: space[2],
+            position: "relative", zIndex: 1,
           }}>
-            {/* Status tiles — clickable, switch tab */}
             <SummaryTile
               value={summary.active} label="Active" color={c.cyan}
               active={activeTab === "active"}
               onClick={() => setActiveTab("active")}
             />
             <SummaryTile
-              value={summary.complete} label="Complete" color={c.green}
+              value={summary.complete} label="Completed" color={c.green}
               active={activeTab === "complete"}
               onClick={() => setActiveTab("complete")}
             />
             <SummaryTile
-              value={summary.depri} label="Depri" color={c.orange}
+              value={summary.depri} label="Deprioritized" color={c.orange}
               active={activeTab === "deprioritized"}
               onClick={() => setActiveTab("deprioritized")}
             />
@@ -300,10 +312,10 @@ export default function ProjectsView({
 
             <VDivider />
 
-            {/* KPI metrics */}
             <MetricCompact value={summary.totalCommits} label="Total Commits" color={c.text} />
             <MetricCompact value={summary.blockedCount} label="Blocked" color={summary.blockedCount > 0 ? c.red : c.textDim} />
-            <MetricCompact value={summary.avgPeople} label="Avg People" color={c.accent} />
+            <MetricCompact value={summary.avgPeople} label="Avg Team Size" color={c.accent} />
+            <MetricCompact value={`${summary.avgAge}d`} label="Avg Age" color={c.text} />
           </div>
         </div>
 
@@ -335,50 +347,70 @@ export default function ProjectsView({
           ))}
         </div>
 
-        {/* SEARCH — Pulse-aligned */}
-        <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-            <input ref={localSearchRef} value={search} onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
-              className="flow-input"
-              placeholder="Search projects by name, ID, owner, or squad..."
-              style={{
-                width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`,
-                borderRadius: layout.radiusMd, border: `1px solid ${c.border}`,
-                background: c.surfaceAlt, color: c.text,
-                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                outline: "none", boxSizing: "border-box",
-              }} />
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: c.textMid, pointerEvents: "none" }}>🔍</span>
-          </div>
-          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textMid, whiteSpace: "nowrap", flexShrink: 0 }}>
-            {tabProjects.length}<span style={{ color: c.textMid + "80" }}>/{filtered.length}</span>
-          </span>
+        {/* SEARCH */}
+        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+          <input ref={localSearchRef} value={search}
+            onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
+            onBlur={() => setSearchGlow(false)}
+            placeholder="Search projects by name, ID, owner, or squad..."
+            style={{
+              width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`,
+              borderRadius: layout.radiusMd,
+              border: `1px solid ${searchGlow ? c.accent : c.border}`,
+              background: c.surfaceAlt, color: c.text,
+              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+              outline: "none", boxSizing: "border-box",
+              boxShadow: searchGlow ? `0 0 0 3px ${c.accent}25, 0 0 12px ${c.accent}15` : "none",
+              transition: `border-color 0.3s ease, box-shadow 0.3s ease`,
+            }} />
+          {/* Search icon — minimal line SVG */}
+          <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", transition: "opacity 0.3s ease" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={searchGlow ? c.accent : c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
+          </svg>
+          {/* Keycap hint */}
+          {!search && <span style={{
+            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+            fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600,
+            color: c.textDim, lineHeight: 1,
+            padding: `3px 7px 4px`, borderRadius: 4,
+            background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.bg} 100%)`,
+            border: `1px solid ${c.border}`,
+            boxShadow: `0 2px 0 ${c.border}, 0 2px 3px ${c.shadow}`,
+            pointerEvents: "none",
+          }}>/</span>}
         </div>
       </div>
-      {/* end sticky top */}
+      {/* end frozen top */}
 
       {/* ═══════════════════════════════════════════════════════════
-          REGISTRY TABLE — Pulse table architecture
+          SCROLLABLE CONTENT — table (only this area scrolls)
           ═══════════════════════════════════════════════════════════ */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
       {tabProjects.length === 0 ? (
         <EmptyState icon="📂" title="No projects" message={search ? "No projects match your search." : `No ${activeTab === "all" ? "" : activeTab + " "}projects found.`}
           action={search ? "Clear search" : null} onAction={() => setSearch("")} />
       ) : (
-        <Surface variant="data" compact style={{ padding: 0, overflow: "hidden", boxShadow: c.shadowCard }}>
-          <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "68vh", borderRadius: layout.radius }}>
+        <Surface variant="data" compact style={{ padding: 0 }}>
+          <div style={{ borderRadius: layout.radius }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
               <thead>
                 <tr>
                   <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
                   <Th col="project" style={{ minWidth: colWidths.identity.min, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
                   <Th col="owner" style={{ minWidth: colWidths.owner.min, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
-                  <Th col="status" style={{ minWidth: colWidths.status.min, borderLeft: `1px dotted ${c.border}` }}>Status</Th>
-                  <Th col="phase" style={{ minWidth: colWidths.phase.min, borderLeft: `1px dotted ${c.border}` }}>Phase</Th>
-                  <Th col="total" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Total</Th>
-                  <Th col="thisWk" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>This Wk</Th>
+                  {activeTab === "all" && <Th col="status" style={{ minWidth: colWidths.status.min, borderLeft: `1px dotted ${c.border}` }}>Status</Th>}
+                  {activeTab !== "complete" && <Th col="phase" style={{ minWidth: colWidths.phase.min, borderLeft: `1px dotted ${c.border}` }}>Phase</Th>}
+                  <Th col="total" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Commits</Th>
+                  {activeTab !== "complete" && <Th col="thisWk" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>{isHistorical ? selectedWeekKey : "This Wk"}</Th>}
                   <Th col="people" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>People</Th>
-                  <Th col="last" style={{ minWidth: colWidths.date.min, borderLeft: `1px dotted ${c.border}` }}>Last</Th>
-                  <Th col="timeline" style={{ minWidth: colWidths.timeline.min, borderLeft: `1px dotted ${c.border}` }}>Timeline</Th>
+                  {activeTab === "complete" && <>
+                    <Th col="planStart" style={{ minWidth: colWidths.date.min, borderLeft: `1px dotted ${c.border}` }}>Plan Start</Th>
+                    <Th col="actualStart" style={{ minWidth: colWidths.date.min, borderLeft: `1px dotted ${c.border}` }}>Actual Start</Th>
+                    <Th col="planDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Plan Days</Th>
+                    <Th col="actualDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Actual Days</Th>
+                  </>}
+                  {activeTab !== "complete" && <Th col="last" style={{ minWidth: colWidths.date.min, borderLeft: `1px dotted ${c.border}` }}>Last Active</Th>}
+                  {activeTab !== "complete" && <Th col="timeline" style={{ minWidth: colWidths.timeline.min, borderLeft: `1px dotted ${c.border}` }}>Timeline</Th>}
                 </tr>
               </thead>
               <tbody>
@@ -429,7 +461,7 @@ export default function ProjectsView({
                           }}>{proj.id}</span>
                           <span style={{
                             fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                            fontWeight: 600, color: isHovered ? ec.project : c.text,
+                            fontWeight: 600, color: c.text,
                             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                             transition: `color ${motion.interaction.duration}`,
                           }}>{proj.name}</span>
@@ -448,23 +480,23 @@ export default function ProjectsView({
                         whiteSpace: "nowrap",
                       }}>{proj.owner || "—"}</td>
 
-                      {/* Status */}
-                      <td style={{
+                      {/* Status — only in "All" tab */}
+                      {activeTab === "all" && <td style={{
                         padding: `${space[1]}px ${space[2] - 2}px`,
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
                       }}>
                         <Badge color={sCfg.color} bg={sCfg.bg}>{sCfg.label}</Badge>
-                      </td>
+                      </td>}
 
-                      {/* Phase */}
-                      <td style={{
+                      {/* Phase — hidden in Completed tab */}
+                      {activeTab !== "complete" && <td style={{
                         padding: `${space[1]}px ${space[2] - 2}px`,
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
                       }}>
                         <Badge color={pc[proj.phase] || c.textDim} bg={`${pc[proj.phase] || c.textDim}18`}>{proj.phase}</Badge>
-                      </td>
+                      </td>}
 
                       {/* Total commits */}
                       <td style={{
@@ -475,14 +507,14 @@ export default function ProjectsView({
                         color: m.totalCommits > 0 ? c.text : c.textDim, fontWeight: 600,
                       }}>{m.totalCommits || "—"}</td>
 
-                      {/* This week */}
-                      <td style={{
+                      {/* This week — hidden in Completed tab */}
+                      {activeTab !== "complete" && <td style={{
                         padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
                         fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
                         color: m.thisWeekTotal > 0 ? c.cyan : c.textDim,
-                      }}>{m.thisWeekTotal || "—"}</td>
+                      }}>{m.thisWeekTotal || "—"}</td>}
 
                       {/* People */}
                       <td style={{
@@ -493,26 +525,65 @@ export default function ProjectsView({
                         color: m.peopleList?.length > 0 ? c.text : c.textDim,
                       }}>{m.peopleList?.length || "—"}</td>
 
-                      {/* Last activity */}
-                      <td style={{
+                      {/* Completed tab — plan/actual columns */}
+                      {activeTab === "complete" && <>
+                        <td style={{
+                          padding: `${space[1]}px ${space[2] - 2}px`,
+                          borderBottom: `1px dotted ${c.border}`,
+                          borderLeft: `1px dotted ${c.border}`,
+                          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid,
+                        }}>{fmtDate(proj.startDate)}</td>
+                        <td style={{
+                          padding: `${space[1]}px ${space[2] - 2}px`,
+                          borderBottom: `1px dotted ${c.border}`,
+                          borderLeft: `1px dotted ${c.border}`,
+                          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid,
+                        }}>{fmtDate(proj.actualStartDate)}</td>
+                        <td style={{
+                          padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
+                          borderBottom: `1px dotted ${c.border}`,
+                          borderLeft: `1px dotted ${c.border}`,
+                          fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text, fontWeight: 600,
+                        }}>{allocated}</td>
+                        {(() => {
+                          const actualDays = proj.actualStartDate && proj.actualEndDate ? daysBetween(proj.actualStartDate, proj.actualEndDate) : 0;
+                          const overPlan = actualDays > allocated;
+                          return <td style={{
+                            padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
+                            borderBottom: `1px dotted ${c.border}`,
+                            borderLeft: `1px dotted ${c.border}`,
+                            fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 600,
+                            color: overPlan ? c.orange : c.green,
+                          }}>{actualDays}</td>;
+                        })()}
+                      </>}
+
+                      {/* Last activity — hidden in Completed tab */}
+                      {activeTab !== "complete" && <td style={{
                         padding: `${space[1]}px ${space[2] - 2}px`,
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
                         fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                         color: m.lastActivity === "This wk" ? c.cyan : m.lastActivity ? c.textMid : c.textDim,
                         fontWeight: m.lastActivity === "This wk" ? 700 : 500,
-                      }}>{m.lastActivity || "—"}</td>
+                      }}>{m.lastActivity || "—"}</td>}
 
-                      {/* Timeline — compact dates + progress bar */}
-                      <td style={{
+                      {/* Timeline — hidden in Completed tab */}
+                      {activeTab !== "complete" && <td style={{
                         padding: `${space[1]}px ${space[2] - 2}px`,
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
                       }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>
-                            {proj.startDate?.slice(5)} → {proj.endDate?.slice(5)}
-                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
+                              {fmtDate(proj.startDate)}
+                            </span>
+                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>→</span>
+                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
+                              {fmtDate(proj.endDate)}
+                            </span>
+                          </div>
                           <div style={{ height: 3, borderRadius: 2, background: c.border, overflow: "hidden" }}>
                             <div style={{
                               height: "100%", borderRadius: 2, width: `${Math.min(pct, 100)}%`,
@@ -520,7 +591,7 @@ export default function ProjectsView({
                             }} />
                           </div>
                         </div>
-                      </td>
+                      </td>}
                     </tr>
                   );
                 })}
@@ -529,17 +600,193 @@ export default function ProjectsView({
           </div>
         </Surface>
       )}
+      <div style={{ flexShrink: 0, height: space[8] }} />
+      </div>{/* end scrollable content */}
+
+      {/* FAB — Add Project */}
+      <button onClick={() => setShowCreate(true)} style={{
+        position: "fixed", bottom: space[7], right: space[7], zIndex: 50,
+        padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusMd,
+        border: "none", cursor: "pointer",
+        background: c.orange, color: c.bg,
+        fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 700,
+        display: "flex", alignItems: "center", justifyContent: "center", gap: space[1],
+        boxShadow: `0 4px 16px ${c.orange}40, 0 2px 4px ${c.shadow}`,
+        transition: `transform ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration}`,
+      }}>Add</button>
+
+      {/* Create Project Overlay */}
+      {showCreate && <CreateProjectOverlay
+        projects={projects} people={people} setProjects={setProjects}
+        onClose={() => setShowCreate(false)}
+      />}
     </div>
   );
 }
 
 
 /* ══════════════════════════════════════════════════════════════════
+   CREATE PROJECT OVERLAY
+   ══════════════════════════════════════════════════════════════════ */
+function CreateProjectOverlay({ projects, people, setProjects, onClose }) {
+  const [name, setName] = useState("");
+  const [owner, setOwner] = useState("");
+  const [squad, setSquad] = useState("");
+  const [phase, setPhase] = useState("PRD");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const allSquads = [...new Set(projects.map(p => p.squad).filter(Boolean))].sort();
+  const allOwners = people ? people.map(p => p.name).sort() : [...new Set(projects.map(p => p.owner).filter(Boolean))].sort();
+
+  const nextId = useMemo(() => {
+    const nums = projects.map(p => parseInt(p.id.replace(/\D/g, ""), 10)).filter(n => !isNaN(n));
+    const max = nums.length > 0 ? Math.max(...nums) : 0;
+    return `X${String(max + 1).padStart(2, "0")}`;
+  }, [projects]);
+
+  const canSave = name.trim() && owner && squad && startDate && endDate;
+
+  const handleCreate = () => {
+    if (!canSave) return;
+    setProjects(prev => [...prev, {
+      id: nextId, name: name.trim(), owner, squad, phase,
+      startDate, endDate, ship: false, status: "active",
+    }]);
+    onClose();
+  };
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const inputStyle = {
+    width: "100%", height: 40, padding: `0 ${space[3]}px`,
+    borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+    background: c.surfaceAlt, color: c.text,
+    fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+    outline: "none", boxSizing: "border-box",
+  };
+
+  const monoLabel = { fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 600, color: c.textDim, marginBottom: space[1] };
+
+  return (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 200,
+      background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      <div onClick={e => e.stopPropagation()} className="flow-terminal-log" style={{
+        width: "100%", maxWidth: 520, opacity: 1,
+        animation: `rowSlideIn 0.3s ${motion.critical.easing} both`,
+      }}>
+        {/* Terminal header bar */}
+        <div className="flow-terminal-header" style={{ padding: `${space[2]}px ${space[4]}px` }}>
+          <div className="flow-terminal-dot" style={{ background: c.red }} />
+          <div className="flow-terminal-dot" style={{ background: c.orange }} />
+          <div className="flow-terminal-dot" style={{ background: c.green }} />
+          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size + 1, fontWeight: 600, color: c.textMid, marginLeft: space[2] }}>
+            create@flow
+          </span>
+          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.orange, marginLeft: "auto" }}>
+            {nextId}
+          </span>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: `${space[5]}px ${space[5]}px ${space[6]}px` }}>
+          {/* Command prompt */}
+          <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginBottom: space[1] }}>
+            $ flow create --project
+          </div>
+          <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, color: c.orange, marginBottom: space[5] }}>
+            Initialize new project
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+            {/* Name */}
+            <div>
+              <div style={monoLabel}>--name</div>
+              <Inp value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Checkout Redesign" style={{ width: "100%", fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size }} autoFocus />
+            </div>
+
+            {/* Owner + Squad */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+              <div>
+                <div style={monoLabel}>--owner</div>
+                <SearchSelect value={owner} onChange={setOwner} options={allOwners} placeholder="Search people..." />
+              </div>
+              <div>
+                <div style={monoLabel}>--squad</div>
+                <SearchSelect value={squad} onChange={setSquad} options={allSquads} placeholder="Search squads..." />
+              </div>
+            </div>
+
+            {/* Phase */}
+            <div>
+              <div style={monoLabel}>--phase</div>
+              <Sel value={phase} onChange={e => setPhase(e.target.value)} style={{ width: "100%" }}>
+                {phaseNames.map(p => <option key={p} value={p}>{p}</option>)}
+              </Sel>
+            </div>
+
+            {/* Duration — start → end inline */}
+            <div>
+              <div style={monoLabel}>--duration</div>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim, flexShrink: 0 }}>→</span>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: space[2], marginTop: space[3] }}>
+              <Btn variant="secondary" size="sm" onClick={onClose}>Abort</Btn>
+              <button onClick={handleCreate} style={{
+                padding: `${space[2]}px ${space[5]}px`, borderRadius: layout.radiusMd,
+                border: "none", cursor: canSave ? "pointer" : "default",
+                background: canSave ? c.green : c.surfaceAlt,
+                color: canSave ? c.bg : c.textDim,
+                fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700,
+                opacity: canSave ? 1 : 0.5,
+                boxShadow: canSave ? `0 2px 8px ${c.green}30` : "none",
+                transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+              }}>Execute</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
    PROJECT DEEP DIVE — PeopleDeepDive structural model
    De-cluttered: hero → history → ledger → supporting metadata
    ══════════════════════════════════════════════════════════════════ */
-function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, onNavigate, goBack, pc, sc, tc, ec }) {
-  const sCfg = sc[proj.status] || sc.active;
+function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, setProjects, people, onNavigate, goBack, pc, sc, tc, ec }) {
+  const [editing, setEditing] = useState(false);
+  const [editOwner, setEditOwner] = useState(proj.owner);
+  const [editSquad, setEditSquad] = useState(proj.squad);
+  const [editPhase, setEditPhase] = useState(proj.phase);
+  const [editStatus, setEditStatus] = useState(proj.status || "active");
+
+  const allSquads = [...new Set(projects.map(p => p.squad).filter(Boolean))].sort();
+  const allOwners = people ? people.map(p => p.name).sort() : [...new Set(projects.map(p => p.owner).filter(Boolean))].sort();
+
+  const saveEdits = () => {
+    setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, owner: editOwner, squad: editSquad, phase: editPhase, status: editStatus } : p));
+    setEditing(false);
+  };
+  const cancelEdits = () => {
+    setEditOwner(proj.owner); setEditSquad(proj.squad); setEditPhase(proj.phase); setEditStatus(proj.status || "active");
+    setEditing(false);
+  };
+
+  const sCfg = sc[editStatus] || sc[proj.status] || sc.active;
   const allocated = daysBetween(proj.startDate, proj.endDate);
   const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, weekConfig.today), allocated));
 
@@ -548,7 +795,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, onN
     const allWeeks = WEEK_LABELS;
     const matrix = {};
     for (const w of allWeeks) {
-      matrix[w] = { PRD: [], Design: [], Engineering: [], QA: [] };
+      matrix[w] = { PRD: [], Design: [], Dev: [], QA: [] };
     }
     const projHist = history[proj.id] || [];
     for (const wk of projHist) {
@@ -573,54 +820,98 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, onN
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
-      {/* ═══ HERO — Telemetry Panel (PeopleDeepDive pattern) ═══ */}
+      {/* ═══ HERO — Telemetry Panel (People tab pattern) ═══ */}
       <div className="flow-telemetry-panel" style={{ padding: `${space[6]}px ${space[7]}px` }}>
-        {/* Tier 1: Project identity — dominant read */}
+        {/* Identity (left) + status highlight (right) */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: space[5], position: "relative", zIndex: 1 }}>
-          <div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: space[2] }}>
-              <span style={{
-                fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size + 2,
-                fontWeight: 700, color: ec.project,
-              }}>{proj.id}</span>
-              <span style={{
-                fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size,
-                fontWeight: typo.displayXl.weight, color: c.text,
-                letterSpacing: typo.displayXl.tracking, lineHeight: 1.15,
-              }}>{proj.name}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+              <div style={{ fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size, fontWeight: typo.displayXl.weight, color: c.text, letterSpacing: typo.displayXl.tracking, lineHeight: 1.15 }}>{proj.name}</div>
+              {!editing && (
+                <button onClick={() => setEditing(true)} className="flow-btn" style={{
+                  padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusMd,
+                  border: `1px solid ${c.border}`, background: c.surfaceAlt, cursor: "pointer",
+                  fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 600,
+                  color: c.textMid, transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                }}>Edit</button>
+              )}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
-              <Badge color={sCfg.color} bg={sCfg.bg}>{sCfg.label}</Badge>
-              <Badge color={pc[proj.phase] || c.textDim} bg={`${pc[proj.phase] || c.textDim}18`}>{proj.phase}</Badge>
-              {proj.ship && <Badge color={c.green} bg={c.greenDim}>🚀 Shipped</Badge>}
-              {m.isBlocked && <Badge color={c.red} bg={c.redDim}>Blocked</Badge>}
-              {m.overdue && <Badge color={c.red} bg={c.redDim}>Overdue</Badge>}
-              {m.endingSoon && <Badge color={c.orange} bg={c.orangeDim}>Ending soon</Badge>}
-            </div>
+
+            {!editing ? (
+              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2] }}>
+                <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, letterSpacing: typo.monoLg.tracking, color: ec.project }}>{proj.id}</span>
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>·</span>
+                <span style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: typo.bodyLg.weight, color: c.textMid }}>{proj.owner}</span>
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>·</span>
+                <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, letterSpacing: typo.monoLg.tracking, color: c.accent }}>{proj.squad}</span>
+                {m.isBlocked && <Badge color={c.red} bg={c.redDim}>Blocked</Badge>}
+                {m.overdue && <Badge color={c.red} bg={c.redDim}>Overdue</Badge>}
+                {m.endingSoon && <Badge color={c.orange} bg={c.orangeDim}>Ending soon</Badge>}
+                {proj.ship && <Badge color={c.green} bg={c.greenDim}>Shipped</Badge>}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: space[3], marginTop: space[3] }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: space[3] }}>
+                  <div>
+                    <Label style={{ marginBottom: space[1] }}>Owner</Label>
+                    <SearchSelect value={editOwner} onChange={setEditOwner} options={allOwners} placeholder="Search people..." />
+                  </div>
+                  <div>
+                    <Label style={{ marginBottom: space[1] }}>Squad</Label>
+                    <SearchSelect value={editSquad} onChange={setEditSquad} options={allSquads} placeholder="Search squads..." />
+                  </div>
+                  <div>
+                    <Label style={{ marginBottom: space[1] }}>Phase</Label>
+                    <Sel value={editPhase} onChange={e => setEditPhase(e.target.value)} style={{ width: "100%" }}>
+                      {phaseNames.map(p => <option key={p} value={p}>{p}</option>)}
+                    </Sel>
+                  </div>
+                  <div>
+                    <Label style={{ marginBottom: space[1] }}>Status</Label>
+                    <Sel value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ width: "100%" }}>
+                      <option value="active">Active</option>
+                      <option value="complete">Complete</option>
+                      <option value="deprioritized">Deprioritized</option>
+                    </Sel>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: space[2] }}>
+                  <Btn variant="command" size="sm" onClick={saveEdits} style={{ borderColor: c.green + "60", color: c.green }}>Save</Btn>
+                  <Btn variant="secondary" size="sm" onClick={cancelEdits}>Cancel</Btn>
+                </div>
+              </div>
+            )}
           </div>
+
+          {!editing && (
+            <div style={{ textAlign: "center", padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusMd, background: sCfg.bg, border: `1px solid ${sCfg.color}20`, flexShrink: 0 }}>
+              <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, color: sCfg.color, lineHeight: 1 }}>{proj.phase}</div>
+              <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginTop: space[1] }}>{sCfg.label}</div>
+            </div>
+          )}
         </div>
 
-        {/* Tier 2: Stat rail — key metrics (PeopleDeepDive StatCell grid) */}
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: space[3],
-          position: "relative", zIndex: 1, borderTop: `1px solid ${c.border}`, paddingTop: space[5],
-        }}>
-          <StatCell value={m.totalCommits} label="Total Commits" color={c.text} />
-          <StatCell value={m.thisWeekTotal} label="This Week" color={c.cyan} />
-          <StatCell value={m.peopleList?.length || 0} label="Contributors" color={c.accent} />
-          <StatCell value={m.lastActivity || "—"} label="Last Active" color={m.lastActivity === "This wk" ? c.cyan : c.textMid} />
-          <StatCell value={`${allocated}d`} label="Duration" color={c.text} />
+        {/* Project details — below separator */}
+        <div style={{ borderTop: `1px solid ${c.border}`, paddingTop: space[4], position: "relative", zIndex: 1 }}>
+          <Label style={{ marginBottom: space[3] }}>Project Details</Label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: space[3] }}>
+            <StatCell value={fmtDate(proj.startDate)} label="Start" color={c.text} style={{ textAlign: "left" }} />
+            <StatCell value={fmtDate(proj.endDate)} label="End" color={c.text} style={{ textAlign: "left" }} />
+            <StatCell value={`${allocated}d`} label="Duration" color={c.text} style={{ textAlign: "left" }} />
+            <StatCell value={`${elapsed}d`} label="Elapsed" color={elapsed >= allocated ? c.orange : c.text} style={{ textAlign: "left" }} />
+            <StatCell value={m.peopleList?.length || 0} label="Contributors" color={c.accent} style={{ textAlign: "left" }} />
+          </div>
         </div>
       </div>
 
-      {/* ═══ SUPPORTING META — compact secondary surface ═══ */}
+      {/* ═══ METRICS — stat rail ═══ */}
       <Surface variant="panel" style={{ padding: `${space[4]}px ${space[5]}px` }}>
-        <div style={{ display: "flex", gap: space[5], flexWrap: "wrap" }}>
-          <MetaItem label="Owner" value={proj.owner} />
-          <MetaItem label="Squad" value={proj.squad} />
-          <MetaItem label="Start" value={proj.startDate} />
-          <MetaItem label="End" value={proj.endDate} />
-          <MetaItem label="Elapsed" value={`${elapsed}d / ${allocated}d`} />
+        <Label style={{ marginBottom: space[3] }}>Activity</Label>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: space[3] }}>
+          <StatCell value={m.totalCommits} label="Total Commits" color={c.text} style={{ textAlign: "left" }} />
+          <StatCell value={m.thisWeekTotal} label="This Week" color={c.cyan} style={{ textAlign: "left" }} />
+          <StatCell value={m.lastActivity || "—"} label="Last Active" color={m.lastActivity === "This wk" ? c.cyan : c.textMid} style={{ textAlign: "left" }} />
+          <StatCell value={m.historyTotal} label="History" color={c.text} style={{ textAlign: "left" }} />
         </div>
       </Surface>
 

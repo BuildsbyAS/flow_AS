@@ -1,10 +1,12 @@
 // Flow — App Shell (two-layer header)
 // Layer 1: Logo · Primary Nav · Utility (search, theme)
-// Layer 2: Week controls · Filters · Contextual state
+// Layer 2: Week controls · Filter trigger · Applied chips
+// Filter drawer slides from right when triggered
 import React from "react";
 import { c, typo, layout, space, motion } from "../styles/theme";
 import { FilterChip, Btn } from "./shared";
 import FlowLogo from "./FlowLogo";
+import { weekConfig } from "../data/seed";
 
 /* ════════════════════════════════════════════════════════════════════
    NAV
@@ -16,6 +18,7 @@ export const NAV = [
   { key: "projects", label: "Projects", num: 4 },
   { key: "people",   label: "People",   num: 5 },
   { key: "settings", label: "Settings", num: 6 },
+  { key: "guide",    label: "Guide",    num: 7 },
 ];
 
 /* ════════════════════════════════════════════════════════════════════
@@ -66,16 +69,36 @@ export function getAttentionItems(commitments, projects) {
 
 
 /* ════════════════════════════════════════════════════════════════════
+   DAY RHYTHM — contextual day-of-week indicator
+   Mon=Focus · Tue/Wed=Sprint · Thu=Release · Fri=Review
+   ════════════════════════════════════════════════════════════════════ */
+const DAY_RHYTHM = [
+  { label: "Focus day",   color: () => c.purple, icon: "◎" },  // 0 = Sunday
+  { label: "Focus day",   color: () => c.purple, icon: "◎" },  // 1 = Monday
+  { label: "Sprint day",  color: () => c.green,  icon: "⚡" }, // 2 = Tuesday
+  { label: "Sprint day",  color: () => c.green,  icon: "⚡" }, // 3 = Wednesday
+  { label: "Release day", color: () => c.orange, icon: "🚀" }, // 4 = Thursday
+  { label: "Review day",  color: () => c.cyan,   icon: "✓" },  // 5 = Friday
+  { label: "Rest day",    color: () => c.textDim, icon: "💤" }, // 6 = Saturday
+];
+
+function getDayRhythm() {
+  const day = new Date().getDay();
+  return DAY_RHYTHM[day] || null;
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
    HEADER — two-layer shell
-   Layer 1 (48px): [Logo] | [Nav tabs] ····· [🔍] [◐]
-   Layer 2 (36px): [Week ◂ date ▸] | [Filters ▾▾▾ Apply Clear] ····· [chips]
+   Layer 1 (52px): [Logo] | [Nav tabs] ····· [🔍] [◐]
+   Layer 2 (38px): [Week ◂ date ▸] | ····· [chips] [Filters btn]
    Detail mode:    Layer 1 shows breadcrumb, Layer 2 hidden
    ════════════════════════════════════════════════════════════════════ */
 export function Header({
   weekLabel, weekOffset, onWeekPrev, onWeekNext, onLogoClick,
   detailLabel, onBack, breadcrumbLabel,
   activeTab, onTabSwitch,
-  darkMode, onToggleTheme, onCmdOpen,
+  onCmdOpen,
   // ── Global filter props ──
   globalFilters, pendingFilters, setPendingFilters,
   applyFilters, clearGlobalFilters, globalFilterCount,
@@ -83,11 +106,50 @@ export function Header({
 }) {
 
   const showContextBar = !detailLabel;
-  const hasPendingChanges = pendingFilters && globalFilters && (
-    pendingFilters.owner !== globalFilters.owner ||
-    pendingFilters.squad !== globalFilters.squad ||
-    pendingFilters.person !== globalFilters.person
-  );
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+
+  // Local draft state for the drawer — syncs from pendingFilters when opening
+  const [draft, setDraft] = React.useState({ owner: "", squad: "", person: "" });
+
+  // Pending-apply flag: when set, triggers applyFilters on next render after setPendingFilters
+  const applyNextRef = React.useRef(false);
+  React.useEffect(() => {
+    if (applyNextRef.current) {
+      applyNextRef.current = false;
+      applyFilters();
+    }
+  }, [pendingFilters, applyFilters]);
+
+  const openDrawer = () => {
+    setDraft({ ...pendingFilters });
+    setDrawerOpen(true);
+  };
+
+  const closeDrawer = () => setDrawerOpen(false);
+
+  const handleApply = () => {
+    setPendingFilters({ ...draft });
+    applyNextRef.current = true;
+    setDrawerOpen(false);
+  };
+
+  const handleClearAll = () => {
+    setDraft({ owner: "", squad: "", person: "" });
+    clearGlobalFilters();
+    setDrawerOpen(false);
+  };
+
+  const draftCount = Object.values(draft).filter(Boolean).length;
+  const draftChanged = draft.owner !== globalFilters.owner ||
+                       draft.squad !== globalFilters.squad ||
+                       draft.person !== globalFilters.person;
+
+  // Remove a single applied filter chip
+  const removeAppliedFilter = (key) => {
+    const updated = { ...globalFilters, [key]: "" };
+    setPendingFilters(updated);
+    applyNextRef.current = true;
+  };
 
   return (
     <>
@@ -184,33 +246,15 @@ export function Header({
       {/* ── Utility cluster: search · theme ── */}
       <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
         <CompactSearch onClick={onCmdOpen} />
-        <button onClick={onToggleTheme} title="Toggle theme (D)" className="flow-theme-toggle" style={{
-          width: 30, height: 15, borderRadius: layout.radiusMd, border: `1px solid ${c.border}`,
-          cursor: "pointer",
-          background: darkMode
-            ? `linear-gradient(90deg, ${c.accent}30, ${c.accent}15)`
-            : c.surfaceAlt,
-          position: "relative", flexShrink: 0,
-          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-        }}>
-          <div style={{
-            width: 11, height: 11, borderRadius: "50%",
-            background: darkMode ? c.accent : c.textMid,
-            position: "absolute", top: 1,
-            left: darkMode ? 17 : 2,
-            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-            boxShadow: darkMode ? `0 0 5px ${c.accent}50` : "none",
-          }} />
-        </button>
       </div>
     </header>
 
-    {/* ═══ LAYER 2 — Context bar (week + filters) ═══ */}
+    {/* ═══ LAYER 2 — Context bar (week + filter trigger + chips) ═══ */}
     {showContextBar && (
       <div className="flow-context-bar" style={{
-        height: 38, display: "flex", alignItems: "center",
+        height: 52, display: "flex", alignItems: "center",
         padding: `0 ${space[5]}px`, gap: space[2],
-        background: `linear-gradient(180deg, ${c.surfaceSolid}F0 0%, ${c.bg}E8 100%)`,
+        background: `linear-gradient(180deg, ${c.surfaceSolid} 0%, ${c.bg} 100%)`,
         borderBottom: `1px solid ${c.border}`,
         position: "sticky", top: 52, zIndex: 49,
         boxShadow: `0 1px 4px ${c.bg}80`,
@@ -271,77 +315,416 @@ export function Header({
           </button>
         </div>
 
-        {/* ── Separator between week and filters ── */}
-        <div style={{ width: 1, height: 18, background: c.border, flexShrink: 0 }} />
+        {/* ── Separator ── */}
+        <div style={{ width: 1, alignSelf: "stretch", margin: "6px 2px", background: c.border, flexShrink: 0 }} />
 
-        {/* ── Filter cluster ── */}
-        <span style={{
-          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-          fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
-          color: globalFilterCount > 0 ? c.accent : c.textDim,
-          display: "flex", alignItems: "center", gap: 4, flexShrink: 0,
-        }}>
-          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.7 }}>
-            <path d="M1 3h14M4 8h8M6 13h4" stroke={globalFilterCount > 0 ? c.accent : c.textDim} strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        </span>
+        {/* ── Day rhythm pill ── */}
+        <DayRhythmPill onNavigateToGuide={() => onTabSwitch("guide")} />
 
-        <FilterSelect
-          label="Owner"
-          value={pendingFilters?.owner || ""}
-          onChange={v => setPendingFilters(f => ({ ...f, owner: v }))}
-          options={allOwners || []}
-        />
-        <FilterSelect
-          label="Squad"
-          value={pendingFilters?.squad || ""}
-          onChange={v => setPendingFilters(f => ({ ...f, squad: v }))}
-          options={allSquads || []}
-        />
-        <FilterSelect
-          label="Person"
-          value={pendingFilters?.person || ""}
-          onChange={v => setPendingFilters(f => ({ ...f, person: v }))}
-          options={allPeople || []}
-        />
-
-        <Btn
-          variant={hasPendingChanges ? "primary" : "secondary"}
-          size="sm"
-          onClick={applyFilters}
-          disabled={!hasPendingChanges}
-          style={{ flexShrink: 0, padding: `2px ${space[2]}px`, fontSize: typo.bodyXs.size }}
-        >Apply</Btn>
-
-        {globalFilterCount > 0 && (
-          <Btn
-            variant="ghost"
-            size="sm"
-            onClick={clearGlobalFilters}
-            style={{ flexShrink: 0, padding: `2px ${space[2]}px`, fontSize: typo.bodyXs.size, display: "flex", alignItems: "center", gap: 3 }}
-          >
-            Clear
-            <span style={{
-              fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
-              color: c.accent, background: c.accentDim,
-              padding: "0px 4px", borderRadius: layout.radiusTag + 1, lineHeight: 1.4,
-            }}>{globalFilterCount}</span>
-          </Btn>
-        )}
-
+        {/* ── Spacer ── */}
         <div style={{ flex: 1 }} />
 
-        {/* Active filter chips (right-aligned) */}
+        {/* ── Active filter chips (inline) ── */}
         {globalFilterCount > 0 && (
           <div style={{ display: "flex", alignItems: "center", gap: space[1] + 2, flexShrink: 0 }}>
-            {globalFilters.owner && <FilterChip label={`Owner: ${globalFilters.owner}`} />}
-            {globalFilters.squad && <FilterChip label={`Squad: ${globalFilters.squad}`} />}
-            {globalFilters.person && <FilterChip label={`Person: ${globalFilters.person}`} />}
+            {globalFilters.owner && (
+              <FilterChip label={`Owner: ${globalFilters.owner}`} onClick={() => removeAppliedFilter("owner")} />
+            )}
+            {globalFilters.squad && (
+              <FilterChip label={`Squad: ${globalFilters.squad}`} onClick={() => removeAppliedFilter("squad")} />
+            )}
+            {globalFilters.person && (
+              <FilterChip label={`Person: ${globalFilters.person}`} onClick={() => removeAppliedFilter("person")} />
+            )}
+          </div>
+        )}
+
+        {/* ── Filter trigger button ── */}
+        <button onClick={openDrawer} className="flow-filter-trigger" style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: `3px ${space[3]}px`, height: 26,
+          borderRadius: layout.radiusSm,
+          border: `1px solid ${globalFilterCount > 0 ? c.accent + "40" : c.border}`,
+          background: globalFilterCount > 0 ? c.accentDim : c.surfaceAlt,
+          color: globalFilterCount > 0 ? c.accent : c.textMid,
+          fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+          fontWeight: 600, cursor: "pointer",
+          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+          flexShrink: 0,
+        }}>
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.7 }}>
+            <path d="M1 3h14M4 8h8M6 13h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          {globalFilterCount > 0 ? (
+            <>
+              {globalFilterCount} filter{globalFilterCount !== 1 ? "s" : ""} applied
+              <span style={{
+                fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+                color: c.accent, background: `${c.accent}18`,
+                padding: "1px 5px", borderRadius: layout.radiusTag + 1, lineHeight: 1.4,
+              }}>{globalFilterCount}</span>
+            </>
+          ) : "Filters"}
+        </button>
+      </div>
+    )}
+
+    {/* ═══ FILTER DRAWER — slides from right ═══ */}
+    <FilterDrawer
+      open={drawerOpen}
+      onClose={closeDrawer}
+      draft={draft}
+      setDraft={setDraft}
+      onApply={handleApply}
+      onClearAll={handleClearAll}
+      draftCount={draftCount}
+      draftChanged={draftChanged}
+      globalFilterCount={globalFilterCount}
+      allOwners={allOwners || []}
+      allSquads={allSquads || []}
+      allPeople={allPeople || []}
+    />
+    </>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   FILTER DRAWER — full-height right panel with search per group
+   ════════════════════════════════════════════════════════════════════ */
+function FilterDrawer({
+  open, onClose,
+  draft, setDraft,
+  onApply, onClearAll,
+  draftCount, draftChanged, globalFilterCount,
+  allOwners, allSquads, allPeople,
+}) {
+  const drawerRef = React.useRef(null);
+
+  // Close on Escape
+  React.useEffect(() => {
+    if (!open) return;
+    const handle = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handle);
+    return () => document.removeEventListener("keydown", handle);
+  }, [open, onClose]);
+
+  const filterGroups = [
+    { key: "squad",  label: "Squad",  options: allSquads },
+    { key: "owner",  label: "Owner",  options: allOwners },
+    { key: "person", label: "Person", options: allPeople },
+  ];
+
+  const activeCount = [draft.squad, draft.owner, draft.person].filter(Boolean).length;
+
+  return (
+    <>
+      {/* Overlay — dark + blur */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.55)",
+          backdropFilter: open ? "blur(6px)" : "blur(0px)",
+          WebkitBackdropFilter: open ? "blur(6px)" : "blur(0px)",
+          zIndex: 200,
+          opacity: open ? 1 : 0,
+          pointerEvents: open ? "auto" : "none",
+          transition: `opacity 0.3s ease, backdrop-filter 0.3s ease`,
+        }}
+      />
+
+      {/* Drawer panel */}
+      <div
+        ref={drawerRef}
+        style={{
+          position: "fixed", top: 0, right: 0, bottom: 0,
+          width: 360,
+          background: c.surfaceOverlay,
+          borderLeft: `1px solid ${c.border}`,
+          zIndex: 201,
+          transform: open ? "translateX(0)" : "translateX(100%)",
+          transition: `transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)`,
+          display: "flex", flexDirection: "column",
+          boxShadow: open ? `-8px 0 30px rgba(0,0,0,0.5)` : "none",
+        }}
+      >
+        {/* ── Header ── */}
+        <div style={{
+          padding: `${space[4]}px ${space[5]}px`,
+          borderBottom: `1px solid ${c.border}`,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M1 3h14M4 8h8M6 13h4" stroke={c.accent} strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span style={{
+              fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+              fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+              color: c.text,
+            }}>Filters</span>
+            {activeCount > 0 && (
+              <span style={{
+                fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                color: c.accent, background: c.accentDim,
+                padding: "1px 6px", borderRadius: layout.radiusPill,
+                lineHeight: 1.4,
+              }}>{activeCount}</span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+            {globalFilterCount > 0 && (
+              <button onClick={onClearAll} className="flow-drawer-close" style={{
+                height: 28, borderRadius: layout.radiusSm, padding: `0 ${space[2]}px`,
+                border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                color: c.textDim, transition: `all ${motion.interaction.duration}`,
+                fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = `${c.red}40`; }}
+              onMouseLeave={e => { e.currentTarget.style.color = c.textDim; e.currentTarget.style.borderColor = c.border; }}
+              >Reset</button>
+            )}
+            <button onClick={onClose} className="flow-drawer-close" style={{
+              width: 28, height: 28, borderRadius: layout.radiusSm,
+              border: `1px solid ${c.border}`, background: c.surfaceAlt,
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              color: c.textMid, transition: `all ${motion.interaction.duration}`,
+            }}>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* ── Filter groups ── */}
+        <div style={{
+          flex: 1, overflowY: "auto", padding: `${space[3]}px ${space[5]}px`,
+          display: "flex", flexDirection: "column", gap: space[4],
+          scrollbarWidth: "none",
+        }}>
+          {filterGroups.map(group => (
+            <DrawerFilterGroup
+              key={group.key}
+              label={group.label}
+              options={group.options}
+              value={draft[group.key]}
+              onChange={v => setDraft(d => ({ ...d, [group.key]: v }))}
+            />
+          ))}
+        </div>
+
+        {/* ── Footer ── */}
+        <div style={{
+          padding: `${space[3]}px ${space[5]}px ${space[4]}px`,
+          borderTop: `1px solid ${c.border}`,
+          display: "flex", flexDirection: "column", gap: space[3],
+        }}>
+          {/* Draft indicator */}
+          {draftChanged && (
+            <div style={{
+              display: "flex", alignItems: "center", gap: 6,
+              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+              fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
+              color: c.orange,
+            }}>
+              <div className="flow-draft-dot" style={{
+                width: 6, height: 6, borderRadius: "50%", background: c.orange,
+                animation: "breathe 2s ease-in-out infinite",
+              }} />
+              {draftCount > 0
+                ? `${draftCount} pending change${draftCount !== 1 ? "s" : ""}`
+                : "Clearing all filters"
+              }
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div style={{ display: "flex", gap: space[2] }}>
+            <Btn variant="secondary" onClick={onClose} style={{
+              flex: 1, justifyContent: "center", fontSize: typo.bodySm.size,
+            }}>Cancel</Btn>
+            <Btn
+              variant={draftChanged ? "primary" : "secondary"}
+              onClick={onApply}
+              disabled={!draftChanged}
+              style={{ flex: 2, justifyContent: "center", fontSize: typo.bodySm.size }}
+            >
+              {draftChanged ? "Apply filters" : "No changes"}
+            </Btn>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   DRAWER FILTER GROUP — single filter with search + option list
+   ════════════════════════════════════════════════════════════════════ */
+function DrawerFilterGroup({ label, options, value, onChange }) {
+  const [search, setSearch] = React.useState("");
+  const inputRef = React.useRef(null);
+
+  const filtered = search
+    ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
+    : options;
+
+  // When not searching, pin selected item to top
+  const sorted = (!search && value)
+    ? [value, ...filtered.filter(o => o !== value)]
+    : filtered;
+
+  return (
+    <div>
+      {/* Label row */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        marginBottom: space[2],
+      }}>
+        <div style={{
+          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+          fontWeight: typo.monoSm.weight, letterSpacing: "0.06em",
+          color: c.textDim, textTransform: "uppercase",
+        }}>{label}</div>
+        {value && (
+          <span
+            onClick={() => { onChange(""); setSearch(""); }}
+            style={{
+              fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 500,
+              color: c.textDim, cursor: "pointer",
+              padding: "1px 5px", borderRadius: layout.radiusTag,
+              transition: `all ${motion.interaction.duration}`,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = c.accent; }}
+            onMouseLeave={e => { e.currentTarget.style.color = c.textDim; }}
+          >Clear</span>
+        )}
+      </div>
+
+      {/* Search input */}
+      <div style={{ position: "relative", marginBottom: space[2] }}>
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{
+          position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)",
+          opacity: 0.4, pointerEvents: "none",
+        }}>
+          <circle cx="7" cy="7" r="5" stroke={c.textDim} strokeWidth="1.5" />
+          <path d="M11 11l3 3" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+        <input
+          ref={inputRef}
+          placeholder={`Search ${label.toLowerCase()}…`}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter" && filtered.length === 1) {
+              onChange(filtered[0]);
+              setSearch("");
+            }
+          }}
+          style={{
+            width: "100%", height: 32, padding: `0 ${space[3]}px 0 32px`,
+            border: `1px solid ${c.border}`, borderRadius: layout.radiusSm,
+            background: c.surfaceAlt, color: c.text,
+            fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+            outline: "none", boxSizing: "border-box",
+            transition: `border-color ${motion.interaction.duration}`,
+          }}
+          onFocus={e => { e.target.style.borderColor = c.accent + "60"; }}
+          onBlur={e => { e.target.style.borderColor = c.border; }}
+        />
+      </div>
+
+      {/* Option list */}
+      <div style={{
+        maxHeight: 160, overflowY: "auto",
+        borderRadius: layout.radiusSm,
+        border: `1px solid ${c.border}`,
+        background: c.surface,
+        scrollbarWidth: "thin",
+        scrollbarColor: `${c.textDim}30 transparent`,
+      }}>
+        {/* All option */}
+        <div
+          onClick={() => { onChange(""); setSearch(""); }}
+          className="flow-dropdown-item"
+          style={{
+            padding: `6px ${space[3]}px`, cursor: "pointer",
+            fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+            color: !value ? c.accent : c.textMid,
+            fontWeight: !value ? 600 : 400,
+            background: !value ? `${c.accent}08` : "transparent",
+            borderBottom: `1px solid ${c.border}`,
+            display: "flex", alignItems: "center", gap: space[2],
+            transition: `background ${motion.interaction.duration}`,
+          }}
+        >
+          <span style={{
+            width: 14, height: 14, borderRadius: 3,
+            border: `1.5px solid ${!value ? c.accent : c.textDim}`,
+            background: !value ? c.accent : "transparent",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, transition: `all ${motion.interaction.duration}`,
+          }}>
+            {!value && (
+              <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 6l2.5 2.5 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </span>
+          All {label.toLowerCase()}s
+        </div>
+
+        {sorted.map(opt => {
+          const selected = opt === value;
+          return (
+            <div
+              key={opt}
+              onClick={() => { onChange(opt); setSearch(""); }}
+              className="flow-dropdown-item"
+              style={{
+                padding: `6px ${space[3]}px`, cursor: "pointer",
+                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                color: selected ? c.accent : c.text,
+                fontWeight: selected ? 600 : 400,
+                background: selected ? `${c.accent}08` : "transparent",
+                display: "flex", alignItems: "center", gap: space[2],
+                borderBottom: selected ? `1px solid ${c.accent}20` : `1px solid ${c.border}30`,
+                transition: `background ${motion.interaction.duration}`,
+              }}
+            >
+              <span style={{
+                width: 14, height: 14, borderRadius: 3,
+                border: `1.5px solid ${selected ? c.accent : c.textDim}`,
+                background: selected ? c.accent : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, transition: `all ${motion.interaction.duration}`,
+              }}>
+                {selected && (
+                  <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6l2.5 2.5 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </span>
+              {opt}
+            </div>
+          );
+        })}
+
+        {sorted.length === 0 && (
+          <div style={{
+            padding: `${space[3]}px`, fontFamily: typo.bodySm.font,
+            fontSize: typo.bodySm.size, color: c.textDim, textAlign: "center",
+          }}>
+            No matches
           </div>
         )}
       </div>
-    )}
-    </>
+    </div>
   );
 }
 
@@ -402,140 +785,140 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
 
 
 /* ════════════════════════════════════════════════════════════════════
-   FILTER DROPDOWN — custom styled dropdown for context bar
+   DAY RHYTHM PILL — contextual day indicator in context bar
    ════════════════════════════════════════════════════════════════════ */
-function FilterSelect({ label, value, onChange, options }) {
-  const [open, setOpen] = React.useState(false);
-  const [search, setSearch] = React.useState("");
-  const ref = React.useRef(null);
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+function DayRhythmPill({ onNavigateToGuide }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  const currentDay = new Date().getDay();
+  const rhythm = DAY_RHYTHM[currentDay];
+  if (!rhythm) return null;
+  const color = rhythm.color();
+
+  // Close on outside click
   React.useEffect(() => {
     if (!open) return;
-    const handle = (e) => {
+    const handler = (e) => {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const filtered = search
-    ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
-    : options;
-
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      {/* Trigger button */}
-      <button
-        onClick={() => { setOpen(!open); setSearch(""); }}
+    <span ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+      <span
+        onClick={() => setOpen((p) => !p)}
         style={{
-          padding: `2px ${space[2]}px 2px ${space[2] - 2}px`,
-          borderRadius: layout.radiusSm, height: 24,
-          border: `1px solid ${value ? c.accent + "40" : c.border}`,
-          background: value ? c.accentDim : c.surfaceAlt,
-          color: value ? c.accent : c.textMid,
-          fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-          fontWeight: value ? 600 : 500,
-          cursor: "pointer", minWidth: 80, maxWidth: 150,
-          display: "flex", alignItems: "center", gap: space[1],
+          display: "inline-flex", alignItems: "center", gap: 4,
+          padding: `4px ${space[2]}px`,
+          height: 24, boxSizing: "border-box",
+          borderRadius: layout.radiusTag + 1,
+          background: `${color}12`,
+          border: `1px solid ${color}25`,
+          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+          fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
+          color, lineHeight: 1, cursor: "pointer",
+          whiteSpace: "nowrap",
           transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-          boxSizing: "border-box",
         }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = `${color}20`; }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = `${color}12`; }}
       >
-        <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {value || label}
-        </span>
-        <svg width="7" height="4" viewBox="0 0 8 5" fill="none" style={{
-          flexShrink: 0,
-          transform: open ? "rotate(180deg)" : "none",
-          transition: `transform ${motion.interaction.duration}`,
-        }}>
-          <path d="M1 1l3 3 3-3" stroke={value ? c.accent : c.textDim} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </button>
+        <span style={{ fontSize: 10, lineHeight: 1 }}>{rhythm.icon}</span>
+        {rhythm.label}
+      </span>
 
-      {/* Dropdown panel */}
+      {/* Popup */}
       {open && (
         <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0,
-          minWidth: 200, maxHeight: 320, borderRadius: layout.radiusMd,
-          background: c.surfaceOverlay, border: `1px solid ${c.border}`,
-          boxShadow: c.shadowOverlay,
-          zIndex: 100, overflow: "hidden",
-          display: "flex", flexDirection: "column",
-          animation: "fadeScaleIn 0.12s ease-out",
+          position: "absolute", top: "calc(100% + 6px)", left: 0,
+          zIndex: 900, minWidth: 260,
+          background: c.surfaceOverlay,
+          border: `1px solid ${c.border}`,
+          borderRadius: layout.radiusMd,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+          padding: `${space[3]}px`,
+          fontFamily: typo.bodyXs.font,
         }}>
-          {/* Search input (only if many options) */}
-          {options.length > 5 && (
-            <div style={{ padding: `${space[2] - 2}px ${space[2]}px`, borderBottom: `1px solid ${c.border}` }}>
-              <input
-                autoFocus
-                placeholder={`Search ${label.toLowerCase()}…`}
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Escape") setOpen(false);
-                  if (e.key === "Enter" && filtered.length === 1) { onChange(filtered[0]); setOpen(false); setSearch(""); }
-                }}
-                style={{
-                  width: "100%", padding: `5px ${space[2]}px`,
-                  border: `1px solid ${c.border}`, borderRadius: layout.radiusTag + 1,
-                  background: c.surfaceAlt, color: c.text,
-                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                  outline: "none", boxSizing: "border-box",
-                }}
-              />
-            </div>
-          )}
-
-          {/* Option list */}
-          <div style={{ overflowY: "auto", maxHeight: 260, padding: "3px 0" }}>
-            {/* Clear / All option */}
-            <div
-              onClick={() => { onChange(""); setOpen(false); setSearch(""); }}
-              className="flow-dropdown-item"
-              style={{
-                padding: `7px ${space[3]}px`, cursor: "pointer",
-                fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                color: !value ? c.accent : c.textDim,
-                fontWeight: !value ? 600 : 400,
-                background: !value ? `${c.accent}08` : "transparent",
-                borderBottom: `1px solid ${c.border}`,
-              }}
-            >All {label}s</div>
-
-            {filtered.map(opt => (
-              <div
-                key={opt}
-                onClick={() => { onChange(opt); setOpen(false); setSearch(""); }}
-                className="flow-dropdown-item"
-                style={{
-                  padding: `7px ${space[3]}px`, cursor: "pointer",
-                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                  color: opt === value ? c.accent : c.text,
-                  fontWeight: opt === value ? 600 : 400,
-                  background: opt === value ? `${c.accent}08` : "transparent",
-                  display: "flex", alignItems: "center", gap: space[2] - 2,
-                }}
-              >
-                {opt === value && <span style={{ fontSize: 11, color: c.accent }}>●</span>}
-                {opt}
-              </div>
-            ))}
-
-            {filtered.length === 0 && (
-              <div style={{
-                padding: `${space[3]}px`, fontFamily: typo.bodyXs.font,
-                fontSize: typo.bodyXs.size, color: c.textDim, textAlign: "center",
+          <div style={{
+            fontSize: 10, fontWeight: 600, textTransform: "uppercase",
+            letterSpacing: "0.08em", color: c.textDim,
+            marginBottom: space[2],
+          }}>
+            Weekly rhythm
+          </div>
+          {DAY_RHYTHM.map((r, i) => {
+            const rc = r.color();
+            const isToday = i === currentDay;
+            return (
+              <div key={i} style={{
+                display: "flex", alignItems: "center", gap: 8,
+                padding: `4px ${space[2]}px`,
+                borderRadius: layout.radiusTag,
+                background: isToday ? `${rc}15` : "transparent",
+                marginBottom: 2,
               }}>
-                No matches
+                <span style={{
+                  width: 32, fontSize: 11, color: isToday ? c.text : c.textDim,
+                  fontWeight: isToday ? 600 : 400,
+                  fontFamily: typo.monoSm.font,
+                }}>
+                  {DAY_NAMES[i]}
+                </span>
+                <span style={{ fontSize: 11, lineHeight: 1 }}>{r.icon}</span>
+                <span style={{
+                  fontSize: 12, color: isToday ? rc : c.textMid,
+                  fontWeight: isToday ? 600 : 400,
+                  flex: 1,
+                }}>
+                  {r.label}
+                </span>
+                {isToday && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 600, textTransform: "uppercase",
+                    letterSpacing: "0.06em",
+                    color: rc, opacity: 0.8,
+                  }}>
+                    today
+                  </span>
+                )}
               </div>
-            )}
+            );
+          })}
+          {/* Deeplink to Guide */}
+          <div
+            onClick={() => {
+              setOpen(false);
+              if (onNavigateToGuide) {
+                onNavigateToGuide();
+                setTimeout(() => {
+                  const el = document.getElementById("weekly-rhythm");
+                  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 120);
+              }
+            }}
+            style={{
+              marginTop: space[2], paddingTop: space[2],
+              borderTop: `1px solid ${c.border}`,
+              display: "flex", alignItems: "center", gap: 4,
+              cursor: "pointer",
+              fontSize: 11, color: c.accent,
+              fontFamily: typo.monoSm.font, fontWeight: 500,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = c.text; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = c.accent; }}
+          >
+            Learn more in Guide →
           </div>
         </div>
       )}
-    </div>
+    </span>
   );
 }
+
 
 /* ════════════════════════════════════════════════════════════════════
    COMPACT SEARCH — click trigger for command palette
@@ -543,21 +926,21 @@ function FilterSelect({ label, value, onChange, options }) {
 function CompactSearch({ onClick }) {
   return (
     <div className="flow-hide-mobile flow-search-trigger" onClick={onClick} style={{
-      position: "relative", width: 140, cursor: "pointer",
+      position: "relative", width: 200, cursor: "pointer",
       display: "flex", alignItems: "center",
-      padding: `4px ${space[2] + 2}px`, gap: 7,
-      borderRadius: layout.radiusMd, border: `1px solid ${c.border}`,
+      padding: `8px ${space[3] + 2}px`, gap: 9,
+      borderRadius: layout.radiusMd, border: `1px solid rgba(255,255,255,0.22)`,
       background: `linear-gradient(135deg, ${c.surfaceAlt} 0%, ${c.surfaceAlt}C0 100%)`,
       transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.02)`,
+      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 0.5px rgba(255,255,255,0.08)`,
     }}>
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.45, flexShrink: 0 }}>
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.55, flexShrink: 0 }}>
         <circle cx="7" cy="7" r="5" stroke={c.textDim} strokeWidth="1.5" />
         <path d="M11 11l3 3" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" />
       </svg>
       <span style={{
-        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-        color: c.textDim,
+        fontFamily: typo.bodyXs.font, fontSize: 14,
+        color: c.textMid,
         flex: 1, whiteSpace: "nowrap", overflow: "hidden",
         userSelect: "none",
       }}>Search</span>

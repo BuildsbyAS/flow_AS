@@ -1,6 +1,6 @@
 // Flow — Summary View (Phase 2: full design-system compliance)
 // Weekly operating snapshot — polished, cinematic, analytical
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { c, typo, space, layout, motion, typeConfig, colWidths } from "../styles/theme";
 import { Surface, Label, DeltaIndicator, VDivider, TelemetryLabel, MetricCompact, SummaryTile } from "../components/shared";
 import { weekConfig } from "../data/seed";
@@ -20,8 +20,7 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
 
   return (
     <div style={{ flex: 1, minWidth: 180 }}>
-      <TelemetryLabel>{title}</TelemetryLabel>
-      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ marginTop: space[2] }}>
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
         <defs>
           <filter id={`glow-${title.replace(/\s/g,"")}`}>
             <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color} floodOpacity="0.35" />
@@ -50,6 +49,13 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
           );
         })}
       </svg>
+      <div style={{
+        padding: `${space[2]}px ${space[3]}px`, marginTop: space[1],
+        background: "rgba(0,0,0,0.25)", borderRadius: layout.radiusSm,
+        textAlign: "center",
+      }}>
+        <TelemetryLabel>{title}</TelemetryLabel>
+      </div>
     </div>
   );
 };
@@ -72,8 +78,7 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
 
   return (
     <div style={{ flex: 1, minWidth: 180 }}>
-      <TelemetryLabel>{title}</TelemetryLabel>
-      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" style={{ marginTop: space[2] }}>
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
         <defs>
           <linearGradient id={`area-${title.replace(/\s/g,"")}`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity={0.12} />
@@ -106,12 +111,19 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
           );
         })}
       </svg>
+      <div style={{
+        padding: `${space[2]}px ${space[3]}px`, marginTop: space[1],
+        background: "rgba(0,0,0,0.25)", borderRadius: layout.radiusSm,
+        textAlign: "center",
+      }}>
+        <TelemetryLabel>{title}</TelemetryLabel>
+      </div>
     </div>
   );
 };
 
-const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 200 }) => {
-  const padTop = space[3], padBot = space[7], padLR = space[5];
+const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 220 }) => {
+  const padTop = space[7], padBot = space[7], padLR = space[5] + 28;
   const width = 700;
   const chartW = width - padLR * 2;
   const chartH = height - padTop - padBot;
@@ -125,8 +137,23 @@ const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 200 }) =
   return (
     <div>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-        <line x1={padLR} y1={padTop + chartH} x2={width - padLR} y2={padTop + chartH}
-          stroke={c.border} strokeWidth={0.5} />
+        {/* Y-axis gridlines & labels */}
+        {[0, 0.25, 0.5, 0.75, 1].map((pct) => {
+          const yVal = Math.round(maxTotal * pct);
+          const y = padTop + chartH - pct * chartH;
+          return (
+            <g key={pct}>
+              <line x1={padLR} y1={y} x2={width - padLR} y2={y}
+                stroke={c.border} strokeWidth={0.5} strokeDasharray={pct === 0 ? "none" : "3,3"} opacity={pct === 0 ? 1 : 0.5} />
+              {pct > 0 && (
+                <text x={padLR - 6} y={y + 3} textAnchor="end"
+                  fill={c.textDim} style={{ fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 400 }}>
+                  {yVal}
+                </text>
+              )}
+            </g>
+          );
+        })}
         {weekLabels.map((label, wi) => {
           const x = padLR + wi * gap + (gap - barW) / 2;
           const active = wi === highlightIndex;
@@ -153,7 +180,7 @@ const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 200 }) =
           );
         })}
       </svg>
-      <div style={{ display: "flex", gap: space[5] - 2, flexWrap: "wrap", marginTop: space[2] }}>
+      <div style={{ display: "flex", gap: space[5] - 2, flexWrap: "wrap", marginTop: space[2], justifyContent: "center" }}>
         {series.map(s => (
           <div key={s.label} style={{ display: "flex", alignItems: "center", gap: space[2] - 2 }}>
             <div style={{ width: 8, height: 8, borderRadius: 2, background: s.color }} />
@@ -161,12 +188,6 @@ const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 200 }) =
               fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
               fontWeight: typo.bodyXs.weight, color: c.textMid,
             }}>{s.label}</span>
-            <span style={{
-              fontFamily: typo.monoLg.font, fontSize: typo.bodyXs.size,
-              fontWeight: 700, color: s.color,
-            }}>
-              {s.values.reduce((a, b) => a + b, 0)}
-            </span>
           </div>
         ))}
       </div>
@@ -195,8 +216,7 @@ function computeWeekMetrics(weekKey, { history, commitments, projects, people })
     const blockedCount = items.filter(it => it.type === "BLOCKED").length;
     const buildCount = items.filter(it => it.type === "BUILD").length;
     const jamCount = items.filter(it => it.type === "JAM").length;
-    const commitCount = items.filter(it => it.type === "COMMIT").length;
-    const carriedCount = jamCount + commitCount;
+    const carriedCount = jamCount;
     const deliveryRate = totalCommits > 0 ? Math.round((buildCount / totalCommits) * 100) : 0;
     const committedPeople = commitments.filter(cm => cm.items.length > 0).length;
 
@@ -224,7 +244,7 @@ function computeWeekMetrics(weekKey, { history, commitments, projects, people })
     return {
       totalCommits, activeProjects, noActionProjects, totalProjects, shippedCount,
       peopleWithTasks, totalPeople, committedPeople,
-      blockedCount, buildCount, jamCount, commitCount, carriedCount, deliveryRate, squads,
+      blockedCount, buildCount, jamCount, carriedCount, deliveryRate, squads,
     };
   } else {
     const entries = [];
@@ -241,8 +261,7 @@ function computeWeekMetrics(weekKey, { history, commitments, projects, people })
     const blockedCount = entries.filter(e => e.type === "BLOCKED").length;
     const buildCount = entries.filter(e => e.type === "BUILD").length;
     const jamCount = entries.filter(e => e.type === "JAM").length;
-    const commitCount = entries.filter(e => e.type === "COMMIT").length;
-    const carriedCount = jamCount + commitCount;
+    const carriedCount = jamCount;
     const committedPeople = peopleWithTasks;
     const deliveryRate = totalCommits > 0 ? Math.round((buildCount / totalCommits) * 100) : 0;
 
@@ -270,7 +289,7 @@ function computeWeekMetrics(weekKey, { history, commitments, projects, people })
     return {
       totalCommits, activeProjects, noActionProjects, totalProjects, shippedCount,
       peopleWithTasks, totalPeople, committedPeople,
-      blockedCount, buildCount, jamCount, commitCount, carriedCount, deliveryRate, squads,
+      blockedCount, buildCount, jamCount, carriedCount, deliveryRate, squads,
     };
   }
 }
@@ -279,8 +298,12 @@ function computeWeekMetrics(weekKey, { history, commitments, projects, people })
 // ═══════════════════════════════════════════════════════════════
 // SUMMARY VIEW
 // ═══════════════════════════════════════════════════════════════
-const SummaryView = ({ history, commitments, projects, people }) => {
-  const [selectedWeek, setSelectedWeek] = useState("current");
+const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }) => {
+  const [selectedWeek, setSelectedWeek] = useState(selectedWeekKey || "current");
+
+  useEffect(() => {
+    if (selectedWeekKey) setSelectedWeek(selectedWeekKey);
+  }, [selectedWeekKey]);
   const tc = typeConfig();
 
   // Week tabs — newest first
@@ -313,8 +336,7 @@ const SummaryView = ({ history, commitments, projects, people }) => {
   const pctCarried = allMetrics.map(m => m.totalCommits > 0 ? Math.round((m.carriedCount / m.totalCommits) * 100) : 0);
   const commitSeries = [
     { label: "Build", color: tc.BUILD?.color || c.green, values: allMetrics.map(m => m.buildCount) },
-    { label: "Jam", color: tc.JAM?.color || c.blue, values: allMetrics.map(m => m.jamCount) },
-    { label: "Commit", color: tc.COMMIT?.color || c.purple, values: allMetrics.map(m => m.commitCount) },
+    { label: "Jam", color: tc.JAM?.color || c.accent, values: allMetrics.map(m => m.jamCount) },
     { label: "Blocked", color: tc.BLOCKED?.color || c.red, values: allMetrics.map(m => m.blockedCount) },
   ];
 
@@ -344,164 +366,132 @@ const SummaryView = ({ history, commitments, projects, people }) => {
   );
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+    <div style={{
+      display: "flex", flexDirection: "column",
+      height: "calc(100vh - 116px)",
+      marginBottom: -60,
+    }}>
 
       {/* ═══════════════════════════════════════════════════════════
-          STICKY HEADER — Week selector + Mission Grid
+          FROZEN TOP — Mission Grid (never scrolls)
           ═══════════════════════════════════════════════════════════ */}
-      <div style={{
-        position: "sticky", top: 92, zIndex: 10,
-        background: c.bg, paddingBottom: space[3],
-      }}>
-
-        {/* Week selector */}
-        <div style={{ display: "flex", alignItems: "center", gap: space[3] - 2, marginBottom: space[3] }}>
-          <div style={{
-            display: "flex", gap: 2, background: c.accentDim,
-            borderRadius: layout.radiusMd, padding: 3,
-          }}>
-            {weeks.map(w => (
-              <button key={w.key} onClick={() => setSelectedWeek(w.key)} style={{
-                padding: `${space[2] - 2}px ${space[3]}px`,
-                borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
-                background: selectedWeek === w.key ? c.accent : "transparent",
-                color: selectedWeek === w.key ? c.textCrit : c.accent,
-                fontFamily: typo.monoMd.font, fontSize: typo.bodyXs.size,
-                fontWeight: selectedWeek === w.key ? 700 : 500,
-                letterSpacing: typo.monoMd.tracking,
-                whiteSpace: "nowrap",
-                transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-                boxShadow: selectedWeek === w.key ? `0 1px 3px ${c.shadow}` : "none",
-                display: "flex", alignItems: "center", gap: space[1],
-              }}>
-                {w.label}
-                {w.isCurrent && (
-                  <span style={{
-                    fontSize: typo.monoSm.size, fontWeight: 700,
-                    padding: `1px ${space[1]}px`, borderRadius: layout.radiusTag,
-                    background: selectedWeek === w.key ? `${c.textCrit}25` : `${c.accent}30`,
-                    color: selectedWeek === w.key ? c.textCrit : c.accent,
-                  }}>NOW</span>
-                )}
-              </button>
-            ))}
-          </div>
-          {prev && (
-            <span style={{
-              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-              fontWeight: typo.monoSm.weight, color: c.textDim,
-            }}>
-              vs {prev.label}
-            </span>
-          )}
-        </div>
-
-        {/* Mission Grid — hero strip with group labels */}
+      <div style={{ flexShrink: 0, paddingBottom: space[3] }}>
+        {/* Mission Grid — hero strip, uses flow-mission-grid for rounded + dark overlay (same as Pulse) */}
         <div className="flow-mission-grid" style={{ padding: `${space[3]}px ${space[4]}px` }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: space[1],
-            flexWrap: "wrap", position: "relative", zIndex: 1,
-          }}>
-            {/* Projects group */}
-            <TelemetryLabel style={{ marginRight: space[1] }}>Projects</TelemetryLabel>
-            <SummaryTile value={metrics.totalProjects} label="Total" color={c.text} />
-            <SummaryTile value={metrics.activeProjects} label="Active" color={c.green} prevValue={prev?.activeProjects} active />
-            <SummaryTile value={metrics.noActionProjects} label="No action" color={c.orange} prevValue={prev?.noActionProjects} />
-            <SummaryTile value={metrics.shippedCount} label="Shipped" color={c.green} prevValue={prev?.shippedCount} />
-
-            <VDivider />
-
-            {/* Focus metrics */}
-            <TelemetryLabel style={{ marginRight: space[1] }}>Focus</TelemetryLabel>
-            <MetricCompact value={metrics.totalCommits} label="Commits" color={c.text} prevValue={prev?.totalCommits} />
-            <MetricCompact value={metrics.blockedCount} label="Blocked" color={metrics.blockedCount > 0 ? c.red : c.textDim} prevValue={prev?.blockedCount} />
-            <MetricCompact value={metrics.deliveryRate} label="Build %" color={metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red} />
-
-            <VDivider />
-
-            {/* People metrics */}
-            <TelemetryLabel style={{ marginRight: space[1] }}>People</TelemetryLabel>
-            <MetricCompact value={metrics.totalPeople} label="Total" color={c.text} />
-            <MetricCompact value={metrics.peopleWithTasks} label="Active" color={c.cyan} prevValue={prev?.peopleWithTasks} />
-
-            <VDivider />
-
-            {/* Delivery Rate bar */}
-            <div style={{ display: "flex", alignItems: "center", gap: space[2], flex: 1, minWidth: 120 }}>
-              <TelemetryLabel style={{ flexShrink: 0 }}>Delivery</TelemetryLabel>
-              <div style={{
-                flex: 1, height: 6, borderRadius: layout.radiusTag,
-                background: c.surfaceAlt, overflow: "hidden",
-              }}>
-                <div style={{
-                  width: `${Math.min(100, metrics.deliveryRate)}%`, height: "100%",
-                  borderRadius: layout.radiusTag,
-                  background: `linear-gradient(90deg, ${metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red}80, ${metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red})`,
-                  transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
-                }} />
+          {(() => {
+            const blockedPct = metrics.totalCommits > 0 ? Math.round((metrics.blockedCount / metrics.totalCommits) * 100) : 0;
+            const donePct = metrics.totalCommits > 0 ? Math.round((metrics.buildCount / metrics.totalCommits) * 100) : 0;
+            const deprioPct = metrics.totalCommits > 0 ? Math.round((metrics.jamCount / metrics.totalCommits) * 100) : 0;
+            const sectionLabel = {
+              fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+              fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking,
+              color: c.textDim, textTransform: "uppercase",
+            };
+            return (
+            <div style={{
+              display: "flex", alignItems: "flex-end", gap: 0,
+              position: "relative", zIndex: 1,
+            }}>
+              {/* Projects group */}
+              <div style={{ flex: "1.4 1 0", display: "flex", flexDirection: "column", gap: space[3], padding: `${space[4]}px ${space[4]}px ${space[3]}px` }}>
+                <span style={sectionLabel}>Projects</span>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: space[4] }}>
+                  <MetricCompact value={metrics.totalProjects} label="Total" color={c.text} />
+                  <MetricCompact value={metrics.activeProjects} label="Active" color={c.green} />
+                  <MetricCompact value={metrics.noActionProjects} label="No action" color={c.orange} />
+                  <MetricCompact value={metrics.shippedCount} label="Shipped" color={c.cyan} />
+                </div>
               </div>
-              <span style={{
-                fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                fontWeight: 800, letterSpacing: typo.monoMd.tracking, flexShrink: 0,
-                color: metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red,
-              }}>{metrics.deliveryRate}%</span>
+
+              <div style={{ width: 1, alignSelf: "stretch", margin: `${space[4]}px 0`, background: c.border, flexShrink: 0 }} />
+
+              {/* Focus group */}
+              <div style={{ flex: "1.6 1 0", display: "flex", flexDirection: "column", gap: space[3], padding: `${space[4]}px ${space[4]}px ${space[3]}px` }}>
+                <span style={sectionLabel}>Focus</span>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: space[4] }}>
+                  <MetricCompact value={metrics.totalCommits} label="Commits" color={c.text} />
+                  <MetricCompact value={`${metrics.deliveryRate}%`} label="Build %" color={metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red} />
+                  <MetricCompact value={`${donePct}%`} label="Done" color={donePct >= 50 ? c.green : donePct >= 30 ? c.textMid : c.orange} />
+                  <MetricCompact value={`${blockedPct}%`} label="Blocked" color={blockedPct > 15 ? c.red : blockedPct > 5 ? c.orange : c.textDim} />
+                  <MetricCompact value={`${deprioPct}%`} label="Deprioritized" color={deprioPct > 20 ? c.orange : c.textDim} />
+                </div>
+              </div>
+
+              <div style={{ width: 1, alignSelf: "stretch", margin: `${space[4]}px 0`, background: c.border, flexShrink: 0 }} />
+
+              {/* People group */}
+              <div style={{ flex: "0.8 1 0", display: "flex", flexDirection: "column", gap: space[3], padding: `${space[4]}px ${space[4]}px ${space[3]}px` }}>
+                <span style={sectionLabel}>People</span>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: space[4] }}>
+                  <MetricCompact value={metrics.totalPeople} label="Total" color={c.text} />
+                  <MetricCompact value={metrics.peopleWithTasks} label="Active" color={c.cyan} />
+                </div>
+              </div>
             </div>
-          </div>
+            );
+          })()}
         </div>
       </div>
 
       {/* ═══════════════════════════════════════════════════════════
-          CHARTS
+          SCROLLABLE CONTENT — charts + tables (only this area scrolls)
           ═══════════════════════════════════════════════════════════ */}
-      <div style={{ display: "flex", flexDirection: "column", gap: space[4], marginTop: space[1] }}>
+      <div className="flow-summary-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3], paddingBottom: space[8] }}>
 
         {/* ── Projects — bar charts ── */}
-        <Surface variant="data" style={{ padding: `${space[4] - 2}px ${space[4]}px`, overflow: "hidden" }}>
-          <Label style={{ color: c.green }}>Projects — Week over Week</Label>
-          <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
-            <MiniBarChart title="Active" color={c.green}
-              data={allMetrics.map(m => m.activeProjects)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
-            <MiniBarChart title="No Action" color={c.orange}
-              data={allMetrics.map(m => m.noActionProjects)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
-            <MiniBarChart title="Shipped" color={c.cyan}
-              data={allMetrics.map(m => m.shippedCount)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
-          </div>
-        </Surface>
-
-        {/* ── Focus — sparklines + stacked bar ── */}
-        <Surface variant="data" style={{ padding: `${space[4] - 2}px ${space[4]}px`, overflow: "hidden" }}>
-          <Label style={{ color: c.accent }}>Focus — Week over Week</Label>
-          <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
-            <SparkLine title="Delivery Rate" color={c.green} suffix="%"
-              data={pctDone} labels={weekLabels} highlightIndex={selectedIdx} />
-            <SparkLine title="Blocked %" color={c.red} suffix="%"
-              data={pctBlocked} labels={weekLabels} highlightIndex={selectedIdx} />
-            <SparkLine title="Carried %" color={c.accent} suffix="%"
-              data={pctCarried} labels={weekLabels} highlightIndex={selectedIdx} />
-          </div>
-          <div style={{ marginTop: space[4] }}>
-            <Label>Commit Breakdown</Label>
-            <div style={{ marginTop: space[2] }}>
-              <StackedBarChart series={commitSeries} weekLabels={weekLabels} highlightIndex={selectedIdx} />
+        <div className="flow-mission-grid" style={{ padding: `${space[4]}px ${space[5]}px` }}>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <Label style={{ color: c.green }}>Projects — Week over Week</Label>
+            <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
+              <MiniBarChart title="Active" color={c.green}
+                data={allMetrics.map(m => m.activeProjects)} labels={weekLabels}
+                highlightIndex={selectedIdx} />
+              <MiniBarChart title="No Action" color={c.orange}
+                data={allMetrics.map(m => m.noActionProjects)} labels={weekLabels}
+                highlightIndex={selectedIdx} />
+              <MiniBarChart title="Shipped" color={c.cyan}
+                data={allMetrics.map(m => m.shippedCount)} labels={weekLabels}
+                highlightIndex={selectedIdx} />
             </div>
           </div>
-        </Surface>
+        </div>
+
+        {/* ── Focus — sparklines + stacked bar ── */}
+        <div className="flow-mission-grid" style={{ padding: `${space[4]}px ${space[5]}px` }}>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <Label style={{ color: c.accent }}>Focus — Week over Week</Label>
+            <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
+              <SparkLine title="Delivery Rate" color={c.green} suffix="%"
+                data={pctDone} labels={weekLabels} highlightIndex={selectedIdx} />
+              <SparkLine title="Blocked %" color={c.red} suffix="%"
+                data={pctBlocked} labels={weekLabels} highlightIndex={selectedIdx} />
+              <SparkLine title="Carried %" color={c.accent} suffix="%"
+                data={pctCarried} labels={weekLabels} highlightIndex={selectedIdx} />
+            </div>
+            <div style={{ marginTop: space[4] }}>
+              <Label>Commit Breakdown</Label>
+              <div style={{ marginTop: space[2] }}>
+                <StackedBarChart series={commitSeries} weekLabels={weekLabels} highlightIndex={selectedIdx} />
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* ── People — bar + sparkline ── */}
-        <Surface variant="data" style={{ padding: `${space[4] - 2}px ${space[4]}px`, overflow: "hidden" }}>
-          <Label style={{ color: c.cyan }}>People — Week over Week</Label>
-          <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
-            <MiniBarChart title="Active People" color={c.cyan}
-              data={allMetrics.map(m => m.peopleWithTasks)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
-            <SparkLine title="Committed" color={c.purple}
-              data={allMetrics.map(m => m.committedPeople)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
+        <div className="flow-mission-grid" style={{ padding: `${space[4]}px ${space[5]}px` }}>
+          <div style={{ position: "relative", zIndex: 1 }}>
+            <Label style={{ color: c.cyan }}>People — Week over Week</Label>
+            <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
+              <MiniBarChart title="Active People" color={c.cyan}
+                data={allMetrics.map(m => m.peopleWithTasks)} labels={weekLabels}
+                highlightIndex={selectedIdx} />
+              <SparkLine title="Committed" color={c.purple}
+                data={allMetrics.map(m => m.committedPeople)} labels={weekLabels}
+                highlightIndex={selectedIdx} />
+            </div>
           </div>
-        </Surface>
+        </div>
 
         {/* ═══════════════════════════════════════════════════════════
             SQUAD BREAKDOWN — data table
@@ -584,6 +574,7 @@ const SummaryView = ({ history, commitments, projects, people }) => {
           </div>
         </Surface>
 
+        </div>
       </div>
     </div>
   );

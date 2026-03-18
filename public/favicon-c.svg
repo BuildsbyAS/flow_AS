@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#0B1120"/>
+  <!-- Outer ring -->
+  <circle cx="16" cy="16" r="10" fill="none" stroke="#FFB800" stroke-width="0.6" opacity="0.3"/>
+  <!-- Golden core with glow -->
+  <circle cx="16" cy="16" r="6" fill="#FFCC33"/>
+  <circle cx="16" cy="16" r="6" fill="#FFCC33" filter="url(#gc)"/>
+  <!-- Specular highlight -->
+  <circle cx="14" cy="14" r="2" fill="white" opacity="0.45"/>
+  <defs>
+    <filter id="gc"><feGaussianBlur stdDeviation="2" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+</svg>

@@ -87,8 +87,8 @@ const AnimStyles = () => (
 
     /* ── Neon edge glow for mission grid ── */
     @keyframes neonEdge {
-      0%, 100% { box-shadow: 0 0 8px rgba(59,130,246,0.15), inset 0 0 8px rgba(59,130,246,0.05); }
-      50% { box-shadow: 0 0 20px rgba(59,130,246,0.25), inset 0 0 12px rgba(59,130,246,0.08); }
+      0%, 100% { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), inset 0 0 8px rgba(59,130,246,0.08); }
+      50% { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), inset 0 0 14px rgba(59,130,246,0.12); }
     }
 
     /* ── Risk level bar pulse — severity-driven ── */
@@ -166,12 +166,19 @@ const AnimStyles = () => (
     .flow-mission-grid {
       position: relative;
       border-radius: 14px;
-      border: 1px solid ${c.border};
-      background: transparent;
+      border: none;
+      background: ${c.bg};
       overflow: hidden;
       animation: neonEdge 3s ${motion.ambient.easing} infinite;
     }
     .flow-mission-grid::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+    }
+    .flow-mission-grid::after {
       content: '';
       position: absolute;
       inset: 0;
@@ -227,17 +234,32 @@ const AnimStyles = () => (
       animation: viewMorphIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
     }
 
+    /* ── Telemetry side panel backdrop ── */
+    .flow-side-panel-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      animation: sidePanelBackdropIn 0.2s ease both;
+    }
+    @keyframes sidePanelBackdropIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
     /* ── Telemetry side panel ── */
     .flow-side-panel {
       position: fixed;
       right: 0;
-      top: 49px;
+      top: 104px;
       bottom: 0;
-      width: 320px;
-      background: ${c.surfaceSolid};
+      width: 440px;
+      background: ${c.surface};
       border-left: 1px solid ${c.border};
-      box-shadow: -8px 0 30px rgba(0,0,0,0.2);
-      z-index: 40;
+      box-shadow: -12px 0 40px rgba(0,0,0,0.4);
+      z-index: 91;
       overflow-y: auto;
       animation: slidePanelIn 0.22s ${motion.interaction.easing} both;
     }
@@ -369,6 +391,10 @@ const AnimStyles = () => (
       height: 1px;
       background: linear-gradient(90deg, transparent, ${c.border}, transparent);
     }
+
+    /* ── Summary scroll area — hidden scrollbar ── */
+    .flow-summary-scroll::-webkit-scrollbar { display: none; }
+    .flow-summary-scroll { scrollbar-width: none; }
 
     /* ── Focus scroll area — thin custom scrollbar ── */
     .flow-focus-scroll::-webkit-scrollbar { width: 4px; }

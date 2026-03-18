@@ -34,18 +34,6 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
     }, ...prev].slice(0, 100));
   };
 
-  /* ── Bulk / Simulation mode ── */
-  const [simMode, setSimMode] = useState(false);
-  const [bulkOp, setBulkOp] = useState(null);
-  const [csvText, setCsvText] = useState("");
-  const [reassignFrom, setReassignFrom] = useState("");
-  const [reassignTo, setReassignTo] = useState("");
-  const [migrateFromPhase, setMigrateFromPhase] = useState("");
-  const [migrateToPhase, setMigrateToPhase] = useState("");
-  const [migrateSquadFilter, setMigrateSquadFilter] = useState("");
-  const [bulkResult, setBulkResult] = useState(null);
-  const [dryRunPreview, setDryRunPreview] = useState(null);
-
   /* ── Confirmation dialog ── */
   const [confirmAction, setConfirmAction] = useState(null);
 
@@ -86,84 +74,6 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
       logAction("delete", type, name, "Deleted", JSON.stringify(before), null);
     }
     setConfirmAction(null);
-  };
-
-  /* ── Dry-run generators ── */
-  const dryRunCsvImport = () => {
-    const lines = csvText.trim().split("\n").filter(l => l.trim());
-    const items = [];
-    const exceptions = [];
-    lines.forEach((line, li) => {
-      const parts = line.split(",").map(s => s.trim());
-      if (parts.length < 3) { exceptions.push(`Row ${li + 1}: needs Name, Role, Squad (got ${parts.length} fields)`); return; }
-      const [name, role, squad] = parts;
-      if (!name || !role || !squad) { exceptions.push(`Row ${li + 1}: empty field(s)`); return; }
-      if (people.some(p => p.name === name)) { exceptions.push(`Row ${li + 1}: "${name}" already exists — skipped`); return; }
-      if (!roles.includes(role)) { exceptions.push(`Row ${li + 1}: role "${role}" not in org config — will still import`); }
-      if (!squads.includes(squad)) { exceptions.push(`Row ${li + 1}: squad "${squad}" not in org config — will still import`); }
-      items.push({ name, role, squad });
-    });
-    setDryRunPreview({
-      type: "csv", items, exceptions,
-      summary: `${items.length} people will be imported, ${exceptions.length} issues`,
-      execute: () => {
-        let added = 0;
-        items.forEach(({ name, role, squad }) => {
-          setPeople(prev => [...prev, { name, role, squad }]);
-          logAction("import", "person", name, `CSV import`, null, `${role}, ${squad}`);
-          added++;
-        });
-        setBulkResult({ success: added, total: lines.length, exceptions });
-        setDryRunPreview(null);
-        setCsvText("");
-      },
-    });
-  };
-
-  const dryRunReassign = () => {
-    if (!reassignFrom || !reassignTo || reassignFrom === reassignTo) return;
-    const affected = projects.filter(p => p.owner === reassignFrom);
-    setDryRunPreview({
-      type: "reassign",
-      items: affected.map(p => ({ id: p.id, name: p.name, before: reassignFrom, after: reassignTo })),
-      exceptions: [],
-      summary: `${affected.length} projects: ${reassignFrom} → ${reassignTo}`,
-      execute: () => {
-        let count = 0;
-        setProjects(prev => prev.map(p => {
-          if (p.owner === reassignFrom) { count++; return { ...p, owner: reassignTo }; }
-          return p;
-        }));
-        logAction("bulk reassign", "project", reassignFrom, `→ ${reassignTo}`, reassignFrom, `${reassignTo} (${count} projects)`);
-        setBulkResult({ success: count, total: affected.length, exceptions: [] });
-        setDryRunPreview(null);
-        setReassignFrom(""); setReassignTo("");
-      },
-    });
-  };
-
-  const dryRunPhaseMigrate = () => {
-    if (!migrateFromPhase || !migrateToPhase || migrateFromPhase === migrateToPhase) return;
-    const affected = projects.filter(p => p.phase === migrateFromPhase && (!migrateSquadFilter || p.squad === migrateSquadFilter));
-    setDryRunPreview({
-      type: "phase",
-      items: affected.map(p => ({ id: p.id, name: p.name, before: migrateFromPhase, after: migrateToPhase })),
-      exceptions: [],
-      summary: `${affected.length} projects: ${migrateFromPhase} → ${migrateToPhase}${migrateSquadFilter ? ` (${migrateSquadFilter})` : ""}`,
-      execute: () => {
-        let count = 0;
-        setProjects(prev => prev.map(p => {
-          if (p.phase === migrateFromPhase && (!migrateSquadFilter || p.squad === migrateSquadFilter)) {
-            count++; return { ...p, phase: migrateToPhase };
-          }
-          return p;
-        }));
-        logAction("bulk migrate", "project", migrateFromPhase, `→ ${migrateToPhase}`, migrateFromPhase, `${migrateToPhase} (${count} projects)`);
-        setBulkResult({ success: count, total: affected.length, exceptions: [] });
-        setDryRunPreview(null);
-        setMigrateFromPhase(""); setMigrateToPhase(""); setMigrateSquadFilter("");
-      },
-    });
   };
 
   /* ── Keyboard ── */
@@ -224,91 +134,34 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
   /* ═══ RENDER ════════════════════════════════════════════ */
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: space[5] }}>
-      {/* ── Page Header ── */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
-        <div>
-          <div style={{
-            fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
-            fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
-            color: c.text, marginBottom: space[1],
-          }}>Settings</div>
-          <p style={{
-            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-            color: c.textMid, lineHeight: typo.bodyMd.lineHeight, margin: 0,
-          }}>
-            Define squads, roles, people, and projects.
-          </p>
-        </div>
-        <Btn
-          variant={simMode ? "command" : "secondary"}
-          size="sm"
-          onClick={() => { setSimMode(!simMode); setBulkOp(null); setBulkResult(null); setDryRunPreview(null); }}
-          style={{
-            fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-            fontWeight: 700, letterSpacing: typo.monoMd.tracking,
-            ...(simMode ? {
-              borderColor: c.orange + "60",
-              background: `${c.orange}15`,
-              color: c.orange,
-            } : {}),
-          }}
-        >
-          {simMode ? "◉ SIM ON" : "◎ SIMULATE"}
-        </Btn>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
-      {/* ── Sub-tabs ── */}
-      <div style={{ display: "flex", gap: space[2], alignItems: "center" }}>
-        <div style={{
-          display: "flex", gap: space[1], background: c.surfaceData,
-          borderRadius: layout.radiusLg, padding: space[1], border: `1px solid ${c.border}`,
-        }}>
-          <TelemetryLabel style={{ padding: `0 ${space[2]}px`, alignSelf: "center" }}>OPS</TelemetryLabel>
-          {subTabs.filter(st => st.key === "people").map(st => (
-            <button key={st.key} className="flow-btn" onClick={() => setSubTab(st.key)} style={{
-              padding: `${space[2]}px ${space[3]}px`, borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
-              background: subTab === st.key ? c.accentDim : "transparent",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
-              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-            }}>
-              <span style={{
-                fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
-                fontWeight: subTab === st.key ? 700 : 500,
-                color: subTab === st.key ? c.accent : c.textMid,
-              }}>{st.label}</span>
-              <Tag
-                color={subTab === st.key ? c.accent : c.textMid}
-                bg={subTab === st.key ? `${c.accent}15` : c.surfaceAlt}
-              >{st.count}</Tag>
-            </button>
-          ))}
-        </div>
-        <div style={{ width: 1, height: 28, background: c.border, flexShrink: 0 }} />
-        <div style={{
-          display: "flex", gap: space[1], background: c.surfaceData,
-          borderRadius: layout.radiusLg, padding: space[1], border: `1px solid ${c.border}`,
-        }}>
-          <TelemetryLabel style={{ padding: `0 ${space[2]}px`, alignSelf: "center" }}>CONFIG</TelemetryLabel>
-          {subTabs.filter(st => st.key === "squads" || st.key === "roles").map(st => (
-            <button key={st.key} className="flow-btn" onClick={() => setSubTab(st.key)} style={{
-              padding: `${space[2]}px ${space[3]}px`, borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
-              background: subTab === st.key ? c.accentDim : "transparent",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
-              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-            }}>
-              <span style={{
-                fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
-                fontWeight: subTab === st.key ? 700 : 500,
-                color: subTab === st.key ? c.accent : c.textMid,
-              }}>{st.label}</span>
-              <Tag
-                color={subTab === st.key ? c.accent : c.textMid}
-                bg={subTab === st.key ? `${c.accent}15` : c.surfaceAlt}
-              >{st.count}</Tag>
-            </button>
-          ))}
-        </div>
+      {/* ── TAB SWITCHER — segmented toggle (matches Projects/Pulse pattern) ── */}
+      <div style={{
+        display: "flex", gap: 2,
+        background: c.accentDim, borderRadius: layout.radiusMd, padding: 3,
+      }}>
+        {subTabs.map(tab => (
+          <button key={tab.key} onClick={() => setSubTab(tab.key)} style={{
+            flex: 1, padding: `${space[2]}px ${space[4]}px`,
+            borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
+            background: subTab === tab.key ? c.accent : "transparent",
+            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+            fontWeight: subTab === tab.key ? 700 : 500,
+            color: subTab === tab.key ? c.textCrit : c.accent,
+            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+            boxShadow: subTab === tab.key ? `0 1px 3px ${c.shadow}` : "none",
+            display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
+          }}>
+            {tab.label}
+            <span style={{
+              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
+              padding: "1px 5px", borderRadius: layout.radiusTag + 1,
+              background: subTab === tab.key ? "rgba(255,255,255,0.2)" : `${c.accent}15`,
+              color: subTab === tab.key ? c.textCrit : c.accent,
+            }}>{tab.count}</span>
+          </button>
+        ))}
       </div>
 
 
@@ -489,264 +342,6 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
       )}
 
 
-
-
-      {/* ═══ SIMULATION MODE — Bulk Operations ═══ */}
-      {simMode && (
-        <Surface variant="data" style={{
-          padding: `${space[4]}px ${space[5]}px`,
-          borderColor: c.orange + "25",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[3] }}>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{
-                fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
-                fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
-                color: c.orange,
-              }}>Simulation Mode</span>
-              <Tag color={c.bg} bg={c.orange} style={{ fontWeight: 700 }}>SAFE PREVIEW</Tag>
-            </div>
-            <div style={{ display: "flex", gap: space[1] }}>
-              {[
-                { key: "csv", label: "CSV IMPORT" },
-                { key: "reassign", label: "REASSIGN" },
-                { key: "phase", label: "MIGRATE" },
-              ].map(op => (
-                <Btn key={op.key} variant="secondary" size="sm"
-                  onClick={() => { setBulkOp(bulkOp === op.key ? null : op.key); setBulkResult(null); setDryRunPreview(null); }}
-                  style={{
-                    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                    letterSpacing: typo.monoMd.tracking, fontWeight: 700,
-                    ...(bulkOp === op.key ? {
-                      borderColor: c.orange + "60",
-                      background: `${c.orange}15`,
-                      color: c.orange,
-                    } : {}),
-                  }}
-                >{op.label}</Btn>
-              ))}
-            </div>
-          </div>
-
-          {/* Result report */}
-          {bulkResult && (
-            <div style={{
-              padding: `${space[3]}px ${space[3]}px`, borderRadius: layout.radiusMd,
-              background: c.greenDim, border: `1px solid ${c.green}25`, marginBottom: space[3],
-            }}>
-              <div style={{
-                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                fontWeight: 700, color: c.green, marginBottom: space[1],
-              }}>
-                Completed: {bulkResult.success} of {bulkResult.total} succeeded
-              </div>
-              {bulkResult.exceptions.length > 0 && (
-                <div style={{ marginTop: space[2] }}>
-                  <TelemetryLabel color={c.orange} style={{ marginBottom: space[1], display: "block" }}>
-                    EXCEPTIONS ({bulkResult.exceptions.length})
-                  </TelemetryLabel>
-                  {bulkResult.exceptions.map((ex, i) => (
-                    <div key={i} style={{
-                      fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                      color: c.textMid, padding: "2px 0",
-                    }}>• {ex}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* CSV Import */}
-          {bulkOp === "csv" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-              <div style={{
-                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid,
-              }}>
-                Import people as CSV: <span style={{
-                  fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.accent,
-                }}>Name, Role, Squad</span> — one per line
-              </div>
-              <textarea value={csvText} onChange={e => { setCsvText(e.target.value); setDryRunPreview(null); }}
-                placeholder={"Aisha K., Engineer, Platform\nZaid M., Designer, Consumer"}
-                className="flow-input"
-                style={{
-                  width: "100%", height: 100, padding: `${space[3]}px ${space[3]}px`,
-                  borderRadius: layout.radiusMd,
-                  border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text,
-                  fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, outline: "none",
-                  resize: "vertical", boxSizing: "border-box",
-                }} />
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <TelemetryLabel>{csvText.trim() ? csvText.trim().split("\n").length : 0} rows</TelemetryLabel>
-                <Btn variant="command" size="sm"
-                  onClick={dryRunCsvImport}
-                  disabled={!csvText.trim()}
-                  style={csvText.trim() ? { borderColor: c.orange + "60", color: c.orange } : {}}
-                >PREVIEW</Btn>
-              </div>
-            </div>
-          )}
-
-          {/* Owner Reassign */}
-          {bulkOp === "reassign" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-              <div style={{
-                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid,
-              }}>Reassign all projects from one owner to another</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr auto", gap: space[3], alignItems: "end" }}>
-                <div>
-                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>FROM</TelemetryLabel>
-                  <Sel value={reassignFrom} onChange={e => { setReassignFrom(e.target.value); setDryRunPreview(null); }}>
-                    <option value="">Select owner...</option>
-                    {[...new Set(projects.map(p => p.owner).filter(Boolean))].sort().map(o => {
-                      const cnt = projects.filter(p => p.owner === o).length;
-                      return <option key={o} value={o}>{o} ({cnt})</option>;
-                    })}
-                  </Sel>
-                </div>
-                <span style={{
-                  fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                  color: c.textDim, paddingBottom: space[2],
-                }}>→</span>
-                <div>
-                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>TO</TelemetryLabel>
-                  <Sel value={reassignTo} onChange={e => { setReassignTo(e.target.value); setDryRunPreview(null); }}>
-                    <option value="">Select owner...</option>
-                    {people.map(p => <option key={p.name} value={p.name}>{p.name}</option>)}
-                  </Sel>
-                </div>
-                <Btn variant="command" size="sm"
-                  onClick={dryRunReassign}
-                  disabled={!reassignFrom || !reassignTo || reassignFrom === reassignTo}
-                  style={(reassignFrom && reassignTo && reassignFrom !== reassignTo) ? { borderColor: c.orange + "60", color: c.orange } : {}}
-                >PREVIEW</Btn>
-              </div>
-            </div>
-          )}
-
-          {/* Phase Migration */}
-          {bulkOp === "phase" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-              <div style={{
-                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid,
-              }}>Migrate all projects from one phase to another</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr 1fr auto", gap: space[3], alignItems: "end" }}>
-                <div>
-                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>FROM PHASE</TelemetryLabel>
-                  <Sel value={migrateFromPhase} onChange={e => { setMigrateFromPhase(e.target.value); setDryRunPreview(null); }}>
-                    <option value="">Select...</option>
-                    {phaseNames.map(p => {
-                      const cnt = projects.filter(pr => pr.phase === p && (!migrateSquadFilter || pr.squad === migrateSquadFilter)).length;
-                      return <option key={p} value={p}>{p} ({cnt})</option>;
-                    })}
-                  </Sel>
-                </div>
-                <span style={{
-                  fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                  color: c.textDim, paddingBottom: space[2],
-                }}>→</span>
-                <div>
-                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>TO PHASE</TelemetryLabel>
-                  <Sel value={migrateToPhase} onChange={e => { setMigrateToPhase(e.target.value); setDryRunPreview(null); }}>
-                    <option value="">Select...</option>
-                    {phaseNames.map(p => <option key={p} value={p}>{p}</option>)}
-                  </Sel>
-                </div>
-                <div>
-                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>SQUAD (OPT.)</TelemetryLabel>
-                  <Sel value={migrateSquadFilter} onChange={e => { setMigrateSquadFilter(e.target.value); setDryRunPreview(null); }}>
-                    <option value="">All squads</option>
-                    {squads.map(s => <option key={s} value={s}>{s}</option>)}
-                  </Sel>
-                </div>
-                <Btn variant="command" size="sm"
-                  onClick={dryRunPhaseMigrate}
-                  disabled={!migrateFromPhase || !migrateToPhase || migrateFromPhase === migrateToPhase}
-                  style={(migrateFromPhase && migrateToPhase && migrateFromPhase !== migrateToPhase) ? { borderColor: c.orange + "60", color: c.orange } : {}}
-                >PREVIEW</Btn>
-              </div>
-            </div>
-          )}
-
-          {!bulkOp && (
-            <div style={{
-              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-              color: c.textDim, textAlign: "center", padding: `${space[2]}px 0`,
-            }}>Select an operation above</div>
-          )}
-
-          {/* ── Git-style Diff Viewer ── */}
-          {dryRunPreview && (
-            <div style={{ marginTop: space[3] }} className="flow-diff-viewer">
-              <div className="flow-diff-header">
-                <span style={{ color: c.orange, fontWeight: 700 }}>DIFF</span>
-                <span style={{ color: c.textDim }}>|</span>
-                <span>{dryRunPreview.summary}</span>
-                <div style={{ marginLeft: "auto", display: "flex", gap: space[2] }}>
-                  <Btn variant="danger" size="sm" onClick={() => setDryRunPreview(null)}>Discard</Btn>
-                  <Btn variant="success" size="sm"
-                    onClick={dryRunPreview.execute}
-                    disabled={dryRunPreview.items.length === 0}
-                  >Apply ({dryRunPreview.items.length})</Btn>
-                </div>
-              </div>
-
-              {dryRunPreview.type === "csv" && (
-                <>
-                  <div className="flow-diff-hunk">@@ +{dryRunPreview.items.length} new people @@</div>
-                  {dryRunPreview.items.map((item, i) => (
-                    <div key={i} className="flow-diff-line flow-diff-line-add" style={{ animationDelay: `${i * 0.04}s` }}>
-                      + {item.name} ({item.role}, {item.squad})
-                    </div>
-                  ))}
-                </>
-              )}
-
-              {(dryRunPreview.type === "reassign" || dryRunPreview.type === "phase") && (
-                <>
-                  <div className="flow-diff-hunk">@@ {dryRunPreview.items.length} project{dryRunPreview.items.length !== 1 ? "s" : ""} modified @@</div>
-                  {dryRunPreview.items.slice(0, 50).map((item, i) => (
-                    <React.Fragment key={i}>
-                      <div className="flow-diff-line flow-diff-line-del" style={{ animationDelay: `${i * 0.06}s` }}>
-                        - {item.id} {item.name}: {dryRunPreview.type === "reassign" ? "owner" : "phase"}={item.before}
-                      </div>
-                      <div className="flow-diff-line flow-diff-line-add" style={{ animationDelay: `${i * 0.06 + 0.03}s` }}>
-                        + {item.id} {item.name}: {dryRunPreview.type === "reassign" ? "owner" : "phase"}={item.after}
-                      </div>
-                    </React.Fragment>
-                  ))}
-                  {dryRunPreview.items.length > 50 && (
-                    <div className="flow-diff-line flow-diff-line-ctx" style={{ fontStyle: "italic" }}>... and {dryRunPreview.items.length - 50} more</div>
-                  )}
-                </>
-              )}
-
-              {dryRunPreview.exceptions.length > 0 && (
-                <div style={{
-                  padding: `${space[2]}px ${space[3]}px`,
-                  background: `${c.orange}08`, borderTop: `1px solid ${c.orange}20`,
-                }}>
-                  <TelemetryLabel color={c.orange} style={{ marginBottom: space[1], display: "block" }}>
-                    WARNINGS ({dryRunPreview.exceptions.length})
-                  </TelemetryLabel>
-                  {dryRunPreview.exceptions.map((ex, i) => (
-                    <div key={i} style={{
-                      fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                      color: c.orange, padding: "2px 0",
-                    }}>! {ex}</div>
-                  ))}
-                </div>
-              )}
-
-              {dryRunPreview.items.length === 0 && (
-                <div className="flow-diff-line flow-diff-line-ctx" style={{
-                  textAlign: "center", padding: `${space[4]}px 0`,
-                }}>No changes to apply — check warnings</div>
-              )}
-            </div>
-          )}
-        </Surface>
-      )}
 
 
       {/* ═══ AUDIT LOG — Event Stream ═══ */}

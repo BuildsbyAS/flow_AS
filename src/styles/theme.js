@@ -28,13 +28,13 @@ export const themes = {
 
   dark: {
     // Backgrounds — deep navy with blue undertone
-    bg: "#06090F", surface: "rgba(11,19,34,0.88)", surfaceAlt: "rgba(10,16,28,0.76)",
+    bg: "#06090F", surface: "#0B1322", surfaceAlt: "#0A1020",
     surfaceSolid: "#0A0E17",
     // Surface variants
-    surfaceHero: "rgba(13,23,42,0.90)",      // hero panels with accent glow
-    surfaceData: "rgba(10,17,30,0.82)",      // flatter tables/grids
-    surfaceOverlay: "#0D1324",               // command palette, modal, side panel
-    glass: "rgba(12,22,40,0.85)", glassData: "rgba(9,16,28,0.78)",
+    surfaceHero: "#0D1729",      // hero panels with accent glow
+    surfaceData: "#0A111E",      // flatter tables/grids
+    surfaceOverlay: "#0D1324",   // command palette, modal, side panel
+    glass: "#0C1628", glassData: "#091018",
     // Borders
     border: "rgba(255,255,255,0.10)", borderHover: "rgba(255,255,255,0.18)",
     // Text
@@ -64,7 +64,7 @@ export const themes = {
     shadow: "rgba(0,0,0,0.5)",
     // Elevation / overlay shadows
     shadowOverlay: "0 8px 30px rgba(0,0,0,0.5)",
-    shadowCard: "0 2px 8px rgba(0,0,0,0.2)",
+    shadowCard: "none",
     shadowHero: "0 4px 20px rgba(0,0,0,0.35)",
   },
   light: {
@@ -97,7 +97,7 @@ export const themes = {
   },
 };
 
-export const phaseNames = ["PRD", "Design", "Engineering", "QA"];
+export const phaseNames = ["PRD", "Design", "Dev", "QA"];
 
 // Mutable color reference - updated on theme change
 export let c = themes.dark;
@@ -109,9 +109,8 @@ export function setTheme(isDark) {
 // ── Canonical status semantics (consistent across all screens) ──
 export const typeConfig = () => ({
   BUILD: { color: c.green, bg: c.greenDim, emoji: "~", label: "Build" },
-  JAM: { color: c.blue, bg: c.blueDim, emoji: "~", label: "Jam" },
-  COMMIT: { color: c.purple, bg: c.purpleDim, emoji: "~", label: "Commit" },
-  BLOCKED: { color: c.red, bg: c.redDim, emoji: "!", label: "Blocked" },
+  JAM: { color: c.accent, bg: c.accentDim, emoji: "~", label: "Jam" },
+  BLOCKED: { color: c.red, bg: c.redDim, emoji: "~", label: "Blocked" },
 });
 
 // ── Canonical outcome semantics ──
@@ -128,7 +127,7 @@ export const riskConfig = () => ({
   critical: { color: c.red, label: "Critical" },
 });
 
-export const phaseColors = () => ({ PRD: c.purple, Design: c.blue, Engineering: c.green, QA: c.cyan });
+export const phaseColors = () => ({ PRD: c.purple, Design: c.blue, Dev: c.green, QA: c.cyan });
 
 // ── Canonical project status semantics ──
 export const statusColors = () => ({

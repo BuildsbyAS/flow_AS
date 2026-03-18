@@ -14,6 +14,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* ── Hide scrollbars but keep scrolling ── */
+.flow-page *::-webkit-scrollbar {
+  display: none;
+}
+.flow-page * {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 /* ── Focus ring — visible keyboard focus ── */
 .flow-input:focus {
   border-color: rgba(59, 130, 246, 0.5);
@@ -124,8 +133,9 @@ body {
 
 /* ── Mission grid — hero strip surface ── */
 .flow-mission-grid {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: #06090F;
+  border: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
   border-radius: 12px;
   position: relative;
   overflow: hidden;
@@ -134,27 +144,11 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(59,130,246,0.04) 0%, transparent 60%);
+  background: rgba(0, 0, 0, 0.45);
   pointer-events: none;
 }
 
-/* ── Side panel — overlay surface ── */
-.flow-side-panel {
-  position: fixed;
-  top: 90px;
-  right: 0;
-  bottom: 0;
-  width: 440px;
-  z-index: 40;
-  overflow-y: auto;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.3);
-  animation: sidePanelIn 0.2s cubic-bezier(0.22, 1, 0.36, 1);
-}
-@keyframes sidePanelIn {
-  from { opacity: 0; transform: translateX(20px); }
-  to { opacity: 1; transform: translateX(0); }
-}
+/* ── Side panel styles are in AnimStyles.jsx ── */
 
 /* ── Risk radar pulse ── */
 .flow-risk-radar {

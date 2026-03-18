@@ -48,6 +48,7 @@ export const Surface = ({ children, style: s, accent, className = "", compact = 
       border: `1px solid ${c.border}`,
       borderLeft: accent ? `3px solid ${accent}` : `1px solid ${c.border}`,
       borderRadius: layout.radius,
+      overflow: "clip",
       padding: compact ? layout.padCompact : layout.padCard,
       ...(variant === "hero" ? { boxShadow: c.shadowHero } : {}),
       ...(variant === "overlay" ? { boxShadow: c.shadowOverlay } : {}),
@@ -192,6 +193,107 @@ export const Sel = ({ children, style: s, ...rest }) => (
     ...s,
   }}>{children}</select>
 );
+
+// ══════════════════════════════════════════════════════════════
+// SearchSelect — filterable dropdown with keyboard nav
+// ══════════════════════════════════════════════════════════════
+export const SearchSelect = ({ value, onChange, options, placeholder = "Search..." }) => {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [focusIdx, setFocusIdx] = React.useState(0);
+  const inputRef = React.useRef(null);
+  const listRef = React.useRef(null);
+  const containerRef = React.useRef(null);
+
+  const filtered = query
+    ? options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  React.useEffect(() => { setFocusIdx(0); }, [query]);
+  React.useEffect(() => {
+    if (open) setTimeout(() => inputRef.current?.focus(), 30);
+  }, [open]);
+
+  // Close on outside click
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const select = (val) => { onChange(val); setOpen(false); setQuery(""); };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx(i => Math.min(filtered.length - 1, i + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx(i => Math.max(0, i - 1)); }
+    else if (e.key === "Enter" && filtered[focusIdx]) { e.preventDefault(); select(filtered[focusIdx]); }
+    else if (e.key === "Escape") { setOpen(false); setQuery(""); }
+  };
+
+  // Scroll active item into view
+  React.useEffect(() => {
+    if (listRef.current) {
+      const el = listRef.current.children[focusIdx];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    }
+  }, [focusIdx]);
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <button onClick={() => setOpen(!open)} className="flow-input" style={{
+        width: "100%", height: 40, padding: `0 ${space[3]}px`,
+        borderRadius: layout.radiusSm,
+        border: `1px solid ${open ? c.accent : c.border}`, background: c.surfaceAlt,
+        color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+        cursor: "pointer", textAlign: "left", boxSizing: "border-box",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}`,
+      }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || placeholder}</span>
+        <span style={{ color: c.textDim, fontSize: 10, marginLeft: space[2], flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4,
+          background: c.surfaceOverlay, border: `1px solid ${c.border}`,
+          borderRadius: layout.radiusSm, boxShadow: c.shadowOverlay,
+          zIndex: 100, maxHeight: 240, display: "flex", flexDirection: "column",
+        }}>
+          <div style={{ padding: `${space[2]}px ${space[2]}px 0` }}>
+            <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              style={{
+                width: "100%", padding: `${space[2]}px ${space[3]}px`,
+                borderRadius: layout.radiusTag + 2,
+                border: `1px solid ${c.border}`, background: c.bg,
+                color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodySm.size,
+                outline: "none", boxSizing: "border-box",
+              }} />
+          </div>
+          <div ref={listRef} style={{ overflowY: "auto", padding: `${space[1]}px 0`, flex: 1 }}>
+            {filtered.length === 0 && (
+              <div style={{ padding: `${space[3]}px ${space[4]}px`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, textAlign: "center" }}>No matches</div>
+            )}
+            {filtered.map((opt, i) => (
+              <div key={opt} onClick={() => select(opt)}
+                onMouseEnter={() => setFocusIdx(i)}
+                style={{
+                  padding: `${space[2]}px ${space[4]}px`, cursor: "pointer",
+                  background: i === focusIdx ? c.accentDim : opt === value ? `${c.accent}08` : "transparent",
+                  fontFamily: typo.bodyMd.font, fontSize: typo.bodySm.size,
+                  color: opt === value ? c.accent : c.text,
+                  fontWeight: opt === value ? 600 : 400,
+                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}`,
+                }}>{opt}</div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ══════════════════════════════════════════════════════════════
 // EmptyState — with explicit next-action

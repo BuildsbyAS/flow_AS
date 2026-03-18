@@ -15,7 +15,7 @@ function computePersonData(person, commitments, projects, history) {
   const weeks = weekConfig.historyWeeks;
 
   const currentItems = cm
-    ? cm.items.filter((_, i) => cm.deselected !== i).map(it => ({ ...it, person }))
+    ? cm.items.slice(0, 3).filter((it, i) => cm.deselected !== i && (it.title.trim() || it.project)).map(it => ({ ...it, person }))
     : [];
 
   const deselectedItems = cm && cm.deselected >= 0
@@ -24,7 +24,7 @@ function computePersonData(person, commitments, projects, history) {
 
   const hasBuffer = cm && cm.buffer;
 
-  const thisWeekTypes = { BUILD: 0, JAM: 0, COMMIT: 0, BLOCKED: 0 };
+  const thisWeekTypes = { BUILD: 0, JAM: 0, COMMIT: 0 };
   currentItems.forEach(it => { if (thisWeekTypes[it.type] !== undefined) thisWeekTypes[it.type]++; });
 
   const weeklyData = weeks.map(week => {
@@ -39,7 +39,7 @@ function computePersonData(person, commitments, projects, history) {
         }
       });
     });
-    const types = { BUILD: 0, JAM: 0, COMMIT: 0, BLOCKED: 0 };
+    const types = { BUILD: 0, JAM: 0, BLOCKED: 0 };
     items.forEach(it => { if (types[it.type] !== undefined) types[it.type]++; });
     return { week, items, types, total: items.length };
   });
@@ -98,7 +98,7 @@ function computePersonData(person, commitments, projects, history) {
 /*  PEOPLE DEEP DIVE                                         */
 /* ═══════════════════════════════════════════════════════════ */
 
-const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef }) => {
+const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical, selectedWeekKey }) => {
   const [selectedPerson, setSelectedPerson] = useState(initialPerson || null);
 
   const initParams = useRef(new URLSearchParams(window.location.search)).current;
@@ -128,9 +128,10 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   const activeFilters = [fSquad, fRole, search].filter(Boolean).length;
 
   const filtered = people.filter(p => {
-    if (fSquad && p.squad !== fSquad) return false;
-    if (fRole && p.role !== fRole) return false;
-    if (search) { const q = search.toLowerCase(); if (!p.name.toLowerCase().includes(q)) return false; }
+    if (search) {
+      const q = search.toLowerCase();
+      if (!p.name.toLowerCase().includes(q) && !p.squad.toLowerCase().includes(q)) return false;
+    }
     return true;
   });
 
@@ -167,11 +168,12 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   }, []);
 
   useKeyboard(!selectedPerson ? [
-    { key: "ArrowUp", fn: () => { setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } },
-    { key: "ArrowDown", fn: () => { setKbActive(true); setFocusIdx(i => Math.min(flatFiltered.length - 1, i + 1)); } },
+    { key: "Escape", fn: () => { if (search) { setSearch(""); setFocusIdx(0); localSearchRef.current?.blur(); } else if (document.activeElement === localSearchRef.current) { localSearchRef.current.blur(); } else if (kbActive) { setKbActive(false); } }, force: true },
+    { key: "ArrowUp", fn: () => { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); }, force: true },
+    { key: "ArrowDown", fn: () => { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.min(flatFiltered.length - 1, i + 1)); }, force: true },
     { key: "Enter", fn: () => { if (flatFiltered[focusIdx]) openPerson(flatFiltered[focusIdx].name); } },
-    { key: "c", fn: () => { setSearch(""); setFSquad(""); setFRole(""); } },
-  ] : [], [flatFiltered.length, focusIdx, selectedPerson]);
+    { key: "c", fn: () => { setSearch(""); } },
+  ] : [], [flatFiltered.length, focusIdx, selectedPerson, search, kbActive]);
 
   useEffect(() => {
     if (focusIdx >= flatFiltered.length && flatFiltered.length > 0) setFocusIdx(flatFiltered.length - 1);
@@ -183,33 +185,39 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   if (!selectedPerson) {
     let flatIdx = 0;
     return (
-      <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-        {/* Sticky filter bar */}
-        <div style={{ position: "sticky", top: 92, zIndex: 10, background: c.bg, paddingTop: space[1], paddingBottom: space[2] }}>
-        <Surface variant="panel" style={{ display: "flex", gap: space[2], alignItems: "center", flexWrap: "wrap", padding: `${space[3]}px ${space[4]}px` }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 128px)", marginBottom: -60 }}>
+
+        {/* ═══════════════════════════════════════════════════════════
+            FROZEN TOP — search + filters (never scrolls)
+            ═══════════════════════════════════════════════════════════ */}
+        <div style={{ flexShrink: 0, paddingBottom: space[3], display: "flex", flexDirection: "column", gap: space[3] - 2 }}>
+        <div className="flow-mission-grid" style={{ display: "flex", gap: space[2], alignItems: "center", flexWrap: "wrap", padding: `${space[3]}px ${space[4]}px` }}>
           <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
             <input ref={localSearchRef} value={search} onChange={e => { setSearch(e.target.value); setFocusIdx(0); }} className="flow-input"
-              placeholder="Search by name..."
+              placeholder="Search by name or squad..."
               style={{ width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`, borderRadius: layout.radiusMd, border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, outline: "none", boxSizing: "border-box" }} />
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 15, color: c.textMid, pointerEvents: "none" }}>🔍</span>
-            <span className="flow-search-hint">/</span>
+            <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
+            </svg>
+            {!search && <span style={{
+              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+              fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600,
+              color: c.textDim, lineHeight: 1,
+              padding: "3px 7px 4px", borderRadius: 4,
+              background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.bg} 100%)`,
+              border: `1px solid ${c.border}`,
+              boxShadow: `0 2px 0 ${c.border}, 0 2px 3px ${c.shadow}`,
+              pointerEvents: "none",
+            }}>/</span>}
           </div>
-          <Sel value={fSquad} onChange={e => setFSquad(e.target.value)} style={{ minWidth: 110, fontSize: typo.bodySm.size }}>
-            <option value="">All squads</option>
-            {allSquads.map(s => <option key={s} value={s}>{s}</option>)}
-          </Sel>
-          <Sel value={fRole} onChange={e => setFRole(e.target.value)} style={{ minWidth: 130, fontSize: typo.bodySm.size }}>
-            <option value="">All roles</option>
-            {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
-          </Sel>
-          {activeFilters > 0 && (
-            <Btn variant="command" size="sm" onClick={() => { setSearch(""); setFSquad(""); setFRole(""); }}>
-              <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.accent, background: "transparent", padding: "0 2px", border: "none", marginRight: 3 }}>C</kbd>Clear ({activeFilters})
-            </Btn>
-          )}
-          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textMid, marginLeft: "auto" }}>{filtered.length}<span style={{ color: c.textMid + "80" }}>/{people.length}</span></span>
-        </Surface>
         </div>
+        </div>
+        {/* end frozen top */}
+
+        {/* ═══════════════════════════════════════════════════════════
+            SCROLLABLE CONTENT — people cards (only this area scrolls)
+            ═══════════════════════════════════════════════════════════ */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
 
         {/* People grouped by squad */}
         {Object.entries(squadsWithPeople).map(([squad, members]) => {
@@ -277,6 +285,7 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
         })}
 
         {filtered.length === 0 && <EmptyState icon="👤" title="No people match" message="Try adjusting your filters or search query." action={activeFilters > 0 ? "Clear all filters" : null} onAction={() => { setSearch(""); setFSquad(""); setFRole(""); }} />}
+      </div>{/* end scrollable content */}
       </div>
     );
   }
@@ -398,7 +407,7 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
           <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size + 1, fontWeight: 600, color: c.textMid, marginLeft: space[2] }}>timeline@{selectedPerson.split(" ")[0].toLowerCase()}</span>
           <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim, marginLeft: "auto" }}>{weeklyData.length} weeks</span>
         </div>
-        <div style={{ padding: `${space[2]}px 0`, maxHeight: 420, overflowY: "auto" }}>
+        <div style={{ padding: `${space[2]}px 0`, maxHeight: 540, overflowY: "auto" }}>
           {[...weeklyData].reverse().filter(w => w.total > 0).length > 0 ? (
             [...weeklyData].reverse().filter(w => w.total > 0).map((w, wi) => (
               <React.Fragment key={wi}>

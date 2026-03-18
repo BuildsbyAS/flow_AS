@@ -10,7 +10,7 @@ import { NAV } from "./AppShell";
 // ── Category color mapping ──
 const CAT_COLORS = () => ({
   all:        { color: c.accent, dim: c.accentDim },
-  projects:   { color: c.cyan,   dim: c.cyanDim   },
+  projects:   { color: c.projectGold, dim: c.projectGoldDim },
   people:     { color: c.green,  dim: c.greenDim   },
   navigation: { color: c.orange, dim: c.orangeDim  },
   settings:   { color: c.purple, dim: c.purpleDim  },
@@ -20,7 +20,7 @@ const CAT_COLORS = () => ({
 const SECTION_COLORS = () => ({
   Navigation: c.accent,
   Actions:    c.orange,
-  Projects:   c.cyan,
+  Projects:   c.projectGold,
   People:     c.green,
   Settings:   c.purple,
 });
@@ -60,7 +60,7 @@ function multiWordMatch(query, ...fields) {
 }
 
 
-const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNavigate, darkMode, onToggleTheme }) => {
+const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNavigate }) => {
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const [category, setCategory] = useState("all");
@@ -99,19 +99,6 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
       });
     });
 
-    // ── Actions ──
-    cmds.push({
-      id: "toggle-theme",
-      label: darkMode ? "Switch to Light Mode" : "Switch to Dark Mode",
-      hint: "Toggle color theme",
-      section: "Actions",
-      cat: "navigation",
-      icon: darkMode ? "☀" : "◑",
-      iconColor: c.orange,
-      kbd: "D",
-      action: () => { onToggleTheme(); onClose(); },
-    });
-
     // ── Projects (ALL) ──
     if (projects) {
       projects.forEach(p => {
@@ -122,7 +109,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
           section: "Projects",
           cat: "projects",
           icon: p.id.slice(0, 3),
-          iconColor: c.cyan,
+          iconColor: c.projectGold,
           action: () => { if (onNavigate) onNavigate("projects", p.id); onClose(); },
         });
       });
@@ -166,7 +153,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
     });
 
     return cmds;
-  }, [projects, people, darkMode, onTabSwitch, onNavigate, onToggleTheme, onClose]);
+  }, [projects, people, onTabSwitch, onNavigate, onClose]);
 
   // Filter + rank
   const filtered = useMemo(() => {

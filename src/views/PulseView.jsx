@@ -89,116 +89,178 @@ const DeltaToken = ({ gained, lost }) => {
 const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
   if (!proj) return null;
   const d = deltaMap[proj.id];
-  const panelRef = useRef(null);
+  const ec = entityColors();
+  const healthColor = proj.health >= 70 ? c.green : proj.health >= 40 ? c.orange : c.red;
 
-  useEffect(() => {
-    const handle = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) onClose();
-    };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [onClose]);
+  const formatDate = (d) => {
+    if (!d) return "—";
+    const dt = new Date(d);
+    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  const sectionTitle = {
+    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+    fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
+    color: c.textDim, textTransform: "uppercase", marginBottom: space[2],
+    display: "block",
+  };
+
+  const metaLabel = {
+    fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+    color: c.textDim, marginBottom: 2, display: "block",
+  };
+
+  const metaValue = {
+    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+    fontWeight: 600, color: c.text,
+  };
 
   return (
-    <div ref={panelRef} className="flow-side-panel" style={{
+    <div className="flow-side-panel" style={{
       padding: 0, background: c.surfaceOverlay,
     }}>
-      {/* Header */}
+      {/* ── Header ── */}
       <div style={{
-        padding: `${space[4]}px ${space[5]}px`,
+        padding: `${space[4]}px ${space[5]}px ${space[3]}px`,
         borderBottom: `1px solid ${c.border}`,
-        background: `${pc[proj.phase]}06`,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={{
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Project ID — gold */}
+            <span style={{
               fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-              fontWeight: 700, color: c.accent, marginBottom: space[1],
-            }}>{proj.id}</div>
+              fontWeight: 700, color: ec.project, letterSpacing: typo.monoLg.tracking,
+            }}>{proj.id}</span>
+            {/* Project name */}
             <div style={{
               fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
               fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
-              color: c.text,
+              color: c.text, marginTop: 3,
             }}>{proj.name}</div>
           </div>
-          <Btn variant="ghost" size="sm" onClick={onClose} style={{ padding: `3px ${space[2]}px` }}>✕</Btn>
+          <Btn variant="ghost" size="sm" onClick={onClose} style={{ padding: `3px ${space[2]}px`, flexShrink: 0 }}>✕</Btn>
         </div>
-        <div style={{ display: "flex", gap: space[2], marginTop: space[2], flexWrap: "wrap" }}>
+
+        {/* Phase + Squad + Owner row */}
+        <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[3], flexWrap: "wrap" }}>
           <Badge color={pc[proj.phase]} bg={`${pc[proj.phase]}15`}>{proj.phase}</Badge>
           {proj.ship && <Badge color={c.green} bg={c.greenDim}>Shipped</Badge>}
+          <span style={{ width: 1, height: 12, background: c.border, flexShrink: 0 }} />
           <span style={{
-            fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-            color: c.textMid,
-          }}>{proj.squad} · {proj.owner || "No owner"}</span>
+            fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+            fontWeight: 600, color: c.textMid,
+          }}>{proj.squad}</span>
+          <span style={{ width: 1, height: 12, background: c.border, flexShrink: 0 }} />
+          <span style={{
+            fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+            fontWeight: 600, color: c.cyan,
+          }}>{proj.owner || "Unassigned"}</span>
         </div>
       </div>
 
-      {/* Telemetry section */}
-      <div style={{ padding: `${space[4]}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[4] - 2 }}>
-        {/* Health gauge */}
+      {/* ── Content sections ── */}
+      <div style={{ padding: `${space[4]}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[5] }}>
+
+        {/* ── Timeline ── */}
+        {(() => {
+          const pct = proj.planned > 0 ? Math.min(100, Math.round((proj.age / proj.planned) * 100)) : 0;
+          const overdue = proj.remaining != null && proj.remaining < 0;
+          const ageColor = proj.age > 60 ? c.red : proj.age > 30 ? c.orange : c.cyan;
+          const remColor = proj.remaining != null ? (proj.remaining < 0 ? c.red : proj.remaining < 7 ? c.orange : c.green) : c.textDim;
+          const barColor = overdue ? c.red : pct > 75 ? c.orange : c.cyan;
+          return (
+            <div>
+              <span style={sectionTitle}>Timeline</span>
+              {/* Progress bar */}
+              <div style={{
+                position: "relative", height: 6, borderRadius: 3,
+                background: c.border, overflow: "hidden", marginBottom: space[3],
+              }}>
+                <div style={{
+                  position: "absolute", left: 0, top: 0, height: "100%",
+                  width: `${Math.min(pct, 100)}%`, borderRadius: 3,
+                  background: barColor,
+                  transition: "width 0.4s ease",
+                }} />
+              </div>
+              {/* Date range row */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                marginBottom: space[2],
+              }}>
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text }}>
+                  {formatDate(proj.startDate)}
+                </span>
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                  color: c.textDim,
+                }}>→</span>
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text }}>
+                  {formatDate(proj.endDate)}
+                </span>
+              </div>
+              {/* Age / Remaining pills */}
+              <div style={{ display: "flex", gap: space[2] }}>
+                <div style={{
+                  flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: `${space[1] + 1}px ${space[3]}px`,
+                  background: `${ageColor}10`, borderRadius: layout.radiusMd,
+                  border: `1px solid ${ageColor}20`,
+                }}>
+                  <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textDim }}>Age</span>
+                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: ageColor }}>{proj.age}d</span>
+                </div>
+                <div style={{
+                  flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: `${space[1] + 1}px ${space[3]}px`,
+                  background: `${remColor}10`, borderRadius: layout.radiusMd,
+                  border: `1px solid ${remColor}20`,
+                }}>
+                  <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textDim }}>Remaining</span>
+                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: remColor }}>
+                    {proj.remaining != null ? `${proj.remaining}d` : "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ── Health ── */}
         <div>
-          <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, marginBottom: space[2] - 2, display: "block" }}>Health</span>
-          <div style={{ display: "flex", alignItems: "center", gap: space[3] - 2 }}>
+          <span style={sectionTitle}>Health</span>
+          <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
             <div style={{
-              flex: 1, height: 8, borderRadius: layout.radiusTag + 1,
+              flex: 1, height: 6, borderRadius: layout.radiusTag,
               background: c.surfaceAlt, overflow: "hidden",
             }}>
               <div style={{
                 width: `${proj.health}%`, height: "100%",
-                borderRadius: layout.radiusTag + 1,
-                background: proj.health >= 70 ? c.green : proj.health >= 40 ? c.orange : c.red,
+                borderRadius: layout.radiusTag,
+                background: healthColor,
                 transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
               }} />
             </div>
             <span style={{
-              fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
-              fontWeight: 800,
-              color: proj.health >= 70 ? c.green : proj.health >= 40 ? c.orange : c.red,
+              fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+              fontWeight: 700, color: healthColor, minWidth: 28, textAlign: "right",
             }}>{proj.health}</span>
           </div>
         </div>
 
-        {/* Timeline */}
-        <div style={{ display: "flex", gap: space[4] }}>
-          <div>
-            <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, marginBottom: 3, display: "block" }}>Age</span>
-            <span style={{
-              fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
-              fontWeight: 700,
-              color: proj.age > 60 ? c.red : proj.age > 30 ? c.orange : c.text,
-            }}>{proj.age}d</span>
-          </div>
-          {proj.remaining !== null && (
-            <div>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, marginBottom: 3, display: "block" }}>Remaining</span>
-              <span style={{
-                fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
-                fontWeight: 700,
-                color: proj.remaining < 0 ? c.red : proj.remaining < 7 ? c.orange : c.text,
-              }}>{proj.remaining}d</span>
-            </div>
-          )}
-          {d && (
-            <div>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, marginBottom: 3, display: "block" }}>Delta</span>
-              <DeltaToken gained={d.gained} lost={d.lost} />
-            </div>
-          )}
-        </div>
-
-        {/* Risks */}
+        {/* ── Risks ── */}
         {proj.risks.length > 0 && (
           <div>
-            <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.red, marginBottom: space[2] - 2, display: "block" }}>Risks</span>
+            <span style={{ ...sectionTitle, color: c.red }}>Risks · {proj.risks.length}</span>
             <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
               {proj.risks.map(r => (
                 <div key={r.key} style={{
                   display: "flex", alignItems: "center", gap: space[2] - 2,
-                  padding: `${space[1]}px ${space[2]}px`,
+                  padding: `${space[1] + 1}px ${space[2]}px`,
                   background: `${r.color}08`, borderRadius: layout.radiusSm,
-                  border: `1px solid ${r.color}20`,
+                  border: `1px solid ${r.color}18`,
                 }}>
-                  <span style={{ fontSize: typo.bodyXs.size }}>{r.icon}</span>
+                  <span style={{ fontSize: 11, lineHeight: 1 }}>{r.icon}</span>
                   <span style={{
                     fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
                     fontWeight: 600, color: r.color,
@@ -209,62 +271,47 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
           </div>
         )}
 
-        {/* Commitments */}
+        {/* ── This week's focus ── */}
         <div>
-          <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, marginBottom: space[2] - 2, display: "block" }}>
-            Commitments · {proj.items.length}
-          </span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <span style={sectionTitle}>This week's focus · {proj.items.length}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {proj.items.map((it, ii) => (
               <div key={ii} style={{
-                display: "flex", alignItems: "center", gap: space[2] - 2,
-                padding: `5px ${space[2]}px`,
+                display: "flex", alignItems: "center", gap: space[2],
+                padding: `${space[2]}px ${space[2] + 2}px`,
                 background: c.surfaceAlt, borderRadius: layout.radiusSm,
+                border: `1px solid ${c.border}`,
               }}>
-                <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("people", it.person); }} style={{
-                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                  fontWeight: 600, color: c.cyan, cursor: "pointer",
-                  textDecoration: "underline", textDecorationColor: c.cyan + "40",
-                  textUnderlineOffset: 2, minWidth: 70,
-                }}>{it.person}</span>
                 <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
                 <span style={{
                   fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                  color: c.textMid, flex: 1,
+                  color: c.text, flex: 1,
                 }}>{it.title || "—"}</span>
+                <span style={{
+                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                  fontWeight: 500, color: c.cyan, whiteSpace: "nowrap",
+                }}>{it.person}</span>
               </div>
             ))}
             {proj.items.length === 0 && (
-              <span style={{
-                fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                color: c.textDim,
-              }}>No commitments this week</span>
+              <div style={{
+                padding: `${space[3]}px ${space[2] + 2}px`,
+                background: c.surfaceAlt, borderRadius: layout.radiusSm,
+                border: `1px solid ${c.border}`,
+                textAlign: "center",
+              }}>
+                <span style={{
+                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                  color: c.textDim,
+                }}>No focus items this week</span>
+              </div>
             )}
           </div>
         </div>
 
-        {/* People */}
-        {proj.people.length > 0 && (
-          <div>
-            <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, marginBottom: space[2] - 2, display: "block" }}>
-              People · {proj.people.length}
-          </span>
-            <div style={{ display: "flex", gap: space[1], flexWrap: "wrap" }}>
-              {proj.people.map(p => (
-                <span key={p} onClick={() => onNavigate && onNavigate("people", p)} style={{
-                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                  fontWeight: 500, color: c.cyan, cursor: "pointer",
-                  padding: `3px ${space[2]}px`,
-                  background: c.cyanDim, borderRadius: layout.radiusPill,
-                }}>{p}</span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* View full project link */}
+        {/* ── View full project CTA ── */}
         <Btn variant="command" onClick={() => onNavigate && onNavigate("projects", proj.id)}
-          style={{ marginTop: space[1], justifyContent: "center" }}>
+          style={{ justifyContent: "center" }}>
           View full project →
         </Btn>
       </div>
@@ -277,7 +324,7 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
 // ═══════════════════════════════════════════════════════════════
 // PULSE VIEW — main component
 // ═══════════════════════════════════════════════════════════════
-const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globalFilters = {} }) => {
+const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globalFilters = {}, isHistorical, selectedWeekKey }) => {
   const [expandedProject, setExpandedProject] = useState(null);
   const initParams = useRef(new URLSearchParams(window.location.search)).current;
   const [filterPhase, setFilterPhase] = useState(initParams.get("phase") || null);
@@ -319,7 +366,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
     const risks = [];
     if (!proj.owner) risks.push({ key: "no_dri", label: "No owner", color: c.red, icon: "⚠" });
     if ((typeCounts.JAM || 0) > (typeCounts.BUILD || 0) && items.length > 1) risks.push({ key: "jam_heavy", label: "JAM > BUILD", color: c.orange, icon: "⚡" });
-    if (proj.phase === "Engineering" && age > 30) risks.push({ key: "stale_eng", label: "Stuck in Eng " + age + "d", color: c.orange, icon: "🐌" });
+    if (proj.phase === "Dev" && age > 30) risks.push({ key: "stale_eng", label: "Stuck in Eng " + age + "d", color: c.orange, icon: "🐌" });
     if (age > 60) risks.push({ key: "aging", label: "Aging " + age + "d", color: c.red, icon: "⏰" });
     if (remaining !== null && remaining < 0) risks.push({ key: "overdue", label: "Overdue", color: c.red, icon: "🚨" });
     if (typeCounts.BLOCKED > 0) risks.push({ key: "blocked", label: `${typeCounts.BLOCKED} blocked`, color: c.red, icon: "🚧" });
@@ -504,16 +551,19 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
           rows.push({ squad: person.squad, personName: person.name, role: person.role, projectId: null, projectName: null, owner: null, title: null, type: null, stage: null, status: null });
         }
       } else {
-        items.forEach(item => {
+        items.forEach((item, itemIdx) => {
           const proj = projects.find(pr => pr.id === item.project);
           if (globalFilters.owner && (!proj || proj.owner !== globalFilters.owner)) return;
-          const stage = item.stage || proj?.phase || null;
-          const status = item.type === "BLOCKED" ? "Blocked" : isLocked ? "Locked" : "Open";
+          // Skip rows where both project and title are empty (corrupt/stale data)
+          if (!item.project && !item.title) return;
+          const stage = (!item.project && !proj) ? null : (item.stage || proj?.phase || null);
+          const status = isLocked ? "Locked" : "Open";
           rows.push({
             squad: person.squad, personName: person.name, role: person.role,
-            projectId: item.project, projectName: proj?.name || item.project,
+            projectId: item.project || null, projectName: proj?.name || item.project || null,
             owner: proj?.owner || "—",
-            title: item.title || "—", type: item.type, stage, status,
+            title: item.title || "—", type: item.project ? item.type : null, stage, status: item.project ? status : null,
+            commitIdx: itemIdx,
           });
         });
       }
@@ -534,14 +584,14 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 128px)", marginBottom: -60 }}>
 
       {/* ═══════════════════════════════════════════════════════════
-          STICKY TOP — summary + toggle (stays fixed when scrolling)
+          FROZEN TOP — summary + toggle (never scrolls)
           ═══════════════════════════════════════════════════════════ */}
       <div style={{
-        position: "sticky", top: 92, zIndex: 10,
-        background: c.bg, paddingBottom: space[3],
+        flexShrink: 0,
+        paddingBottom: space[3],
         display: "flex", flexDirection: "column", gap: space[3] - 2,
       }}>
 
@@ -619,11 +669,12 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
       </div>
 
       </div>
-      {/* end sticky top */}
+      {/* end frozen top */}
 
       {/* ═══════════════════════════════════════════════════════════
-          VIEW CONTENT
+          SCROLLABLE CONTENT (only this area scrolls)
           ═══════════════════════════════════════════════════════════ */}
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
       <div key={morphKey} className="flow-view-morph">
 
       {/* ── SHIP VIEW ── */}
@@ -691,11 +742,9 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
           ═══════════════════════════════════════════════════════════ */}
       {pulseMode === "matrix" && !showShip && (
         <Surface variant="data" compact style={{
-          padding: 0, overflow: "hidden",
-          boxShadow: c.shadowCard,
+          padding: 0,
         }}>
           <div style={{
-            overflowX: "auto", overflowY: "auto", maxHeight: "68vh",
             borderRadius: layout.radius,
           }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: dp.minTable }}>
@@ -787,10 +836,20 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                               </span>
                             )}
                             {proj.items.length === 0 && (
-                              <Badge color={c.orange} bg={`${c.orange}12`} style={{
+                              <span style={{
                                 marginLeft: "auto", flexShrink: 0,
                                 border: `1px solid ${c.orange}20`,
-                              }}>No action</Badge>
+                                background: `${c.orange}10`,
+                                padding: `1px 6px`,
+                                fontSize: 9,
+                                fontFamily: typo.monoSm.font,
+                                fontWeight: 600,
+                                letterSpacing: typo.monoSm.tracking,
+                                lineHeight: 1.2,
+                                borderRadius: layout.radiusTag,
+                                color: c.orange,
+                                whiteSpace: "nowrap",
+                              }}>No action</span>
                             )}
                           </div>
                         </td>
@@ -899,7 +958,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                               {items.length > 0 && (
                                 <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
                                   {Object.entries(ct).map(([t, n]) => {
-                                    const letter = { BUILD: "B", JAM: "J", COMMIT: "C", BLOCKED: "X" }[t] || t[0];
+                                    const letter = { BUILD: "B", JAM: "J", COMMIT: "C" }[t] || t[0];
                                     return <Tag key={t} color={tc[t]?.color} bg={tc[t]?.bg} style={{ letterSpacing: "-0.02em" }}>{letter}{n}</Tag>;
                                   })}
                                 </div>
@@ -1029,11 +1088,9 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
 
         return (
           <Surface variant="data" compact style={{
-            padding: 0, overflow: "hidden",
-            boxShadow: c.shadowCard,
+            padding: 0,
           }}>
             <div style={{
-              overflowX: "auto", overflowY: "auto", maxHeight: "68vh",
               borderRadius: layout.radius,
             }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
@@ -1140,7 +1197,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                       }}>
                         {row.title ? (
                           <span
-                            onClick={() => onNavigate && onNavigate("focus", row.personName)}
+                            onClick={() => onNavigate && onNavigate("focus", { person: row.personName, commitIdx: row.commitIdx })}
                             style={{
                               fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
                               color: c.text, cursor: "pointer",
@@ -1161,7 +1218,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                         borderLeft: `1px dotted ${c.border}`,
                       }}>
                         {row.stage ? (
-                          <Badge color={pc[row.stage] || c.textMid} bg={`${pc[row.stage] || c.textMid}15`}>{row.stage}</Badge>
+                          <Badge color={pc[row.stage] || c.textMid} bg={`${pc[row.stage] || c.textMid}15`} style={{ minWidth: 80, display: "inline-block", textAlign: "center" }}>{row.stage}</Badge>
                         ) : (
                           <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>—</span>
                         )}
@@ -1173,7 +1230,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                         borderLeft: `1px dotted ${c.border}`,
                       }}>
                         {row.type ? (
-                          <Badge color={tc[row.type]?.color} bg={tc[row.type]?.bg}>{row.type}</Badge>
+                          <Badge color={tc[row.type]?.color} bg={tc[row.type]?.bg} style={{ minWidth: 72, display: "inline-block", textAlign: "center" }}>{row.type}</Badge>
                         ) : (
                           <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>—</span>
                         )}
@@ -1185,7 +1242,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                         borderLeft: `1px dotted ${c.border}`,
                       }}>
                         {row.status ? (
-                          <Badge color={commitStatusColors[row.status] || c.textMid} bg={`${commitStatusColors[row.status] || c.textMid}15`}>{row.status}</Badge>
+                          <Badge color={commitStatusColors[row.status] || c.textMid} bg={`${commitStatusColors[row.status] || c.textMid}15`} style={{ minWidth: 56, display: "inline-block", textAlign: "center" }}>{row.status}</Badge>
                         ) : (
                           <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>—</span>
                         )}
@@ -1201,19 +1258,24 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
 
       </div>
       {/* end morph wrapper */}
+      <div style={{ flexShrink: 0, height: space[8] }} />
+      </div>{/* end scrollable content */}
 
       {/* ═══════════════════════════════════════════════════════════
           SIDE PANEL — project telemetry on row click
           ═══════════════════════════════════════════════════════════ */}
       {sidePanelProj && (
-        <SidePanel
-          proj={sidePanelProj}
-          deltaMap={deltaMap}
-          tc={tc}
-          pc={pc}
-          onNavigate={onNavigate}
-          onClose={() => setSidePanelProj(null)}
-        />
+        <>
+          <div className="flow-side-panel-backdrop" onClick={() => setSidePanelProj(null)} />
+          <SidePanel
+            proj={sidePanelProj}
+            deltaMap={deltaMap}
+            tc={tc}
+            pc={pc}
+            onNavigate={onNavigate}
+            onClose={() => setSidePanelProj(null)}
+          />
+        </>
       )}
     </div>
   );
