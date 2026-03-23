@@ -1,66 +1,101 @@
-# Flow — Weekly Team Commitment Dashboard
+# Flow — Team Productivity, Finally Visible
 
-**Kill vague work. Ship with clarity.**
+> **Commit. Lock. Ship.**
 
-Flow is a weekly commitment system where every person declares 3 things they'll deliver this week. No vague updates, no hiding. Just clarity.
+Flow is a weekly commitment system for engineering teams. Every person declares what they'll deliver this week, locks it in, and reports outcomes. No vague updates, no hiding — just clarity.
+
+## What Flow Does
+
+Flow gives engineering leaders a real-time operating view of their team. It's built around two layers:
+
+### The Execution Layer — *What's happening this week*
+- **Pulse** (`2`) — Real-time command center. See every project across all squads — what's active, who's working on it, and the health of each project for the current week.
+- **Commit** (`3`) — Where each person declares their 3 weekly deliverables. Fill in project, description, stage, and type (Build or Jam). Lock them in Monday, close them Friday.
+
+### The Deep-Dive Layer — *The full picture across weeks*
+- **Summary** (`1`) — Executive dashboard with team-wide KPIs: commit count, lock rate, completion rate, carry-forward, and health scores.
+- **Projects** (`4`) — Project deep dive with phase progression, Gantt chart timeline, board view, and per-project metrics. Table, Board, and Gantt views.
+- **People** (`5`) — People deep dive with role/squad breakdown, type distribution, commitment history, and velocity trends.
+
+### Power Features
+- **Command Palette** (`F`) — Universal search across projects, people, squads, and IDs. Works everywhere.
+- **Week Navigation** — Time-travel through weeks with arrow keys. Filter by squad, owner, phase, or status.
+- **Terminal** (`T`) — Settings, Logs, Rant (feature requests/bug reports), and Admin — gated behind a terminal unlock.
+- **Keyboard Shortcuts** — Navigate tabs with `1`–`6`, toggle hints with `?`, press `Esc` to go back.
+
+## Weekly Rhythm
+
+| Day | Action |
+|-----|--------|
+| **Sunday** | Plan — fill in your 3 commits |
+| **Monday** | Lock — commits are locked, no more changes |
+| **Wednesday** | Pulse — midweek check-in, flag blockers |
+| **Friday** | Close — mark outcomes (done, partial, carry, blocked) |
+
+## The 3+1 Model
+
+Each person gets **3 commit slots** + **1 buffer**. The buffer activates if a commit is dropped. This forces prioritization while allowing flexibility.
+
+## Commit Types
+
+- **Build** — DRI ownership, you're making it
+- **Jam** — Supporting/enabling, time-capped collaboration
+
+## Project Phases
+
+`PRD → Design → Dev → QA → Alpha → Beta → GA`
 
 ## Architecture
 
 ```
-flow-app/
+flow/
 ├── src/
-│   ├── App.jsx              # Main app shell (nav, routing, state)
+│   ├── App.jsx                    # Main app shell, routing, state
 │   ├── components/
-│   │   └── ui.jsx           # Glass UI components (Badge, Card, Input, etc.)
+│   │   ├── AppShell.jsx           # Navigation, layout, toolbar
+│   │   ├── CommandPalette.jsx     # Universal search overlay
+│   │   ├── FlowLogo.jsx          # Animated gravity well logo
+│   │   ├── GanttChart.jsx        # Project timeline visualization
+│   │   ├── LoginScreen.jsx       # OAuth login with calendar grid
+│   │   ├── OnboardingScreen.jsx  # New user setup
+│   │   └── shared.jsx            # Reusable UI primitives
 │   ├── data/
-│   │   └── seed.js          # Seed data (squads, roles, people, projects, commitments)
+│   │   └── seed.js               # Seed data (squads, roles, people, projects)
+│   ├── hooks/
+│   │   ├── useAuth.js            # Supabase Google OAuth
+│   │   ├── useKeyboard.js        # Keyboard shortcut system
+│   │   ├── useSupabaseData.js    # Real-time data sync
+│   │   └── useSyncedSetters.js   # Optimistic state updates
 │   ├── lib/
-│   │   └── theme.js         # Design system (themes, fonts, type/phase configs)
+│   │   ├── supabase.js           # Supabase client
+│   │   ├── mutations.js          # DB write operations
+│   │   └── activityLog.js        # Activity tracking
 │   ├── styles/
-│   │   └── animations.jsx   # CSS-in-JS animations (glassmorphism, transitions)
+│   │   ├── theme.js              # Design system tokens
+│   │   └── global.css            # Global styles
 │   └── views/
-│       ├── FocusView.jsx    # Weekly 3+1 commitment input per person
-│       ├── PeopleView.jsx   # People deep dive (history, metrics)
-│       ├── ProjectsView.jsx # Projects deep dive (timeline, status)
-│       ├── PulseView.jsx    # Project matrix overview (phase × squad)
-│       └── SettingsView.jsx # CRUD for projects, people, squads, roles
-├── package.json
-└── README.md
+│       ├── SummaryView.jsx       # Executive KPI dashboard
+│       ├── PulseView.jsx         # Weekly project matrix
+│       ├── HumansView.jsx        # Commit planning interface
+│       ├── ProjectsView.jsx      # Projects deep dive + Gantt + Board
+│       ├── PeopleDeepDive.jsx    # People analytics
+│       ├── GuideView.jsx         # In-app playbook
+│       ├── TerminalView.jsx      # Terminal gate
+│       ├── SettingsView.jsx      # CRUD management
+│       ├── RantView.jsx          # Feature requests & bug reports
+│       └── LogsView.jsx          # Activity logs
+├── supabase/                      # DB migrations & seed scripts
+├── Dockerfile                     # Cloud Run deployment
+└── nginx.conf                     # Production static serving
 ```
 
-## Concepts
+## Tech Stack
 
-### Vocabulary System
-- **BUILD 🔨** (green) — DRI ownership, making it
-- **JAM 🎸** (blue) — supporting/enabling, time-capped
-- **COMMIT 🔀** (purple) — quality gate, sign-off
-- **BLOCKED 🚧** (red) — waiting on dependency, auto-escalates >48h
-
-### Phase Pipeline
-PRD → Design → Engineering → QA
-
-### Weekly Rhythm
-Declare (Friday) → Lock (Monday) → Pulse (Wednesday) → Close (Friday)
-
-### 3+1 Model
-Each person commits to 3 things. If they deselect one, a buffer slot activates for a replacement.
-
-## Tabs
-
-| Tab | Purpose |
-|-----|---------|
-| **Pulse** | Project matrix — phase tiles, sortable table, ship flags |
-| **Focus** | Weekly input — person directory, 3+1 cards, lock-in, mark done |
-| **Projects** | Deep dive — phase progression, metrics, timeline history |
-| **People** | Deep dive — role/squad, type breakdown, commitment history |
-| **Settings** | CRUD — manage projects, people, squads, roles |
-
-## Design System
-
-- **Glassmorphism** — `backdrop-filter: blur()`, translucent surfaces, ambient gradient background
-- **Fonts** — Figtree (display/body), JetBrains Mono (data/IDs)
-- **Dark/Light** themes with deep navy gradient (dark) or soft lavender (light)
-- **Status colors** — green (#4ADE80), blue (#60A5FA), purple (#C084FC), red (#FB7185), orange (#FF9F43)
+- **Frontend**: React + Vite (inline styles, no CSS framework)
+- **Backend**: Supabase (PostgreSQL + Auth + Realtime)
+- **Auth**: Google OAuth via Supabase
+- **Deployment**: Docker + Google Cloud Run
+- **Design**: Custom dark theme, Inter font, glassmorphism
 
 ## Getting Started
 
@@ -69,28 +104,19 @@ npm install
 npm run dev
 ```
 
-> **Note**: Currently a prototype with inline styles. Production path:
-> 1. Move to Tailwind CSS or CSS modules
-> 2. Add Supabase/Postgres for persistence
-> 3. Add auth (Clerk/NextAuth)
-> 4. Add real-time sync (Supabase Realtime or WebSockets)
-> 5. Add Slack/Teams integration for weekly reminders
+The app runs on `localhost:5173`. Auth is skipped on localhost for development.
 
-## Data Model (for DB migration)
+## Keyboard Shortcuts
 
-```sql
--- Core tables
-squads (id, name, created_at)
-roles (id, name, created_at)
-people (id, name, role_id, squad_id, avatar_url)
-projects (id, xid, name, owner_id, squad_id, phase, ship, start_date, end_date)
+| Key | Action |
+|-----|--------|
+| `1`–`5` | Navigate tabs (Summary, Pulse, Commit, Projects, People) |
+| `6` | Open Guide |
+| `T` | Open Terminal |
+| `F` | Command palette / universal search |
+| `?` | Toggle keyboard shortcut hints |
+| `Esc` | Go back / close palette |
 
--- Weekly commitments
-weeks (id, start_date, end_date, status)
-commitments (id, person_id, week_id, locked_at)
-commitment_items (id, commitment_id, slot, project_id, type, stage, title, done_at)
-commitment_buffer (id, commitment_id, project_id, type, stage, title)
+---
 
--- History (denormalized for speed)
-project_history (id, project_id, week_id, entries_json)
-```
+*vibe coded by AJ, Opus, Codex, Wispr, Vosk, and Red Bull!*
