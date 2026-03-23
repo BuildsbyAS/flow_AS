@@ -3,11 +3,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, outcomeConfig, entityColors } from "../styles/theme";
 import { Tag, EmptyState, Surface, Label, Btn, Sel, StatCell } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
-import { weekConfig } from "../data/seed";
+import { weekConfig as fallbackWeekConfig } from "../data/seed";
 
 /* ── helpers ──────────────────────────────────────────────── */
 
-function computePersonData(person, commitments, projects, history) {
+function computePersonData(person, commitments, projects, history, weekConfig) {
   const cm = commitments.find(x => x.person === person);
   const tc = typeConfig();
   const pc = getPhaseColors();
@@ -73,7 +73,26 @@ function computePersonData(person, commitments, projects, history) {
   });
 
   const totalHistoryItems = weeklyData.filter(w => !w.isCurrent).reduce((s, w) => s + w.total, 0);
-  const weeksActive = weeklyData.filter(w => w.total > 0).length;
+
+  // Only count weeks from the person's first activity onward
+  const firstActiveIdx = weeklyData.findIndex(w => w.total > 0);
+  const relevantWeeks = firstActiveIdx >= 0 ? weeklyData.slice(firstActiveIdx) : [];
+  const weeksActive = relevantWeeks.filter(w => w.total > 0).length;
+  const weeksEligible = relevantWeeks.length;
+
+  // Momentum: per-week score based on completion rate
+  // Past weeks: % of items marked done/done_carry (out of 100)
+  // Current week: 35 pts for locking + 65 pts × completion rate
+  const weekScores = relevantWeeks.filter(w => w.total > 0).map(w => {
+    const completed = w.items.filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
+    if (w.isCurrent) {
+      const lockScore = cm?.lockedAt ? 35 : 0;
+      const completionScore = w.total > 0 ? (completed / w.total) * 65 : 0;
+      return lockScore + completionScore;
+    }
+    return w.total > 0 ? (completed / w.total) * 100 : 0;
+  });
+  const momentum = weekScores.length > 0 ? Math.round(weekScores.reduce((a, b) => a + b, 0) / weekScores.length) : null;
 
   const scopeChurnEvents = [];
   if (deselectedItems.length > 0) {
@@ -88,7 +107,7 @@ function computePersonData(person, commitments, projects, history) {
   return {
     cm, currentItems, deselectedItems, hasBuffer, thisWeekTypes,
     weeklyData, projectTimeline, projectMap, totalHistoryItems,
-    weeksActive, scopeChurnEvents, tc, pc, oc,
+    weeksActive, weeksEligible, momentum, scopeChurnEvents, tc, pc, oc,
   };
 }
 
@@ -98,7 +117,8 @@ function computePersonData(person, commitments, projects, history) {
 /*  PEOPLE DEEP DIVE                                         */
 /* ═══════════════════════════════════════════════════════════ */
 
-const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical, selectedWeekKey }) => {
+const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical, selectedWeekKey, weekConfig: weekConfigProp }) => {
+  const weekConfig = weekConfigProp || fallbackWeekConfig;
   const [selectedPerson, setSelectedPerson] = useState(initialPerson || null);
 
   const initParams = useRef(new URLSearchParams(window.location.search)).current;
@@ -237,17 +257,40 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
                   const hasDeselect = cm && cm.deselected >= 0;
                   const isFocused = kbActive && (startIdx + gi) === focusIdx;
 
-                  // Quick reliability preview
+                  // Momentum preview — score based on completion rate per week
                   const personWeeks = weekConfig.historyWeeks;
-                  let activeWks = 0;
-                  personWeeks.forEach(w => {
-                    const active = Object.values(history).some(ph =>
-                      ph.some(wk => wk.week === w && wk.entries.some(e => e.person === p.name))
+                  const weekItems = personWeeks.map(w => {
+                    const wkItems = [];
+                    Object.values(history).forEach(ph =>
+                      ph.forEach(wk => {
+                        if (wk.week === w) wk.entries.filter(e => e.person === p.name).forEach(e => wkItems.push(e));
+                      })
                     );
-                    if (active) activeWks++;
+                    return wkItems;
                   });
-                  if (items.length > 0) activeWks++;
-                  const relPct = personWeeks.length > 0 ? Math.round((activeWks / (personWeeks.length + 1)) * 100) : 0;
+                  // Find first week with activity
+                  const hasCurrentItems = items.length > 0;
+                  const firstActiveWk = weekItems.findIndex(wi => wi.length > 0);
+                  const hasAnyHistory = firstActiveWk >= 0 || hasCurrentItems;
+                  let momPct = null;
+                  if (hasAnyHistory) {
+                    const scores = [];
+                    const startIdx2 = firstActiveWk >= 0 ? firstActiveWk : weekItems.length;
+                    for (let wi = startIdx2; wi < weekItems.length; wi++) {
+                      if (weekItems[wi].length > 0) {
+                        const done = weekItems[wi].filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
+                        scores.push((done / weekItems[wi].length) * 100);
+                      }
+                    }
+                    // Current week
+                    if (hasCurrentItems) {
+                      const done = items.filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
+                      const lockScore = cm?.lockedAt ? 35 : 0;
+                      const completionScore = items.length > 0 ? (done / items.length) * 65 : 0;
+                      scores.push(lockScore + completionScore);
+                    }
+                    momPct = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+                  }
 
                   return (
                     <div key={gi} className={`flow-row${isFocused ? " flow-kb-focus" : ""}`} onClick={() => openPerson(p.name)} style={{
@@ -271,10 +314,10 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
                           </div>
                         </div>
                       </div>
-                      {/* Reliability indicator */}
+                      {/* Momentum indicator */}
                       <div style={{ textAlign: "center", flexShrink: 0, marginLeft: space[3] }}>
-                        <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: relPct >= 80 ? c.green : relPct >= 50 ? c.orange : c.red, lineHeight: 1 }}>{relPct}%</div>
-                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginTop: space[1] }}>Reliability</div>
+                        <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: momPct === null ? c.textDim : momPct >= 80 ? c.green : momPct >= 50 ? c.orange : c.red, lineHeight: 1 }}>{momPct === null ? "—" : `${momPct}%`}</div>
+                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginTop: space[1] }}>Momentum</div>
                       </div>
                     </div>
                   );
@@ -294,11 +337,11 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   /* ═══ DETAIL VIEW ═══════════════════════════════════════ */
 
   const personObj = people.find(p => p.name === selectedPerson);
-  const data = computePersonData(selectedPerson, commitments, projects, history);
+  const data = computePersonData(selectedPerson, commitments, projects, history, weekConfig);
   const { currentItems, weeklyData, scopeChurnEvents } = data;
 
   const allPersonProjects = Object.keys(data.projectMap);
-  const reliabilityPct = weeklyData.length > 0 ? Math.round((data.weeksActive / weeklyData.length) * 100) : 0;
+  const momentumPct = data.momentum;
 
   // Last 4 weeks summary data
   const last4 = weeklyData.filter(w => !w.isCurrent).slice(-4);
@@ -332,10 +375,10 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
             </div>
           </div>
 
-          {/* Reliability highlight */}
-          <div style={{ textAlign: "center", padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusMd, background: reliabilityPct >= 80 ? c.greenDim : reliabilityPct >= 50 ? c.orangeDim : c.redDim, border: `1px solid ${(reliabilityPct >= 80 ? c.green : reliabilityPct >= 50 ? c.orange : c.red)}20` }}>
-            <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, color: reliabilityPct >= 80 ? c.green : reliabilityPct >= 50 ? c.orange : c.red, lineHeight: 1 }}>{reliabilityPct}%</div>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginTop: space[1] }}>Reliability</div>
+          {/* Momentum highlight */}
+          <div style={{ textAlign: "center", padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusMd, background: momentumPct === null ? c.surfaceAlt : momentumPct >= 80 ? c.greenDim : momentumPct >= 50 ? c.orangeDim : c.redDim, border: `1px solid ${momentumPct === null ? c.border : (momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.orange : c.red) + "20"}` }}>
+            <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, color: momentumPct === null ? c.textDim : momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.orange : c.red, lineHeight: 1 }}>{momentumPct === null ? "—" : `${momentumPct}%`}</div>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginTop: space[1] }}>Momentum</div>
           </div>
         </div>
 
@@ -344,8 +387,8 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
           <Label style={{ marginBottom: space[3] }}>Last 4 Weeks</Label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: space[3] }}>
             <StatCell value={`${last4Active}/${last4.length}`} label="Active weeks" color={c.text} style={{ textAlign: "left" }} />
-            <StatCell value={last4Total} label="Commitments" color={c.accent} style={{ textAlign: "left" }} />
-            <StatCell value={`${reliabilityPct}%`} label="Reliability" color={reliabilityPct >= 80 ? c.green : reliabilityPct >= 50 ? c.orange : c.red} style={{ textAlign: "left" }} />
+            <StatCell value={last4Total} label="Commits" color={c.accent} style={{ textAlign: "left" }} />
+            <StatCell value={momentumPct === null ? "—" : `${momentumPct}%`} label="Momentum" color={momentumPct === null ? c.textDim : momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.orange : c.red} style={{ textAlign: "left" }} />
             <StatCell value={last4Projects.size} label="Projects" color={c.text} style={{ textAlign: "left" }} />
           </div>
         </div>
@@ -358,7 +401,7 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
         {currentItems.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
             <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>
-              {currentItems.length} commitment{currentItems.length !== 1 ? "s" : ""} across {new Set(currentItems.map(it => it.project).filter(Boolean)).size} project{new Set(currentItems.map(it => it.project).filter(Boolean)).size !== 1 ? "s" : ""}
+              {currentItems.length} commit{currentItems.length !== 1 ? "s" : ""} across {new Set(currentItems.map(it => it.project).filter(Boolean)).size} project{new Set(currentItems.map(it => it.project).filter(Boolean)).size !== 1 ? "s" : ""}
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
               {currentItems.map((it, i) => (
@@ -376,7 +419,7 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
             </div>
           </div>
         ) : (
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No commitments this week</div>
+          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No commits this week</div>
         )}
         {scopeChurnEvents.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: space[1], padding: `${space[2]}px ${space[3]}px`, marginTop: space[3], background: c.orangeDim, borderRadius: layout.radiusMd, border: `1px solid ${c.orange}15`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.5 }}>

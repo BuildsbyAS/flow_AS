@@ -1,4 +1,5 @@
 import React from "react";
+import ReactDOM from "react-dom";
 import { c, typo, layout, space, motion, btnVariants, entityColors } from "../styles/theme";
 
 // ══════════════════════════════════════════════════════════════
@@ -40,10 +41,10 @@ const SURFACE_BG = {
   overlay: () => c.surfaceOverlay,
 };
 
-export const Surface = ({ children, style: s, accent, className = "", compact = false, variant = "panel" }) => {
+export const Surface = ({ children, style: s, accent, className = "", compact = false, variant = "panel", id }) => {
   const bgFn = SURFACE_BG[variant] || SURFACE_BG.panel;
   return (
-    <div className={`flow-card ${className}`} style={{
+    <div id={id} className={`flow-card ${className}`} style={{
       background: bgFn(),
       border: `1px solid ${c.border}`,
       borderLeft: accent ? `3px solid ${accent}` : `1px solid ${c.border}`,
@@ -151,7 +152,7 @@ export const TextArea = ({ style: s, ...rest }) => (
 
 // ══════════════════════════════════════════════════════════════
 // ChoiceGroup — single-select toggle button group
-// Use for: stage, type, duration pickers in Focus commitment cards
+// Use for: stage, type, duration pickers in Commit cards
 // mono: true → uses monoMd tokens (for type codes); false → bodySm (for labels)
 // ══════════════════════════════════════════════════════════════
 export const ChoiceGroup = ({ options, value, onChange, mono = false }) => {
@@ -204,6 +205,7 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
   const inputRef = React.useRef(null);
   const listRef = React.useRef(null);
   const containerRef = React.useRef(null);
+  const dropdownRef = React.useRef(null);
 
   const filtered = query
     ? options.filter(o => o.toLowerCase().includes(query.toLowerCase()))
@@ -217,7 +219,10 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
   // Close on outside click
   React.useEffect(() => {
     if (!open) return;
-    const handler = (e) => { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false); };
+    const handler = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target) &&
+          dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
+    };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
@@ -239,6 +244,15 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
     }
   }, [focusIdx]);
 
+  // Calculate dropdown position relative to viewport
+  const [dropPos, setDropPos] = React.useState({ top: 0, left: 0, width: 0 });
+  React.useEffect(() => {
+    if (open && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    }
+  }, [open]);
+
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <button onClick={() => setOpen(!open)} className="flow-input" style={{
@@ -253,12 +267,12 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || placeholder}</span>
         <span style={{ color: c.textDim, fontSize: 10, marginLeft: space[2], flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
       </button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4,
+      {open && ReactDOM.createPortal(
+        <div ref={dropdownRef} style={{
+          position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width,
           background: c.surfaceOverlay, border: `1px solid ${c.border}`,
-          borderRadius: layout.radiusSm, boxShadow: c.shadowOverlay,
-          zIndex: 100, maxHeight: 240, display: "flex", flexDirection: "column",
+          borderRadius: layout.radiusSm, boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          zIndex: 10000, maxHeight: 240, display: "flex", flexDirection: "column",
         }}>
           <div style={{ padding: `${space[2]}px ${space[2]}px 0` }}>
             <input ref={inputRef} value={query} onChange={e => setQuery(e.target.value)}
@@ -289,7 +303,8 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
                 }}>{opt}</div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -366,23 +381,23 @@ export const FilterChip = ({ label, active = true, onClick, style: s }) => (
 // Use for: supporting metrics in hero strips, summary rails
 // Shared across Summary (prev-week diff) and Pulse (commits/blocked/health)
 // ══════════════════════════════════════════════════════════════
-export const MetricCompact = ({ value, label, color, prevValue }) => (
+export const MetricCompact = ({ value, label, color, prevValue, hero }) => (
   <div style={{
     display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
     padding: `${space[3] - 2}px ${space[2]}px`, minWidth: 48,
   }}>
     <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
       <span style={{
-        fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
-        fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+        fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
+        fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
         color, lineHeight: 1,
       }}>{value}</span>
       {prevValue !== undefined && <DeltaIndicator value={value - prevValue} />}
     </div>
     <span style={{
       fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-      fontWeight: 500, letterSpacing: "0",
-      color: c.textMid, whiteSpace: "nowrap",
+      fontWeight: hero ? 700 : 500, letterSpacing: "0",
+      color: hero ? c.text : c.textMid, whiteSpace: "nowrap",
     }}>{label}</span>
   </div>
 );
@@ -484,9 +499,9 @@ export const SectionDivider = ({ label, count, color, style: s }) => (
 // ══════════════════════════════════════════════════════════════
 // SummaryTile — compact inline tile for KPI/status summary strips
 // Use for: phase counts, status counts, clickable filter tiles
-// Shared across Pulse (phase/ship/no-action) and Focus (locked/ready/partial/empty)
+// Shared across Pulse (phase/ship/no-action) and Commit (locked/ready/partial/empty)
 // ══════════════════════════════════════════════════════════════
-export const SummaryTile = ({ value, label, color, active, onClick, icon, prevValue }) => (
+export const SummaryTile = ({ value, label, color, active, onClick, icon, prevValue, hero }) => (
   <div
     onClick={onClick}
     className="flow-glass-tile"
@@ -510,8 +525,8 @@ export const SummaryTile = ({ value, label, color, active, onClick, icon, prevVa
     </div>
     <span style={{
       fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-      fontWeight: 500, letterSpacing: "0",
-      color: active ? color : c.textMid,
+      fontWeight: hero ? 700 : 500, letterSpacing: "0",
+      color: hero ? c.text : (active ? color : c.textMid),
       whiteSpace: "nowrap",
     }}>{icon ? `${icon} ` : ""}{label}</span>
   </div>

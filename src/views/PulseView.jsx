@@ -1,10 +1,10 @@
 // Flow — Pulse View (Phase 2: full design-system compliance)
 // Leadership command center — highest intensity, futuristic, tactical
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { c, typo, space, layout, motion, phaseNames, typeConfig, phaseColors, density, entityColors } from "../styles/theme";
-import { Badge, Tag, Card, Surface, Label, Btn, EmptyState, DeltaIndicator, VDivider, TelemetryLabel, MetricCompact, SummaryTile, Th as SharedTh } from "../components/shared";
+import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, typeConfig, phaseColors, density, entityColors } from "../styles/theme";
+import { Badge, Tag, Card, Surface, Label, Btn, EmptyState, DeltaIndicator, VDivider, TelemetryLabel, MetricCompact, SummaryTile, Th as SharedTh, EntityLink } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
-import { weekConfig } from "../data/seed";
+import { weekConfig as fallbackWeekConfig } from "../data/seed";
 
 // ─── ANIMATED KPI COUNTER ─────────────────────────────────────
 const KpiCounter = ({ value, label, color, delay = 0 }) => {
@@ -144,7 +144,6 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
         {/* Phase + Squad + Owner row */}
         <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[3], flexWrap: "wrap" }}>
           <Badge color={pc[proj.phase]} bg={`${pc[proj.phase]}15`}>{proj.phase}</Badge>
-          {proj.ship && <Badge color={c.green} bg={c.greenDim}>Shipped</Badge>}
           <span style={{ width: 1, height: 12, background: c.border, flexShrink: 0 }} />
           <span style={{
             fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
@@ -248,32 +247,9 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
           </div>
         </div>
 
-        {/* ── Risks ── */}
-        {proj.risks.length > 0 && (
-          <div>
-            <span style={{ ...sectionTitle, color: c.red }}>Risks · {proj.risks.length}</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
-              {proj.risks.map(r => (
-                <div key={r.key} style={{
-                  display: "flex", alignItems: "center", gap: space[2] - 2,
-                  padding: `${space[1] + 1}px ${space[2]}px`,
-                  background: `${r.color}08`, borderRadius: layout.radiusSm,
-                  border: `1px solid ${r.color}18`,
-                }}>
-                  <span style={{ fontSize: 11, lineHeight: 1 }}>{r.icon}</span>
-                  <span style={{
-                    fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                    fontWeight: 600, color: r.color,
-                  }}>{r.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── This week's focus ── */}
+        {/* ── This week's commits ── */}
         <div>
-          <span style={sectionTitle}>This week's focus · {proj.items.length}</span>
+          <span style={sectionTitle}>This week's commits · {proj.items.length}</span>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {proj.items.map((it, ii) => (
               <div key={ii} style={{
@@ -303,7 +279,7 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
                 <span style={{
                   fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
                   color: c.textDim,
-                }}>No focus items this week</span>
+                }}>No commit items this week</span>
               </div>
             )}
           </div>
@@ -324,13 +300,14 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
 // ═══════════════════════════════════════════════════════════════
 // PULSE VIEW — main component
 // ═══════════════════════════════════════════════════════════════
-const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globalFilters = {}, isHistorical, selectedWeekKey }) => {
+const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globalFilters = {}, isHistorical, selectedWeekKey, weekConfig: weekConfigProp, appSettings = {} }) => {
+  const weekConfig = weekConfigProp || fallbackWeekConfig;
   const [expandedProject, setExpandedProject] = useState(null);
   const initParams = useRef(new URLSearchParams(window.location.search)).current;
   const [filterPhase, setFilterPhase] = useState(initParams.get("phase") || null);
   const [sortCol, setSortCol] = useState(initParams.get("sort") || "squad");
   const [sortDir, setSortDir] = useState(initParams.get("dir") || "asc");
-  const [showShip, setShowShip] = useState(initParams.get("ship") === "1");
+  // showShip removed — Ship tile now uses filterStatus="shipping" like other tiles
   const [filterStatus, setFilterStatus] = useState(initParams.get("status") || "");
   const [focusIdx, setFocusIdx] = useState(0);
   const [kbActive, setKbActive] = useState(false);
@@ -363,49 +340,99 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
     const planned = calcPlanned(proj.startDate, proj.endDate);
     const remaining = proj.endDate ? Math.ceil((new Date(proj.endDate) - new Date(weekConfig.today)) / 86400000) : null;
 
+    // ── Risk signals ──
     const risks = [];
     if (!proj.owner) risks.push({ key: "no_dri", label: "No owner", color: c.red, icon: "⚠" });
+    if (items.length === 0 && !shipPhases.includes(proj.phase)) risks.push({ key: "no_commits", label: "No activity", color: c.red, icon: "⚠" });
     if ((typeCounts.JAM || 0) > (typeCounts.BUILD || 0) && items.length > 1) risks.push({ key: "jam_heavy", label: "JAM > BUILD", color: c.orange, icon: "⚡" });
-    if (proj.phase === "Dev" && age > 30) risks.push({ key: "stale_eng", label: "Stuck in Eng " + age + "d", color: c.orange, icon: "🐌" });
+    if (proj.phase === "Dev" && age > 30) risks.push({ key: "stale_eng", label: "Stuck in Dev " + age + "d", color: c.orange, icon: "🐌" });
     if (age > 60) risks.push({ key: "aging", label: "Aging " + age + "d", color: c.red, icon: "⏰" });
     if (remaining !== null && remaining < 0) risks.push({ key: "overdue", label: "Overdue", color: c.red, icon: "🚨" });
-    if (typeCounts.BLOCKED > 0) risks.push({ key: "blocked", label: `${typeCounts.BLOCKED} blocked`, color: c.red, icon: "🚧" });
+    const outcomeItems = items.filter(it => it.outcome);
+    const carryCount = outcomeItems.filter(it => it.outcome === "carry").length;
+    const blockedOutcomes = outcomeItems.filter(it => it.outcome === "blocked").length;
+    if (carryCount > 1) risks.push({ key: "carry_heavy", label: carryCount + " carried over", color: c.orange, icon: "🔄" });
 
+    // ── Health: 5 dimensions (each penalizes from 100) ──
     let health = 100;
+
+    // 1. Timeline pressure (max −35)
     if (planned > 0) {
       const pctElapsed = age / planned;
-      if (pctElapsed > 1) health -= 40;
-      else if (pctElapsed > 0.75) health -= 20;
+      if (pctElapsed > 1) health -= 35;
+      else if (pctElapsed > 0.85) health -= 20;
+      else if (pctElapsed > 0.65) health -= 10;
     }
-    if (age > 60) health -= 15;
-    else if (age > 30) health -= 5;
-    if (typeCounts.BLOCKED) health -= typeCounts.BLOCKED * 15;
-    if (items.length > 0 && !typeCounts.BUILD && typeCounts.JAM) health -= 10;
-    if (!proj.owner) health -= 15;
+    if (remaining !== null && remaining < 7 && remaining >= 0 && !shipPhases.includes(proj.phase)) health -= 5;
+
+    // 2. Commitment activity (max −25)
+    if (items.length === 0 && !shipPhases.includes(proj.phase)) {
+      health -= 25;
+    } else {
+      if (items.length > 0 && !typeCounts.BUILD && typeCounts.JAM) health -= 10;
+      const blockedItems = typeCounts.BLOCKED || 0;
+      if (blockedItems > 0) health -= Math.min(15, blockedItems * 5);
+    }
+
+    // 3. Ownership & accountability (max −20)
+    if (!proj.owner) health -= 20;
+    const projPeople = ppl.map(name => commitments.find(cm => cm.person === name));
+    const hasUnlocked = projPeople.some(cm => cm && !cm.lockedAt);
+    if (items.length > 0 && hasUnlocked) health -= 5;
+
+    // 4. Outcome track record (max −15)
+    const outcomePenalty = Math.min(10, carryCount * 5) + Math.min(10, blockedOutcomes * 5);
+    health -= Math.min(15, outcomePenalty);
+
+    // 5. Scope stability (max −10)
+    const depriOnProj = commitments.filter(cm => cm.deselected >= 0 && cm.items[cm.deselected]?.project === proj.id).length;
+    if (depriOnProj > 0) health -= Math.min(10, depriOnProj * 5);
+
     health = Math.max(0, Math.min(100, health));
 
     return { ...proj, items, typeCounts, people: ppl, totalCommitments: items.length, age, planned, remaining, risks, health };
   });
 
+  // ── GA auto-hide: hide GA projects older than threshold ──
+  const gaVisibilityWeeks = parseInt(appSettings.ga_visibility_weeks, 10);
+  const gaThresholdMs = !isNaN(gaVisibilityWeeks) ? gaVisibilityWeeks * 7 * 24 * 60 * 60 * 1000 : null;
+  const isGaHidden = (proj) => gaThresholdMs !== null && proj.phase === "GA" && proj.gaEnteredAt && (Date.now() - new Date(proj.gaEnteredAt).getTime()) > gaThresholdMs;
+
   // ── Apply global filters to summary data ──
   const summaryData = projectData.filter(proj => {
-    if (globalFilters.owner && proj.owner !== globalFilters.owner) return false;
-    if (globalFilters.squad && proj.squad !== globalFilters.squad) return false;
-    if (globalFilters.person) {
-      const hasPersonCommitment = proj.items.some(it => it.person === globalFilters.person);
+    if (isGaHidden(proj)) return false;
+    if (globalFilters.owner.length > 0 && !globalFilters.owner.includes(proj.owner)) return false;
+    if (globalFilters.squad.length > 0 && !globalFilters.squad.includes(proj.squad)) return false;
+    if (globalFilters.person.length > 0) {
+      const hasPersonCommitment = proj.items.some(it => globalFilters.person.includes(it.person));
       if (!hasPersonCommitment) return false;
     }
     return true;
   });
 
   // ── Derived KPI metrics (from globally filtered data) ──
-  const shippingProjects = summaryData.filter(p => p.ship);
+  const shippingProjects = summaryData.filter(p => shipPhases.includes(p.phase));
   const totalRiskProjects = summaryData.filter(p => p.risks.length > 0).length;
   const avgHealth = summaryData.length > 0 ? Math.round(summaryData.reduce((s, p) => s + p.health, 0) / summaryData.length) : 0;
   const summaryItems = summaryData.flatMap(p => p.items);
   const totalCommitments = summaryItems.length;
-  const blockedCount = summaryData.reduce((s, p) => s + (p.typeCounts.BLOCKED || 0), 0);
   const noActionCount = summaryData.filter(p => p.items.length === 0).length;
+
+  // ── Commit-level metrics ──
+  const lockedItems = commitments.filter(cm => !!cm.lockedAt).flatMap(cm => cm.items.filter((_, idx) => cm.deselected !== idx));
+  const lockedCount = lockedItems.length;
+  const lockedPct = totalCommitments > 0 ? Math.round((lockedCount / totalCommitments) * 100) : 0;
+  // Outcome breakdown (from all items across all commits)
+  const allOutcomeItems = commitments.flatMap(cm => cm.items.filter((_, idx) => cm.deselected !== idx));
+  const outcomeTotal = allOutcomeItems.length;
+  const completedCount = allOutcomeItems.filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
+  const carriedCount = allOutcomeItems.filter(it => it.outcome === "carry").length;
+  const blockedCount = allOutcomeItems.filter(it => it.outcome === "blocked").length;
+  const depriCount = commitments.filter(cm => cm.deselected >= 0).length;
+  const completedPct = outcomeTotal > 0 ? Math.round((completedCount / outcomeTotal) * 100) : 0;
+  const carriedPct = outcomeTotal > 0 ? Math.round((carriedCount / outcomeTotal) * 100) : 0;
+  const blockedPct = outcomeTotal > 0 ? Math.round((blockedCount / outcomeTotal) * 100) : 0;
+  const depriPct = outcomeTotal > 0 ? Math.round((depriCount / outcomeTotal) * 100) : 0;
 
   // Risk level
   const riskPct = summaryData.length > 0 ? Math.round((totalRiskProjects / summaryData.length) * 100) : 0;
@@ -431,16 +458,18 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
 
   // ── Filtering (uses globalFilters) ──
   let filtered = projectData.filter(proj => {
+    // Auto-hide old GA projects (unless user explicitly filters to GA phase)
+    if (!filterPhase && isGaHidden(proj)) return false;
     if (showRisksOnly && proj.risks.length === 0) return false;
     if (filterPhase && proj.phase !== filterPhase) return false;
-    if (globalFilters.owner && proj.owner !== globalFilters.owner) return false;
-    if (globalFilters.squad && proj.squad !== globalFilters.squad) return false;
-    if (globalFilters.person) {
-      const hasPersonCommitment = proj.items.some(it => it.person === globalFilters.person);
+    if (globalFilters.owner.length > 0 && !globalFilters.owner.includes(proj.owner)) return false;
+    if (globalFilters.squad.length > 0 && !globalFilters.squad.includes(proj.squad)) return false;
+    if (globalFilters.person.length > 0) {
+      const hasPersonCommitment = proj.items.some(it => globalFilters.person.includes(it.person));
       if (!hasPersonCommitment) return false;
     }
     if (filterStatus === "no_action" && proj.items.length > 0) return false;
-    if (filterStatus === "shipping" && !proj.ship) return false;
+    if (filterStatus === "shipping" && !shipPhases.includes(proj.phase)) return false;
     return true;
   });
 
@@ -469,7 +498,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
   const dp = densityPresets[matrixDensity] || densityPresets.default;
 
   const localActiveFilters = [filterPhase, filterStatus].filter(Boolean).length;
-  const clearLocalFilters = () => { setFilterPhase(null); setFilterStatus(""); setShowShip(false); setShowRisksOnly(false); };
+  const clearLocalFilters = () => { setFilterPhase(null); setFilterStatus(""); setShowRisksOnly(false); };
 
   // View morph: bump key on mode change
   const handleModeChange = useCallback((mode) => {
@@ -502,7 +531,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
     if (filterPhase) p.set("phase", filterPhase);
     if (sortCol !== "squad") p.set("sort", sortCol);
     if (sortDir !== "asc") p.set("dir", sortDir);
-    if (showShip) p.set("ship", "1");
+    if (filterStatus === "shipping") p.set("status", "shipping");
     if (showRisksOnly) p.set("risks", "1");
     if (pulseMode !== "matrix") p.set("mode", pulseMode);
     if (matrixDensity !== "default") p.set("density", matrixDensity);
@@ -510,17 +539,17 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
     const qs = p.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, "", url);
-  }, [filterPhase, sortCol, sortDir, showShip, showRisksOnly, pulseMode, matrixDensity, filterStatus]);
+  }, [filterPhase, sortCol, sortDir, showRisksOnly, pulseMode, matrixDensity, filterStatus]);
 
   // ── Keyboard shortcuts ──
   useKeyboard([
     { key: "ArrowUp", fn: () => { setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } },
     { key: "ArrowDown", fn: () => { setKbActive(true); setFocusIdx(i => Math.min(filtered.length - 1, i + 1)); } },
     { key: "Enter", fn: () => { if (filtered[focusIdx]) { const p = filtered[focusIdx]; setSidePanelProj(sidePanelProj?.id === p.id ? null : p); } } },
-    { key: "s", fn: () => { setShowShip(!showShip); setFilterPhase(null); setShowRisksOnly(false); } },
+    { key: "s", fn: () => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); } },
     { key: "c", fn: () => { clearLocalFilters(); } },
-    { key: "Escape", fn: () => { if (sidePanelProj) { setSidePanelProj(null); } else { clearLocalFilters(); setShowShip(false); } } },
-  ], [filtered.length, focusIdx, showShip, showRisksOnly, sidePanelProj]);
+    { key: "Escape", fn: () => { if (sidePanelProj) { setSidePanelProj(null); } else { clearLocalFilters(); } } },
+  ], [filtered.length, focusIdx, filterStatus, showRisksOnly, sidePanelProj]);
 
   // Re-trigger row animation only on mode change
   useEffect(() => {
@@ -537,23 +566,23 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
       style={{ padding: dp.headerPad, ...s }}>{children}</SharedTh>
   );
 
-  // ── People view data — flat rows: one row per focus item ──
+  // ── People view data — flat rows: one row per commit item ──
   const buildPeopleRows = () => {
     const rows = [];
     people.forEach(person => {
-      if (globalFilters.person && person.name !== globalFilters.person) return;
-      if (globalFilters.squad && person.squad !== globalFilters.squad) return;
+      if (globalFilters.person.length > 0 && !globalFilters.person.includes(person.name)) return;
+      if (globalFilters.squad.length > 0 && !globalFilters.squad.includes(person.squad)) return;
       const cm = commitments.find(cm => cm.person === person.name);
       const isLocked = !!cm?.lockedAt;
       const items = cm ? cm.items.filter((_, idx) => cm.deselected !== idx) : [];
       if (items.length === 0) {
-        if (!globalFilters.owner) {
+        if (globalFilters.owner.length === 0) {
           rows.push({ squad: person.squad, personName: person.name, role: person.role, projectId: null, projectName: null, owner: null, title: null, type: null, stage: null, status: null });
         }
       } else {
         items.forEach((item, itemIdx) => {
           const proj = projects.find(pr => pr.id === item.project);
-          if (globalFilters.owner && (!proj || proj.owner !== globalFilters.owner)) return;
+          if (globalFilters.owner.length > 0 && (!proj || !globalFilters.owner.includes(proj.owner))) return;
           // Skip rows where both project and title are empty (corrupt/stale data)
           if (!item.project && !item.title) return;
           const stage = (!item.project && !proj) ? null : (item.stage || proj?.phase || null);
@@ -595,53 +624,80 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
         display: "flex", flexDirection: "column", gap: space[3] - 2,
       }}>
 
-      {/* UNIFIED SUMMARY — phase counts + KPIs + risk in one strip */}
+      {/* UNIFIED SUMMARY — phase counts + commit metrics + outcomes */}
       <div className="flow-mission-grid" style={{ padding: `${space[3]}px ${space[4]}px` }}>
         <div style={{
-          display: "flex", alignItems: "center", gap: space[1],
-          flexWrap: "wrap", position: "relative", zIndex: 1,
+          display: "flex", alignItems: "center",
+          position: "relative", zIndex: 1,
         }}>
-          {/* Phase tiles — clickable */}
-          {phaseNames.map(ph => (
+          {/* Section 1: Phase tiles — clickable */}
+          <div style={{ flex: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
+            {phaseNames.map(ph => (
+              <SummaryTile
+                key={ph}
+                value={phaseCounts[ph]}
+                label={ph}
+                color={pc[ph]}
+                active={filterPhase === ph}
+                onClick={() => { setFilterPhase(filterPhase === ph ? null : ph); setFilterStatus(""); setPulseMode("matrix"); }}
+              />
+            ))}
             <SummaryTile
-              key={ph}
-              value={phaseCounts[ph]}
-              label={ph}
-              color={pc[ph]}
-              active={filterPhase === ph}
-              onClick={() => { setFilterPhase(filterPhase === ph ? null : ph); setShowShip(false); setPulseMode("matrix"); }}
+              value={shippingProjects.length}
+              label={<>{"🚀 Ship"}</>}
+              color={"#1FAA59"}
+              active={filterStatus === "shipping"}
+              onClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); setPulseMode("matrix"); }}
             />
-          ))}
-          {/* Ship tile */}
-          <SummaryTile
-            value={shippingProjects.length}
-            label="Ship"
-            color={c.green}
-            icon="🚀"
-            active={showShip}
-            onClick={() => { setShowShip(!showShip); setFilterPhase(null); setShowRisksOnly(false); setPulseMode("matrix"); }}
-          />
-          {/* No action tile */}
-          <SummaryTile
-            value={noActionCount}
-            label="No action"
-            color={c.orange}
-            active={filterStatus === "no_action"}
-            onClick={() => { setFilterStatus(filterStatus === "no_action" ? "" : "no_action"); setFilterPhase(null); setShowShip(false); setPulseMode("matrix"); }}
-          />
+            <SummaryTile
+              value={noActionCount}
+              label="No action"
+              color={c.orange}
+              active={filterStatus === "no_action"}
+              onClick={() => { setFilterStatus(filterStatus === "no_action" ? "" : "no_action"); setFilterPhase(null); setPulseMode("matrix"); }}
+            />
+          </div>
 
-          <VDivider />
+          <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
 
-          {/* KPI metrics */}
-          <MetricCompact value={totalCommitments} label="Commits" color={c.text} />
-          <MetricCompact value={blockedCount} label="Blocked" color={blockedCount > 0 ? c.red : c.textDim} />
-          <MetricCompact value={avgHealth} label="Avg Health" color={avgHealth >= 70 ? c.green : avgHealth >= 40 ? c.orange : c.red} />
+          {/* Section 2: Commit metrics — non-clickable */}
+          <div style={{ flex: 3, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
+            <MetricCompact value={totalCommitments} label="Commits" color={c.text} hero />
+            <MetricCompact value={lockedCount} label="Locked" color={lockedCount > 0 ? c.green : c.textDim} />
+            <MetricCompact value={`${lockedPct}%`} label="Lock Rate" color={lockedPct >= 80 ? c.green : lockedPct >= 50 ? c.orange : c.textDim} />
+          </div>
 
-          <VDivider />
+          <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
 
-          {/* Risk level bar */}
-          <div style={{ flex: 1, minWidth: 120 }}>
-            <RiskLevelBar level={riskLevel} pct={riskPct} />
+          {/* Section 3: Outcome breakdown — clickable, deep-links to commits */}
+          <div style={{ flex: 4, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
+            <SummaryTile value={`${completedPct}%`} label="Completed" color={completedPct > 0 ? c.green : c.textDim} hero
+              onClick={() => { setPulseMode("people"); setTimeout(() => { const el = document.querySelector('[data-status-group="Completed"]'); if (el) { const sc = el.closest('[style*="overflow"]'); if (sc) { const elTop = el.offsetTop - sc.offsetTop; sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" }); } else { el.scrollIntoView({ behavior: "smooth", block: "center" }); } } }, 100); }} />
+            <SummaryTile value={`${carriedPct}%`} label="Carried" color={carriedPct > 0 ? c.orange : c.textDim}
+              onClick={() => { setPulseMode("people"); setTimeout(() => { const el = document.querySelector('[data-status-group="Carry"]'); if (el) { const sc = el.closest('[style*="overflow"]'); if (sc) { const elTop = el.offsetTop - sc.offsetTop; sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" }); } else { el.scrollIntoView({ behavior: "smooth", block: "center" }); } } }, 100); }} />
+            <SummaryTile value={`${blockedPct}%`} label="Blocked" color={blockedPct > 0 ? c.red : c.textDim}
+              onClick={() => { setPulseMode("people"); setTimeout(() => { const el = document.querySelector('[data-status-group="Blocked"]'); if (el) { const sc = el.closest('[style*="overflow"]'); if (sc) { const elTop = el.offsetTop - sc.offsetTop; sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" }); } else { el.scrollIntoView({ behavior: "smooth", block: "center" }); } } }, 100); }} />
+            <SummaryTile value={`${depriPct}%`} label="Depri'd" color={depriPct > 0 ? c.red : c.textDim}
+              onClick={() => { setPulseMode("people"); setTimeout(() => { const el = document.querySelector('[data-status-group="Deprioritized"]'); if (el) { const sc = el.closest('[style*="overflow"]'); if (sc) { const elTop = el.offsetTop - sc.offsetTop; sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" }); } else { el.scrollIntoView({ behavior: "smooth", block: "center" }); } } }, 100); }} />
+          </div>
+
+          <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
+
+          {/* Section 4: Avg Health with progress bar */}
+          <div style={{ flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
+            <div style={{ textAlign: "center", minWidth: 80 }}>
+              <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: 700, color: avgHealth >= 70 ? c.green : avgHealth >= 40 ? c.orange : c.red }}>{avgHealth}</div>
+              <div style={{
+                width: "100%", height: 4, borderRadius: 2, background: c.surfaceAlt, marginTop: 4, overflow: "hidden",
+              }}>
+                <div style={{
+                  width: `${avgHealth}%`, height: "100%", borderRadius: 2,
+                  background: avgHealth >= 70 ? c.green : avgHealth >= 40 ? c.orange : c.red,
+                  transition: "width 0.5s ease",
+                }} />
+              </div>
+              <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginTop: 3, letterSpacing: "0.05em" }}>Avg Health</div>
+            </div>
           </div>
         </div>
       </div>
@@ -653,7 +709,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
       }}>
         {[
           { key: "matrix", label: "Projects" },
-          { key: "people", label: "People" },
+          { key: "people", label: "Commits" },
         ].map(v => (
           <button key={v.key} onClick={() => handleModeChange(v.key)} style={{
             flex: 1, padding: `${space[2]}px ${space[4]}px`,
@@ -677,70 +733,10 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
       <div key={morphKey} className="flow-view-morph">
 
-      {/* ── SHIP VIEW ── */}
-      {pulseMode === "matrix" && showShip && (
-        <div style={{ display: "flex", flexDirection: "column", gap: space[3] - 2 }}>
-          <Label>Shipping this week</Label>
-          {shippingProjects.map(proj => (
-            <Card key={proj.id} style={{ padding: layout.padCard }}>
-              <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-                marginBottom: space[2] - 2,
-              }}>
-                <div style={{ display: "flex", alignItems: "center", gap: space[3] - 2 }}>
-                  <span style={{ fontSize: space[4] }}>🚀</span>
-                  <span style={{
-                    fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                    fontWeight: 700, color: entityColors().project,
-                  }}>{proj.id}</span>
-                  <span style={{
-                    fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
-                    fontWeight: typo.bodyLg.weight, color: c.text,
-                  }}>{proj.name}</span>
-                </div>
-              </div>
-              <div style={{
-                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                color: c.textMid,
-              }}>{proj.squad} · {proj.owner}</div>
-              {proj.items.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: space[2] }}>
-                  {proj.items.map((it, ii) => (
-                    <div key={ii} style={{
-                      display: "flex", alignItems: "center", gap: space[2],
-                      padding: `${space[1]}px ${space[2]}px`,
-                      background: c.surfaceAlt, borderRadius: layout.radiusTag + 1,
-                    }}>
-                      <span style={{
-                        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                        fontWeight: 600, color: c.text, minWidth: 70, cursor: "pointer",
-                        textDecoration: "underline", textDecorationColor: c.textMid + "40",
-                        textUnderlineOffset: 2,
-                      }} onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("people", it.person); }}>{it.person}</span>
-                      <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
-                      <span style={{
-                        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                        color: c.textMid, flex: 1,
-                      }}>{it.title}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          ))}
-          {shippingProjects.length === 0 && (
-            <div style={{
-              textAlign: "center", padding: `${space[7]}px 0`,
-              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim,
-            }}>Nothing shipping this week</div>
-          )}
-        </div>
-      )}
-
       {/* ═══════════════════════════════════════════════════════════
           PROJECT MATRIX — table with hover panel + delta tokens
           ═══════════════════════════════════════════════════════════ */}
-      {pulseMode === "matrix" && !showShip && (
+      {pulseMode === "matrix" && (
         <Surface variant="data" compact style={{
           padding: 0,
         }}>
@@ -753,6 +749,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                   <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
                   <Th col="name" style={{ minWidth: 150, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
                   <Th col="owner" style={{ minWidth: 80, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
+                  <Th col="phase" style={{ minWidth: 64, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>
                   <Th col="health" style={{ minWidth: 48, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Health</Th>
                   {dp.showAge && <Th col="age" style={{ minWidth: 44, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Age</Th>}
                   {dp.showBlocked && <Th col="blocked" style={{ minWidth: 32, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>BLK</Th>}
@@ -769,11 +766,21 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                       cursor: "default", whiteSpace: "nowrap",
                     }}>{ph}</th>
                   ))}
+                  <th style={{
+                    position: "sticky", top: 0, background: c.bg, zIndex: 2,
+                    padding: dp.headerPad, textAlign: "center",
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                    fontWeight: 600, letterSpacing: "0",
+                    color: "#4ADE80",
+                    borderBottom: `1px solid ${"#4ADE80"}40`,
+                    borderLeft: `1px dotted ${c.border}`, minWidth: 76,
+                    cursor: "default", whiteSpace: "nowrap",
+                  }}>Ship</th>
                 </tr>
               </thead>
               <tbody key={rowAnimKey}>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={phaseNames.length + 4 + (dp.showAge ? 1 : 0) + (dp.showBlocked ? 1 : 0) + (dp.showChurn ? 1 : 0)}>
+                  <tr><td colSpan={phaseNames.length + 6 + (dp.showAge ? 1 : 0) + (dp.showBlocked ? 1 : 0) + (dp.showChurn ? 1 : 0)}>
                     <EmptyState icon="🔍" title="No projects match" message="Try adjusting your filters to see results."
                       action={localActiveFilters > 0 ? "Clear filters" : null} onAction={clearLocalFilters} />
                   </td></tr>
@@ -826,7 +833,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                               fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
                               fontWeight: 600, color: c.text,
                             }}>{proj.name}</span>
-                            {proj.ship && <span title="Shipping" style={{ fontSize: typo.bodyXs.size }}>🚀</span>}
+                            {shipPhases.includes(proj.phase) && <span title={proj.phase} style={{ fontSize: typo.bodyXs.size }}>🚀</span>}
                             {hasCriticalRisk && (
                               <span className="flow-risk-radar" style={{
                                 width: 14, height: 14,
@@ -864,13 +871,22 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                         }}>
                           {proj.owner || "—"}
                         </td>
-                        {/* Health */}
-                        <td title={`Health ${proj.health}/100\n${proj.risks.map(r => r.label).join(", ") || "No risks"}`} style={{
+                        {/* Status (phase) */}
+                        <td style={{
                           padding: dp.cellPad, textAlign: "center",
                           borderBottom: `1px dotted ${c.border}`,
                           borderLeft: `1px dotted ${c.border}`,
                         }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                          <Badge color={pc[proj.phase] || c.textMid} bg={`${pc[proj.phase] || c.textMid}15`}>{proj.phase}</Badge>
+                        </td>
+                        {/* Health */}
+                        <td title={`Health ${proj.health}/100\n${proj.risks.map(r => r.label).join(", ") || "No risks"}`} style={{
+                          padding: dp.cellPad,
+                          borderBottom: `1px dotted ${c.border}`,
+                          borderLeft: `1px dotted ${c.border}`,
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                             <div style={{
                               width: 48, height: 8, borderRadius: layout.radiusTag + 1,
                               background: c.surfaceAlt, overflow: "hidden",
@@ -891,6 +907,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                               color: proj.health >= 70 ? c.green : proj.health >= 40 ? c.orange : c.red,
                               opacity: 0.8,
                             }}>{proj.health >= 70 ? "Good" : proj.health >= 40 ? "Fair" : "Poor"}</span>
+                          </div>
                           </div>
                         </td>
                         {/* Age */}
@@ -946,31 +963,36 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                                 padding: dp.cellPad, textAlign: "center", verticalAlign: "middle",
                                 borderBottom: `1px dotted ${c.border}`,
                                 borderLeft: `1px dotted ${c.border}`,
-                                background: isDrill ? `${pc[ph]}20` : isActive ? `${pc[ph]}08` : "transparent",
+                                background: isDrill ? `${pc[ph]}20` : "transparent",
                                 cursor: items.length > 0 ? "pointer" : "default",
                               }}>
-                              {isActive && items.length === 0 && (
-                                <div style={{
-                                  width: 5, height: 5, borderRadius: "50%",
-                                  background: pc[ph], margin: "0 auto", opacity: 0.6,
-                                }} />
-                              )}
                               {items.length > 0 && (
                                 <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
                                   {Object.entries(ct).map(([t, n]) => {
                                     const letter = { BUILD: "B", JAM: "J", COMMIT: "C" }[t] || t[0];
-                                    return <Tag key={t} color={tc[t]?.color} bg={tc[t]?.bg} style={{ letterSpacing: "-0.02em" }}>{letter}{n}</Tag>;
+                                    return <Tag key={t} color={tc[t]?.color} bg={tc[t]?.bg}>{n}{letter}</Tag>;
                                   })}
                                 </div>
                               )}
                             </td>
                           );
                         })}
+                        {/* Ship column */}
+                        <td style={{
+                          padding: dp.cellPad, textAlign: "center", verticalAlign: "middle",
+                          borderBottom: `1px dotted ${c.border}`,
+                          borderLeft: `1px dotted ${c.border}`,
+                          background: shipPhases.includes(proj.phase) ? `${pc[proj.phase] || c.green}10` : "transparent",
+                        }}>
+                          {shipPhases.includes(proj.phase) && (
+                            <Badge color={pc[proj.phase] || c.green} bg={`${pc[proj.phase] || c.green}18`}>{proj.phase}</Badge>
+                          )}
+                        </td>
                       </tr>
                       {/* Cell drilldown */}
                       {drillCell && drillCell.projId === proj.id && (() => {
                         const drillItems = byPhase[drillCell.phase] || [];
-                        const colSpan = phaseNames.length + 4 + (dp.showAge ? 1 : 0) + (dp.showBlocked ? 1 : 0) + (dp.showChurn ? 1 : 0);
+                        const colSpan = phaseNames.length + 6 + (dp.showAge ? 1 : 0) + (dp.showBlocked ? 1 : 0) + (dp.showChurn ? 1 : 0);
                         return (
                           <tr>
                             <td colSpan={colSpan} style={{
@@ -1007,7 +1029,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                       })()}
                       {/* Full row expand */}
                       {isExp && (() => {
-                        const colSpan = phaseNames.length + 4 + (dp.showAge ? 1 : 0) + (dp.showBlocked ? 1 : 0) + (dp.showChurn ? 1 : 0);
+                        const colSpan = phaseNames.length + 6 + (dp.showAge ? 1 : 0) + (dp.showBlocked ? 1 : 0) + (dp.showChurn ? 1 : 0);
                         const keyRisks = proj.risks.filter(r => r.key !== "no_dri" && r.key !== "blocked" && r.key !== "aging");
                         const drillPhase = drillCell && drillCell.projId === proj.id ? drillCell.phase : null;
                         const extraItems = drillPhase
@@ -1053,7 +1075,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                                   fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
                                   color: c.textDim,
                                 }}>
-                                  {hasHiddenItems ? `All ${proj.items.length} commitments shown in ${drillPhase} drilldown above` : "No commitments"}
+                                  {hasHiddenItems ? `All ${proj.items.length} commits shown in ${drillPhase} drilldown above` : "No commits"}
                                 </div>
                               )}
                               {hasHiddenItems && extraItems.length > 0 && (
@@ -1080,179 +1102,238 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
       )}
 
       {/* ═══════════════════════════════════════════════════════════
-          PEOPLE TABLE — flat rows, one per focus item
+          COMMITS TABLE — flat rows, one per commit item (all people, all states)
           ═══════════════════════════════════════════════════════════ */}
       {pulseMode === "people" && (() => {
-        const peopleRows = buildPeopleRows();
-        const commitStatusColors = { Open: c.cyan, Locked: c.green, Blocked: c.red };
+        // Build flat commit rows — ALL items (locked or not)
+        const allCommitRows = [];
+        commitments.forEach(cm => {
+          const pObj = people.find(p => p.name === cm.person);
+          if (!pObj) return;
+          if (globalFilters.person.length > 0 && !globalFilters.person.includes(cm.person)) return;
+          if (globalFilters.squad.length > 0 && !globalFilters.squad.includes(pObj.squad)) return;
+          const isLocked = !!cm.lockedAt;
+          const isClosed = !!cm.closedAt;
+
+          const items = cm.items.slice(0, 3).filter(it => it.title && it.title.trim());
+          if (items.length === 0) {
+            // Person with no commits — show empty row
+            if (globalFilters.owner.length === 0) {
+              allCommitRows.push({
+                person: cm.person, squad: pObj.squad, role: pObj.role,
+                project: null, projectName: null, title: null,
+                type: null, stage: null, _status: "Empty",
+                isDeselected: false, commitIdx: null,
+              });
+            }
+          } else {
+            items.forEach((it, idx) => {
+              const isDepri = cm.deselected === idx;
+              const proj = projects.find(pr => pr.id === it.project);
+              if (globalFilters.owner.length > 0 && (!proj || !globalFilters.owner.includes(proj.owner))) return;
+              const status = isDepri ? "Deprioritized"
+                : isClosed ? (it.outcome === "done" || it.outcome === "done_carry" ? "Completed" : it.outcome === "blocked" ? "Blocked" : it.outcome === "carry" ? "Carry" : "Closed")
+                : isLocked ? (it.outcome === "done" || it.outcome === "done_carry" ? "Completed" : it.outcome === "blocked" ? "Blocked" : it.outcome === "carry" ? "Carry" : "WIP")
+                : it.project && it.stage && it.type ? "Ready"
+                : "Open";
+              allCommitRows.push({
+                person: cm.person, squad: pObj.squad, role: pObj.role,
+                project: it.project || null, projectName: proj?.name || null,
+                title: it.title, type: it.type || null,
+                stage: it.stage || (proj?.phase || null),
+                duration: it.duration || null,
+                _status: status, isDeselected: isDepri, commitIdx: idx,
+              });
+            });
+          }
+          // Buffer item
+          if (cm.deselected >= 0 && cm.buffer && cm.buffer.trim() && cm.bufferProject) {
+            const proj = projects.find(pr => pr.id === cm.bufferProject);
+            if (globalFilters.owner.length === 0 || (proj && globalFilters.owner.includes(proj.owner))) {
+              const bufStatus = isClosed
+                ? (cm.bufferOutcome === "done" || cm.bufferOutcome === "done_carry" ? "Completed" : cm.bufferOutcome === "blocked" ? "Blocked" : cm.bufferOutcome === "carry" ? "Carry" : "Closed")
+                : isLocked
+                ? (cm.bufferOutcome === "done" || cm.bufferOutcome === "done_carry" ? "Completed" : cm.bufferOutcome === "blocked" ? "Blocked" : "Buffer")
+                : "Buffer";
+              allCommitRows.push({
+                person: cm.person, squad: pObj.squad, role: pObj.role,
+                project: cm.bufferProject, projectName: proj?.name || null,
+                title: cm.buffer, type: cm.bufferType || null,
+                stage: cm.bufferStage || (proj?.phase || null),
+                _status: bufStatus, isDeselected: false, isBuffer: true, commitIdx: null,
+              });
+            }
+          }
+        });
+        const outcomeColors = {
+          Completed: c.green, WIP: c.cyan, Ready: c.cyan, Carry: c.cyan,
+          Open: c.textMid, Buffer: c.purple, Blocked: c.red,
+          Deprioritized: c.textDim, Closed: c.textMid, Empty: c.red,
+        };
+
+        // Group order — mirrors Commit People table pattern
+        const groupOrder = [
+          { key: "Completed", label: "Completed", color: c.green },
+          { key: "WIP", label: "Work in Progress", color: c.cyan },
+          { key: "Ready", label: "Ready", color: c.cyan },
+          { key: "Open", label: "Open", color: c.textMid },
+          { key: "Buffer", label: "Buffer", color: c.purple },
+          { key: "Blocked", label: "Blocked", color: c.red },
+          { key: "Carry", label: "Carry", color: c.orange },
+          { key: "Closed", label: "Closed", color: c.textMid },
+          { key: "Deprioritized", label: "Deprioritized", color: c.textDim },
+          { key: "Empty", label: "Empty", color: c.red },
+        ];
+
+        // Sort within each group
+        const sortGroupRows = (arr) => [...arr].sort((a, b) => {
+          let va, vb;
+          if (sortCol === "person") { va = a.person; vb = b.person; }
+          else if (sortCol === "project") { va = a.project || ""; vb = b.project || ""; }
+          else if (sortCol === "type") { va = a.type || ""; vb = b.type || ""; }
+          else if (sortCol === "stage") { va = a.stage || ""; vb = b.stage || ""; }
+          else if (sortCol === "title") { va = a.title || ""; vb = b.title || ""; }
+          else { va = a.squad || ""; vb = b.squad || ""; }
+          return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+        });
+
+        const groupedData = groupOrder.map(g => ({
+          ...g,
+          rows: sortGroupRows(allCommitRows.filter(r => r._status === g.key)),
+        })).filter(g => g.rows.length > 0);
+
+        let globalRowIdx = 0;
+        const dotBorder = `1px dotted ${c.border}`;
+        const colCount = 7;
 
         return (
-          <Surface variant="data" compact style={{
-            padding: 0,
-          }}>
-            <div style={{
-              borderRadius: layout.radius,
-            }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 820 }}>
+          <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, background: c.surfaceData }}>
+            <div style={{ borderRadius: layout.radius }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                 <thead>
                   <tr>
                     <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
-                    <Th col="person" style={{ minWidth: 120, borderLeft: `1px dotted ${c.border}` }}>Person</Th>
-                    <Th col="name" style={{ minWidth: 140, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
-                    <Th col="owner" style={{ minWidth: 80, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
-                    <Th col="title" style={{ minWidth: 160, borderLeft: `1px dotted ${c.border}` }}>Focus</Th>
-                    <Th col="stage" style={{ minWidth: 70, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Stage</Th>
-                    <Th col="type" style={{ minWidth: 64, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Type</Th>
-                    <Th col="status" style={{ minWidth: 64, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>
+                    <Th col="person" style={{ minWidth: 120, borderLeft: dotBorder }}>Person</Th>
+                    <Th col="project" style={{ minWidth: 140, borderLeft: dotBorder }}>Project</Th>
+                    <Th col="title" style={{ minWidth: 160, borderLeft: dotBorder }}>Commit</Th>
+                    <Th col="type" style={{ minWidth: 64, textAlign: "center", borderLeft: dotBorder }}>Type</Th>
+                    <Th col="status" style={{ minWidth: 80, textAlign: "center", borderLeft: dotBorder }}>Status</Th>
+                    <Th col="duration" style={{ minWidth: 64, textAlign: "center", borderLeft: dotBorder }}>Timeline</Th>
                   </tr>
                 </thead>
                 <tbody key={rowAnimKey}>
-                  {peopleRows.length === 0 && (
-                    <tr><td colSpan={8}><EmptyState icon="👥" title="No people match" message="Try adjusting the global filters to see results." /></td></tr>
+                  {groupedData.length === 0 && (
+                    <tr><td colSpan={colCount} style={{ textAlign: "center", padding: `${space[7]}px 0`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No commits yet</td></tr>
                   )}
-                  {peopleRows.map((row, ri) => (
-                    <tr
-                      key={`${row.personName}-${row.projectId || "none"}-${ri}`}
-                      className="flow-row"
-                      style={{
-                        animation: `rowSlideIn 0.3s ${motion.critical.easing} both`,
-                        animationDelay: `${Math.min(ri * 20, 600)}ms`,
-                      }}
-                    >
-                      {/* Squad */}
-                      <td style={{
-                        padding: dp.cellPad,
-                        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                        fontWeight: 600, color: c.textMid,
-                        borderBottom: `1px dotted ${c.border}`,
-                        position: "sticky", left: 0, background: c.bg, zIndex: 1,
-                      }}>{row.squad}</td>
-                      {/* Person */}
-                      <td style={{
-                        padding: dp.cellPad,
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: space[2] - 2 }}>
-                          <span
-                            onClick={() => onNavigate && onNavigate("people", row.personName)}
-                            style={{
-                              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                              fontWeight: 600, color: c.text, cursor: "pointer",
-                              textDecoration: "underline", textDecorationColor: c.textMid + "40",
-                              textUnderlineOffset: 2,
-                            }}
-                          >{row.personName}</span>
-                          <span style={{
-                            fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                            color: c.textDim,
-                          }}>{row.role}</span>
-                        </div>
-                      </td>
-                      {/* Project */}
-                      <td style={{
-                        padding: dp.cellPad,
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                      }}>
-                        {row.projectId ? (
-                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                            <span
-                              onClick={() => onNavigate && onNavigate("projects", row.projectId)}
-                              style={{
-                                fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                                fontWeight: 700, color: entityColors().project, cursor: "pointer",
-                                textDecoration: "underline", textDecorationColor: entityColors().project + "40",
-                                textUnderlineOffset: 2,
-                              }}
-                            >{row.projectId}</span>
+                  {groupedData.map((group) => {
+                    const sectionRows = group.rows.map((it) => {
+                      const ri = globalRowIdx++;
+                      const sClr = outcomeColors[it._status] || c.textDim;
+                      const isDepri = it._status === "Deprioritized";
+                      const rowBg = it._status === "Completed" ? `${c.green}08`
+                        : it._status === "Blocked" ? `${c.red}08`
+                        : "transparent";
+                      return (
+                        <tr key={`${it.person}-${it.project || "none"}-${ri}`} className="flow-row" style={{
+                          animation: `rowSlideIn 0.3s ${motion.interaction.easing} both`,
+                          animationDelay: `${Math.min(ri * 20, 600)}ms`,
+                          opacity: isDepri ? 0.45 : 1,
+                          background: rowBg,
+                          textDecoration: isDepri ? "line-through" : "none",
+                          textDecorationStyle: isDepri ? "dotted" : undefined,
+                          textDecorationColor: isDepri ? "#ffffffaa" : undefined,
+                          pointerEvents: "auto",
+                        }}>
+                          {/* Squad */}
+                          <td style={{
+                            padding: dp.cellPad,
+                            fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                            fontWeight: 600, color: c.textMid, borderBottom: dotBorder,
+                            position: "sticky", left: 0, background: c.bg, zIndex: 1,
+                          }}>{it.squad}</td>
+                          {/* Person */}
+                          <td style={{ padding: dp.cellPad, borderBottom: dotBorder, borderLeft: dotBorder }}>
+                            <EntityLink type="person" onClick={() => onNavigate && onNavigate("people", it.person)} underline style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600 }}>{it.person}</EntityLink>
+                          </td>
+                          {/* Project */}
+                          <td style={{ padding: dp.cellPad, borderBottom: dotBorder, borderLeft: dotBorder }}>
+                            {it.project ? (
+                              <>
+                                <EntityLink type="project" onClick={() => onNavigate && onNavigate("projects", it.project)} style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700 }}>{it.project}</EntityLink>
+                                {it.projectName && <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.text, marginLeft: space[1] }}>{it.projectName}</span>}
+                              </>
+                            ) : (
+                              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>{"\u2014"}</span>
+                            )}
+                          </td>
+                          {/* Commit title */}
+                          <td style={{ padding: dp.cellPad, borderBottom: dotBorder, borderLeft: dotBorder, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.text }}>
+                            {it.title ? (
+                              <span
+                                onClick={() => onNavigate && onNavigate("commit", { person: it.person, commitIdx: it.commitIdx })}
+                                style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: c.textMid + "30", textUnderlineOffset: 2 }}
+                              >{it.title}</span>
+                            ) : (
+                              <Badge color={c.orange} bg={`${c.orange}12`} style={{ border: `1px solid ${c.orange}20` }}>No commit</Badge>
+                            )}
+                          </td>
+                          {/* Type */}
+                          <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: dotBorder, borderLeft: dotBorder }}>
+                            {it.type ? (
+                              <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{tc[it.type]?.label || it.type}</Badge>
+                            ) : (
+                              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>{"\u2014"}</span>
+                            )}
+                          </td>
+                          {/* Status */}
+                          <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: dotBorder, borderLeft: dotBorder }}>
+                            <Badge color={sClr} bg={`${sClr}15`}>{it._status}</Badge>
+                          </td>
+                          {/* Timeline */}
+                          <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: dotBorder, borderLeft: dotBorder }}>
+                            {it.duration ? (
+                              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.textMid }}>{it.duration}w</span>
+                            ) : (
+                              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>{"\u2014"}</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    });
+
+                    return [
+                      /* Section header row */
+                      <tr key={`section-${group.key}`} data-status-group={group.key}>
+                        <td colSpan={colCount} style={{
+                          padding: `${space[2]}px ${space[2] - 2}px`,
+                          background: `${group.color}06`,
+                          borderBottom: dotBorder,
+                          borderTop: dotBorder,
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                            <div style={{
+                              width: 6, height: 6, borderRadius: "50%",
+                              background: group.color, boxShadow: `0 0 6px ${group.color}40`,
+                            }} />
                             <span style={{
-                              fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                              fontWeight: 500, color: c.text,
-                            }}>{row.projectName}</span>
+                              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                              fontWeight: 700, color: group.color, letterSpacing: "0",
+                            }}>{group.label}</span>
+                            <span style={{
+                              fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                              fontWeight: typo.monoMd.weight, color: group.color,
+                              opacity: 0.7,
+                            }}>{group.rows.length}</span>
                           </div>
-                        ) : (
-                          <span style={{
-                            fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                            color: c.textDim,
-                          }}>—</span>
-                        )}
-                      </td>
-                      {/* Owner */}
-                      <td style={{
-                        padding: dp.cellPad,
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                        fontWeight: 500, color: row.owner ? c.textMid : c.textDim,
-                        whiteSpace: "nowrap",
-                      }}>
-                        {row.owner || "—"}
-                      </td>
-                      {/* Focus title */}
-                      <td style={{
-                        padding: dp.cellPad,
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                      }}>
-                        {row.title ? (
-                          <span
-                            onClick={() => onNavigate && onNavigate("focus", { person: row.personName, commitIdx: row.commitIdx })}
-                            style={{
-                              fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                              color: c.text, cursor: "pointer",
-                              textDecoration: "underline", textDecorationColor: c.textMid + "30",
-                              textUnderlineOffset: 2,
-                            }}
-                          >{row.title}</span>
-                        ) : (
-                          <Badge color={c.orange} bg={`${c.orange}12`} style={{
-                            border: `1px solid ${c.orange}20`,
-                          }}>No focus</Badge>
-                        )}
-                      </td>
-                      {/* Stage */}
-                      <td style={{
-                        padding: dp.cellPad, textAlign: "center",
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                      }}>
-                        {row.stage ? (
-                          <Badge color={pc[row.stage] || c.textMid} bg={`${pc[row.stage] || c.textMid}15`} style={{ minWidth: 80, display: "inline-block", textAlign: "center" }}>{row.stage}</Badge>
-                        ) : (
-                          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>—</span>
-                        )}
-                      </td>
-                      {/* Type */}
-                      <td style={{
-                        padding: dp.cellPad, textAlign: "center",
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                      }}>
-                        {row.type ? (
-                          <Badge color={tc[row.type]?.color} bg={tc[row.type]?.bg} style={{ minWidth: 72, display: "inline-block", textAlign: "center" }}>{row.type}</Badge>
-                        ) : (
-                          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>—</span>
-                        )}
-                      </td>
-                      {/* Status */}
-                      <td style={{
-                        padding: dp.cellPad, textAlign: "center",
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                      }}>
-                        {row.status ? (
-                          <Badge color={commitStatusColors[row.status] || c.textMid} bg={`${commitStatusColors[row.status] || c.textMid}15`} style={{ minWidth: 56, display: "inline-block", textAlign: "center" }}>{row.status}</Badge>
-                        ) : (
-                          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                      </tr>,
+                      ...sectionRows,
+                    ];
+                  })}
                 </tbody>
               </table>
             </div>
-          </Surface>
+          </div>
         );
       })()}
 

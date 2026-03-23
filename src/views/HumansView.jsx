@@ -1,11 +1,11 @@
-// Flow — Focus View (Phase-driven: Planning → Locked → Closing)
+// Flow — Commit View (Phase-driven: Planning → Locked → Closing)
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { c, layout, motion, space, typo, phaseNames, typeConfig, phaseColors as getPhaseColors, density, btnVariants, entityColors, colWidths } from "../styles/theme";
 import { Badge, Tag, Surface, Inp, TextArea, ChoiceGroup, Sel, Btn, TelemetryLabel, SummaryTile, Th as SharedTh, MetricCompact, EntityLink, VDivider, SectionDivider } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
 
 // ─── ANIMATED KPI COUNTER ─────────────────────────────────────
-const FocusKpi = ({ value, label, color, delay = 0 }) => {
+const CommitKpi = ({ value, label, color, delay = 0 }) => {
   const [displayVal, setDisplayVal] = useState(0);
   useEffect(() => {
     let frame;
@@ -21,7 +21,7 @@ const FocusKpi = ({ value, label, color, delay = 0 }) => {
     return () => { clearTimeout(timeout); cancelAnimationFrame(frame); };
   }, [value, delay]);
   return (
-    <div className="flow-focus-kpi" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: space[1], animationDelay: `${delay}ms` }}>
+    <div className="flow-commit-kpi" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: space[1], animationDelay: `${delay}ms` }}>
       <span style={{ fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size, fontWeight: typo.displayXl.weight, color, letterSpacing: typo.displayXl.tracking, lineHeight: typo.displayXl.lineHeight }}>{displayVal}</span>
       <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.textMid, letterSpacing: "0" }}>{label}</span>
     </div>
@@ -106,9 +106,26 @@ const ProjectSearchSelect = ({ projects, value, onChange, placeholder }) => {
   );
 };
 
-// ═══ FOCUS VIEW ═════════════════════════════════════════════════
-const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, people, initialPerson, initialCommitIdx, setDetailLabel, setGoBack, setIsLocked, searchRef, globalFilters = {}, suppressBackRef, isHistorical, selectedWeekKey }) => {
-  const setCommitments = isHistorical ? () => {} : rawSetCommitments;
+// ═══ COMMIT VIEW ════════════════════════════════════════════════
+const EMPTY_ITEM = { title: '', type: '', project: '', stage: '' };
+const ensureItems = (cm) => {
+  if (!cm) return cm;
+  const items = Array.isArray(cm.items) ? cm.items : [];
+  if (items.length >= 3) return cm;
+  return { ...cm, items: [...items, ...Array.from({ length: 3 - items.length }, () => ({ ...EMPTY_ITEM }))] };
+};
+
+const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitments, projects, people, initialPerson, initialCommitIdx, setDetailLabel, setGoBack, setIsLocked, searchRef, globalFilters = {}, suppressBackRef, isHistorical, selectedWeekKey, onSave }) => {
+  // Normalize: ensure every commitment has a padded items array
+  const commitments = React.useMemo(() => rawCommitments.map(ensureItems), [rawCommitments]);
+  const _rawSet = isHistorical ? () => {} : rawSetCommitments;
+  const setCommitments = React.useCallback((updater) => {
+    _rawSet(prev => {
+      const normalized = prev.map(ensureItems);
+      const result = typeof updater === 'function' ? updater(normalized) : updater;
+      return result;
+    });
+  }, [_rawSet]);
   const [activePerson, setActivePerson] = useState(() => {
     if (initialPerson) {
       const idx = commitments.findIndex(cm => cm.person === initialPerson);
@@ -117,7 +134,6 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
     return -1;
   });
   const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState("people");
   const [focusIdx, setFocusIdx] = useState(0);
   const [kbActive, setKbActive] = useState(false);
   const [detailFocus, setDetailFocus] = useState(initialCommitIdx != null ? initialCommitIdx : 0);
@@ -125,6 +141,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
   const closingModeRef = useRef(false);
   const setClosingMode = (val) => { closingModeRef.current = val; _setClosingMode(val); };
   const [confirmAction, setConfirmAction] = useState(null); // "lock" | "unlock" | null
+  const [confirmReset, setConfirmReset] = useState(false);
   const [blockedModal, setBlockedModal] = useState(null); // { idx: number } | null
   const [blockedText, setBlockedText] = useState("");
   const [depriModal, setDepriModal] = useState(null); // { idx: number } | null
@@ -151,11 +168,11 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
       const squadMatch = (pObj?.squad || "").toLowerCase().includes(q);
       if (!nameMatch && !roleMatch && !squadMatch) return false;
     }
-    if (globalFilters.squad && pObj?.squad !== globalFilters.squad) return false;
-    if (globalFilters.person && cm.person !== globalFilters.person) return false;
-    if (globalFilters.owner) {
-      const ownsProject = projects.some(pr => pr.owner === cm.person && pr.owner === globalFilters.owner);
-      if (cm.person !== globalFilters.owner && !ownsProject) return false;
+    if (globalFilters.squad.length > 0 && !globalFilters.squad.includes(pObj?.squad)) return false;
+    if (globalFilters.person.length > 0 && !globalFilters.person.includes(cm.person)) return false;
+    if (globalFilters.owner.length > 0) {
+      const ownsProject = projects.some(pr => pr.owner === cm.person && globalFilters.owner.includes(pr.owner));
+      if (!globalFilters.owner.includes(cm.person) && !ownsProject) return false;
     }
     return true;
   });
@@ -342,19 +359,21 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
   const bufferActive = person ? person.deselected >= 0 : false;
   const bufferFilled = person ? (bufferActive && (person.buffer || "").trim() && person.bufferProject) : false;
 
-  // readyCount: active slots fully complete (title + project + stage + type) + buffer
+  // readyCount: active slots fully complete (title + project + valid stage + type) + buffer
+  const validStagesForReady = ["PRD", "Design", "Dev", "QA"];
   const readyCount = person ? (
-    person.items.slice(0, 3).filter((it, idx) => person.deselected !== idx && it.title.trim() && it.project && it.stage && it.type).length
+    person.items.slice(0, 3).filter((it, idx) => person.deselected !== idx && it.title.trim() && it.project && it.stage && validStagesForReady.includes(it.stage) && it.type).length
     + (bufferFilled ? 1 : 0)
   ) : 0;
 
   const lockBlockers = [];
   if (person && !isLocked) {
-    const isComplete = (it) => it.title.trim() && it.project && it.stage && it.type;
+    const validStages = ["PRD", "Design", "Dev", "QA"];
+    const isComplete = (it) => it.title.trim() && it.project && it.stage && validStages.includes(it.stage) && it.type;
     if (bufferActive) {
       // After deprioritize: need 2 active slots complete + buffer filled
       const activeCompleteCount = person.items.slice(0, 3).filter((it, idx) => person.deselected !== idx && isComplete(it)).length;
-      if (activeCompleteCount < 2) lockBlockers.push(`Need 2 fully filled commitments (have ${activeCompleteCount})`);
+      if (activeCompleteCount < 2) lockBlockers.push(`Need 2 fully filled commits (have ${activeCompleteCount})`);
       if (!bufferFilled) lockBlockers.push("Buffer: fill in the replacement task");
       person.items.slice(0, 3).forEach((it, idx) => {
         if (person.deselected === idx) return;
@@ -365,7 +384,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
     } else {
       // Normal planning: need 3 fully filled slots
       const completeCount = person.items.slice(0, 3).filter(it => isComplete(it)).length;
-      if (completeCount < 3) lockBlockers.push(`Need 3 fully filled commitments (have ${completeCount})`);
+      if (completeCount < 3) lockBlockers.push(`Need 3 fully filled commits (have ${completeCount})`);
       person.items.slice(0, 3).forEach((it, idx) => {
         if (it.title.trim() && !it.project) lockBlockers.push(`Task ${idx + 1}: select a project`);
         if (it.title.trim() && it.project && !it.stage) lockBlockers.push(`Task ${idx + 1}: select a stage`);
@@ -375,29 +394,8 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
   }
   const canLock = person ? lockBlockers.length === 0 : false;
 
-  // ── 6-hour lock cooldown ──
-  const LOCK_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
-  const [lockCountdown, setLockCountdown] = useState("");
-  const lockExpired = useRef(true);
-
-  useEffect(() => {
-    if (!person?.lockedAtTime) { setLockCountdown(""); lockExpired.current = true; return; }
-    const tick = () => {
-      const elapsed = Date.now() - person.lockedAtTime;
-      const remaining = LOCK_COOLDOWN_MS - elapsed;
-      if (remaining <= 0) { setLockCountdown(""); lockExpired.current = true; return; }
-      lockExpired.current = false;
-      const h = Math.floor(remaining / 3600000);
-      const m = Math.floor((remaining % 3600000) / 60000);
-      const s = Math.floor((remaining % 60000) / 1000);
-      setLockCountdown(`${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`);
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [person?.lockedAtTime]);
-
-  const canUnlock = lockExpired.current;
+  // Lock is permanent — no cooldown. Unlock is always allowed via explicit action.
+  const canUnlock = true;
 
   const handleLock = () => {
     if (!canLock || isLocked) return;
@@ -454,12 +452,12 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
     const empty = total - closed - locked - filled - partial;
     const pctLocked = total > 0 ? Math.round((locked / total) * 100) : 0;
 
-    // Total commitments (first 3 items per person)
+    // Total commits (first 3 items per person)
     const totalCommitments = filtered.reduce((sum, cm) =>
       sum + cm.items.slice(0, 3).filter(it => it.title.trim()).length, 0
     );
 
-    // Outcome metrics — from closed people's commitments only (first 3 slots + buffer)
+    // Outcome metrics — from closed people's commits only (first 3 slots + buffer)
     const closedPeople = filtered.filter(cm => !!cm.closedAt);
     const closedItems = closedPeople.flatMap(cm => {
       const items = cm.items.slice(0, 3).filter((it, idx) => it.title.trim() && cm.deselected !== idx);
@@ -495,18 +493,9 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
             display: "flex", alignItems: "center",
             position: "relative", zIndex: 1,
           }}>
-            {/* Section 1: Commitments + Locked % + Deprioritized % */}
-            <div style={{ flex: 3, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
-              <MetricCompact value={totalCommitments} label="Commitments" color={c.text} />
-              <MetricCompact value={`${pctLocked}%`} label="Locked" color={pctLocked === 100 ? c.green : pctLocked >= 50 ? c.accent : c.textDim} />
-              <MetricCompact value={`${pctDeprioritized}%`} label="Deprioritized" color={deprioritizedCount > 0 ? c.orange : c.textDim} />
-            </div>
-
-            <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
-
-            {/* Section 2: Team breakdown — clickable filters */}
+            {/* Section 1: Team breakdown — clickable filters */}
             <div style={{ flex: 5, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
-              <SummaryTile value={total} label="Team" color={c.text} />
+              <SummaryTile value={total} label="Team" color={c.text} hero />
               <SummaryTile value={filled} label="Ready" color={c.cyan} active={filterStatus === "ready"} onClick={() => { setFilterStatus(filterStatus === "ready" ? null : "ready"); setRowAnimKey(k => k + 1); }} />
               <SummaryTile value={partial} label="Partial" color={c.orange} active={filterStatus === "partial"} onClick={() => { setFilterStatus(filterStatus === "partial" ? null : "partial"); setRowAnimKey(k => k + 1); }} />
               <SummaryTile value={empty} label="Empty" color={c.red} active={filterStatus === "empty"} onClick={() => { setFilterStatus(filterStatus === "empty" ? null : "empty"); setRowAnimKey(k => k + 1); }} />
@@ -515,33 +504,24 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
 
             <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
 
-            {/* Section 3: Closed outcomes */}
+            {/* Section 2: Commit metrics — mirrors Pulse */}
+            <div style={{ flex: 3, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
+              <MetricCompact value={totalCommitments} label="Commits" color={c.text} hero />
+              <MetricCompact value={locked + closed} label="Locked" color={c.text} />
+              <MetricCompact value={`${total > 0 ? Math.round(((locked + closed) / total) * 100) : 0}%`} label="Lock Rate" color={(locked + closed) === total && total > 0 ? c.green : (locked + closed) / total >= 0.5 ? c.orange : c.textDim} />
+            </div>
+
+            <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
+
+            {/* Section 3: Outcome breakdown — mirrors Pulse */}
             <div style={{ flex: 4, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
-              <SummaryTile value={closed} label="Closed" color={c.textMid} active={filterStatus === "closed"} onClick={() => { setFilterStatus(filterStatus === "closed" ? null : "closed"); setRowAnimKey(k => k + 1); }} />
+              <SummaryTile value={closed} label="Closed" color={c.textMid} active={filterStatus === "closed"} onClick={() => { setFilterStatus(filterStatus === "closed" ? null : "closed"); setRowAnimKey(k => k + 1); }} hero />
               <MetricCompact value={`${pctCompleted}%`} label="Complete" color={pctCompleted > 0 ? c.green : c.textDim} />
               <MetricCompact value={`${pctCarried}%`} label="Carry" color={carried > 0 ? c.orange : c.textDim} />
               <MetricCompact value={`${pctBlocked}%`} label="Blocked" color={blockedCount > 0 ? c.red : c.textDim} />
+              <MetricCompact value={`${pctDeprioritized}%`} label="Deprioritized" color={deprioritizedCount > 0 ? c.orange : c.textDim} />
             </div>
           </div>
-        </div>
-
-        {/* VIEW MODE TOGGLE — matches Pulse segmented control */}
-        <div style={{
-          display: "flex", gap: 2,
-          background: c.accentDim, borderRadius: layout.radiusMd, padding: 3,
-        }}>
-          {[{ key: "people", label: "People" }, { key: "summary", label: "Commitments" }].map(v => (
-            <button key={v.key} onClick={() => { setViewMode(v.key); setRowAnimKey(k => k + 1); setSortCol("squad"); setSortDir("asc"); }} style={{
-              flex: 1, padding: `${space[2]}px ${space[4]}px`,
-              borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
-              background: viewMode === v.key ? c.accent : "transparent",
-              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-              fontWeight: viewMode === v.key ? 700 : 500,
-              color: viewMode === v.key ? c.textCrit : c.accent,
-              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-              boxShadow: viewMode === v.key ? `0 1px 3px ${c.shadow}` : "none",
-            }}>{v.label}</button>
-          ))}
         </div>
 
         {/* SEARCH */}
@@ -585,8 +565,8 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
         {/* ═══ SCROLLABLE CONTENT ═══ */}
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
 
-        {/* Commitments table — flat rows, one per locked commitment item */}
-        {viewMode === "summary" && (() => {
+        {/* Commits table — moved to Pulse tab */}
+        {false && (() => {
           const allItems = filtered.flatMap(cm => {
             if (!cm.lockedAt) return [];
             const rows = cm.items.slice(0, 3)
@@ -639,7 +619,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
                       <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
                       <Th col="person" style={{ minWidth: colWidths.person.min, borderLeft: `1px dotted ${c.border}` }}>Person</Th>
                       <Th col="project" style={{ minWidth: colWidths.identity.min, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
-                      <Th col="title" style={{ minWidth: colWidths.focus.min, borderLeft: `1px dotted ${c.border}` }}>Focus</Th>
+                      <Th col="title" style={{ minWidth: colWidths.commit.min, borderLeft: `1px dotted ${c.border}` }}>Commit</Th>
                       <Th col="type" style={{ minWidth: colWidths.status.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Type</Th>
                       <Th col="stage" style={{ minWidth: colWidths.phase.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Stage</Th>
                       <Th col="status" style={{ minWidth: colWidths.status.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>
@@ -647,7 +627,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
                   </thead>
                   <tbody key={rowAnimKey}>
                     {sortedItems.length === 0 && (
-                      <tr><td colSpan={7} style={{ textAlign: "center", padding: `${space[7]}px 0`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No locked commitments yet</td></tr>
+                      <tr><td colSpan={7} style={{ textAlign: "center", padding: `${space[7]}px 0`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No locked commits yet</td></tr>
                     )}
                     {sortedItems.map((it, ri) => {
                       const pObj = people.find(p => p.name === it.person);
@@ -700,7 +680,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
         })()}
 
         {/* People table — grouped by operational status */}
-        {viewMode === "people" && (() => {
+        {(() => {
           const commitStatusColors = { Closed: c.textMid, Locked: c.green, Ready: c.cyan, Partial: c.orange, Empty: c.red };
           const groupOrder = [
             { key: "Closed", label: "Closed", color: c.textMid, icon: "✓" },
@@ -878,7 +858,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
     );
   }
 
-  // ═══ COMMITMENT EDITOR (detail view) — Phase-driven ═══════════
+  // ═══ COMMIT EDITOR (detail view) — Phase-driven ═══════════════
   const personMeta = people.find(p => p.name === person.person);
 
   // Carry-to weeks for closing phase
@@ -895,7 +875,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
   weekEnd.setDate(weekEnd.getDate() + 6);
   const weekLabel = `${base.toLocaleDateString("en-US", { month: "short", day: "numeric" })} \u2013 ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
-  // Closing phase: track outcomes — only first 3 commitment slots (excluding deprioritized)
+  // Closing phase: track outcomes — only first 3 commit slots (excluding deprioritized)
   const activeItems = person.items.slice(0, 3)
     .map((it, idx) => ({ ...it, idx }))
     .filter(it => it.title.trim() && person.deselected !== it.idx);
@@ -975,29 +955,11 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
             {/* Planning: filled count + Lock button */}
             {phase === "planning" && (
               <>
-                <div style={{
-                  display: "flex", alignItems: "center", gap: space[2],
-                  padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
-                  background: canLock ? `${c.green}08` : c.surfaceAlt,
-                  border: `1px solid ${canLock ? c.green + "25" : c.border}`,
-                }}>
-                  <div style={{ display: "flex", gap: 3 }}>
-                    {[0, 1, 2].map(si => (
-                      <div key={si} style={{
-                        width: 14, height: 4, borderRadius: 2,
-                        background: si < readyCount ? c.green : `${c.textDim}18`,
-                        border: si < readyCount ? "none" : `1px solid ${c.border}`,
-                      }} />
-                    ))}
-                  </div>
-                  <span style={{
-                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                    fontWeight: 700, letterSpacing: typo.monoSm.tracking,
-                    color: canLock ? c.green : c.textDim,
-                  }}>{readyCount}/3</span>
-                </div>
+                <Btn variant="secondary" size="sm" onClick={() => { if (onSave) onSave(); }}>
+                  Save
+                </Btn>
                 <Btn variant="success" size="sm" disabled={!canLock} onClick={() => { if (canLock) setConfirmAction("lock"); }}>
-                  Lock Week <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, opacity: 0.6 }}>L</kbd>
+                  Lock Week
                 </Btn>
               </>
             )}
@@ -1011,16 +973,6 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
                 }}>
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.green, boxShadow: `0 0 6px ${c.green}60` }} />
                   <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.green, textTransform: "uppercase" }}>Locked</span>
-                  {lockCountdown && (
-                    <>
-                      <div style={{ width: 1, height: 12, background: `${c.green}20` }} />
-                      <svg width="9" height="9" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.5 }}>
-                        <rect x="3" y="7" width="10" height="8" rx="2" stroke={c.green} strokeWidth="1.5" fill="none" />
-                        <path d="M5 7V5a3 3 0 0 1 6 0v2" stroke={c.green} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-                      </svg>
-                      <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.green, opacity: 0.7 }}>{lockCountdown}</span>
-                    </>
-                  )}
                 </div>
                 <Btn variant="primary" size="sm" onClick={() => setClosingMode(true)}>
                   Finish <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, opacity: 0.6 }}>F</kbd>
@@ -1065,7 +1017,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
         const spotHasProject = !!spotItem?.project;
         const spotHasTitle = !!(spotItem?.title || "").trim();
         const slotFilled = person.items.slice(0, 3).map((it) =>
-          !!it.project && !!(it.title || "").trim() && !!it.stage && !!it.type
+          !!it.project && !!(it.title || "").trim() && !!it.stage && ["PRD", "Design", "Dev", "QA"].includes(it.stage) && !!it.type
         );
         const bufProj = bufferActive ? projects.find(p => p.id === person.bufferProject) : null;
         const bufferHasContent = bufferActive && (person.buffer || "").trim() && person.bufferProject;
@@ -1177,10 +1129,28 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                   <div style={{ width: 32, height: 32, borderRadius: layout.radiusMd, background: `${c.purple}10`, border: `1px solid ${c.purple}25`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: c.purple, flexShrink: 0 }}>B</div>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking, color: bufProj ? c.text : c.textMid }}>{bufProj ? bufProj.name : "Buffer Task"}</div>
                     <div style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textDim, marginTop: 2 }}>{bufProj ? `${bufProj.id} · Replacing #${person.deselected + 1}` : `Replacing task #${person.deselected + 1} — pick a project to start`}</div>
                   </div>
+                  {!!person.bufferProject && (
+                    <div style={{ display: "flex", gap: 2, background: c.surfaceAlt, borderRadius: layout.radiusSm, padding: 2, border: `1px solid ${c.border}`, flexShrink: 0 }}>
+                      {["BUILD", "JAM"].map(t => {
+                        const cfg = tc[t] || {};
+                        const active = person.bufferType === t;
+                        return (
+                          <button key={t} onClick={() => updatePerson("bufferType", t)} style={{
+                            fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                            letterSpacing: "0.05em", padding: `5px 14px`,
+                            borderRadius: layout.radiusSm - 1, border: "none", cursor: "pointer",
+                            background: active ? `${cfg.color || c.accent}18` : "transparent",
+                            color: active ? (cfg.color || c.accent) : c.textDim,
+                            transition: "all 0.15s ease",
+                          }}>{cfg.label || t}</button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>{person.bufferProject ? "Project" : "Which project are you working on?"}</div>
@@ -1189,24 +1159,18 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
                 {!!person.bufferProject && (
                   <div>
                     <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>What are you delivering this week?</div>
-                    <TextArea value={person.buffer || ""} onChange={e => updatePerson("buffer", e.target.value)} placeholder="Be specific about the outcome, not just the task" rows={3} />
+                    <TextArea value={person.buffer || ""} onChange={e => updatePerson("buffer", e.target.value)} placeholder="Describe what you'll deliver" rows={3} />
                   </div>
                 )}
                 {!!person.bufferProject && !!(person.buffer || "").trim() && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-                    <div style={{ display: "flex", gap: space[4] }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Stage</div>
-                        <ChoiceGroup options={phaseNames.map(s => ({ value: s, label: s, color: pc[s] || c.textDim }))} value={person.bufferStage} onChange={val => updatePerson("bufferStage", val)} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Type</div>
-                        <ChoiceGroup mono options={["BUILD", "JAM", "BLOCKED"].map(t => ({ value: t, label: tc[t]?.label || t, color: (tc[t] || {}).color, bg: (tc[t] || {}).bg }))} value={person.bufferType} onChange={val => updatePerson("bufferType", val)} />
-                      </div>
+                  <div style={{ display: "flex", gap: space[4] }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Stage</div>
+                      <ChoiceGroup options={phaseNames.map(s => ({ value: s, label: s, color: pc[s] || c.textDim }))} value={person.bufferStage} onChange={val => updatePerson("bufferStage", val)} />
                     </div>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Estimated timeline</div>
-                      <ChoiceGroup mono options={[1, 2, 3, 4].map(w => ({ value: w, label: `${w} ${w === 1 ? "week" : "weeks"}` }))} value={person.bufferDuration || 1} onChange={val => updatePerson("bufferDuration", val)} />
+                      <ChoiceGroup mono options={[1, 2, 3, 4].map(w => ({ value: w, label: `${w}w` }))} value={person.bufferDuration || 1} onChange={val => updatePerson("bufferDuration", val)} />
                     </div>
                   </div>
                 )}
@@ -1222,7 +1186,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
                 borderRadius: layout.radius + 2, padding: `${space[6]}px`,
                 display: "flex", flexDirection: "column", gap: space[4],
               }}>
-                {/* Header — number badge + title */}
+                {/* Header — number badge + title + type toggle */}
                 <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                   <div style={{
                     width: 32, height: 32, borderRadius: layout.radiusMd,
@@ -1233,8 +1197,26 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
                   <div style={{
                     fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
                     fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
-                    color: spotProj ? c.text : c.textMid,
-                  }}>{spotProj ? spotProj.name : `Commitment ${detailFocus + 1}`}</div>
+                    color: spotProj ? c.text : c.textMid, flex: 1,
+                  }}>{spotProj ? spotProj.name : `Commit ${detailFocus + 1}`}</div>
+                  {spotHasProject && (
+                    <div style={{ display: "flex", gap: 2, background: c.surfaceAlt, borderRadius: layout.radiusSm, padding: 2, border: `1px solid ${c.border}`, flexShrink: 0 }}>
+                      {["BUILD", "JAM"].map(t => {
+                        const cfg = tc[t] || {};
+                        const active = spotItem.type === t;
+                        return (
+                          <button key={t} onClick={() => updateItem(detailFocus, "type", t)} style={{
+                            fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                            letterSpacing: "0.05em", padding: `5px 14px`,
+                            borderRadius: layout.radiusSm - 1, border: "none", cursor: "pointer",
+                            background: active ? `${cfg.color || c.accent}18` : "transparent",
+                            color: active ? (cfg.color || c.accent) : c.textDim,
+                            transition: "all 0.15s ease",
+                          }}>{cfg.label || t}</button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Project search — clickable to change */}
@@ -1259,31 +1241,24 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
                     <TextArea
                       value={spotItem.title}
                       onChange={e => updateItem(detailFocus, "title", e.target.value)}
-                      placeholder="Describe the deliverable..."
+                      placeholder="Describe what you'll deliver"
                       rows={3}
                     />
-                    <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginTop: 3 }}>Be specific about the outcome, not just the task</div>
                   </div>
                 )}
 
-                {/* Stage + Type (side by side) + Weeks — unlocked after deliverable */}
+                {/* Stage + Estimated timeline — single row */}
                 {spotHasProject && spotHasTitle && (
-                  <>
-                    <div style={{ display: "flex", gap: space[4] }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Stage</div>
-                        <ChoiceGroup options={phaseNames.map(s => ({ value: s, label: s, color: pc[s] || c.textDim }))} value={spotItem.stage} onChange={val => updateItem(detailFocus, "stage", val)} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Type</div>
-                        <ChoiceGroup mono options={["BUILD", "JAM", "BLOCKED"].map(t => ({ value: t, label: tc[t]?.label || t, color: (tc[t] || {}).color, bg: (tc[t] || {}).bg }))} value={spotItem.type} onChange={val => updateItem(detailFocus, "type", val)} />
-                      </div>
+                  <div style={{ display: "flex", gap: space[4] }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Stage</div>
+                      <ChoiceGroup options={phaseNames.map(s => ({ value: s, label: s, color: pc[s] || c.textDim }))} value={spotItem.stage} onChange={val => updateItem(detailFocus, "stage", val)} />
                     </div>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Estimated timeline</div>
-                      <ChoiceGroup mono options={[1, 2, 3, 4].map(w => ({ value: w, label: `${w} ${w === 1 ? "week" : "weeks"}` }))} value={spotItem.duration || 1} onChange={val => updateItem(detailFocus, "duration", val)} />
+                      <ChoiceGroup mono options={[1, 2, 3, 4].map(w => ({ value: w, label: `${w}w` }))} value={spotItem.duration || 1} onChange={val => updateItem(detailFocus, "duration", val)} />
                     </div>
-                  </>
+                  </div>
                 )}
 
                 {/* Locked hint — fill deliverable to unlock rest */}
@@ -1457,7 +1432,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
           }}>
             <div>
               <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[1] }}>
-                Deprioritize this commitment
+                Deprioritize this commit
               </div>
               <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>
                 Add a reason for deprioritization
@@ -1729,7 +1704,7 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
         }}>
           <div>
             <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking, color: weekComplete ? c.green : c.textMid }}>
-              {weekComplete ? "All commitments resolved" : `${fullyResolved}/${totalToResolve} resolved`}
+              {weekComplete ? "All commits resolved" : `${fullyResolved}/${totalToResolve} resolved`}
             </div>
             <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginTop: 2 }}>
               {weekComplete ? "Ready to close this week" : "Resolve all items to close the week"}
@@ -1808,32 +1783,32 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
             </div>
             <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: space[3] }}>
               {confirmAction === "lock"
-                ? `You're locking ${activeItems.length + (bufferFilled ? 1 : 0)} commitments for the week of ${weekLabel}. Once locked, your plan is set and visible to your team.`
+                ? `You're locking ${activeItems.length + (bufferFilled ? 1 : 0)} commits for the week of ${weekLabel}. Once locked, your plan is set and visible to your team.`
                 : "Tasks will become editable again. Any changes made will be updated in the system."}
             </div>
             {confirmAction === "lock" && (
               <Surface compact variant="data" style={{
-                display: "flex", alignItems: "center", gap: space[2],
-                borderLeft: `3px solid ${c.orange}`, marginBottom: space[4],
+                display: "flex", alignItems: "flex-start", gap: space[2],
+                borderLeft: `3px solid ${c.red}`, marginBottom: space[4],
               }}>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                  <circle cx="8" cy="8" r="7" stroke={c.orange} strokeWidth="1.3" fill="none" />
-                  <line x1="8" y1="4" x2="8" y2="9" stroke={c.orange} strokeWidth="1.5" strokeLinecap="round" />
-                  <circle cx="8" cy="11.5" r="0.8" fill={c.orange} />
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
+                  <circle cx="8" cy="8" r="7" stroke={c.red} strokeWidth="1.3" fill="none" />
+                  <line x1="8" y1="4" x2="8" y2="9" stroke={c.red} strokeWidth="1.5" strokeLinecap="round" />
+                  <circle cx="8" cy="11.5" r="0.8" fill={c.red} />
                 </svg>
-                <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.orange }}>
-                  6-hour lock cooldown — no edits during this period
+                <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.red, lineHeight: 1.5 }}>
+                  This is permanent. Once locked, you will not be able to edit these commits. You can deprioritize one task and add a buffer, but nothing else.
                 </span>
               </Surface>
             )}
-            {/* Commitment summary for lock confirmation */}
+            {/* Commit summary for lock confirmation */}
             {confirmAction === "lock" && (
               <div style={{
                 padding: `${space[3]}px ${space[3] + 2}px`, borderRadius: layout.radiusMd,
                 background: c.surfaceAlt, border: `1px solid ${c.border}`, marginBottom: space[5],
                 display: "flex", flexDirection: "column", gap: space[1] + 2,
               }}>
-                <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: "0.04em", color: c.textDim, textTransform: "uppercase", marginBottom: 2 }}>Your commitments</div>
+                <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: "0.04em", color: c.textDim, textTransform: "uppercase", marginBottom: 2 }}>Your commits</div>
                 {person.items.slice(0, 3).map((it, ci) => {
                   if (person.deselected === ci) return null;
                   if (!it.title.trim()) return null;
@@ -1884,6 +1859,70 @@ const HumansView = ({ commitments, setCommitments: rawSetCommitments, projects, 
       )}
 
       {/* ═══ BLOCKED REASON MODAL ═══════════════════════════════════ */}
+      {/* ═══ RESET FAB — bottom-right, only in detail view when not locked ═══ */}
+      {person && !isLocked && !closingMode && (
+        <button onClick={() => setConfirmReset(true)} style={{
+          position: "fixed", bottom: space[7], right: space[7], zIndex: 50,
+          padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusMd,
+          border: `1px solid ${c.red}30`, cursor: "pointer",
+          background: `${c.red}12`, color: c.red,
+          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: space[1],
+          boxShadow: "none",
+          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+          opacity: 0.7,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.background = `${c.red}20`; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = "0.7"; e.currentTarget.style.background = `${c.red}12`; }}
+        >Reset</button>
+      )}
+
+      {/* ═══ RESET CONFIRMATION MODAL ═══════════════════════════════ */}
+      {confirmReset && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={() => setConfirmReset(false)} style={{
+            position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+          }} />
+          <Surface variant="overlay" style={{
+            position: "relative", zIndex: 1,
+            border: `1px solid ${c.red}40`,
+            borderRadius: layout.radiusLg + 2, padding: `${space[6]}px ${space[7] - 4}px`, width: 460, maxWidth: "90vw",
+            boxShadow: c.shadowOverlay,
+          }}>
+            <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, color: c.text, marginBottom: space[2] }}>
+              Reset all commits?
+            </div>
+            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
+              Are you sure you want to reset? All progress for this week will be lost.
+            </div>
+            <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => setConfirmReset(false)}>Cancel</Btn>
+              <Btn variant="danger" onClick={() => {
+                setCommitments(prev => {
+                  const next = [...prev];
+                  const p = { ...next[activePerson] };
+                  p.items = [
+                    { title: '', type: '', project: '', stage: '' },
+                    { title: '', type: '', project: '', stage: '' },
+                    { title: '', type: '', project: '', stage: '' },
+                  ];
+                  p.buffer = '';
+                  p.bufferType = '';
+                  p.bufferProject = '';
+                  p.bufferStage = '';
+                  p.deselected = -1;
+                  next[activePerson] = p;
+                  return next;
+                });
+                setConfirmReset(false);
+                setDetailFocus(0);
+              }}>Yes, Reset</Btn>
+            </div>
+          </Surface>
+        </div>
+      )}
+
       {blockedModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={() => { setBlockedModal(null); setBlockedText(""); }} style={{

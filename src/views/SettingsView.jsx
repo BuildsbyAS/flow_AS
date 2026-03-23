@@ -52,13 +52,13 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
       const cms = commitments ? commitments.filter(cm => cm.person === name) : [];
       if (cms.length) {
         const hasItems = cms.some(cm => cm.items.some(it => it.title && it.title.trim()));
-        if (hasItems) { deps.push({ text: "Has active commitments this week" }); blocked = true; }
+        if (hasItems) { deps.push({ text: "Has active commits this week" }); blocked = true; }
       }
       const ownedProj = projects.filter(p => p.owner === name);
       if (ownedProj.length) { deps.push({ text: `Owns ${ownedProj.length} projects`, items: ownedProj.map(p => p.id) }); blocked = true; }
     } else if (type === "project") {
       const projItems = commitments ? commitments.flatMap(cm => cm.items.filter(it => it.project === name)) : [];
-      if (projItems.length) { deps.push({ text: `${projItems.length} active commitments reference this project` }); blocked = true; }
+      if (projItems.length) { deps.push({ text: `${projItems.length} active commits reference this project` }); blocked = true; }
     }
     setConfirmAction({ kind: "delete", type, idx, name, deps, blocked });
   };
@@ -174,20 +174,18 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             </Btn>
           </div>
           <div className="flow-data-grid">
-            <div className="flow-data-grid-header" style={{ gridTemplateColumns: "4px 1fr 80px 80px 100px" }}>
-              <span></span>
+            <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 100px 100px 80px" }}>
               <span>Squad</span>
-              <span>Members</span>
-              <span>Projects</span>
-              <span style={{ textAlign: "right" }}>Actions</span>
+              <span style={{ textAlign: "center" }}>Members</span>
+              <span style={{ textAlign: "center" }}>Projects</span>
+              <span style={{ textAlign: "right" }}></span>
             </div>
-            <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
+            <div style={{ overflowY: "auto" }}>
               {squads.map((sq, i) => {
                 const memberCount = people.filter(p => p.squad === sq).length;
                 const projCount = projects.filter(p => p.squad === sq).length;
                 return (
-                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "4px 1fr 80px 80px 100px" }}>
-                    <div style={{ width: 4, height: 24, borderRadius: 2, background: c.accent }} />
+                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 100px 100px 80px" }}>
                     <span style={{
                       fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
                       fontWeight: typo.bodyLg.weight, color: c.text,
@@ -195,15 +193,23 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                     <span style={{
                       fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                       fontWeight: typo.monoLg.weight, color: c.textMid,
+                      textAlign: "center",
                     }}>{memberCount}</span>
                     <span style={{
                       fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                       fontWeight: typo.monoLg.weight, color: c.textMid,
+                      textAlign: "center",
                     }}>{projCount}</span>
-                    <div style={{ display: "flex", gap: space[1], justifyContent: "flex-end" }}>
-                      <Btn variant="danger" size="sm" onClick={() => requestDelete("squad", i, sq)}>
-                        <span>✕</span> DELETE
-                      </Btn>
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <button onClick={() => requestDelete("squad", i, sq)} style={{
+                        background: "transparent", border: `1px solid transparent`, cursor: "pointer",
+                        fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
+                        padding: "4px 10px", borderRadius: 4,
+                        transition: "all 0.15s ease",
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                      >Delete</button>
                     </div>
                   </div>
                 );
@@ -232,16 +238,16 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             </Btn>
           </div>
           <div className="flow-data-grid">
-            <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 80px 100px" }}>
+            <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 100px 80px" }}>
               <span>Role</span>
-              <span>Holders</span>
-              <span style={{ textAlign: "right" }}>Actions</span>
+              <span style={{ textAlign: "center" }}>Holders</span>
+              <span style={{ textAlign: "right" }}></span>
             </div>
-            <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
+            <div style={{ overflowY: "auto" }}>
               {roles.map((rl, i) => {
                 const holderCount = people.filter(p => p.role === rl).length;
                 return (
-                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 80px 100px" }}>
+                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 100px 80px" }}>
                     <span style={{
                       fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
                       fontWeight: typo.bodyLg.weight, color: c.text,
@@ -249,11 +255,18 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                     <span style={{
                       fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                       fontWeight: typo.monoLg.weight, color: c.textMid,
+                      textAlign: "center",
                     }}>{holderCount}</span>
-                    <div style={{ display: "flex", gap: space[1], justifyContent: "flex-end" }}>
-                      <Btn variant="danger" size="sm" onClick={() => requestDelete("role", i, rl)}>
-                        <span>✕</span> DELETE
-                      </Btn>
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <button onClick={() => requestDelete("role", i, rl)} style={{
+                        background: "transparent", border: `1px solid transparent`, cursor: "pointer",
+                        fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
+                        padding: "4px 10px", borderRadius: 4,
+                        transition: "all 0.15s ease",
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                      >Delete</button>
                     </div>
                   </div>
                 );
@@ -299,15 +312,15 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                   <Tag color={c.accent} bg={c.accentDim}>{members.length}</Tag>
                 </div>
                 <div className="flow-data-grid">
-                  <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 1fr 100px" }}>
+                  <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 1fr 80px" }}>
                     <span>Name</span>
                     <span>Role</span>
-                    <span style={{ textAlign: "right" }}>Actions</span>
+                    <span style={{ textAlign: "right" }}></span>
                   </div>
                   {members.map((p, i) => {
                     const gi = people.indexOf(p);
                     return (
-                      <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 1fr 100px" }}>
+                      <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 1fr 80px" }}>
                         <span style={{
                           fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
                           fontWeight: typo.bodyLg.weight, color: c.text,
@@ -316,10 +329,16 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                           fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                           color: c.textMid,
                         }}>{p.role}</span>
-                        <div style={{ display: "flex", gap: space[1], justifyContent: "flex-end" }}>
-                          <Btn variant="danger" size="sm" onClick={() => requestDelete("person", gi, p.name)}>
-                            <span>✕</span> DELETE
-                          </Btn>
+                        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                          <button onClick={() => requestDelete("person", gi, p.name)} style={{
+                            background: "transparent", border: `1px solid transparent`, cursor: "pointer",
+                            fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
+                            padding: "4px 10px", borderRadius: 4,
+                            transition: "all 0.15s ease",
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                          >Delete</button>
                         </div>
                       </div>
                     );

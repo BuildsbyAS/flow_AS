@@ -7,7 +7,7 @@ import { KbdHint } from "./shared";
  * Props:
  *   activeTab    — current tab key
  *   hasDetail    — true when a view is in detail mode
- *   isLocked     — true when Focus tab is locked
+ *   isLocked     — true when Commit tab is locked
  *   visible      — controlled visibility
  */
 const ShortcutHintBar = ({ activeTab, hasDetail, isLocked, visible }) => {
@@ -30,9 +30,9 @@ const ShortcutHintBar = ({ activeTab, hasDetail, isLocked, visible }) => {
     hints.push({ keys: "↵", label: "Expand" });
     hints.push({ keys: "S", label: "Ship view" });
     hints.push({ keys: "C", label: "Clear filters" });
-  } else if (activeTab === "focus") {
+  } else if (activeTab === "commit") {
     if (hasDetail) {
-      hints.push({ keys: "↑↓", label: "Commitments" });
+      hints.push({ keys: "↑↓", label: "Commits" });
       if (!isLocked) {
         hints.push({ keys: "L", label: "Lock" });
       } else {

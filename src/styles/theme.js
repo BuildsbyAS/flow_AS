@@ -98,6 +98,8 @@ export const themes = {
 };
 
 export const phaseNames = ["PRD", "Design", "Dev", "QA"];
+export const shipPhases = ["Alpha", "Beta", "GA"];
+export const allPhases = [...phaseNames, ...shipPhases];
 
 // Mutable color reference - updated on theme change
 export let c = themes.dark;
@@ -127,13 +129,14 @@ export const riskConfig = () => ({
   critical: { color: c.red, label: "Critical" },
 });
 
-export const phaseColors = () => ({ PRD: c.purple, Design: c.blue, Dev: c.green, QA: c.cyan });
+export const phaseColors = () => ({
+  PRD: c.purple, Design: c.blue, Dev: c.orange, QA: c.cyan,
+  Alpha: "#6BCB77", Beta: "#36AE7C", GA: "#1FAA59",
+});
 
 // ── Canonical project status semantics ──
 export const statusColors = () => ({
   active:        { color: c.cyan,   bg: c.cyanDim,   label: "Active" },
-  complete:      { color: c.green,  bg: c.greenDim,  label: "Complete" },
-  blocked:       { color: c.red,    bg: c.redDim,    label: "Blocked" },
   deprioritized: { color: c.orange, bg: c.orangeDim, label: "Depri" },
 });
 
@@ -237,7 +240,7 @@ export const colWidths = {
   date:     { min: 60 },
   timeline: { min: 90 },
   actions:  { min: 60 },
-  focus:    { min: 140 },
+  commit:   { min: 140 },
 };
 
 // ── Motion tiers ──────────────────────────────────────────────

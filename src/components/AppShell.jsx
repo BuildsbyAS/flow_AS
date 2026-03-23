@@ -2,11 +2,13 @@
 // Layer 1: Logo · Primary Nav · Utility (search, theme)
 // Layer 2: Week controls · Filter trigger · Applied chips
 // Filter drawer slides from right when triggered
-import React from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { c, typo, layout, space, motion } from "../styles/theme";
 import { FilterChip, Btn } from "./shared";
 import FlowLogo from "./FlowLogo";
-import { weekConfig } from "../data/seed";
+import { supabase } from "../lib/supabase";
+
+// weekConfig now passed via props from App.jsx
 
 /* ════════════════════════════════════════════════════════════════════
    NAV
@@ -14,19 +16,34 @@ import { weekConfig } from "../data/seed";
 export const NAV = [
   { key: "summary",  label: "Summary",  num: 1 },
   { key: "pulse",    label: "Pulse",    num: 2 },
-  { key: "focus",    label: "Focus",    num: 3 },
+  { key: "commit",   label: "Commit",   num: 3 },
   { key: "projects", label: "Projects", num: 4 },
   { key: "people",   label: "People",   num: 5 },
-  { key: "settings", label: "Settings", num: 6 },
-  { key: "guide",    label: "Guide",    num: 7 },
+  { key: "guide",    label: "Guide",    num: 6 },
+  { key: "settings", label: "Settings", num: null },
+  { key: "logs",     label: "Logs",     num: null },
+  { key: "rant",     label: "Rant",     num: null },
 ];
+
+// Primary nav = tabs shown in the header bar (guide stays here)
+const PRIMARY_NAV = NAV.filter(t => !["settings", "logs", "rant"].includes(t.key));
+// Utility nav = behind the terminal icon
+const UTILITY_NAV = NAV.filter(t => ["settings", "logs", "rant"].includes(t.key));
+
+/* ── Terminal Icon SVG ── */
+const TerminalIcon = ({ size = 18, color = c.textMid }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="4 17 10 11 4 5" />
+    <line x1="12" y1="19" x2="20" y2="19" />
+  </svg>
+);
 
 /* ════════════════════════════════════════════════════════════════════
    CYCLE STAGE
    declare → lock → pulse → close
    ════════════════════════════════════════════════════════════════════ */
 const STAGES = {
-  declare: { label: "Declare", verb: "Open Focus", targetTab: "focus",  color: () => c.purple },
+  declare: { label: "Declare", verb: "Open Commit", targetTab: "commit",  color: () => c.purple },
   lock:    { label: "Lock",    verb: "Run Pulse",  targetTab: "pulse",  color: () => c.orange },
   pulse:   { label: "Pulse",   verb: "Close Week", targetTab: "pulse",  color: () => c.green  },
   close:   { label: "Close",   verb: "Outcomes",   targetTab: "pulse",  color: () => c.blue   },
@@ -53,10 +70,10 @@ export function getAttentionItems(commitments, projects) {
   const total = commitments.length;
   if (total === 0) return items;
   const unlocked = commitments.filter(x => !x.lockedAt).length;
-  const blocked = commitments.reduce((n, x) => n + x.items.filter(i => i.type === "BLOCKED").length, 0);
+  const blocked = 0;
   const soon = 14 * 86400000;
   const atRisk = projects.filter(p =>
-    !p.ship && p.endDate &&
+    !["Alpha","Beta","GA"].includes(p.phase) && p.endDate &&
     (new Date(p.endDate).getTime() - Date.now()) < soon &&
     (new Date(p.endDate).getTime() - Date.now()) > 0
   ).length;
@@ -103,13 +120,15 @@ export function Header({
   globalFilters, pendingFilters, setPendingFilters,
   applyFilters, clearGlobalFilters, globalFilterCount,
   allOwners, allSquads, allPeople,
+  // ── Auth ──
+  currentUser,
 }) {
 
   const showContextBar = !detailLabel;
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
   // Local draft state for the drawer — syncs from pendingFilters when opening
-  const [draft, setDraft] = React.useState({ owner: "", squad: "", person: "" });
+  const [draft, setDraft] = React.useState({ owner: [], squad: [], person: [] });
 
   // Pending-apply flag: when set, triggers applyFilters on next render after setPendingFilters
   const applyNextRef = React.useRef(false);
@@ -134,19 +153,17 @@ export function Header({
   };
 
   const handleClearAll = () => {
-    setDraft({ owner: "", squad: "", person: "" });
+    setDraft({ owner: [], squad: [], person: [] });
     clearGlobalFilters();
     setDrawerOpen(false);
   };
 
-  const draftCount = Object.values(draft).filter(Boolean).length;
-  const draftChanged = draft.owner !== globalFilters.owner ||
-                       draft.squad !== globalFilters.squad ||
-                       draft.person !== globalFilters.person;
+  const draftCount = Object.values(draft).filter(v => v.length > 0).length;
+  const draftChanged = JSON.stringify(draft) !== JSON.stringify(globalFilters);
 
   // Remove a single applied filter chip
   const removeAppliedFilter = (key) => {
-    const updated = { ...globalFilters, [key]: "" };
+    const updated = { ...globalFilters, [key]: [] };
     setPendingFilters(updated);
     applyNextRef.current = true;
   };
@@ -181,8 +198,8 @@ export function Header({
           <FlowLogo size={30} />
         </div>
         <span style={{
-          fontFamily: typo.displaySm.font, fontSize: 16,
-          fontWeight: 800, color: c.text, letterSpacing: "-0.05em",
+          fontFamily: "'Space Grotesk', 'Inter', sans-serif", fontSize: 17,
+          fontWeight: 700, color: c.text, letterSpacing: "-0.05em",
           textShadow: `0 0 20px ${c.accent}15`,
         }}>Flow</span>
       </div>
@@ -199,7 +216,7 @@ export function Header({
         />
       ) : (
         <nav className="flow-nav-rail" style={{ display: "flex", alignItems: "stretch", gap: 2, flexShrink: 0, height: "100%" }}>
-          {NAV.map(tab => {
+          {PRIMARY_NAV.map(tab => {
             const active = activeTab === tab.key;
             return (
               <button key={tab.key} onClick={() => onTabSwitch(tab.key)} className="flow-header-tab" style={{
@@ -217,14 +234,18 @@ export function Header({
               }}>
                 {tab.label}
                 {/* Numeric shortcut hint — subtle hotkey */}
-                <span style={{
+                {tab.num && <span style={{
                   fontFamily: typo.monoSm.font, fontSize: 9,
-                  fontWeight: 500, letterSpacing: typo.monoSm.tracking,
-                  color: c.textDim,
-                  opacity: active ? 0.5 : 0.3,
+                  fontWeight: 600, letterSpacing: typo.monoSm.tracking,
+                  color: active ? c.textMid : c.textDim,
+                  opacity: active ? 0.6 : 0.35,
                   lineHeight: 1, flexShrink: 0,
-                  transition: `opacity ${motion.interaction.duration}`,
-                }}>{tab.num}</span>
+                  padding: "2px 4px",
+                  border: `1px solid ${active ? c.textDim + '40' : c.textDim + '25'}`,
+                  borderRadius: 4,
+                  transition: `all ${motion.interaction.duration}`,
+                  position: "relative", top: -1,
+                }}>{tab.num}</span>}
                 {/* Active indicator — bottom bar with glow */}
                 {active && (
                   <div style={{
@@ -243,9 +264,37 @@ export function Header({
       {/* ── Spacer ── */}
       <div style={{ flex: 1, minWidth: space[2] }} />
 
-      {/* ── Utility cluster: search · theme ── */}
+      {/* ── Utility cluster: search · user ── */}
       <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
         <CompactSearch onClick={onCmdOpen} />
+
+        {/* ── Terminal button (Settings, Logs & Rant) ── */}
+        <button
+          onClick={() => onTabSwitch("terminal")}
+          style={{
+            width: 34, height: 34, borderRadius: layout.radiusSm,
+            border: `1px solid ${["terminal","settings","logs"].includes(activeTab) ? "#00ff4140" : c.border}`,
+            background: ["terminal","settings","logs"].includes(activeTab) ? "#00ff4112" : "transparent",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+          }}
+          title="Terminal"
+        >
+          <TerminalIcon size={16} color={["terminal","settings","logs"].includes(activeTab) ? "#00ff41" : c.textMid} />
+        </button>
+
+        {/* ── Notification bell (admin rant replies) ── */}
+        {currentUser?.user?.email && (
+          <NotificationBell
+            userEmail={currentUser.user.email}
+            onNavigate={(rantId) => { onTabSwitch("terminal"); }}
+          />
+        )}
+
+        {/* ── User avatar + logout ── */}
+        {currentUser?.user && (
+          <UserBadge user={currentUser.user} personProfile={currentUser.personProfile} onSignOut={currentUser.signOut} onRefreshProfile={currentUser.refreshProfile} />
+        )}
       </div>
     </header>
 
@@ -318,23 +367,23 @@ export function Header({
         {/* ── Separator ── */}
         <div style={{ width: 1, alignSelf: "stretch", margin: "6px 2px", background: c.border, flexShrink: 0 }} />
 
-        {/* ── Day rhythm pill ── */}
-        <DayRhythmPill onNavigateToGuide={() => onTabSwitch("guide")} />
+        {/* ── Tab help text ── */}
+        <TabHelpText activeTab={activeTab} onNavigate={onTabSwitch} />
 
         {/* ── Spacer ── */}
         <div style={{ flex: 1 }} />
 
         {/* ── Active filter chips (inline) ── */}
         {globalFilterCount > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: space[1] + 2, flexShrink: 0 }}>
-            {globalFilters.owner && (
-              <FilterChip label={`Owner: ${globalFilters.owner}`} onClick={() => removeAppliedFilter("owner")} />
+          <div style={{ display: "flex", alignItems: "center", gap: space[1] + 2, flexShrink: 0, flexWrap: "wrap" }}>
+            {globalFilters.owner.length > 0 && (
+              <FilterChip label={`Owner: ${globalFilters.owner.join(", ")}`} onClick={() => removeAppliedFilter("owner")} />
             )}
-            {globalFilters.squad && (
-              <FilterChip label={`Squad: ${globalFilters.squad}`} onClick={() => removeAppliedFilter("squad")} />
+            {globalFilters.squad.length > 0 && (
+              <FilterChip label={`Squad: ${globalFilters.squad.join(", ")}`} onClick={() => removeAppliedFilter("squad")} />
             )}
-            {globalFilters.person && (
-              <FilterChip label={`Person: ${globalFilters.person}`} onClick={() => removeAppliedFilter("person")} />
+            {globalFilters.person.length > 0 && (
+              <FilterChip label={`Person: ${globalFilters.person.join(", ")}`} onClick={() => removeAppliedFilter("person")} />
             )}
           </div>
         )}
@@ -366,6 +415,9 @@ export function Header({
             </>
           ) : "Filters"}
         </button>
+
+        {/* ── Day rhythm pill ── */}
+        <DayRhythmPill onNavigateToGuide={() => onTabSwitch("guide")} />
       </div>
     )}
 
@@ -415,7 +467,7 @@ function FilterDrawer({
     { key: "person", label: "Person", options: allPeople },
   ];
 
-  const activeCount = [draft.squad, draft.owner, draft.person].filter(Boolean).length;
+  const activeCount = [draft.squad, draft.owner, draft.person].filter(v => v.length > 0).length;
 
   return (
     <>
@@ -566,7 +618,7 @@ function FilterDrawer({
 /* ════════════════════════════════════════════════════════════════════
    DRAWER FILTER GROUP — single filter with search + option list
    ════════════════════════════════════════════════════════════════════ */
-function DrawerFilterGroup({ label, options, value, onChange }) {
+function DrawerFilterGroup({ label, options, value = [], onChange }) {
   const [search, setSearch] = React.useState("");
   const inputRef = React.useRef(null);
 
@@ -574,10 +626,20 @@ function DrawerFilterGroup({ label, options, value, onChange }) {
     ? options.filter(o => o.toLowerCase().includes(search.toLowerCase()))
     : options;
 
-  // When not searching, pin selected item to top
-  const sorted = (!search && value)
-    ? [value, ...filtered.filter(o => o !== value)]
+  // Pin selected items to top when not searching
+  const sorted = (!search && value.length > 0)
+    ? [...value.filter(v => filtered.includes(v)), ...filtered.filter(o => !value.includes(o))]
     : filtered;
+
+  const allSelected = value.length === 0;
+
+  const toggle = (opt) => {
+    if (value.includes(opt)) {
+      onChange(value.filter(v => v !== opt));
+    } else {
+      onChange([...value, opt]);
+    }
+  };
 
   return (
     <div>
@@ -586,14 +648,24 @@ function DrawerFilterGroup({ label, options, value, onChange }) {
         display: "flex", alignItems: "center", justifyContent: "space-between",
         marginBottom: space[2],
       }}>
-        <div style={{
-          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-          fontWeight: typo.monoSm.weight, letterSpacing: "0.06em",
-          color: c.textDim, textTransform: "uppercase",
-        }}>{label}</div>
-        {value && (
+        <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+          <span style={{
+            fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+            fontWeight: typo.monoSm.weight, letterSpacing: "0.06em",
+            color: c.textDim, textTransform: "uppercase",
+          }}>{label}</span>
+          {value.length > 0 && (
+            <span style={{
+              fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+              color: c.accent, background: c.accentDim,
+              padding: "1px 5px", borderRadius: layout.radiusPill,
+              lineHeight: 1.4,
+            }}>{value.length}</span>
+          )}
+        </div>
+        {value.length > 0 && (
           <span
-            onClick={() => { onChange(""); setSearch(""); }}
+            onClick={() => { onChange([]); setSearch(""); }}
             style={{
               fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 500,
               color: c.textDim, cursor: "pointer",
@@ -622,7 +694,7 @@ function DrawerFilterGroup({ label, options, value, onChange }) {
           onChange={e => setSearch(e.target.value)}
           onKeyDown={e => {
             if (e.key === "Enter" && filtered.length === 1) {
-              onChange(filtered[0]);
+              toggle(filtered[0]);
               setSearch("");
             }
           }}
@@ -650,14 +722,14 @@ function DrawerFilterGroup({ label, options, value, onChange }) {
       }}>
         {/* All option */}
         <div
-          onClick={() => { onChange(""); setSearch(""); }}
+          onClick={() => { onChange([]); setSearch(""); }}
           className="flow-dropdown-item"
           style={{
             padding: `6px ${space[3]}px`, cursor: "pointer",
             fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-            color: !value ? c.accent : c.textMid,
-            fontWeight: !value ? 600 : 400,
-            background: !value ? `${c.accent}08` : "transparent",
+            color: allSelected ? c.accent : c.textMid,
+            fontWeight: allSelected ? 600 : 400,
+            background: allSelected ? `${c.accent}08` : "transparent",
             borderBottom: `1px solid ${c.border}`,
             display: "flex", alignItems: "center", gap: space[2],
             transition: `background ${motion.interaction.duration}`,
@@ -665,12 +737,12 @@ function DrawerFilterGroup({ label, options, value, onChange }) {
         >
           <span style={{
             width: 14, height: 14, borderRadius: 3,
-            border: `1.5px solid ${!value ? c.accent : c.textDim}`,
-            background: !value ? c.accent : "transparent",
+            border: `1.5px solid ${allSelected ? c.accent : c.textDim}`,
+            background: allSelected ? c.accent : "transparent",
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0, transition: `all ${motion.interaction.duration}`,
           }}>
-            {!value && (
+            {allSelected && (
               <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
                 <path d="M2.5 6l2.5 2.5 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
@@ -680,11 +752,11 @@ function DrawerFilterGroup({ label, options, value, onChange }) {
         </div>
 
         {sorted.map(opt => {
-          const selected = opt === value;
+          const selected = value.includes(opt);
           return (
             <div
               key={opt}
-              onClick={() => { onChange(opt); setSearch(""); }}
+              onClick={() => toggle(opt)}
               className="flow-dropdown-item"
               style={{
                 padding: `6px ${space[3]}px`, cursor: "pointer",
@@ -785,6 +857,67 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
 
 
 /* ════════════════════════════════════════════════════════════════════
+   TAB HELP TEXT — contextual one-liner per tab
+   ════════════════════════════════════════════════════════════════════ */
+const TAB_HELP = {
+  summary:  { text: "Week-on-week progress at a glance", section: "guide-summary" },
+  pulse:    { text: "Live team activity — who's doing what right now", section: "guide-pulse" },
+  commit:   { text: "Your commits for the week — add, lock, ship", section: "guide-commit" },
+  projects: { text: "Every project, one view — roadmap & status", section: "guide-projects" },
+  people:   { text: "Person deep-dive — history, momentum, workload", section: "guide-people" },
+  guide:    { text: "How Flow works — the playbook", section: null },
+};
+
+function TabHelpText({ activeTab, onNavigate }) {
+  const help = TAB_HELP[activeTab];
+  if (!help) return null;
+
+  const handleClick = () => {
+    if (!help.section || !onNavigate) return;
+    onNavigate("guide");
+    // Wait for the guide tab to render, then scroll with offset for sticky headers (104px)
+    setTimeout(() => {
+      const el = document.getElementById(help.section);
+      if (el) {
+        const y = el.getBoundingClientRect().top + window.scrollY - 120;
+        window.scrollTo({ top: y, behavior: "smooth" });
+      }
+    }, 150);
+  };
+
+  return (
+    <span
+      onClick={handleClick}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 5,
+        padding: `3px ${space[2] + 2}px`,
+        borderRadius: layout.radiusTag + 1,
+        background: `${c.accent}06`,
+        border: `1px solid ${c.accent}10`,
+        flexShrink: 1, minWidth: 0, overflow: "hidden",
+        cursor: help.section ? "pointer" : "default",
+        transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+      }}
+      onMouseEnter={e => { if (help.section) { e.currentTarget.style.background = `${c.accent}14`; e.currentTarget.style.borderColor = `${c.accent}25`; } }}
+      onMouseLeave={e => { e.currentTarget.style.background = `${c.accent}06`; e.currentTarget.style.borderColor = `${c.accent}10`; }}
+      title={help.section ? "Click to learn more in the Guide" : undefined}
+    >
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, opacity: 0.5 }}>
+        <circle cx="8" cy="8" r="6.5" stroke={c.accent} strokeWidth="1.2" />
+        <path d="M6.5 6.2a1.5 1.5 0 0 1 2.83.7c0 1-1.33 1.2-1.33 1.2" stroke={c.accent} strokeWidth="1.1" strokeLinecap="round" />
+        <circle cx="8" cy="11" r="0.6" fill={c.accent} />
+      </svg>
+      <span style={{
+        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+        color: c.textMid, fontWeight: 500, fontStyle: "italic",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>{help.text}</span>
+    </span>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
    DAY RHYTHM PILL — contextual day indicator in context bar
    ════════════════════════════════════════════════════════════════════ */
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -834,8 +967,8 @@ function DayRhythmPill({ onNavigateToGuide }) {
       {/* Popup */}
       {open && (
         <div style={{
-          position: "absolute", top: "calc(100% + 6px)", left: 0,
-          zIndex: 900, minWidth: 260,
+          position: "absolute", top: "calc(100% + 6px)", right: 0,
+          zIndex: 900, minWidth: 200,
           background: c.surfaceOverlay,
           border: `1px solid ${c.border}`,
           borderRadius: layout.radiusMd,
@@ -876,15 +1009,6 @@ function DayRhythmPill({ onNavigateToGuide }) {
                 }}>
                   {r.label}
                 </span>
-                {isToday && (
-                  <span style={{
-                    fontSize: 9, fontWeight: 600, textTransform: "uppercase",
-                    letterSpacing: "0.06em",
-                    color: rc, opacity: 0.8,
-                  }}>
-                    today
-                  </span>
-                )}
               </div>
             );
           })}
@@ -916,6 +1040,408 @@ function DayRhythmPill({ onNavigateToGuide }) {
         </div>
       )}
     </span>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   NOTIFICATION BELL — admin rant replies for current user
+   ════════════════════════════════════════════════════════════════════ */
+function NotificationBell({ userEmail, onNavigate }) {
+  const [notifications, setNotifications] = React.useState([]);
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+
+  // Read dismissed IDs from localStorage
+  const getSeenIds = () => {
+    try { return JSON.parse(localStorage.getItem("flow_notif_seen") || "[]"); } catch { return []; }
+  };
+  const markSeen = (id) => {
+    const seen = getSeenIds();
+    if (!seen.includes(id)) {
+      localStorage.setItem("flow_notif_seen", JSON.stringify([...seen, id]));
+    }
+  };
+  const markAllSeen = () => {
+    const ids = notifications.map(n => n.id);
+    localStorage.setItem("flow_notif_seen", JSON.stringify(ids));
+    setNotifications(prev => prev.map(n => ({ ...n, _seen: true })));
+  };
+
+  // Fetch rants with admin replies for this user
+  const fetchNotifs = React.useCallback(async () => {
+    if (!userEmail) return;
+    const { data } = await supabase
+      .from("rants")
+      .select("id, title, admin_note, status, updated_at")
+      .eq("user_email", userEmail)
+      .not("admin_note", "is", null)
+      .order("updated_at", { ascending: false })
+      .limit(20);
+    if (data) {
+      const seen = getSeenIds();
+      setNotifications(data.map(r => ({ ...r, _seen: seen.includes(r.id) })));
+    }
+  }, [userEmail]);
+
+  React.useEffect(() => { fetchNotifs(); }, [fetchNotifs]);
+
+  // Poll every 60s
+  React.useEffect(() => {
+    const iv = setInterval(fetchNotifs, 60000);
+    return () => clearInterval(iv);
+  }, [fetchNotifs]);
+
+  // Close on outside click
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const unreadCount = notifications.filter(n => !n._seen).length;
+
+  const timeAgo = (ts) => {
+    const d = new Date(ts);
+    const now = new Date();
+    const diffMin = Math.floor((now - d) / 60000);
+    if (diffMin < 1) return "just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}h ago`;
+    const diffDay = Math.floor(diffHr / 24);
+    if (diffDay < 7) return `${diffDay}d ago`;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  if (notifications.length === 0) return null;
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => { setOpen(v => !v); }}
+        style={{
+          width: 34, height: 34, borderRadius: layout.radiusSm,
+          border: `1px solid ${open ? "#FBBF2440" : c.border}`,
+          background: open ? "#FBBF2412" : "transparent",
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          position: "relative",
+          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+        }}
+        title="Notifications"
+      >
+        {/* Bell icon */}
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={open ? "#FBBF24" : c.textMid} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        {/* Unread dot */}
+        {unreadCount > 0 && (
+          <div style={{
+            position: "absolute", top: 4, right: 4,
+            width: 8, height: 8, borderRadius: "50%",
+            background: "#FBBF24",
+            boxShadow: "0 0 6px #FBBF2480",
+          }} />
+        )}
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", right: 0, marginTop: 6,
+          width: 320, maxHeight: 400, overflow: "auto",
+          background: c.surfaceSolid, border: `1px solid ${c.border}`,
+          borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          zIndex: 200,
+          animation: "flow-load-fade-in 0.15s ease-out",
+          scrollbarWidth: "none",
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: "10px 14px", borderBottom: `1px solid ${c.border}`,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: c.text }}>Notifications</span>
+            {unreadCount > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); markAllSeen(); }}
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  fontSize: 11, color: "#FBBF24", fontFamily: "inherit",
+                }}
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
+
+          {/* Items */}
+          {notifications.map(n => (
+            <button
+              key={n.id}
+              onClick={() => {
+                markSeen(n.id);
+                setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, _seen: true } : x));
+                setOpen(false);
+                if (onNavigate) onNavigate(n.id);
+              }}
+              style={{
+                width: "100%", padding: "10px 14px",
+                background: n._seen ? "transparent" : "#FBBF2406",
+                border: "none", borderBottom: `1px solid ${c.border}`,
+                cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                display: "flex", gap: 10, alignItems: "flex-start",
+                transition: "background 0.1s",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}
+              onMouseLeave={e => e.currentTarget.style.background = n._seen ? "transparent" : "#FBBF2406"}
+            >
+              {/* Unread dot */}
+              <div style={{
+                width: 6, height: 6, borderRadius: "50%", marginTop: 5, flexShrink: 0,
+                background: n._seen ? "transparent" : "#FBBF24",
+              }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: 12, fontWeight: n._seen ? 400 : 600, color: c.text,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  Admin replied to "{n.title}"
+                </div>
+                <div style={{
+                  fontSize: 11, color: c.textDim, marginTop: 2,
+                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                }}>
+                  {n.admin_note}
+                </div>
+                <div style={{ fontSize: 10, color: c.textDim, opacity: 0.5, marginTop: 2 }}>
+                  {timeAgo(n.updated_at)}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   USER BADGE — avatar + dropdown with logout
+   ════════════════════════════════════════════════════════════════════ */
+function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
+  const [open, setOpen] = React.useState(false);
+  const [editing, setEditing] = React.useState(false);
+  const [editName, setEditName] = React.useState("");
+  const [editSquadId, setEditSquadId] = React.useState("");
+  const [editRoleId, setEditRoleId] = React.useState("");
+  const [squads, setSquads] = React.useState([]);
+  const [roles, setRoles] = React.useState([]);
+  const [saving, setSaving] = React.useState(false);
+  const ref = React.useRef(null);
+
+  // Close on outside click
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // When opening edit mode, fetch squads/roles and populate current values
+  const startEditing = async () => {
+    setEditName(personProfile?.name || "");
+    setEditSquadId(personProfile?.squad_id || "");
+    setEditRoleId(personProfile?.role_id || "");
+    setEditing(true);
+
+    // Lazy-load squads + roles
+    const { supabase } = await import("../lib/supabase");
+    const [sq, ro] = await Promise.all([
+      supabase.from("squads").select("id, name").order("name"),
+      supabase.from("roles").select("id, name").order("name"),
+    ]);
+    if (sq.data) setSquads(sq.data);
+    if (ro.data) setRoles(ro.data);
+  };
+
+  const handleSave = async () => {
+    if (!editName.trim() || !editSquadId || !editRoleId) return;
+    setSaving(true);
+    const { supabase } = await import("../lib/supabase");
+    await supabase
+      .from("people")
+      .update({ name: editName.trim(), squad_id: editSquadId, role_id: editRoleId })
+      .eq("id", personProfile.id);
+    setSaving(false);
+    setEditing(false);
+    if (onRefreshProfile) onRefreshProfile();
+  };
+
+  const avatar = user?.user_metadata?.avatar_url;
+  const displayName = personProfile?.name || user?.user_metadata?.full_name || user?.email;
+
+  const inputStyle = {
+    width: "100%", padding: "6px 10px",
+    background: "rgba(255,255,255,0.04)",
+    border: `1px solid rgba(255,255,255,0.1)`,
+    borderRadius: 6, color: c.text,
+    fontSize: 12, fontFamily: "inherit",
+    outline: "none",
+  };
+
+  const menuBtn = {
+    width: "100%", padding: "8px 14px",
+    background: "transparent", border: "none",
+    textAlign: "left", cursor: "pointer",
+    fontSize: 13, color: c.text, fontFamily: "inherit",
+    transition: "background 0.1s",
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        onClick={() => { setOpen(v => !v); if (open) setEditing(false); }}
+        style={{
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "3px 3px", background: "transparent", border: "none",
+          cursor: "pointer", borderRadius: 20,
+          transition: "background 0.15s",
+        }}
+        title={displayName}
+      >
+        {avatar ? (
+          <img src={avatar} alt="" style={{
+            width: 28, height: 28, borderRadius: "50%",
+            border: `2px solid ${c.border}`,
+            transition: "border-color 0.15s",
+          }} />
+        ) : (
+          <div style={{
+            width: 28, height: 28, borderRadius: "50%",
+            background: `linear-gradient(135deg, ${c.purple}, ${c.cyan})`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 12, fontWeight: 700, color: "#fff",
+            border: `2px solid ${c.border}`,
+          }}>
+            {(displayName || "?")[0].toUpperCase()}
+          </div>
+        )}
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", right: 0, marginTop: 6,
+          width: editing ? 260 : 220, padding: "8px 0",
+          background: c.surfaceSolid, border: `1px solid ${c.border}`,
+          borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          zIndex: 200,
+          animation: "flow-load-fade-in 0.15s ease-out",
+        }}>
+
+          {!editing ? (
+            <>
+              {/* User info */}
+              <div style={{ padding: "8px 14px 10px", borderBottom: `1px solid ${c.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{displayName}</div>
+                <div style={{ fontSize: 11, opacity: 0.35 }}>{user?.email}</div>
+                {personProfile?.squads?.name && (
+                  <div style={{ fontSize: 11, opacity: 0.3, marginTop: 2 }}>
+                    {personProfile.squads.name} · {personProfile.roles?.name}
+                  </div>
+                )}
+              </div>
+
+              {/* Edit profile */}
+              <button
+                onClick={startEditing}
+                style={menuBtn}
+                onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.04)"}
+                onMouseLeave={e => e.target.style.background = "transparent"}
+              >
+                Edit profile
+              </button>
+
+              {/* Sign out */}
+              <button
+                onClick={() => { setOpen(false); onSignOut(); }}
+                style={menuBtn}
+                onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.04)"}
+                onMouseLeave={e => e.target.style.background = "transparent"}
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            /* ── Edit mode ── */
+            <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", opacity: 0.35 }}>
+                Edit profile
+              </div>
+
+              {/* Name */}
+              <input
+                type="text"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                placeholder="Display name"
+                style={inputStyle}
+                autoFocus
+              />
+
+              {/* Squad */}
+              <select
+                value={editSquadId}
+                onChange={e => setEditSquadId(e.target.value)}
+                style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}
+              >
+                <option value="" disabled>Squad</option>
+                {squads.map(s => (
+                  <option key={s.id} value={s.id} style={{ background: c.bg, color: c.text }}>{s.name}</option>
+                ))}
+              </select>
+
+              {/* Role */}
+              <select
+                value={editRoleId}
+                onChange={e => setEditRoleId(e.target.value)}
+                style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}
+              >
+                <option value="" disabled>Role</option>
+                {roles.map(r => (
+                  <option key={r.id} value={r.id} style={{ background: c.bg, color: c.text }}>{r.name}</option>
+                ))}
+              </select>
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+                <button
+                  onClick={() => setEditing(false)}
+                  style={{
+                    flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 500, fontFamily: "inherit",
+                    background: "transparent", border: `1px solid ${c.border}`,
+                    borderRadius: 6, color: c.text, cursor: "pointer",
+                  }}
+                >Cancel</button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !editName.trim() || !editSquadId || !editRoleId}
+                  style={{
+                    flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, fontFamily: "inherit",
+                    background: saving ? "rgba(168,85,247,0.3)" : "linear-gradient(135deg, #A855F7, #7C3AED)",
+                    border: "none", borderRadius: 6, color: "#fff", cursor: saving ? "wait" : "pointer",
+                  }}
+                >{saving ? "Saving…" : "Save"}</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

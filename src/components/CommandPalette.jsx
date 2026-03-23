@@ -27,14 +27,14 @@ const SECTION_COLORS = () => ({
 
 const CATEGORIES = [
   { key: "all",        label: "All",        icon: "◎" },
-  { key: "projects",   label: "Projects",   icon: "◆" },
   { key: "people",     label: "People",     icon: "●" },
+  { key: "projects",   label: "Projects",   icon: "◆" },
   { key: "navigation", label: "Navigate",   icon: "→" },
   { key: "settings",   label: "Settings",   icon: "⚙" },
 ];
 
 // Section ordering for "All" mode
-const SECTION_ORDER = ["Navigation", "Actions", "Projects", "People", "Settings"];
+const SECTION_ORDER = ["People", "Projects", "Navigation", "Actions", "Settings"];
 
 // ── Scoring helper ──
 function scoreMatch(query, text) {
@@ -89,12 +89,12 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
       cmds.push({
         id: `nav-${tab.key}`,
         label: tab.label.replace("⚙️ ", ""),
-        hint: `Go to ${tab.label.replace("⚙️ ", "")} view`,
+        hint: "",
         section: "Navigation",
         cat: "navigation",
-        icon: String(tab.num),
+        icon: tab.num != null ? String(tab.num) : tab.key === "settings" ? "⚙" : tab.key === "logs" ? "◉" : tab.key === "rant" ? "🔥" : "·",
         iconColor: c.accent,
-        kbd: String(tab.num),
+        kbd: tab.num != null ? String(tab.num) : "",
         action: () => { onTabSwitch(tab.key); onClose(); },
       });
     });

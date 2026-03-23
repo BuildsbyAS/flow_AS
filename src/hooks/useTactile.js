@@ -32,7 +32,7 @@ function playTone(freq, duration = 0.04, volume = 0.08, type = "sine") {
 
 // ── Named tactile events ──
 export const tactile = {
-  // Lock commitment — satisfying confirmation
+  // Lock commit — satisfying confirmation
   lock: () => {
     playTone(880, 0.05, 0.06);
     setTimeout(() => playTone(1320, 0.06, 0.05), 60);

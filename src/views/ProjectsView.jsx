@@ -1,10 +1,17 @@
 // Flow — Projects View (Rebuild v2: Pulse structural model + PeopleDeepDive history model)
 // Two states: Registry (Pulse-style table with tabs) → Project Deep Dive (PeopleDeepDive-style)
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { c, typo, space, layout, motion, phaseNames, typeConfig, phaseColors as getPhaseColors, statusColors, entityColors, colWidths } from "../styles/theme";
+import { createPortal } from "react-dom";
+import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, typeConfig, phaseColors as getPhaseColors, statusColors, entityColors, colWidths, outcomeConfig } from "../styles/theme";
 import { Badge, Tag, Surface, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, SectionDivider, StatCell, MetricCompact, SummaryTile, VDivider, Th as SharedTh } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
-import { weekConfig } from "../data/seed";
+import GanttChart from "../components/GanttChart";
+import FlowLogo from "../components/FlowLogo";
+import { weekConfig as fallbackWeekConfig } from "../data/seed";
+import { logProjectEdit, logProjectCreate } from "../lib/activityLog";
+
+// Today's date — used by module-level functions; updated by component on mount
+let _today = new Date().toISOString().split('T')[0];
 
 /* ══════════════════════════════════════════════════════════════════
    HELPERS
@@ -20,12 +27,84 @@ const fmtDate = (d) => {
   if (!d) return "—";
   const [, m, day] = d.split("-");
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${months[parseInt(m, 10) - 1]} ${parseInt(day, 10)}`;
+  return `${parseInt(day, 10)} ${months[parseInt(m, 10) - 1]}`;
 };
 
 // statusColors imported from theme.js
 
-const WEEK_LABELS = [...weekConfig.historyWeeks, "This wk"];
+// WEEK_LABELS now computed inside components using weekConfig prop
+
+/* ══════════════════════════════════════════════════════════════════
+   GANTT MULTI-SELECT FILTER — dropdown with checkboxes
+   ══════════════════════════════════════════════════════════════════ */
+function GanttMultiFilter({ label, options, selected, onToggle, onClear }) {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  const active = selected.length > 0;
+
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        padding: `${space[1]}px ${space[2]}px`,
+        borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+        background: active ? c.accentDim : c.surfaceAlt,
+        color: active ? c.accent : c.textDim,
+        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+        cursor: "pointer", outline: "none",
+        display: "flex", alignItems: "center", gap: 4,
+      }}>
+        {active ? `${label} (${selected.length})` : `All ${label}`}
+        <span style={{ fontSize: 8, opacity: 0.6 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 900,
+          minWidth: 180, maxHeight: 260, overflowY: "auto",
+          background: c.surfaceOverlay, border: `1px solid ${c.border}`,
+          borderRadius: layout.radiusMd, boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+          padding: `${space[1]}px 0`,
+        }}>
+          {active && (
+            <div onClick={() => { onClear(); }} style={{
+              padding: `${space[1]}px ${space[3]}px`, cursor: "pointer",
+              fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+              color: c.red, fontWeight: 600, borderBottom: `1px solid ${c.border}`,
+              marginBottom: space[1],
+            }}>Clear all</div>
+          )}
+          {options.map(opt => {
+            const isSelected = selected.includes(opt);
+            return (
+              <div key={opt} onClick={() => onToggle(opt)} style={{
+                padding: `${space[1]}px ${space[3]}px`, cursor: "pointer",
+                display: "flex", alignItems: "center", gap: space[2],
+                background: isSelected ? `${c.accent}10` : "transparent",
+                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                color: isSelected ? c.text : c.textMid,
+              }}>
+                <span style={{
+                  width: 14, height: 14, borderRadius: 3,
+                  border: `1.5px solid ${isSelected ? c.accent : c.textDim}`,
+                  background: isSelected ? c.accent : "transparent",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 9, color: c.bg, fontWeight: 700,
+                }}>{isSelected ? "✓" : ""}</span>
+                {opt}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /* ══════════════════════════════════════════════════════════════════
    DATA DERIVATION — full-history metrics per project
@@ -79,7 +158,6 @@ function deriveProjectMetrics(projects, commitments, history) {
           const stage = it.stage || "PRD";
           if (m.phaseBreakdown[stage] !== undefined) m.phaseBreakdown[stage]++;
           if (m.typeBreakdown[it.type] !== undefined) m.typeBreakdown[it.type]++;
-          if (it.type === "BLOCKED") m.isBlocked = true;
         }
       });
     });
@@ -92,9 +170,20 @@ function deriveProjectMetrics(projects, commitments, history) {
     m.peopleList = [...m.people];
 
     // Risk flags
-    const daysToEnd = daysBetween(weekConfig.today, proj.endDate);
-    if (daysToEnd <= 14 && daysToEnd > 0 && proj.status !== "complete") m.endingSoon = true;
-    if (daysToEnd < 0 && proj.status !== "complete") m.overdue = true;
+    const daysToEnd = daysBetween(_today, proj.endDate);
+    if (daysToEnd <= 14 && daysToEnd > 0 && !shipPhases.includes(proj.phase)) m.endingSoon = true;
+    if (daysToEnd < 0 && !shipPhases.includes(proj.phase)) m.overdue = true;
+
+    // Health (mirrors PulseView formula)
+    const age = daysBetween(proj.startDate, _today);
+    const planned = daysBetween(proj.startDate, proj.endDate);
+    let health = 100;
+    if (planned > 0) { const pctEl = age / planned; if (pctEl > 1) health -= 35; else if (pctEl > 0.85) health -= 20; else if (pctEl > 0.65) health -= 10; }
+    if (daysToEnd != null && daysToEnd < 7 && daysToEnd >= 0 && !shipPhases.includes(proj.phase)) health -= 5;
+    if (m.thisWeekTotal === 0 && !shipPhases.includes(proj.phase)) health -= 25;
+    else { if (m.thisWeekTotal > 0 && !m.typeBreakdown.BUILD && m.typeBreakdown.JAM) health -= 10; }
+    if (!proj.owner) health -= 20;
+    m.health = Math.max(0, Math.min(100, health));
 
     map[id] = m;
   }
@@ -113,7 +202,7 @@ function sortList(list, key, dir, metrics) {
       case "project": return d * (a.name || "").localeCompare(b.name || "");
       case "owner": return d * (a.owner || "").localeCompare(b.owner || "");
       case "status": return d * (a.status || "active").localeCompare(b.status || "active");
-      case "phase": return d * (phaseNames.indexOf(a.phase) - phaseNames.indexOf(b.phase));
+      case "phase": return d * (allPhases.indexOf(a.phase) - allPhases.indexOf(b.phase));
       case "total": return d * ((metrics[a.id]?.totalCommits || 0) - (metrics[b.id]?.totalCommits || 0));
       case "thisWk": return d * ((metrics[a.id]?.thisWeekTotal || 0) - (metrics[b.id]?.thisWeekTotal || 0));
       case "people": return d * ((metrics[a.id]?.peopleList.length || 0) - (metrics[b.id]?.peopleList.length || 0));
@@ -121,7 +210,7 @@ function sortList(list, key, dir, metrics) {
         const order = { "This wk": 5, "Mar 3": 4, "Feb 24": 3, "Feb 17": 2, "Feb 10": 1 };
         return d * ((order[metrics[a.id]?.lastActivity] || 0) - (order[metrics[b.id]?.lastActivity] || 0));
       }
-      case "timeline": return d * (daysBetween(weekConfig.today, a.endDate) - daysBetween(weekConfig.today, b.endDate));
+      case "timeline": return d * (daysBetween(_today, a.endDate) - daysBetween(_today, b.endDate));
       default: return 0;
     }
   });
@@ -132,9 +221,14 @@ function sortList(list, key, dir, metrics) {
    ══════════════════════════════════════════════════════════════════ */
 export default function ProjectsView({
   projects: rawProjects, setProjects, commitments, people, history,
+  weekConfig: weekConfigProp,
   initialId, onNavigate, setDetailLabel, setGoBack, searchRef, globalFilters = {},
   isHistorical, selectedWeekKey,
 }) {
+  const weekConfig = weekConfigProp || fallbackWeekConfig;
+  // Sync module-level _today from live weekConfig
+  if (weekConfig.today) _today = weekConfig.today;
+  const WEEK_LABELS = useMemo(() => [...(weekConfig.historyWeeks || []), "This wk"], [weekConfig]);
   const projects = useMemo(() => rawProjects.map(ensureStatus), [rawProjects]);
   const metrics = useMemo(() => deriveProjectMetrics(projects, commitments, history), [projects, commitments, history]);
 
@@ -148,6 +242,20 @@ export default function ProjectsView({
   const [kbActive, setKbActive] = useState(false);
   const [searchGlow, setSearchGlow] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [viewMode, setViewMode] = useState("registry"); // "registry" | "board" | "timeline"
+  const [ganttFullscreen, setGanttFullscreen] = useState(false);
+  const [boardFullscreen, setBoardFullscreen] = useState(false);
+  const [boardSearch, setBoardSearch] = useState("");
+  const [boardSquads, setBoardSquads] = useState([]);
+  const [boardOwners, setBoardOwners] = useState([]);
+  const [boardPhases, setBoardPhases] = useState([]);
+  const boardSearchRef = useRef(null);
+  const [ganttSearch, setGanttSearch] = useState("");
+  const [ganttSquads, setGanttSquads] = useState([]);
+  const [ganttOwners, setGanttOwners] = useState([]);
+  const [ganttPhases, setGanttPhases] = useState([]);
+  const toggleFilter = (setter, val) => setter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  const ganttSearchRef = useRef(null);
   const localSearchRef = useRef(null);
 
   // Wire searchRef
@@ -187,10 +295,10 @@ export default function ProjectsView({
         (p.owner || "").toLowerCase().includes(q) || (p.squad || "").toLowerCase().includes(q)
       );
     }
-    if (globalFilters.owner) list = list.filter(p => p.owner === globalFilters.owner);
-    if (globalFilters.squad) list = list.filter(p => p.squad === globalFilters.squad);
-    if (globalFilters.person) {
-      list = list.filter(p => metrics[p.id]?.people.has(globalFilters.person));
+    if (globalFilters.owner.length > 0) list = list.filter(p => globalFilters.owner.includes(p.owner));
+    if (globalFilters.squad.length > 0) list = list.filter(p => globalFilters.squad.includes(p.squad));
+    if (globalFilters.person.length > 0) {
+      list = list.filter(p => globalFilters.person.some(fp => metrics[p.id]?.people.has(fp)));
     }
     return list;
   }, [projects, search, globalFilters, metrics]);
@@ -199,8 +307,15 @@ export default function ProjectsView({
   const tabProjects = useMemo(() => {
     let list;
     switch (activeTab) {
-      case "active": list = filtered.filter(p => p.status === "active" || p.status === "blocked"); break;
-      case "complete": list = filtered.filter(p => p.status === "complete"); break;
+      case "active": list = filtered.filter(p => (p.status === "active" || p.status === "blocked") && !shipPhases.includes(p.phase)); break;
+      case "at_risk": list = filtered.filter(p => {
+        if (shipPhases.includes(p.phase) || p.status === "deprioritized") return false;
+        const age = daysBetween(p.startDate, weekConfig.today);
+        const m = metrics[p.id];
+        return m?.overdue || age > 60 || m?.isBlocked;
+      }); break;
+      case "overdue": list = filtered.filter(p => !shipPhases.includes(p.phase) && p.status !== "deprioritized" && metrics[p.id]?.overdue); break;
+      case "shipped": list = filtered.filter(p => shipPhases.includes(p.phase)); break;
       case "deprioritized": list = filtered.filter(p => p.status === "deprioritized"); break;
       default: list = filtered;
     }
@@ -209,15 +324,60 @@ export default function ProjectsView({
 
   // ── KPI summary (from filtered data) ──
   const summary = useMemo(() => {
-    const active = filtered.filter(p => p.status === "active" || p.status === "blocked");
-    const complete = filtered.filter(p => p.status === "complete");
+    const active = filtered.filter(p => (p.status === "active" || p.status === "blocked") && !shipPhases.includes(p.phase));
+    const shipped = filtered.filter(p => shipPhases.includes(p.phase));
     const depri = filtered.filter(p => p.status === "deprioritized");
     const blockedCount = active.filter(p => p.status === "blocked" || metrics[p.id]?.isBlocked).length;
     const totalCommits = filtered.reduce((s, p) => s + (metrics[p.id]?.totalCommits || 0), 0);
-    const avgPeople = filtered.length > 0 ? Math.round(filtered.reduce((s, p) => s + (metrics[p.id]?.peopleList.length || 0), 0) / filtered.length) : 0;
-    const avgAge = active.length > 0 ? Math.round(active.reduce((s, p) => s + daysBetween(p.startDate, weekConfig.today), 0) / active.length) : 0;
-    return { active: active.length, complete: complete.length, depri: depri.length, all: filtered.length, blockedCount, totalCommits, avgPeople, avgAge };
+    const overdueCount = active.filter(p => metrics[p.id]?.overdue).length;
+    const atRiskCount = active.filter(p => {
+      const age = daysBetween(p.startDate, weekConfig.today);
+      const m = metrics[p.id];
+      return m?.overdue || age > 60 || m?.isBlocked;
+    }).length;
+    // Simple health: 100 base, -20 if overdue, -15 if blocked, -10 if age > 60
+    const avgHealth = active.length > 0 ? Math.round(active.reduce((s, p) => {
+      let h = 100;
+      const m = metrics[p.id];
+      if (m?.overdue) h -= 20;
+      if (m?.isBlocked) h -= 15;
+      const age = daysBetween(p.startDate, weekConfig.today);
+      if (age > 60) h -= 10;
+      else if (age > 30) h -= 5;
+      return s + Math.max(0, h);
+    }, 0) / active.length) : 0;
+    return { active: active.length, shipped: shipped.length, depri: depri.length, all: filtered.length, blockedCount, totalCommits, avgHealth, atRiskCount, overdueCount };
   }, [filtered, metrics]);
+
+  // ── Gantt-specific filter (separate from registry filters) ──
+  const allSquads = useMemo(() => [...new Set(projects.map(p => p.squad).filter(Boolean))].sort(), [projects]);
+  const allOwners = useMemo(() => people ? people.map(p => p.name).sort() : [...new Set(projects.map(p => p.owner).filter(Boolean))].sort(), [projects, people]);
+  const ganttProjects = useMemo(() => {
+    let list = projects;
+    if (ganttSearch.trim()) {
+      const q = ganttSearch.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) ||
+        (p.owner || "").toLowerCase().includes(q) || (p.squad || "").toLowerCase().includes(q));
+    }
+    if (ganttSquads.length > 0) list = list.filter(p => ganttSquads.includes(p.squad));
+    if (ganttOwners.length > 0) list = list.filter(p => ganttOwners.includes(p.owner));
+    if (ganttPhases.length > 0) list = list.filter(p => ganttPhases.includes(p.phase));
+    return list;
+  }, [projects, ganttSearch, ganttSquads, ganttOwners, ganttPhases]);
+
+  // ── Board-specific filter (all projects, not tab-filtered) ──
+  const boardProjects = useMemo(() => {
+    let list = projects;
+    if (boardSearch.trim()) {
+      const q = boardSearch.toLowerCase();
+      list = list.filter(p => p.name.toLowerCase().includes(q) || p.id.toLowerCase().includes(q) ||
+        (p.owner || "").toLowerCase().includes(q) || (p.squad || "").toLowerCase().includes(q));
+    }
+    if (boardSquads.length > 0) list = list.filter(p => boardSquads.includes(p.squad));
+    if (boardOwners.length > 0) list = list.filter(p => boardOwners.includes(p.owner));
+    if (boardPhases.length > 0) list = list.filter(p => boardPhases.includes(p.phase));
+    return list;
+  }, [projects, boardSearch, boardSquads, boardOwners, boardPhases]);
 
   // ── Sort handler (Pulse pattern) ──
   const toggleSort = useCallback((col) => {
@@ -228,12 +388,13 @@ export default function ProjectsView({
 
   // ── Keyboard ──
   useKeyboard([
-    { key: "Escape", fn: () => { if (selectedProject) goBackToList(); else if (search) { setSearch(""); setFocusIdx(0); localSearchRef.current?.blur(); setKbActive(false); } else if (document.activeElement === localSearchRef.current) { localSearchRef.current.blur(); setKbActive(false); } else if (kbActive) { setKbActive(false); } }, force: true },
-    { key: "ArrowUp", fn: () => { if (!selectedProject) { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } }, force: true },
-    { key: "ArrowDown", fn: () => { if (!selectedProject) { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.min(tabProjects.length - 1, i + 1)); } }, force: true },
-    { key: "Enter", fn: () => { if (!selectedProject && kbActive && tabProjects[focusIdx]) openProject(tabProjects[focusIdx].id); }, force: true },
-    { key: "/", fn: (e) => { if (!selectedProject) { e.preventDefault(); localSearchRef.current?.focus(); setSearchGlow(true); setKbActive(false); setTimeout(() => setSearchGlow(false), 1200); } }, force: true },
-  ], [selectedProject, goBackToList, tabProjects.length, focusIdx, kbActive]);
+    { key: "Escape", fn: () => { if (boardFullscreen) { setBoardFullscreen(false); } else if (ganttFullscreen) { if (document.activeElement === ganttSearchRef.current) { ganttSearchRef.current.blur(); } else { setGanttFullscreen(false); } } else if (selectedProject) goBackToList(); else if (search) { setSearch(""); setFocusIdx(0); localSearchRef.current?.blur(); setKbActive(false); } else if (document.activeElement === localSearchRef.current) { localSearchRef.current.blur(); setKbActive(false); } else if (kbActive) { setKbActive(false); } }, force: true },
+    { key: "ArrowUp", fn: () => { if (!ganttFullscreen && !selectedProject) { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } }, force: true },
+    { key: "ArrowDown", fn: () => { if (!ganttFullscreen && !selectedProject) { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.min(tabProjects.length - 1, i + 1)); } }, force: true },
+    { key: "Enter", fn: () => { if (!ganttFullscreen && !selectedProject && kbActive && tabProjects[focusIdx]) openProject(tabProjects[focusIdx].id); }, force: true },
+    { key: "/", fn: (e) => { e.preventDefault(); if (ganttFullscreen) { ganttSearchRef.current?.focus(); } else if (!selectedProject) { localSearchRef.current?.focus(); setSearchGlow(true); setKbActive(false); setTimeout(() => setSearchGlow(false), 1200); } }, force: true },
+    { key: "f", fn: (e) => { if (ganttFullscreen && document.activeElement !== ganttSearchRef.current) { e.preventDefault(); ganttSearchRef.current?.focus(); } }, force: true },
+  ], [selectedProject, goBackToList, tabProjects.length, focusIdx, kbActive, ganttFullscreen, boardFullscreen]);
 
   useEffect(() => {
     if (focusIdx >= tabProjects.length && tabProjects.length > 0) setFocusIdx(tabProjects.length - 1);
@@ -250,7 +411,7 @@ export default function ProjectsView({
   if (selectedProject) {
     const proj = projects.find(p => p.id === selectedProject);
     if (!proj) return <EmptyState icon="🔍" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
-    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} setProjects={setProjects} people={people} onNavigate={onNavigate} goBack={goBackToList} pc={pc} sc={sc} tc={tc} ec={ec} />;
+    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} setProjects={setProjects} people={people} onNavigate={onNavigate} goBack={goBackToList} pc={pc} sc={sc} tc={tc} ec={ec} weekLabels={WEEK_LABELS} />;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -259,7 +420,7 @@ export default function ProjectsView({
 
   const TABS = [
     { key: "active", label: "Active", count: summary.active, color: c.cyan },
-    { key: "complete", label: "Completed", count: summary.complete, color: c.green },
+    { key: "shipped", label: "Shipped", count: summary.shipped, color: "#1FAA59" },
     { key: "deprioritized", label: "Deprioritized", count: summary.depri, color: c.orange },
     { key: "all", label: "All", count: summary.all, color: c.text },
   ];
@@ -285,7 +446,7 @@ export default function ProjectsView({
         {/* SUMMARY STRIP — full-width grid */}
         <div className="flow-mission-grid" style={{ padding: `${space[3]}px ${space[4]}px` }}>
           <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr auto 1fr 1fr 1fr 1fr",
+            display: "grid", gridTemplateColumns: "repeat(6, 1fr)",
             alignItems: "center", gap: space[2],
             position: "relative", zIndex: 1,
           }}>
@@ -293,11 +454,22 @@ export default function ProjectsView({
               value={summary.active} label="Active" color={c.cyan}
               active={activeTab === "active"}
               onClick={() => setActiveTab("active")}
+              hero
             />
             <SummaryTile
-              value={summary.complete} label="Completed" color={c.green}
-              active={activeTab === "complete"}
-              onClick={() => setActiveTab("complete")}
+              value={summary.atRiskCount} label="At Risk" color={summary.atRiskCount > 0 ? c.orange : c.textDim}
+              active={activeTab === "at_risk"}
+              onClick={() => setActiveTab(activeTab === "at_risk" ? "active" : "at_risk")}
+            />
+            <SummaryTile
+              value={summary.overdueCount} label="Overdue" color={summary.overdueCount > 0 ? c.red : c.textDim}
+              active={activeTab === "overdue"}
+              onClick={() => setActiveTab(activeTab === "overdue" ? "active" : "overdue")}
+            />
+            <SummaryTile
+              value={summary.shipped} label="Shipped" color={"#1FAA59"}
+              active={activeTab === "shipped"}
+              onClick={() => setActiveTab("shipped")}
             />
             <SummaryTile
               value={summary.depri} label="Deprioritized" color={c.orange}
@@ -309,81 +481,76 @@ export default function ProjectsView({
               active={activeTab === "all"}
               onClick={() => setActiveTab("all")}
             />
-
-            <VDivider />
-
-            <MetricCompact value={summary.totalCommits} label="Total Commits" color={c.text} />
-            <MetricCompact value={summary.blockedCount} label="Blocked" color={summary.blockedCount > 0 ? c.red : c.textDim} />
-            <MetricCompact value={summary.avgPeople} label="Avg Team Size" color={c.accent} />
-            <MetricCompact value={`${summary.avgAge}d`} label="Avg Age" color={c.text} />
           </div>
         </div>
 
-        {/* TAB SWITCHER — Pulse segmented toggle pattern */}
-        <div style={{
-          display: "flex", gap: 2,
-          background: c.accentDim, borderRadius: layout.radiusMd, padding: 3,
-        }}>
-          {TABS.map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)} style={{
-              flex: 1, padding: `${space[2]}px ${space[4]}px`,
-              borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
-              background: activeTab === tab.key ? c.accent : "transparent",
-              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-              fontWeight: activeTab === tab.key ? 700 : 500,
-              color: activeTab === tab.key ? c.textCrit : c.accent,
+        {/* SEARCH + VIEW TOGGLE on same row */}
+        <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+          <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
+            <input ref={localSearchRef} value={search}
+              onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
+              onBlur={() => setSearchGlow(false)}
+              placeholder="Search projects by name, ID, owner, or squad..."
+              style={{
+                width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`,
+                borderRadius: layout.radiusMd,
+                border: `1px solid ${searchGlow ? c.accent : c.border}`,
+                background: c.surfaceAlt, color: c.text,
+                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                outline: "none", boxSizing: "border-box",
+                boxShadow: searchGlow ? `0 0 0 3px ${c.accent}25, 0 0 12px ${c.accent}15` : "none",
+                transition: `border-color 0.3s ease, box-shadow 0.3s ease`,
+              }} />
+            <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", transition: "opacity 0.3s ease" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={searchGlow ? c.accent : c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
+            </svg>
+            {!search && <span style={{
+              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+              fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600,
+              color: c.textDim, lineHeight: 1,
+              padding: `3px 7px 4px`, borderRadius: 4,
+              background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.bg} 100%)`,
+              border: `1px solid ${c.border}`,
+              boxShadow: `0 2px 0 ${c.border}, 0 2px 3px ${c.shadow}`,
+              pointerEvents: "none",
+            }}>/</span>}
+          </div>
+          <div style={{
+            display: "flex", background: c.surfaceAlt, borderRadius: layout.radiusMd,
+            border: `1px solid ${c.border}`, overflow: "hidden", flexShrink: 0,
+            alignSelf: "stretch",
+          }}>
+            <button onClick={() => setViewMode("registry")} style={{
+              padding: `0 ${space[4]}px`, fontSize: typo.bodySm.size, fontWeight: 600,
+              fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
+              background: viewMode === "registry" ? c.accent : "transparent",
+              color: viewMode === "registry" ? "#fff" : c.textDim,
               transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-              boxShadow: activeTab === tab.key ? `0 1px 3px ${c.shadow}` : "none",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
-            }}>
-              {tab.label}
-              <span style={{
-                fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
-                padding: "1px 5px", borderRadius: layout.radiusTag + 1,
-                background: activeTab === tab.key ? "rgba(255,255,255,0.2)" : `${c.accent}15`,
-                color: activeTab === tab.key ? c.textCrit : c.accent,
-              }}>{tab.count}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* SEARCH */}
-        <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-          <input ref={localSearchRef} value={search}
-            onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
-            onBlur={() => setSearchGlow(false)}
-            placeholder="Search projects by name, ID, owner, or squad..."
-            style={{
-              width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`,
-              borderRadius: layout.radiusMd,
-              border: `1px solid ${searchGlow ? c.accent : c.border}`,
-              background: c.surfaceAlt, color: c.text,
-              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-              outline: "none", boxSizing: "border-box",
-              boxShadow: searchGlow ? `0 0 0 3px ${c.accent}25, 0 0 12px ${c.accent}15` : "none",
-              transition: `border-color 0.3s ease, box-shadow 0.3s ease`,
-            }} />
-          {/* Search icon — minimal line SVG */}
-          <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", transition: "opacity 0.3s ease" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={searchGlow ? c.accent : c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
-          </svg>
-          {/* Keycap hint */}
-          {!search && <span style={{
-            position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-            fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600,
-            color: c.textDim, lineHeight: 1,
-            padding: `3px 7px 4px`, borderRadius: 4,
-            background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.bg} 100%)`,
-            border: `1px solid ${c.border}`,
-            boxShadow: `0 2px 0 ${c.border}, 0 2px 3px ${c.shadow}`,
-            pointerEvents: "none",
-          }}>/</span>}
+              letterSpacing: "0.2px",
+            }}>Table</button>
+            <button onClick={() => setBoardFullscreen(true)} style={{
+              padding: `0 ${space[4]}px`, fontSize: typo.bodySm.size, fontWeight: 600,
+              fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
+              background: "transparent",
+              color: c.textDim,
+              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+              letterSpacing: "0.2px", outline: "none",
+            }}>Board</button>
+            <button onClick={() => setGanttFullscreen(true)} style={{
+              padding: `0 ${space[4]}px`, fontSize: typo.bodySm.size, fontWeight: 600,
+              fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
+              background: "transparent",
+              color: c.textDim,
+              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+              letterSpacing: "0.2px", outline: "none",
+            }}>Gantt</button>
+          </div>
         </div>
       </div>
       {/* end frozen top */}
 
       {/* ═══════════════════════════════════════════════════════════
-          SCROLLABLE CONTENT — table (only this area scrolls)
+          SCROLLABLE CONTENT
           ═══════════════════════════════════════════════════════════ */}
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
       {tabProjects.length === 0 ? (
@@ -398,19 +565,20 @@ export default function ProjectsView({
                   <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
                   <Th col="project" style={{ minWidth: colWidths.identity.min, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
                   <Th col="owner" style={{ minWidth: colWidths.owner.min, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
-                  {activeTab === "all" && <Th col="status" style={{ minWidth: colWidths.status.min, borderLeft: `1px dotted ${c.border}` }}>Status</Th>}
-                  {activeTab !== "complete" && <Th col="phase" style={{ minWidth: colWidths.phase.min, borderLeft: `1px dotted ${c.border}` }}>Phase</Th>}
+                  {activeTab === "all" && <Th col="status" style={{ minWidth: colWidths.status.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>}
+                  {activeTab !== "shipped" && <Th col="phase" style={{ minWidth: colWidths.phase.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Phase</Th>}
                   <Th col="total" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Commits</Th>
-                  {activeTab !== "complete" && <Th col="thisWk" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>{isHistorical ? selectedWeekKey : "This Wk"}</Th>}
-                  <Th col="people" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>People</Th>
-                  {activeTab === "complete" && <>
-                    <Th col="planStart" style={{ minWidth: colWidths.date.min, borderLeft: `1px dotted ${c.border}` }}>Plan Start</Th>
-                    <Th col="actualStart" style={{ minWidth: colWidths.date.min, borderLeft: `1px dotted ${c.border}` }}>Actual Start</Th>
+                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="thisWk" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>{isHistorical ? selectedWeekKey : "This Wk"}</Th>}
+                  {activeTab !== "deprioritized" && <Th col="people" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>People</Th>}
+                  {activeTab === "shipped" && <>
+                    <Th col="planStart" style={{ minWidth: colWidths.date.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Plan Start</Th>
+                    <Th col="actualStart" style={{ minWidth: colWidths.date.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Actual Start</Th>
                     <Th col="planDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Plan Days</Th>
                     <Th col="actualDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Actual Days</Th>
                   </>}
-                  {activeTab !== "complete" && <Th col="last" style={{ minWidth: colWidths.date.min, borderLeft: `1px dotted ${c.border}` }}>Last Active</Th>}
-                  {activeTab !== "complete" && <Th col="timeline" style={{ minWidth: colWidths.timeline.min, borderLeft: `1px dotted ${c.border}` }}>Timeline</Th>}
+                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="last" style={{ minWidth: colWidths.date.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Last Active</Th>}
+                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="timeline" style={{ minWidth: colWidths.timeline.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Timeline</Th>}
+                  {activeTab === "deprioritized" && <Th col="reason" style={{ minWidth: 200, borderLeft: `1px dotted ${c.border}` }}>Reason</Th>}
                 </tr>
               </thead>
               <tbody>
@@ -422,7 +590,7 @@ export default function ProjectsView({
                   const pct = allocated > 0 ? Math.round((elapsed / allocated) * 100) : 0;
                   const isFocused = kbActive && fi === focusIdx;
                   const isHovered = hoveredProject === proj.id;
-                  const isDimmed = activeTab === "all" && (proj.status === "complete" || proj.status === "deprioritized");
+                  const isDimmed = activeTab === "all" && (shipPhases.includes(proj.phase) || proj.status === "deprioritized");
 
                   return (
                     <tr key={proj.id}
@@ -466,7 +634,7 @@ export default function ProjectsView({
                             transition: `color ${motion.interaction.duration}`,
                           }}>{proj.name}</span>
                           {m.isBlocked && <Badge color={c.red} bg={c.redDim} style={{ flexShrink: 0 }}>!</Badge>}
-                          {proj.ship && <span style={{ fontSize: 12, flexShrink: 0 }} title="Shipped">🚀</span>}
+                          {shipPhases.includes(proj.phase) && <span style={{ fontSize: 12, flexShrink: 0 }} title={proj.phase}>🚀</span>}
                         </div>
                       </td>
 
@@ -482,7 +650,7 @@ export default function ProjectsView({
 
                       {/* Status — only in "All" tab */}
                       {activeTab === "all" && <td style={{
-                        padding: `${space[1]}px ${space[2] - 2}px`,
+                        padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
                       }}>
@@ -490,8 +658,9 @@ export default function ProjectsView({
                       </td>}
 
                       {/* Phase — hidden in Completed tab */}
-                      {activeTab !== "complete" && <td style={{
+                      {activeTab !== "shipped" && <td style={{
                         padding: `${space[1]}px ${space[2] - 2}px`,
+                        textAlign: "center",
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
                       }}>
@@ -503,47 +672,47 @@ export default function ProjectsView({
                         padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                         color: m.totalCommits > 0 ? c.text : c.textDim, fontWeight: 600,
                       }}>{m.totalCommits || "—"}</td>
 
-                      {/* This week — hidden in Completed tab */}
-                      {activeTab !== "complete" && <td style={{
+                      {/* This week — hidden in Completed and Deprioritized tabs */}
+                      {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
                         padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                         color: m.thisWeekTotal > 0 ? c.cyan : c.textDim,
                       }}>{m.thisWeekTotal || "—"}</td>}
 
-                      {/* People */}
-                      <td style={{
+                      {/* People — hidden in Deprioritized tab */}
+                      {activeTab !== "deprioritized" && <td style={{
                         padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                         color: m.peopleList?.length > 0 ? c.text : c.textDim,
-                      }}>{m.peopleList?.length || "—"}</td>
+                      }}>{m.peopleList?.length || "—"}</td>}
 
                       {/* Completed tab — plan/actual columns */}
-                      {activeTab === "complete" && <>
+                      {activeTab === "shipped" && <>
                         <td style={{
-                          padding: `${space[1]}px ${space[2] - 2}px`,
+                          padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                           borderBottom: `1px dotted ${c.border}`,
                           borderLeft: `1px dotted ${c.border}`,
-                          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid,
+                          fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.textMid,
                         }}>{fmtDate(proj.startDate)}</td>
                         <td style={{
-                          padding: `${space[1]}px ${space[2] - 2}px`,
+                          padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                           borderBottom: `1px dotted ${c.border}`,
                           borderLeft: `1px dotted ${c.border}`,
-                          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid,
+                          fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.textMid,
                         }}>{fmtDate(proj.actualStartDate)}</td>
                         <td style={{
                           padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                           borderBottom: `1px dotted ${c.border}`,
                           borderLeft: `1px dotted ${c.border}`,
-                          fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text, fontWeight: 600,
+                          fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.text, fontWeight: 600,
                         }}>{allocated}</td>
                         {(() => {
                           const actualDays = proj.actualStartDate && proj.actualEndDate ? daysBetween(proj.actualStartDate, proj.actualEndDate) : 0;
@@ -552,29 +721,29 @@ export default function ProjectsView({
                             padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                             borderBottom: `1px dotted ${c.border}`,
                             borderLeft: `1px dotted ${c.border}`,
-                            fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 600,
+                            fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 600,
                             color: overPlan ? c.orange : c.green,
                           }}>{actualDays}</td>;
                         })()}
                       </>}
 
-                      {/* Last activity — hidden in Completed tab */}
-                      {activeTab !== "complete" && <td style={{
-                        padding: `${space[1]}px ${space[2] - 2}px`,
+                      {/* Last activity — hidden in Completed and Deprioritized tabs */}
+                      {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`, textAlign: "center",
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                         color: m.lastActivity === "This wk" ? c.cyan : m.lastActivity ? c.textMid : c.textDim,
                         fontWeight: m.lastActivity === "This wk" ? 700 : 500,
                       }}>{m.lastActivity || "—"}</td>}
 
-                      {/* Timeline — hidden in Completed tab */}
-                      {activeTab !== "complete" && <td style={{
+                      {/* Timeline — hidden in Completed and Deprioritized tabs */}
+                      {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
                         padding: `${space[1]}px ${space[2] - 2}px`,
                         borderBottom: `1px dotted ${c.border}`,
                         borderLeft: `1px dotted ${c.border}`,
                       }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                             <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
                               {fmtDate(proj.startDate)}
@@ -584,7 +753,7 @@ export default function ProjectsView({
                               {fmtDate(proj.endDate)}
                             </span>
                           </div>
-                          <div style={{ height: 3, borderRadius: 2, background: c.border, overflow: "hidden" }}>
+                          <div style={{ height: 3, borderRadius: 2, background: c.border, overflow: "hidden", width: "100%" }}>
                             <div style={{
                               height: "100%", borderRadius: 2, width: `${Math.min(pct, 100)}%`,
                               background: m.overdue ? c.red : pct > 85 ? c.orange : c.green,
@@ -592,6 +761,16 @@ export default function ProjectsView({
                           </div>
                         </div>
                       </td>}
+
+                      {/* Reason — Deprioritized tab only */}
+                      {activeTab === "deprioritized" && <td style={{
+                        padding: `${space[1]}px ${space[2] - 2}px`,
+                        borderBottom: `1px dotted ${c.border}`,
+                        borderLeft: `1px dotted ${c.border}`,
+                        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                        color: proj.depriReason ? c.textMid : c.textDim,
+                        maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }} title={proj.depriReason || ""}>{proj.depriReason || "—"}</td>}
                     </tr>
                   );
                 })}
@@ -601,7 +780,7 @@ export default function ProjectsView({
         </Surface>
       )}
       <div style={{ flexShrink: 0, height: space[8] }} />
-      </div>{/* end scrollable content */}
+      </div>
 
       {/* FAB — Add Project */}
       <button onClick={() => setShowCreate(true)} style={{
@@ -620,6 +799,309 @@ export default function ProjectsView({
         projects={projects} people={people} setProjects={setProjects}
         onClose={() => setShowCreate(false)}
       />}
+
+      {/* ═══════════════════════════════════════════════════════════
+          GANTT FULLSCREEN OVERLAY
+          ═══════════════════════════════════════════════════════════ */}
+      {ganttFullscreen && createPortal(
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 300,
+          background: c.bg, display: "flex", flexDirection: "column",
+          animation: "ganttFadeIn 0.25s ease-out both",
+        }}>
+          {/* Top bar */}
+          <div style={{
+            height: 56, flexShrink: 0, display: "flex", alignItems: "center",
+            justifyContent: "space-between", padding: `0 ${space[5]}px`,
+            borderBottom: `1px solid ${c.border}`, background: c.bg,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+              <FlowLogo size={28} />
+              <span style={{ fontSize: 15, fontWeight: 700, color: c.text, letterSpacing: "-0.3px" }}>Flow</span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+              {/* Unified search + filters bar */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: space[2],
+                background: c.surfaceAlt, borderRadius: layout.radiusMd,
+                padding: `${space[1] + 1}px ${space[3]}px`,
+                border: `1px solid ${c.border}`,
+              }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
+                </svg>
+                <input
+                  ref={ganttSearchRef}
+                  value={ganttSearch} onChange={e => setGanttSearch(e.target.value)}
+                  placeholder="Search…"
+                  style={{
+                    width: 140, padding: `4px ${space[1]}px`,
+                    border: "none", background: "transparent", color: c.text,
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, outline: "none",
+                  }}
+                />
+                <div style={{ width: 1, height: 20, background: c.border, flexShrink: 0 }} />
+                <GanttMultiFilter label="Squads" options={allSquads} selected={ganttSquads}
+                  onToggle={val => toggleFilter(setGanttSquads, val)} onClear={() => setGanttSquads([])} />
+                <GanttMultiFilter label="Owners" options={allOwners} selected={ganttOwners}
+                  onToggle={val => toggleFilter(setGanttOwners, val)} onClear={() => setGanttOwners([])} />
+                <GanttMultiFilter label="Stage" options={allPhases} selected={ganttPhases}
+                  onToggle={val => toggleFilter(setGanttPhases, val)} onClear={() => setGanttPhases([])} />
+                {(ganttSearch || ganttSquads.length > 0 || ganttOwners.length > 0 || ganttPhases.length > 0) && (
+                  <button onClick={() => { setGanttSearch(""); setGanttSquads([]); setGanttOwners([]); setGanttPhases([]); }} style={{
+                    padding: `3px ${space[2]}px`, borderRadius: layout.radiusSm, border: "none",
+                    background: `${c.red}20`, color: c.red,
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, cursor: "pointer",
+                  }}>Clear</button>
+                )}
+              </div>
+
+              {/* Close button */}
+              <button onClick={() => setGanttFullscreen(false)} style={{
+                width: 36, height: 36, borderRadius: layout.radiusSm,
+                border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                color: c.textDim, fontSize: 18, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: `all ${motion.interaction.duration}`,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = c.red; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = c.red; }}
+              onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.color = c.textDim; e.currentTarget.style.borderColor = c.border; }}
+              title="Close (Esc)"
+              >✕</button>
+            </div>
+          </div>
+
+          {/* Gantt fills rest of screen */}
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <GanttChart
+              projects={ganttProjects}
+              weekConfig={weekConfig}
+              onProjectClick={(id) => { setGanttFullscreen(false); openProject(id); }}
+            />
+          </div>
+
+          {/* Search/filters moved to top bar */}
+
+          <style>{`
+            @keyframes ganttFadeIn {
+              from { opacity: 0; transform: scale(0.98); }
+              to { opacity: 1; transform: scale(1); }
+            }
+          `}</style>
+        </div>,
+        document.body
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════
+          BOARD FULLSCREEN OVERLAY
+          ═══════════════════════════════════════════════════════════ */}
+      {boardFullscreen && createPortal(
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 300,
+          background: c.bg, display: "flex", flexDirection: "column",
+          animation: "ganttFadeIn 0.25s ease-out both",
+        }}>
+          {/* Top bar */}
+          <div style={{
+            height: 56, flexShrink: 0, display: "flex", alignItems: "center",
+            justifyContent: "space-between", padding: `0 ${space[5]}px`,
+            borderBottom: `1px solid ${c.border}`, background: c.bg,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+              <FlowLogo size={28} />
+              <span style={{ fontSize: 15, fontWeight: 700, color: c.text, letterSpacing: "-0.3px" }}>Flow</span>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+              {/* Unified search + filters bar */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: space[2],
+                background: c.surfaceAlt, borderRadius: layout.radiusMd,
+                padding: `${space[1] + 1}px ${space[3]}px`,
+                border: `1px solid ${c.border}`,
+              }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
+                </svg>
+                <input
+                  ref={boardSearchRef}
+                  value={boardSearch} onChange={e => setBoardSearch(e.target.value)}
+                  placeholder="Search…"
+                  style={{
+                    width: 140, padding: `4px ${space[1]}px`,
+                    border: "none", background: "transparent", color: c.text,
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, outline: "none",
+                  }}
+                />
+                <div style={{ width: 1, height: 20, background: c.border, flexShrink: 0 }} />
+                <GanttMultiFilter label="Squads" options={allSquads} selected={boardSquads}
+                  onToggle={val => toggleFilter(setBoardSquads, val)} onClear={() => setBoardSquads([])} />
+                <GanttMultiFilter label="Owners" options={allOwners} selected={boardOwners}
+                  onToggle={val => toggleFilter(setBoardOwners, val)} onClear={() => setBoardOwners([])} />
+                <GanttMultiFilter label="Stage" options={allPhases} selected={boardPhases}
+                  onToggle={val => toggleFilter(setBoardPhases, val)} onClear={() => setBoardPhases([])} />
+                {(boardSearch || boardSquads.length > 0 || boardOwners.length > 0 || boardPhases.length > 0) && (
+                  <button onClick={() => { setBoardSearch(""); setBoardSquads([]); setBoardOwners([]); setBoardPhases([]); }} style={{
+                    padding: `3px ${space[2]}px`, borderRadius: layout.radiusSm, border: "none",
+                    background: `${c.red}20`, color: c.red,
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, cursor: "pointer",
+                  }}>Clear</button>
+                )}
+              </div>
+
+              {/* Close button */}
+              <button onClick={() => setBoardFullscreen(false)} style={{
+                width: 36, height: 36, borderRadius: layout.radiusSm,
+                border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                color: c.textDim, fontSize: 18, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: `all ${motion.interaction.duration}`,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = c.red; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = c.red; }}
+              onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.color = c.textDim; e.currentTarget.style.borderColor = c.border; }}
+              title="Close (Esc)"
+              >✕</button>
+            </div>
+          </div>
+
+          {/* Board columns */}
+          <div style={{ flex: 1, minHeight: 0, overflowX: "auto", overflowY: "hidden", padding: `${space[4]}px ${space[5]}px` }}>
+            {(() => {
+              const columns = allPhases;
+              const columnProjects = {};
+              columns.forEach(ph => { columnProjects[ph] = []; });
+              boardProjects.forEach(proj => {
+                const ph = proj.phase || "PRD";
+                if (columnProjects[ph]) columnProjects[ph].push(proj);
+              });
+
+              return (
+                <div style={{
+                  display: "flex", gap: space[3],
+                  minWidth: columns.length * 220, height: "100%",
+                }}>
+                  {columns.map(phase => {
+                    const phColor = pc[phase] || c.textDim;
+                    const cards = columnProjects[phase] || [];
+                    return (
+                      <div key={phase} style={{
+                        flex: 1, minWidth: 200, display: "flex", flexDirection: "column",
+                        borderRadius: layout.radiusMd,
+                        background: `${phColor}04`,
+                        border: `1px solid ${phColor}15`,
+                      }}>
+                        {/* Column header */}
+                        <div style={{
+                          padding: `${space[3]}px ${space[3] + 2}px`,
+                          borderBottom: `2px solid ${phColor}25`,
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                            <div style={{ width: 10, height: 10, borderRadius: 3, background: phColor }} />
+                            <span style={{
+                              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                              fontWeight: 700, letterSpacing: "0.06em",
+                              color: phColor, textTransform: "uppercase",
+                            }}>{phase}</span>
+                          </div>
+                          <span style={{
+                            fontFamily: typo.monoSm.font, fontSize: 11,
+                            fontWeight: 700, color: c.textMid,
+                            background: c.surfaceAlt, padding: "2px 8px",
+                            borderRadius: layout.radiusPill, border: `1px solid ${c.border}`,
+                          }}>{cards.length}</span>
+                        </div>
+
+                        {/* Cards */}
+                        <div style={{
+                          flex: 1, overflowY: "auto", padding: space[2] + 2,
+                          display: "flex", flexDirection: "column", gap: space[2] + 1,
+                          scrollbarWidth: "thin", scrollbarColor: `${c.textDim}20 transparent`,
+                        }}>
+                          {cards.length === 0 && (
+                            <div style={{
+                              padding: `${space[6]}px ${space[3]}px`,
+                              textAlign: "center",
+                              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                              color: c.textDim, opacity: 0.4,
+                            }}>No projects</div>
+                          )}
+                          {cards.map(proj => {
+                            const m = metrics[proj.id] || {};
+                            const health = m.health ?? 0;
+                            const hColor = health >= 70 ? c.green : health >= 40 ? c.orange : c.red;
+                            return (
+                              <div
+                                key={proj.id}
+                                onClick={() => { setBoardFullscreen(false); openProject(proj.id); }}
+                                className="flow-row"
+                                style={{
+                                  padding: `${space[3]}px`,
+                                  borderRadius: layout.radiusSm + 1,
+                                  background: c.surface,
+                                  border: `1px solid ${c.border}`,
+                                  cursor: "pointer",
+                                  display: "flex", flexDirection: "column", gap: space[2],
+                                  transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                                }}
+                              >
+                                {/* ID + health bar */}
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                  <span style={{
+                                    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                                    fontWeight: 700, letterSpacing: typo.monoMd.tracking,
+                                    color: ec.project,
+                                  }}>{proj.id}</span>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                    <div style={{
+                                      width: 24, height: 4, borderRadius: 2, background: c.surfaceAlt, overflow: "hidden",
+                                    }}>
+                                      <div style={{ width: `${health}%`, height: "100%", borderRadius: 2, background: hColor }} />
+                                    </div>
+                                    <span style={{
+                                      fontFamily: typo.monoSm.font, fontSize: 10,
+                                      fontWeight: 700, color: hColor,
+                                    }}>{health}</span>
+                                  </div>
+                                </div>
+
+                                {/* Name */}
+                                <div style={{
+                                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                                  fontWeight: 600, color: c.text, lineHeight: 1.4,
+                                }}>{proj.name}</div>
+
+                                {/* Owner + squad */}
+                                <div style={{
+                                  display: "flex", alignItems: "center", gap: space[1],
+                                  fontFamily: typo.bodySm.font, fontSize: 11, color: c.textDim,
+                                }}>
+                                  <span>{proj.owner || "—"}</span>
+                                  <span style={{ opacity: 0.3 }}>·</span>
+                                  <span>{proj.squad}</span>
+                                </div>
+
+                                {/* Commits this week */}
+                                <span style={{
+                                  fontFamily: typo.bodySm.font, fontSize: 11,
+                                  fontWeight: 500,
+                                  color: (m.thisWeekTotal || 0) > 0 ? c.cyan : c.textDim,
+                                }}>{(m.thisWeekTotal || 0)} {(m.thisWeekTotal || 0) === 1 ? "commit" : "commits"} this week</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -651,7 +1133,7 @@ function CreateProjectOverlay({ projects, people, setProjects, onClose }) {
     if (!canSave) return;
     setProjects(prev => [...prev, {
       id: nextId, name: name.trim(), owner, squad, phase,
-      startDate, endDate, ship: false, status: "active",
+      startDate, endDate, status: "active",
     }]);
     onClose();
   };
@@ -678,7 +1160,7 @@ function CreateProjectOverlay({ projects, people, setProjects, onClose }) {
       background: "rgba(0,0,0,0.6)", backdropFilter: "blur(8px)",
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <div onClick={e => e.stopPropagation()} className="flow-terminal-log" style={{
+      <div onClick={e => e.stopPropagation()} data-suppress-shortcuts className="flow-terminal-log" style={{
         width: "100%", maxWidth: 520, opacity: 1,
         animation: `rowSlideIn 0.3s ${motion.critical.easing} both`,
       }}>
@@ -708,8 +1190,11 @@ function CreateProjectOverlay({ projects, people, setProjects, onClose }) {
           <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
             {/* Name */}
             <div>
-              <div style={monoLabel}>--name</div>
-              <Inp value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Checkout Redesign" style={{ width: "100%", fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size }} autoFocus />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <div style={monoLabel}>--name</div>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: name.length > 35 ? c.red : c.textDim }}>{name.length}/35</span>
+              </div>
+              <Inp value={name} onChange={e => { if (e.target.value.length <= 35) setName(e.target.value); }} placeholder="e.g. Checkout Redesign" style={{ width: "100%", fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size }} autoFocus maxLength={35} />
             </div>
 
             {/* Owner + Squad */}
@@ -728,7 +1213,7 @@ function CreateProjectOverlay({ projects, people, setProjects, onClose }) {
             <div>
               <div style={monoLabel}>--phase</div>
               <Sel value={phase} onChange={e => setPhase(e.target.value)} style={{ width: "100%" }}>
-                {phaseNames.map(p => <option key={p} value={p}>{p}</option>)}
+                {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
               </Sel>
             </div>
 
@@ -767,19 +1252,41 @@ function CreateProjectOverlay({ projects, people, setProjects, onClose }) {
    PROJECT DEEP DIVE — PeopleDeepDive structural model
    De-cluttered: hero → history → ledger → supporting metadata
    ══════════════════════════════════════════════════════════════════ */
-function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, setProjects, people, onNavigate, goBack, pc, sc, tc, ec }) {
+function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, setProjects, people, onNavigate, goBack, pc, sc, tc, ec, weekLabels: WEEK_LABELS }) {
   const [editing, setEditing] = useState(false);
   const [editOwner, setEditOwner] = useState(proj.owner);
   const [editSquad, setEditSquad] = useState(proj.squad);
   const [editPhase, setEditPhase] = useState(proj.phase);
   const [editStatus, setEditStatus] = useState(proj.status || "active");
+  const [depriReasonModal, setDepriReasonModal] = useState(false);
+  const [depriReasonText, setDepriReasonText] = useState("");
 
   const allSquads = [...new Set(projects.map(p => p.squad).filter(Boolean))].sort();
   const allOwners = people ? people.map(p => p.name).sort() : [...new Set(projects.map(p => p.owner).filter(Boolean))].sort();
 
-  const saveEdits = () => {
-    setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, owner: editOwner, squad: editSquad, phase: editPhase, status: editStatus } : p));
+  const doSave = (overrides = {}) => {
+    const finalStatus = overrides.status || editStatus;
+    const finalReason = overrides.depriReason !== undefined ? overrides.depriReason : proj.depriReason;
+    window.__flowSyncToast?.show(proj.name);
+    setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, owner: editOwner, squad: editSquad, phase: editPhase, status: finalStatus, depriReason: finalReason } : p));
     setEditing(false);
+    logProjectEdit(proj.id, proj.name, { owner: editOwner, squad: editSquad, phase: editPhase, status: finalStatus });
+    setTimeout(() => window.__flowSyncToast?.done(proj.name), 800);
+  };
+
+  const saveEdits = () => {
+    // If status is changing to deprioritized, prompt for reason
+    if (editStatus === "deprioritized" && proj.status !== "deprioritized") {
+      setDepriReasonText("");
+      setDepriReasonModal(true);
+      return;
+    }
+    // If reactivating, clear reason
+    if (editStatus === "active" && proj.status === "deprioritized") {
+      doSave({ depriReason: null });
+      return;
+    }
+    doSave();
   };
   const cancelEdits = () => {
     setEditOwner(proj.owner); setEditSquad(proj.squad); setEditPhase(proj.phase); setEditStatus(proj.status || "active");
@@ -788,7 +1295,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
 
   const sCfg = sc[editStatus] || sc[proj.status] || sc.active;
   const allocated = daysBetween(proj.startDate, proj.endDate);
-  const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, weekConfig.today), allocated));
+  const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, _today), allocated));
 
   // Build full weekly matrix for phase timeline
   const weekPhaseMatrix = useMemo(() => {
@@ -820,57 +1327,44 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
-      {/* ═══ HERO — Telemetry Panel (People tab pattern) ═══ */}
-      <div className="flow-telemetry-panel" style={{ padding: `${space[6]}px ${space[7]}px` }}>
-        {/* Identity (left) + status highlight (right) */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: space[5], position: "relative", zIndex: 1 }}>
+      {/* ═══ HERO — Telemetry Panel ═══ */}
+      <div className="flow-telemetry-panel" style={{ padding: `${space[5]}px ${space[6]}px` }}>
+        {/* ── Row 1: Identity ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-              <div style={{ fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size, fontWeight: typo.displayXl.weight, color: c.text, letterSpacing: typo.displayXl.tracking, lineHeight: 1.15 }}>{proj.name}</div>
-              {!editing && (
-                <button onClick={() => setEditing(true)} className="flow-btn" style={{
-                  padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusMd,
-                  border: `1px solid ${c.border}`, background: c.surfaceAlt, cursor: "pointer",
-                  fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 600,
-                  color: c.textMid, transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-                }}>Edit</button>
-              )}
-            </div>
-
             {!editing ? (
-              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2] }}>
-                <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, letterSpacing: typo.monoLg.tracking, color: ec.project }}>{proj.id}</span>
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>·</span>
-                <span style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: typo.bodyLg.weight, color: c.textMid }}>{proj.owner}</span>
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>·</span>
-                <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, letterSpacing: typo.monoLg.tracking, color: c.accent }}>{proj.squad}</span>
-                {m.isBlocked && <Badge color={c.red} bg={c.redDim}>Blocked</Badge>}
-                {m.overdue && <Badge color={c.red} bg={c.redDim}>Overdue</Badge>}
-                {m.endingSoon && <Badge color={c.orange} bg={c.orangeDim}>Ending soon</Badge>}
-                {proj.ship && <Badge color={c.green} bg={c.greenDim}>Shipped</Badge>}
-              </div>
+              <>
+                <div style={{ display: "flex", alignItems: "baseline", gap: space[3], marginBottom: space[1] + 2 }}>
+                  <span style={{ fontFamily: typo.monoLg.font, fontSize: 18, fontWeight: 700, letterSpacing: "0.03em", color: ec.project }}>{proj.id}</span>
+                  <span style={{ fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size, fontWeight: typo.displayXl.weight, color: c.text, letterSpacing: typo.displayXl.tracking, lineHeight: 1.15 }}>{proj.name}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                  <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid }}>{proj.owner}</span>
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>·</span>
+                  <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.cyan }}>{proj.squad}</span>
+                </div>
+              </>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: space[3], marginTop: space[3] }}>
+              <div data-suppress-shortcuts style={{ display: "flex", flexDirection: "column", gap: space[3], position: "relative", zIndex: 60 }}>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: space[3] }}>
-                  <div>
+                  <div style={{ position: "relative", zIndex: 4 }}>
                     <Label style={{ marginBottom: space[1] }}>Owner</Label>
                     <SearchSelect value={editOwner} onChange={setEditOwner} options={allOwners} placeholder="Search people..." />
                   </div>
-                  <div>
+                  <div style={{ position: "relative", zIndex: 3 }}>
                     <Label style={{ marginBottom: space[1] }}>Squad</Label>
                     <SearchSelect value={editSquad} onChange={setEditSquad} options={allSquads} placeholder="Search squads..." />
                   </div>
-                  <div>
+                  <div style={{ position: "relative", zIndex: 2 }}>
                     <Label style={{ marginBottom: space[1] }}>Phase</Label>
                     <Sel value={editPhase} onChange={e => setEditPhase(e.target.value)} style={{ width: "100%" }}>
-                      {phaseNames.map(p => <option key={p} value={p}>{p}</option>)}
+                      {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
                     </Sel>
                   </div>
-                  <div>
+                  <div style={{ position: "relative", zIndex: 1 }}>
                     <Label style={{ marginBottom: space[1] }}>Status</Label>
                     <Sel value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ width: "100%" }}>
                       <option value="active">Active</option>
-                      <option value="complete">Complete</option>
                       <option value="deprioritized">Deprioritized</option>
                     </Sel>
                   </div>
@@ -884,47 +1378,84 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
           </div>
 
           {!editing && (
-            <div style={{ textAlign: "center", padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusMd, background: sCfg.bg, border: `1px solid ${sCfg.color}20`, flexShrink: 0 }}>
-              <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, color: sCfg.color, lineHeight: 1 }}>{proj.phase}</div>
-              <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginTop: space[1] }}>{sCfg.label}</div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
+              <Badge color={sCfg.color} bg={`${sCfg.color}15`} style={{ fontSize: 14, fontWeight: 800, padding: `5px ${space[4]}px`, letterSpacing: "0.06em" }}>{proj.phase}</Badge>
+              <div style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 500, color: c.textDim, letterSpacing: "0.04em", textTransform: "uppercase", marginTop: 4 }}>Phase</div>
             </div>
           )}
         </div>
 
-        {/* Project details — below separator */}
-        <div style={{ borderTop: `1px solid ${c.border}`, paddingTop: space[4], position: "relative", zIndex: 1 }}>
-          <Label style={{ marginBottom: space[3] }}>Project Details</Label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: space[3] }}>
-            <StatCell value={fmtDate(proj.startDate)} label="Start" color={c.text} style={{ textAlign: "left" }} />
-            <StatCell value={fmtDate(proj.endDate)} label="End" color={c.text} style={{ textAlign: "left" }} />
-            <StatCell value={`${allocated}d`} label="Duration" color={c.text} style={{ textAlign: "left" }} />
-            <StatCell value={`${elapsed}d`} label="Elapsed" color={elapsed >= allocated ? c.orange : c.text} style={{ textAlign: "left" }} />
-            <StatCell value={m.peopleList?.length || 0} label="Contributors" color={c.accent} style={{ textAlign: "left" }} />
-          </div>
-        </div>
+        {/* ── Row 2: Timeline (left) + Activity (right) ── */}
+        {(() => {
+          const remaining = proj.endDate ? Math.ceil((new Date(proj.endDate) - new Date(_today)) / 86400000) : null;
+          const pct = allocated > 0 ? Math.min(100, Math.round((elapsed / allocated) * 100)) : 0;
+          const overdue = remaining != null && remaining < 0;
+          const ageColor = elapsed > 60 ? c.red : elapsed > 30 ? c.orange : c.cyan;
+          const remColor = remaining != null ? (remaining < 0 ? c.red : remaining < 7 ? c.orange : c.green) : c.textDim;
+          const barColor = overdue ? c.red : pct > 75 ? c.orange : c.cyan;
+          const fmtShort = (d) => { if (!d) return "—"; const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+          const healthVal = m.health != null ? m.health : 0;
+          const healthColor = healthVal >= 70 ? c.green : healthVal >= 40 ? c.orange : c.red;
+
+          return (
+            <div style={{ borderTop: `1px solid ${c.border}`, marginTop: space[4], paddingTop: space[4], display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: space[5], position: "relative", zIndex: 1 }}>
+              {/* Left: Timeline */}
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%" }}>
+                <div style={{ display: "flex", gap: space[2] }}>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${space[2] + 2}px ${space[3]}px`, background: `${ageColor}10`, borderRadius: layout.radiusMd, border: `1px solid ${ageColor}20` }}>
+                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Age</span>
+                    <span style={{ fontFamily: typo.monoLg.font, fontSize: 15, fontWeight: 700, color: ageColor }}>{elapsed}d</span>
+                  </div>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${space[2] + 2}px ${space[3]}px`, background: `${remColor}10`, borderRadius: layout.radiusMd, border: `1px solid ${remColor}20` }}>
+                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Remaining</span>
+                    <span style={{ fontFamily: typo.monoLg.font, fontSize: 15, fontWeight: 700, color: remColor }}>{remaining != null ? `${remaining}d` : "—"}</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ position: "relative", height: 6, borderRadius: 3, background: c.border, overflow: "hidden" }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(pct, 100)}%`, borderRadius: 3, background: barColor, transition: "width 0.4s ease" }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: space[2] }}>
+                    <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.text }}>{fmtShort(proj.startDate)}</span>
+                    <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.text }}>{fmtShort(proj.endDate)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Divider */}
+              <div style={{ background: c.border }} />
+
+              {/* Right: Activity */}
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3], alignContent: "center", height: "100%" }}>
+                  {[
+                    { label: "Total Commits", value: m.totalCommits, color: c.text },
+                    { label: "Health", value: healthVal, color: healthColor },
+                    { label: "Contributors", value: m.peopleList?.length || 0, color: c.text },
+                    { label: "Last Active", value: m.lastActivity || "—", color: m.lastActivity === "This wk" ? c.cyan : c.textMid },
+                  ].map((item, i) => (
+                    <div key={i} style={{ textAlign: "center" }}>
+                      <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking, color: item.color, lineHeight: 1.2 }}>{item.value}</div>
+                      <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginTop: 3 }}>{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
-      {/* ═══ METRICS — stat rail ═══ */}
-      <Surface variant="panel" style={{ padding: `${space[4]}px ${space[5]}px` }}>
-        <Label style={{ marginBottom: space[3] }}>Activity</Label>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: space[3] }}>
-          <StatCell value={m.totalCommits} label="Total Commits" color={c.text} style={{ textAlign: "left" }} />
-          <StatCell value={m.thisWeekTotal} label="This Week" color={c.cyan} style={{ textAlign: "left" }} />
-          <StatCell value={m.lastActivity || "—"} label="Last Active" color={m.lastActivity === "This wk" ? c.cyan : c.textMid} style={{ textAlign: "left" }} />
-          <StatCell value={m.historyTotal} label="History" color={c.text} style={{ textAlign: "left" }} />
-        </div>
-      </Surface>
-
-      {/* ═══ PHASE TIMELINE — roadmap lane ═══ */}
+      {/* ═══ WEEKLY COMMITS — roadmap lane ═══ */}
       <Surface compact>
-        <Label>Phase Timeline</Label>
+        <Label>Weekly Commits</Label>
         <div style={{ overflowX: "auto" }}>
           {/* Week headers */}
           <div style={{ display: "grid", gridTemplateColumns: `80px repeat(${WEEK_LABELS.length}, 1fr)`, gap: 2, marginBottom: space[1] }}>
             <span />
             {WEEK_LABELS.map(w => (
               <span key={w} style={{
-                fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
                 color: w === "This wk" ? c.cyan : c.textDim, textAlign: "center",
                 fontWeight: w === "This wk" ? 700 : 500,
               }}>{w}</span>
@@ -938,7 +1469,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
                 display: "grid", gridTemplateColumns: `80px repeat(${WEEK_LABELS.length}, 1fr)`,
                 gap: 2, marginBottom: 4,
               }}>
-                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color, display: "flex", alignItems: "center" }}>{phase}</span>
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color, display: "flex", alignItems: "center" }}>{phase}</span>
                 {WEEK_LABELS.map(w => {
                   const entries = weekPhaseMatrix[w]?.[phase] || [];
                   const hasActivity = entries.length > 0;
@@ -961,20 +1492,14 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
         </div>
       </Surface>
 
-      {/* ═══ ACTIVITY TIMELINE DIVIDER ═══ */}
-      <SectionDivider label="Activity Timeline" count={m.weeklyData.length + " weeks"} />
-
-      {/* ═══ ACTIVITY LEDGER — Terminal Log (PeopleDeepDive pattern) ═══ */}
+      {/* ═══ ACTIVITY TIMELINE — Terminal Log ═══ */}
       <div className="flow-terminal-log" style={{ opacity: 0.9 }}>
         <div className="flow-terminal-header">
           <div className="flow-terminal-dot" style={{ background: c.red }} />
           <div className="flow-terminal-dot" style={{ background: c.orange }} />
           <div className="flow-terminal-dot" style={{ background: c.green }} />
           <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size + 1, fontWeight: 600, color: c.textMid, marginLeft: space[2] }}>
-            timeline@{proj.id.toLowerCase()}
-          </span>
-          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim, marginLeft: "auto" }}>
-            {m.weeklyData.length} weeks
+            Activity Timeline
           </span>
         </div>
         <div style={{ padding: `${space[2]}px 0`, maxHeight: 500, overflowY: "auto" }}>
@@ -983,9 +1508,17 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
               $ no activity logged<span className="flow-terminal-cursor" />
             </div>
           ) : (
-            [...m.weeklyData].reverse().map((wk, wi) => (
+            [...m.weeklyData].reverse().map((wk, wi) => {
+              // Only show entries that have a valid stage matching the heatmap phases
+              const validEntries = wk.entries.filter(e => {
+                const stage = e.stage || "";
+                return stage && ["PRD", "Design", "Dev", "QA"].includes(stage);
+              });
+              if (validEntries.length === 0 && !wk.isCurrent) return null;
+              const entriesToShow = wk.isCurrent ? wk.entries : validEntries;
+              return (
               <React.Fragment key={wi}>
-                {/* Week separator — current week emphasized */}
+                {/* Week separator */}
                 <div style={{ padding: `${space[2]}px ${space[4]}px ${space[1]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
                   <span style={{
                     fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
@@ -994,44 +1527,58 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
                     {wk.isCurrent ? "▸ THIS WEEK" : `▸ ${wk.week.toUpperCase()}`}
                   </span>
                   <div style={{ flex: 1, height: 1, background: wk.isCurrent ? `${c.accent}30` : c.border }} />
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{wk.entries.length} entries</span>
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{entriesToShow.length}</span>
                 </div>
-                {wk.entries.map((entry, ei) => (
-                  <div key={`${wi}-${ei}`} className="flow-terminal-line" style={{
-                    animationDelay: `${(wi * 3 + ei) * 0.04}s`,
+                {entriesToShow.map((entry, ei) => (
+                  <div key={`${wi}-${ei}`} style={{
+                    display: "grid",
+                    gridTemplateColumns: "52px 1fr 90px 52px 64px",
+                    alignItems: "center",
+                    gap: space[2],
+                    padding: `${space[1] + 2}px ${space[4]}px`,
+                    borderBottom: `1px solid rgba(255,255,255,0.03)`,
                     opacity: wk.isCurrent ? 1 : 0.8,
+                    animationDelay: `${(wi * 3 + ei) * 0.04}s`,
                   }}>
-                    <span style={{
-                      width: 6, height: 6, borderRadius: "50%",
-                      background: tc[entry.type]?.color || c.textDim,
-                      boxShadow: wk.isCurrent ? `0 0 6px ${tc[entry.type]?.color || c.textDim}40` : "none",
-                      flexShrink: 0, marginTop: 5,
-                    }} />
-                    <span style={{
-                      fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                      color: c.textDim, flexShrink: 0, width: 52, marginTop: 1,
-                    }}>
-                      {wk.isCurrent ? "now" : wk.week.split(" ")[0].substring(0, 3)}
-                    </span>
-                    <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg}>{entry.type}</Tag>
-                    <Tag color={pc[entry.stage] || c.textDim} bg={(pc[entry.stage] || c.textDim) + "12"}>{entry.stage || "—"}</Tag>
+                    {/* Stage */}
+                    <Tag color={pc[entry.stage] || c.textDim} bg={(pc[entry.stage] || c.textDim) + "12"} style={{ textAlign: "center", justifySelf: "start" }}>{entry.stage || "—"}</Tag>
+                    {/* Task */}
                     <span style={{
                       fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                      color: wk.isCurrent ? c.text : c.textMid, flex: 1, minWidth: 0,
+                      color: wk.isCurrent ? c.text : c.textMid,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                     }}>
                       {entry.task || entry.title || "—"}
                     </span>
+                    {/* Person */}
                     <span onClick={(e) => { e.stopPropagation(); onNavigate && onNavigate("people", entry.person); }}
                       style={{
                         fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                        fontWeight: typo.monoLg.weight, color: c.cyan, cursor: "pointer", flexShrink: 0,
+                        fontWeight: typo.monoLg.weight, color: c.cyan, cursor: "pointer",
+                        textAlign: "right",
                       }}>
                       {entry.person}
                     </span>
+                    {/* Type */}
+                    <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg} style={{ textAlign: "center", justifySelf: "center" }}>{tc[entry.type]?.label || entry.type}</Tag>
+                    {/* Outcome */}
+                    {entry.outcome ? (() => { const oc = outcomeConfig(); const cfg = oc[entry.outcome]; return cfg ? (
+                      <span style={{
+                        fontFamily: typo.monoSm.font, fontSize: "10px", fontWeight: 700,
+                        color: cfg.color, background: cfg.bg,
+                        padding: "1px 6px", borderRadius: 4,
+                        letterSpacing: "0.04em", textAlign: "center", justifySelf: "center",
+                      }}>
+                        {cfg.icon} {entry.outcome.toUpperCase()}
+                      </span>
+                    ) : null; })() : (
+                      <span />
+                    )}
                   </div>
                 ))}
               </React.Fragment>
-            ))
+              );
+            })
           )}
           {m.weeklyData.length > 0 && (
             <div style={{ padding: `${space[2]}px ${space[4]}px`, display: "flex", alignItems: "center", gap: space[1] + 2 }}>
@@ -1059,19 +1606,76 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
         </Surface>
       )}
 
-      {/* ═══ PHASE BREAKDOWN — compact secondary ═══ */}
-      <Surface variant="panel" style={{ padding: `${space[4]}px ${space[5]}px` }}>
-        <Label style={{ marginBottom: space[2] }}>Phase Breakdown</Label>
-        <div style={{ display: "flex", gap: space[4], flexWrap: "wrap" }}>
-          {phaseNames.map(ph => m.phaseBreakdown[ph] > 0 && (
-            <div key={ph} style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <div style={{ width: 8, height: 8, borderRadius: 2, background: pc[ph] }} />
-              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: pc[ph], fontWeight: 700 }}>{ph}</span>
-              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text }}>{m.phaseBreakdown[ph]}</span>
+
+      {/* ═══ FLOATING EDIT BUTTON ═══ */}
+      {!editing && (
+        <button onClick={() => setEditing(true)} className="flow-btn" style={{
+          position: "fixed", bottom: space[7], right: space[7], zIndex: 50,
+          padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusMd,
+          border: "none", cursor: "pointer",
+          background: c.orange, color: c.bg,
+          fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: space[1],
+          boxShadow: `0 4px 16px ${c.orange}40, 0 2px 4px ${c.shadow}`,
+          transition: `transform ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration}`,
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+          Edit
+        </button>
+      )}
+
+      {/* ═══ DEPRIORITIZATION REASON MODAL ═══ */}
+      {depriReasonModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div onClick={() => setDepriReasonModal(false)} style={{
+            position: "absolute", inset: 0, background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)",
+          }} />
+          <Surface variant="overlay" style={{
+            position: "relative", zIndex: 1,
+            border: `1px solid ${c.orange}40`,
+            borderRadius: layout.radiusLg + 2, padding: `${space[6]}px ${space[7] - 4}px`, width: 460, maxWidth: "90vw",
+            boxShadow: c.shadowOverlay,
+          }}>
+            <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, color: c.text, marginBottom: space[2] }}>
+              Why is this being deprioritized?
             </div>
-          ))}
+            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: space[3] }}>
+              Provide context so your team understands why <strong style={{ color: c.text }}>{proj.name}</strong> is being deprioritized.
+            </div>
+            <div style={{ marginBottom: space[3] }}>
+              <TelemetryLabel color={c.orange} style={{ marginBottom: space[1] }}>Reason</TelemetryLabel>
+              <textarea
+                autoFocus
+                value={depriReasonText}
+                onChange={e => setDepriReasonText(e.target.value)}
+                placeholder="e.g. Redirecting team to higher-priority work..."
+                rows={3}
+                style={{
+                  width: "100%", padding: `${space[2]}px ${space[3]}px`,
+                  borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                  background: c.surfaceAlt, color: c.text, resize: "vertical",
+                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                  outline: "none", boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
+              <Btn variant="ghost" onClick={() => setDepriReasonModal(false)}>Cancel</Btn>
+              <Btn variant="secondary" style={{ borderColor: c.orange + "40", color: c.orange }}
+                disabled={!depriReasonText.trim()}
+                onClick={() => {
+                  doSave({ status: "deprioritized", depriReason: depriReasonText.trim() });
+                  setDepriReasonModal(false);
+                }}>
+                Deprioritize
+              </Btn>
+            </div>
+          </Surface>
         </div>
-      </Surface>
+      )}
     </div>
   );
 }

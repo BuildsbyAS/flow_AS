@@ -1,0 +1,17 @@
+node_modules/
+.git/
+.env
+.env.local
+.claude/
+*.md
+*.html
+!index.html
+*.zip
+*.svg
+docs/
+task-runner-logs/
+flow-dashboard.jsx
+flow-dashboard.monolith.jsx
+flow.html
+claude-task-runner.sh
+.DS_Store

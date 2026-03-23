@@ -1,9 +1,9 @@
 // Flow — Summary View (Phase 2: full design-system compliance)
 // Weekly operating snapshot — polished, cinematic, analytical
 import React, { useState, useMemo, useEffect } from "react";
-import { c, typo, space, layout, motion, typeConfig, colWidths } from "../styles/theme";
+import { c, typo, space, layout, motion, typeConfig, colWidths, shipPhases } from "../styles/theme";
 import { Surface, Label, DeltaIndicator, VDivider, TelemetryLabel, MetricCompact, SummaryTile } from "../components/shared";
-import { weekConfig } from "../data/seed";
+import { weekConfig as fallbackWeekConfig } from "../data/seed";
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -211,7 +211,7 @@ function computeWeekMetrics(weekKey, { history, commitments, projects, people })
     const totalCommits = items.length;
     const activeProjects = new Set(items.map(it => it.project)).size;
     const noActionProjects = totalProjects - activeProjects;
-    const shippedCount = projects.filter(p => p.ship).length;
+    const shippedCount = projects.filter(p => shipPhases.includes(p.phase)).length;
     const peopleWithTasks = new Set(items.map(it => it.person)).size;
     const blockedCount = items.filter(it => it.type === "BLOCKED").length;
     const buildCount = items.filter(it => it.type === "BUILD").length;
@@ -256,7 +256,7 @@ function computeWeekMetrics(weekKey, { history, commitments, projects, people })
     const totalCommits = entries.length;
     const activeProjects = new Set(entries.map(e => e.project)).size;
     const noActionProjects = totalProjects - activeProjects;
-    const shippedCount = projects.filter(p => p.ship).length;
+    const shippedCount = projects.filter(p => shipPhases.includes(p.phase)).length;
     const peopleWithTasks = new Set(entries.map(e => e.person)).size;
     const blockedCount = entries.filter(e => e.type === "BLOCKED").length;
     const buildCount = entries.filter(e => e.type === "BUILD").length;
@@ -298,7 +298,8 @@ function computeWeekMetrics(weekKey, { history, commitments, projects, people })
 // ═══════════════════════════════════════════════════════════════
 // SUMMARY VIEW
 // ═══════════════════════════════════════════════════════════════
-const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }) => {
+const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, weekConfig: weekConfigProp }) => {
+  const weekConfig = weekConfigProp || fallbackWeekConfig;
   const [selectedWeek, setSelectedWeek] = useState(selectedWeekKey || "current");
 
   useEffect(() => {
@@ -306,10 +307,11 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }
   }, [selectedWeekKey]);
   const tc = typeConfig();
 
-  // Week tabs — newest first
+  // Week tabs — newest first, limited to last 6 weeks
   const weeks = useMemo(() => {
     const tabs = [{ key: "current", label: weekConfig.weekOf, isCurrent: true }];
-    tabs.push(...[...weekConfig.historyWeeks].reverse().map(w => ({ key: w, label: w })));
+    const hist = [...weekConfig.historyWeeks].reverse().slice(0, 5);
+    tabs.push(...hist.map(w => ({ key: w, label: w })));
     return tabs;
   }, []);
 
@@ -337,7 +339,6 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }
   const commitSeries = [
     { label: "Build", color: tc.BUILD?.color || c.green, values: allMetrics.map(m => m.buildCount) },
     { label: "Jam", color: tc.JAM?.color || c.accent, values: allMetrics.map(m => m.jamCount) },
-    { label: "Blocked", color: tc.BLOCKED?.color || c.red, values: allMetrics.map(m => m.blockedCount) },
   ];
 
   // ─── Table helpers (token-compliant) ───
@@ -375,63 +376,6 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }
       {/* ═══════════════════════════════════════════════════════════
           FROZEN TOP — Mission Grid (never scrolls)
           ═══════════════════════════════════════════════════════════ */}
-      <div style={{ flexShrink: 0, paddingBottom: space[3] }}>
-        {/* Mission Grid — hero strip, uses flow-mission-grid for rounded + dark overlay (same as Pulse) */}
-        <div className="flow-mission-grid" style={{ padding: `${space[3]}px ${space[4]}px` }}>
-          {(() => {
-            const blockedPct = metrics.totalCommits > 0 ? Math.round((metrics.blockedCount / metrics.totalCommits) * 100) : 0;
-            const donePct = metrics.totalCommits > 0 ? Math.round((metrics.buildCount / metrics.totalCommits) * 100) : 0;
-            const deprioPct = metrics.totalCommits > 0 ? Math.round((metrics.jamCount / metrics.totalCommits) * 100) : 0;
-            const sectionLabel = {
-              fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-              fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking,
-              color: c.textDim, textTransform: "uppercase",
-            };
-            return (
-            <div style={{
-              display: "flex", alignItems: "flex-end", gap: 0,
-              position: "relative", zIndex: 1,
-            }}>
-              {/* Projects group */}
-              <div style={{ flex: "1.4 1 0", display: "flex", flexDirection: "column", gap: space[3], padding: `${space[4]}px ${space[4]}px ${space[3]}px` }}>
-                <span style={sectionLabel}>Projects</span>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: space[4] }}>
-                  <MetricCompact value={metrics.totalProjects} label="Total" color={c.text} />
-                  <MetricCompact value={metrics.activeProjects} label="Active" color={c.green} />
-                  <MetricCompact value={metrics.noActionProjects} label="No action" color={c.orange} />
-                  <MetricCompact value={metrics.shippedCount} label="Shipped" color={c.cyan} />
-                </div>
-              </div>
-
-              <div style={{ width: 1, alignSelf: "stretch", margin: `${space[4]}px 0`, background: c.border, flexShrink: 0 }} />
-
-              {/* Focus group */}
-              <div style={{ flex: "1.6 1 0", display: "flex", flexDirection: "column", gap: space[3], padding: `${space[4]}px ${space[4]}px ${space[3]}px` }}>
-                <span style={sectionLabel}>Focus</span>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: space[4] }}>
-                  <MetricCompact value={metrics.totalCommits} label="Commits" color={c.text} />
-                  <MetricCompact value={`${metrics.deliveryRate}%`} label="Build %" color={metrics.deliveryRate >= 50 ? c.green : metrics.deliveryRate >= 30 ? c.orange : c.red} />
-                  <MetricCompact value={`${donePct}%`} label="Done" color={donePct >= 50 ? c.green : donePct >= 30 ? c.textMid : c.orange} />
-                  <MetricCompact value={`${blockedPct}%`} label="Blocked" color={blockedPct > 15 ? c.red : blockedPct > 5 ? c.orange : c.textDim} />
-                  <MetricCompact value={`${deprioPct}%`} label="Deprioritized" color={deprioPct > 20 ? c.orange : c.textDim} />
-                </div>
-              </div>
-
-              <div style={{ width: 1, alignSelf: "stretch", margin: `${space[4]}px 0`, background: c.border, flexShrink: 0 }} />
-
-              {/* People group */}
-              <div style={{ flex: "0.8 1 0", display: "flex", flexDirection: "column", gap: space[3], padding: `${space[4]}px ${space[4]}px ${space[3]}px` }}>
-                <span style={sectionLabel}>People</span>
-                <div style={{ display: "flex", alignItems: "flex-end", gap: space[4] }}>
-                  <MetricCompact value={metrics.totalPeople} label="Total" color={c.text} />
-                  <MetricCompact value={metrics.peopleWithTasks} label="Active" color={c.cyan} />
-                </div>
-              </div>
-            </div>
-            );
-          })()}
-        </div>
-      </div>
 
       {/* ═══════════════════════════════════════════════════════════
           SCROLLABLE CONTENT — charts + tables (only this area scrolls)
@@ -442,7 +386,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }
         {/* ── Projects — bar charts ── */}
         <div className="flow-mission-grid" style={{ padding: `${space[4]}px ${space[5]}px` }}>
           <div style={{ position: "relative", zIndex: 1 }}>
-            <Label style={{ color: c.green }}>Projects — Week over Week</Label>
+            <Label style={{ color: c.green }}>Projects</Label>
             <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
               <MiniBarChart title="Active" color={c.green}
                 data={allMetrics.map(m => m.activeProjects)} labels={weekLabels}
@@ -450,19 +394,19 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }
               <MiniBarChart title="No Action" color={c.orange}
                 data={allMetrics.map(m => m.noActionProjects)} labels={weekLabels}
                 highlightIndex={selectedIdx} />
-              <MiniBarChart title="Shipped" color={c.cyan}
+              <MiniBarChart title="Shipped" color={"#1FAA59"}
                 data={allMetrics.map(m => m.shippedCount)} labels={weekLabels}
                 highlightIndex={selectedIdx} />
             </div>
           </div>
         </div>
 
-        {/* ── Focus — sparklines + stacked bar ── */}
+        {/* ── Commit — sparklines + stacked bar ── */}
         <div className="flow-mission-grid" style={{ padding: `${space[4]}px ${space[5]}px` }}>
           <div style={{ position: "relative", zIndex: 1 }}>
-            <Label style={{ color: c.accent }}>Focus — Week over Week</Label>
+            <Label style={{ color: c.accent }}>Commit</Label>
             <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
-              <SparkLine title="Delivery Rate" color={c.green} suffix="%"
+              <SparkLine title="Completion Rate" color={c.green} suffix="%"
                 data={pctDone} labels={weekLabels} highlightIndex={selectedIdx} />
               <SparkLine title="Blocked %" color={c.red} suffix="%"
                 data={pctBlocked} labels={weekLabels} highlightIndex={selectedIdx} />
@@ -481,7 +425,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }
         {/* ── People — bar + sparkline ── */}
         <div className="flow-mission-grid" style={{ padding: `${space[4]}px ${space[5]}px` }}>
           <div style={{ position: "relative", zIndex: 1 }}>
-            <Label style={{ color: c.cyan }}>People — Week over Week</Label>
+            <Label style={{ color: c.cyan }}>People</Label>
             <div style={{ display: "flex", gap: space[5], marginTop: space[3] }}>
               <MiniBarChart title="Active People" color={c.cyan}
                 data={allMetrics.map(m => m.peopleWithTasks)} labels={weekLabels}
@@ -507,7 +451,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }
                     <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.green }}>Projects</span>
                   </th>
                   <th colSpan={4} style={{ ...thStyle, borderBottom: `2px solid ${c.accent}30`, paddingBottom: space[1], textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>
-                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.accent }}>Focus</span>
+                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.accent }}>Commit</span>
                   </th>
                   <th colSpan={2} style={{ ...thStyle, borderBottom: `2px solid ${c.cyan}30`, paddingBottom: space[1], textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>
                     <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.cyan }}>People</span>
@@ -517,13 +461,13 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }
                 <tr>
                   <th style={{ ...thStyle, textAlign: "left", minWidth: colWidths.squad.min }}>Squad</th>
                   <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>Active</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>No Act.</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>No Action</th>
                   <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>Ship</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Act.</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Active</th>
                   <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min, borderLeft: `1px dotted ${c.border}` }}>Total</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Comp.</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Blk.</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Carry</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Complete</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Blocked</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Carried</th>
                   <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min, borderLeft: `1px dotted ${c.border}` }}>Total</th>
                   <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Active</th>
                 </tr>
@@ -533,7 +477,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey }
                   const d = metrics.squads[sq];
                   if (!d) return null;
                   const sqProjects = projects.filter(p => p.squad === sq);
-                  const sqShipped = sqProjects.filter(p => p.ship).length;
+                  const sqShipped = sqProjects.filter(p => shipPhases.includes(p.phase)).length;
                   const sqCarried = Math.max(0, d.commits - d.buildCount - d.blockedCount);
                   const projBase = d.activeProjects + d.noActionProjects;
                   const pA = projBase > 0 ? Math.round((d.activeProjects / projBase) * 100) : 0;

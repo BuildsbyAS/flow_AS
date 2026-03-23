@@ -14,7 +14,8 @@ export default function useKeyboard(bindings, deps = []) {
   useEffect(() => {
     const handler = (e) => {
       const tag = e.target.tagName;
-      const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable;
+      const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable
+        || !!e.target.closest("[data-suppress-shortcuts]");
 
       for (const b of bindings) {
         const keyMatch = e.key === b.key || e.key === b.key?.toLowerCase();

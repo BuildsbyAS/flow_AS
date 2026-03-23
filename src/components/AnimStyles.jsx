@@ -281,7 +281,7 @@ const AnimStyles = () => (
     }
 
     /* ═══════════════════════════════════════════════════════════════
-       FOCUS PAGE — Phase 3 animations
+       COMMIT PAGE — Phase 3 animations
        ═══════════════════════════════════════════════════════════════ */
 
     /* ── Neon card scanline texture ── */
@@ -313,7 +313,7 @@ const AnimStyles = () => (
       50% { box-shadow: 0 0 0 4px ${c.accent}30, 0 0 12px ${c.accent}15; }
     }
 
-    /* ── Neon commitment card ── */
+    /* ── Neon commit card ── */
     .flow-neon-card {
       position: relative;
       border-radius: 12px;
@@ -378,11 +378,11 @@ const AnimStyles = () => (
       animation: weekCompletePop 0.5s ${motion.critical.easing} both;
     }
 
-    /* ── Focus frozen control bar ── */
-    .flow-focus-sticky {
+    /* ── Commit frozen control bar ── */
+    .flow-commit-sticky {
       position: relative;
     }
-    .flow-focus-sticky::after {
+    .flow-commit-sticky::after {
       content: '';
       position: absolute;
       bottom: 0;
@@ -396,57 +396,57 @@ const AnimStyles = () => (
     .flow-summary-scroll::-webkit-scrollbar { display: none; }
     .flow-summary-scroll { scrollbar-width: none; }
 
-    /* ── Focus scroll area — thin custom scrollbar ── */
-    .flow-focus-scroll::-webkit-scrollbar { width: 4px; }
-    .flow-focus-scroll::-webkit-scrollbar-track { background: transparent; }
-    .flow-focus-scroll::-webkit-scrollbar-thumb { background: ${c.border}; border-radius: 4px; }
-    .flow-focus-scroll::-webkit-scrollbar-thumb:hover { background: ${c.textDim}; }
-    .flow-focus-scroll { scrollbar-width: thin; scrollbar-color: ${c.border} transparent; }
+    /* ── Commit scroll area — thin custom scrollbar ── */
+    .flow-commit-scroll::-webkit-scrollbar { width: 4px; }
+    .flow-commit-scroll::-webkit-scrollbar-track { background: transparent; }
+    .flow-commit-scroll::-webkit-scrollbar-thumb { background: ${c.border}; border-radius: 4px; }
+    .flow-commit-scroll::-webkit-scrollbar-thumb:hover { background: ${c.textDim}; }
+    .flow-commit-scroll { scrollbar-width: thin; scrollbar-color: ${c.border} transparent; }
 
-    /* ── Focus hero KPI entrance ── */
-    @keyframes focusCountUp {
+    /* ── Commit hero KPI entrance ── */
+    @keyframes commitCountUp {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .flow-focus-kpi {
-      animation: focusCountUp 0.4s ${motion.interaction.easing} both;
+    .flow-commit-kpi {
+      animation: commitCountUp 0.4s ${motion.interaction.easing} both;
     }
 
-    /* ── Focus person row hover ── */
-    .flow-focus-person-row {
+    /* ── Commit person row hover ── */
+    .flow-commit-person-row {
       transition: all 0.15s ${motion.interaction.easing};
       cursor: pointer;
     }
-    .flow-focus-person-row:hover {
+    .flow-commit-person-row:hover {
       background: ${c.glass} !important;
       transform: translateX(2px);
       box-shadow: 0 2px 8px ${c.shadow};
     }
-    .flow-focus-person-row:active {
+    .flow-commit-person-row:active {
       transform: scale(0.997) translateX(1px);
     }
 
-    /* ── Focus lock pulse ── */
-    @keyframes focusLockPulse {
+    /* ── Commit lock pulse ── */
+    @keyframes commitLockPulse {
       0%, 100% { box-shadow: 0 0 8px ${c.green}40; }
       50% { box-shadow: 0 0 16px ${c.green}60, 0 0 4px ${c.green}30; }
     }
-    .flow-focus-lock-glow {
-      animation: focusLockPulse 2s ${motion.ambient.easing} infinite;
+    .flow-commit-lock-glow {
+      animation: commitLockPulse 2s ${motion.ambient.easing} infinite;
     }
 
     /* ── Card entrance stagger ── */
-    .flow-focus-card-enter {
+    .flow-commit-card-enter {
       animation: slideUp 0.35s ${motion.interaction.easing} both;
     }
 
-    /* ── Focus progress bar glow ── */
-    .flow-focus-progress {
+    /* ── Commit progress bar glow ── */
+    .flow-commit-progress {
       position: relative;
       overflow: hidden;
       border-radius: 4px;
     }
-    .flow-focus-progress::after {
+    .flow-commit-progress::after {
       content: '';
       position: absolute;
       inset: 0;
@@ -455,12 +455,12 @@ const AnimStyles = () => (
       pointer-events: none;
     }
 
-    /* ── Focus hero card ── */
-    .flow-focus-hero {
+    /* ── Commit hero card ── */
+    .flow-commit-hero {
       position: relative;
       overflow: hidden;
     }
-    .flow-focus-hero::before {
+    .flow-commit-hero::before {
       content: '';
       position: absolute;
       top: 0; left: 0; right: 0;

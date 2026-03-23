@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap');
 
 @import "tailwindcss";
 
@@ -96,10 +96,15 @@ body {
 .flow-breadcrumb:focus-visible,
 .flow-context-bar button:focus-visible,
 .flow-week-nav button:focus-visible,
-.flow-header-tab:focus-visible,
 .flow-cmd-category-pill:focus-visible {
   outline: 2px solid rgba(59, 130, 246, 0.5);
   outline-offset: 2px;
+}
+
+/* Nav tabs have clear active styling — no focus ring needed */
+.flow-header-tab:focus,
+.flow-header-tab:focus-visible {
+  outline: none;
 }
 
 /* ── Fade-scale animation for dropdowns ── */
@@ -233,21 +238,21 @@ body {
   background: rgba(255, 255, 255, 0.06);
 }
 
-/* ── Focus: lock glow breathe ── */
-.flow-focus-lock-glow {
-  animation: focusLockGlow 3s ease-in-out infinite;
+/* ── Commit: lock glow breathe ── */
+.flow-commit-lock-glow {
+  animation: commitLockGlow 3s ease-in-out infinite;
 }
-@keyframes focusLockGlow {
+@keyframes commitLockGlow {
   0%, 100% { box-shadow: 0 0 0 rgba(132, 255, 149, 0); }
   50% { box-shadow: 0 0 10px rgba(132, 255, 149, 0.06); }
 }
 
-/* ── Focus: outcome toggle hover ── */
+/* ── Commit: outcome toggle hover ── */
 .flow-outcome-btn:hover {
   filter: brightness(1.15);
 }
 
-/* ── Focus: lock gate pulse ── */
+/* ── Commit: lock gate pulse ── */
 .flow-lock-gate-ready {
   animation: lockGateReady 2s ease-in-out infinite;
 }
@@ -256,18 +261,18 @@ body {
   50% { border-color: rgba(132, 255, 149, 0.35); }
 }
 
-/* ── Focus: card entrance ── */
+/* ── Commit: card entrance ── */
 @keyframes cardFadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.flow-focus-card {
+.flow-commit-card {
   animation: cardFadeIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* ── Focus: responsive 2×2 grid collapse ── */
+/* ── Commit: responsive 2x2 grid collapse ── */
 @media (max-width: 720px) {
-  .flow-focus-grid {
+  .flow-commit-grid {
     grid-template-columns: 1fr !important;
   }
 }
