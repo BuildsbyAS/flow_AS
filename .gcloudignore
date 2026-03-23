@@ -8,6 +8,7 @@ node_modules/
 !index.html
 *.zip
 *.svg
+!public/favicon.svg
 docs/
 task-runner-logs/
 flow-dashboard.jsx

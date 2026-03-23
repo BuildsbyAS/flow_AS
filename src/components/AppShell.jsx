@@ -388,6 +388,9 @@ export function Header({
           </div>
         )}
 
+        {/* ── Day rhythm pill ── */}
+        <DayRhythmPill onNavigateToGuide={() => onTabSwitch("guide")} />
+
         {/* ── Filter trigger button ── */}
         <button onClick={openDrawer} className="flow-filter-trigger" style={{
           display: "flex", alignItems: "center", gap: 6,
@@ -415,9 +418,6 @@ export function Header({
             </>
           ) : "Filters"}
         </button>
-
-        {/* ── Day rhythm pill ── */}
-        <DayRhythmPill onNavigateToGuide={() => onTabSwitch("guide")} />
       </div>
     )}
 

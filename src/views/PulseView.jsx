@@ -644,14 +644,14 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
             ))}
             <SummaryTile
               value={shippingProjects.length}
-              label={<>{"🚀 Ship"}</>}
+              label="Ship"
               color={"#1FAA59"}
               active={filterStatus === "shipping"}
               onClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); setPulseMode("matrix"); }}
             />
             <SummaryTile
               value={noActionCount}
-              label="No action"
+              label="No commits"
               color={c.orange}
               active={filterStatus === "no_action"}
               onClick={() => { setFilterStatus(filterStatus === "no_action" ? "" : "no_action"); setFilterPhase(null); setPulseMode("matrix"); }}
@@ -833,15 +833,6 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                               fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
                               fontWeight: 600, color: c.text,
                             }}>{proj.name}</span>
-                            {shipPhases.includes(proj.phase) && <span title={proj.phase} style={{ fontSize: typo.bodyXs.size }}>🚀</span>}
-                            {hasCriticalRisk && (
-                              <span className="flow-risk-radar" style={{
-                                width: 14, height: 14,
-                                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              }}>
-                                <span style={{ fontSize: 8, color: c.red }}>●</span>
-                              </span>
-                            )}
                             {proj.items.length === 0 && (
                               <span style={{
                                 marginLeft: "auto", flexShrink: 0,
@@ -856,7 +847,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                                 borderRadius: layout.radiusTag,
                                 color: c.orange,
                                 whiteSpace: "nowrap",
-                              }}>No action</span>
+                              }}>No commits</span>
                             )}
                           </div>
                         </td>

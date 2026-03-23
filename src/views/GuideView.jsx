@@ -260,12 +260,55 @@ const GuideView = ({ onNavigate }) => {
           <div style={{ marginTop: space[2] }}>
             <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2] }}>Planning (Sunday–Monday)</div>
             <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-              Fill in your 3 commits — each one needs a <strong style={{ color: c.text, fontWeight: 600 }}>project</strong>, a <strong style={{ color: c.text, fontWeight: 600 }}>deliverable description</strong>, a <strong style={{ color: c.text, fontWeight: 600 }}>stage</strong>, and a <strong style={{ color: c.text, fontWeight: 600 }}>type</strong> (Build or Jam).
+              Fill in your 3 commits — each one needs a <strong style={{ color: c.text, fontWeight: 600 }}>project</strong>, a <strong style={{ color: c.text, fontWeight: 600 }}>deliverable description</strong>, a <strong style={{ color: c.text, fontWeight: 600 }}>stage</strong>, and a <strong style={{ color: c.text, fontWeight: 600 }}>type</strong>.
             </div>
             <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid, marginTop: space[2] }}>
               You also set a <strong style={{ color: c.text, fontWeight: 600 }}>timeline</strong> (1–4 weeks) for each commit. The planning flow uses dot navigation — one commit at a time.
             </div>
           </div>
+
+          {/* ── Stage explainer ── */}
+          <ExampleCard style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size - 1, fontWeight: typo.displaySm.weight, color: c.text, letterSpacing: typo.displaySm.tracking }}>Stage</div>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, lineHeight: 1.5, color: c.textMid }}>
+              What phase of the development lifecycle is this work in?
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[2] }}>
+              {[
+                { stage: "PRD", desc: "Requirements & spec writing" },
+                { stage: "Design", desc: "UI/UX design & prototyping" },
+                { stage: "Dev", desc: "Building & implementation" },
+                { stage: "QA", desc: "Testing & quality assurance" },
+              ].map(s => (
+                <div key={s.stage} style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[1] + 2}px ${space[2] + 2}px`, background: `${pc[s.stage] || c.textDim}08`, borderRadius: layout.radiusSm, border: `1px solid ${pc[s.stage] || c.textDim}20` }}>
+                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: pc[s.stage] || c.textDim, minWidth: 48 }}>{s.stage}</span>
+                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>{s.desc}</span>
+                </div>
+              ))}
+            </div>
+          </ExampleCard>
+
+          {/* ── Type explainer ── */}
+          <ExampleCard style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size - 1, fontWeight: typo.displaySm.weight, color: c.text, letterSpacing: typo.displaySm.tracking }}>Type</div>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, lineHeight: 1.5, color: c.textMid }}>
+              What kind of work is this commit?
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[2] }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: space[1], padding: `${space[2] + 2}px ${space[3]}px`, background: `${tc.BUILD.color}08`, borderRadius: layout.radiusSm, border: `1px solid ${tc.BUILD.color}20` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: tc.BUILD.color }}>BUILD</span>
+                </div>
+                <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.4 }}>Structured project work with a clear deliverable — features, fixes, infrastructure.</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: space[1], padding: `${space[2] + 2}px ${space[3]}px`, background: `${tc.JAM.color}08`, borderRadius: layout.radiusSm, border: `1px solid ${tc.JAM.color}20` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: tc.JAM.color }}>JAM</span>
+                </div>
+                <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.4 }}>Exploratory or support work — spikes, reviews, planning, cross-team coordination.</span>
+              </div>
+            </div>
+          </ExampleCard>
 
           {/* Mini dot navigation visual */}
           <ExampleCard style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: space[3], padding: `${space[3]}px ${space[5]}px` }}>

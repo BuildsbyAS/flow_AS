@@ -391,7 +391,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
               <MiniBarChart title="Active" color={c.green}
                 data={allMetrics.map(m => m.activeProjects)} labels={weekLabels}
                 highlightIndex={selectedIdx} />
-              <MiniBarChart title="No Action" color={c.orange}
+              <MiniBarChart title="No Commits" color={c.orange}
                 data={allMetrics.map(m => m.noActionProjects)} labels={weekLabels}
                 highlightIndex={selectedIdx} />
               <MiniBarChart title="Shipped" color={"#1FAA59"}
@@ -461,7 +461,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
                 <tr>
                   <th style={{ ...thStyle, textAlign: "left", minWidth: colWidths.squad.min }}>Squad</th>
                   <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>Active</th>
-                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>No Action</th>
+                  <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>No Commits</th>
                   <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min }}>Ship</th>
                   <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.pct.min }}>% Active</th>
                   <th style={{ ...thStyle, textAlign: "center", minWidth: colWidths.metric.min, borderLeft: `1px dotted ${c.border}` }}>Total</th>

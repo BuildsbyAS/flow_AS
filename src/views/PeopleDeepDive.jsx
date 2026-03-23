@@ -1,5 +1,5 @@
 // Flow — People Deep Dive (Phase 4: Coaching Console, Signal Cards, Terminal Log, Telemetry Hero)
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, outcomeConfig, entityColors } from "../styles/theme";
 import { Tag, EmptyState, Surface, Label, Btn, Sel, StatCell } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
@@ -457,33 +457,59 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
                 {/* Week separator */}
                 <div style={{ padding: `${space[2]}px ${space[4]}px ${space[1]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
                   <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: w.isCurrent ? c.accent : c.textDim }}>
-                    {w.isCurrent ? "▸ This week" : `▸ ${w.week}`}
+                    {w.isCurrent ? "▸ THIS WEEK" : `▸ ${w.week.toUpperCase()}`}
                   </span>
                   <div style={{ flex: 1, height: 1, background: w.isCurrent ? `${c.accent}30` : c.border }} />
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{w.total} {w.total === 1 ? "entry" : "entries"}</span>
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{w.total}</span>
                 </div>
-                {w.items.map((entry, ei) => (
-                  <div key={`${wi}-${ei}`} className="flow-terminal-line" style={{
-                    animationDelay: `${(wi * 3 + ei) * 0.04}s`,
-                    opacity: w.isCurrent ? 1 : 0.8,
-                  }}>
-                    <span style={{
-                      width: 6, height: 6, borderRadius: "50%",
-                      background: tc[entry.type]?.color || c.textDim,
-                      boxShadow: w.isCurrent ? `0 0 6px ${tc[entry.type]?.color || c.textDim}40` : "none",
-                      flexShrink: 0, marginTop: 5,
-                    }} />
-                    <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", entry.project); }}
-                      style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: entityColors().project, cursor: "pointer", flexShrink: 0, width: 64 }}>
-                      {entry.project}
-                    </span>
-                    <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg}>{entry.type}</Tag>
-                    <Tag color={pc[entry.stage] || c.textDim} bg={(pc[entry.stage] || c.textDim) + "12"}>{entry.stage}</Tag>
-                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: w.isCurrent ? c.text : c.textMid, flex: 1, minWidth: 0 }}>
-                      {entry.title || entry.task || "—"}
-                    </span>
-                  </div>
-                ))}
+                {w.items.map((entry, ei) => {
+                  const oc = outcomeConfig();
+                  const ocCfg = entry.outcome ? oc[entry.outcome] : null;
+                  const projObj = projects.find(p => p.id === entry.project);
+                  return (
+                    <div key={`${wi}-${ei}`} style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 52px 52px 72px",
+                      alignItems: "center",
+                      gap: space[2],
+                      padding: `${space[1] + 2}px ${space[4]}px`,
+                      borderBottom: `1px solid rgba(255,255,255,0.03)`,
+                      opacity: w.isCurrent ? 1 : 0.8,
+                      animationDelay: `${(wi * 3 + ei) * 0.04}s`,
+                    }}>
+                      {/* Project ID + Name : Commitment */}
+                      <span style={{
+                        display: "flex", alignItems: "center", gap: 0,
+                        overflow: "hidden", whiteSpace: "nowrap",
+                      }}>
+                        <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", entry.project); }}
+                          style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: entityColors().project, cursor: "pointer", flexShrink: 0 }}>
+                          {entry.project}
+                        </span>
+                        {projObj && <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, flexShrink: 0, marginLeft: space[1] }}>{projObj.name}</span>}
+                        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, flexShrink: 0, margin: `0 ${space[1]}px` }}>:</span>
+                        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: w.isCurrent ? c.text : c.textMid, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {entry.title || entry.task || "—"}
+                        </span>
+                      </span>
+                      {/* Stage (PRD/Design/Dev/QA) */}
+                      <Tag color={pc[entry.stage] || c.textDim} bg={(pc[entry.stage] || c.textDim) + "12"} style={{ textAlign: "center", justifySelf: "center" }}>{entry.stage || "—"}</Tag>
+                      {/* Type (BUILD/JAM) */}
+                      <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg} style={{ textAlign: "center", justifySelf: "center" }}>{entry.type || "—"}</Tag>
+                      {/* Outcome */}
+                      {ocCfg ? (
+                        <span style={{
+                          fontFamily: typo.monoSm.font, fontSize: "10px", fontWeight: 700,
+                          color: ocCfg.color, background: ocCfg.bg,
+                          padding: "1px 6px", borderRadius: 4,
+                          letterSpacing: "0.04em", textAlign: "center", justifySelf: "center",
+                        }}>
+                          {ocCfg.icon} {entry.outcome.toUpperCase()}
+                        </span>
+                      ) : <span />}
+                    </div>
+                  );
+                })}
               </React.Fragment>
             ))
           ) : (
