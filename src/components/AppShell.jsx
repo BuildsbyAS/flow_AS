@@ -174,11 +174,18 @@ export function Header({
 
   const collapsed = scrollHidden && !hoverPeek;
 
-  // Sync a body class so per-view "frozen top" sections can collapse in sync
+  // Sync CSS var + body class so sticky content below the app header knows
+  // whether to offset by the header's height (expanded) or 0 (collapsed/hidden).
+  // The header itself uses transform to hide, so its layout box still reserves
+  // ~104px at the top — but when visually hidden we want sticky inner headers
+  // (table columns, section titles) to rise to the viewport top.
   React.useEffect(() => {
+    const headerH = showContextBar ? 104 : 52;
+    document.documentElement.style.setProperty('--flow-header-h', `${headerH}px`);
+    document.documentElement.style.setProperty('--flow-header-offset', collapsed ? '0px' : `${headerH}px`);
     document.body.classList.toggle('flow-chrome-collapsed', collapsed);
     return () => document.body.classList.remove('flow-chrome-collapsed');
-  }, [collapsed]);
+  }, [collapsed, showContextBar]);
 
   const triggerPeek = () => {
     setHoverPeek(true);

@@ -251,12 +251,12 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   if (!selectedPerson) {
     let flatIdx = 0;
     return (
-      <div ref={devRef} style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 128px)", marginBottom: -60 }}>
+      <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
 
         {/* ═══════════════════════════════════════════════════════════
-            FROZEN TOP — search + filters (never scrolls)
+            Search + filters — scrolls with the page
             ═══════════════════════════════════════════════════════════ */}
-        <div className="flow-view-chrome" style={{ flexShrink: 0, paddingBottom: space[3], display: "flex", flexDirection: "column", gap: space[2] }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
         <div className="flow-mission-grid" style={{ display: "flex", gap: space[2], alignItems: "center", flexWrap: "wrap", padding: `${space[4]}px ${space[4]}px` }}>
           <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
             <input ref={localSearchRef} value={search} onChange={e => { setSearch(e.target.value); setFocusIdx(0); }} className="flow-input"
@@ -296,7 +296,7 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
         {/* ═══════════════════════════════════════════════════════════
             SCROLLABLE CONTENT — people cards (only this area scrolls)
             ═══════════════════════════════════════════════════════════ */}
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden", position: "relative", zIndex: 1, padding: `0 ${space[4]}px` }}>
+        <div style={{ position: "relative", zIndex: 1, padding: `0 ${space[4]}px` }}>
 
         {/* People grouped by squad */}
         {Object.entries(squadsWithPeople).map(([squad, members]) => {

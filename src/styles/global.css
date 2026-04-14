@@ -23,22 +23,19 @@ body {
   scrollbar-width: none;
 }
 
-/* ── Scroll-aware view chrome: in-view frozen-top strips slide up when the app header does.
-   We use transform (GPU, no reflow) instead of height animation — changing the flow height of
-   the chrome mid-scroll causes the main scroll container's scrollTop to shift, which creates
-   artifact scroll events and a violent oscillation. Chrome keeps its flow space; the floating
-   pill sits over the reserved area. */
-.flow-view-chrome {
-  transition:
-    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.2s ease;
-  will-change: transform;
-  transform-origin: top center;
+/* ── Natural body scroll. Views no longer wrap their content in fixed-height
+   columns with inner overflow: auto — the page itself is the scroll container.
+   Sticky elements that must sit below the app header (table column headers,
+   section titles) use top: var(--flow-sticky-top, 0) which resolves to the
+   current app header height when expanded, 0 when it is scrolled away. */
+:root {
+  --flow-header-h: 104px;
+  --flow-header-offset: 104px;
+  --flow-sticky-top: var(--flow-header-offset, 104px);
 }
-body.flow-chrome-collapsed .flow-view-chrome {
-  transform: translate3d(0, -110%, 0);
-  opacity: 0;
-  pointer-events: none;
+
+html {
+  scroll-padding-top: var(--flow-header-h, 104px);
 }
 
 /* ── Focus ring — visible keyboard focus ── */

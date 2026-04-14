@@ -445,13 +445,10 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
     const tryScroll = () => {
       const el = document.querySelector(`[data-status-group="${groupKey}"]`);
       if (el) {
-        const sc = el.closest('[data-pulse-scroll]');
-        if (sc) {
-          const elTop = el.offsetTop - sc.offsetTop;
-          sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" });
-        } else {
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
+        const rect = el.getBoundingClientRect();
+        const headerH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--flow-header-h')) || 104;
+        const y = rect.top + window.scrollY - headerH - 12;
+        window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
       } else if (attempts < 10) {
         attempts++;
         requestAnimationFrame(tryScroll);
@@ -516,7 +513,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   // Loading state
   if (loadingProp) {
     return (
-      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "calc(100vh - 128px)", flexDirection: "column", gap: space[3] }}>
+      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 240px)", flexDirection: "column", gap: space[3] }}>
         <div style={{ width: 32, height: 32, border: `3px solid ${c.border}`, borderTopColor: c.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
         <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Loading pulse data...</span>
       </div>
@@ -526,7 +523,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   // Error state
   if (errorProp) {
     return (
-      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "calc(100vh - 128px)", flexDirection: "column", gap: space[3] }}>
+      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 240px)", flexDirection: "column", gap: space[3] }}>
         <EmptyState icon="⚠" title="Failed to load pulse data" message={typeof errorProp === "string" ? errorProp : "An unexpected error occurred."} action="Retry" onAction={() => window.location.reload()} />
       </div>
     );
@@ -535,14 +532,14 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   // Empty state — no data (legitimate for new org)
   if (projects.length === 0) {
     return (
-      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "calc(100vh - 128px)" }}>
+      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 240px)" }}>
         <EmptyState icon="📡" title="No pulse data yet" message="Once projects and commitments are added, the leadership command center will populate here." />
       </div>
     );
   }
 
   return (
-    <div ref={devRef} style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 128px)" }}>
+    <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
 
       {/* Scroll feedback toast */}
       {scrollFeedback && (
@@ -571,9 +568,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
       {/* ═══════════════════════════════════════════════════════════
           FROZEN TOP — summary + toggle (never scrolls)
           ═══════════════════════════════════════════════════════════ */}
-      <div className="flow-view-chrome" style={{
-        flexShrink: 0,
-        paddingBottom: space[3],
+      <div style={{
         display: "flex", flexDirection: "column", gap: space[3],
       }}>
 
@@ -705,7 +700,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
       {/* ═══════════════════════════════════════════════════════════
           SCROLLABLE CONTENT (only this area scrolls)
           ═══════════════════════════════════════════════════════════ */}
-      <div data-pulse-scroll style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
+      <div data-pulse-scroll style={{ overflowX: "auto", position: "relative", zIndex: 1 }}>
       <div key={morphKey} className="flow-view-morph">
 
       {/* ═══════════════════════════════════════════════════════════
@@ -721,14 +716,14 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: dp.minTable }}>
               <thead>
                 <tr>
-                  <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
+                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
                   <Th col="name" style={{ minWidth: 150, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
                   <Th col="owner" style={{ minWidth: 80, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
                   <Th col="phase" style={{ minWidth: 64, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>
                   <Th col="health" style={{ minWidth: 48, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Health</Th>
                   {phaseNames.map(ph => (
                     <th key={ph} style={{
-                      position: "sticky", top: 0, background: c.bg, zIndex: 2,
+                      position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 2,
                       padding: dp.headerPad, textAlign: "center",
                       fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                       fontWeight: 600, letterSpacing: "0",
@@ -739,7 +734,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                     }}>{ph}</th>
                   ))}
                   <th style={{
-                    position: "sticky", top: 0, background: c.bg, zIndex: 2,
+                    position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 2,
                     padding: dp.headerPad, textAlign: "center",
                     fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                     fontWeight: 600, letterSpacing: "0",
@@ -1070,7 +1065,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                 <thead>
                   <tr>
-                    <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
+                    <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
                     <Th col="person" style={{ minWidth: 120, borderLeft: dotBorder }}>Person</Th>
                     <Th col="project" style={{ minWidth: 140, borderLeft: dotBorder }}>Project</Th>
                     <Th col="title" style={{ minWidth: 160, borderLeft: dotBorder }}>Commitment</Th>

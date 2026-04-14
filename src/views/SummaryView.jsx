@@ -455,7 +455,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
     fontFamily: typo.bodyMd.font, fontSize: 16,
     fontWeight: 600, letterSpacing: "0",
     color: c.textMid, borderBottom: `1px solid ${c.border}`,
-    background: c.bg, position: "sticky", top: 0, zIndex: 2,
+    background: c.bg, position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 2,
     whiteSpace: "nowrap",
   };
   const tdBase = {
@@ -478,7 +478,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
   const hasGlobalFilter = gf.squad?.length || gf.person?.length || gf.owner?.length;
   if (!metrics || (filteredProjects.length === 0 && filteredPeople.length === 0)) {
     return (
-      <div ref={devRef} style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", height: "calc(100vh - 116px)", marginBottom: -60 }}>
+      <div ref={devRef} style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "calc(100vh - 240px)" }}>
         <EmptyState
           title={hasGlobalFilter ? "No matching data" : "No data yet"}
           message={hasGlobalFilter
@@ -491,15 +491,13 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
 
   return (
     <div ref={devRef} style={{
-      display: "flex", flexDirection: "column",
-      height: "calc(100vh - 116px)",
-      marginBottom: -60,
+      display: "flex", flexDirection: "column", gap: space[3],
     }}>
 
       {/* ═══════════════════════════════════════════════════════════
-          FROZEN TOP — Hero KPI strip (never scrolls)
+          KPI strip — scrolls with the page
           ═══════════════════════════════════════════════════════════ */}
-      <KPIBar className="flow-view-chrome" style={{ flexShrink: 0 }}>
+      <KPIBar>
           <SummaryTile value={metrics.activeProjects} prevValue={prev?.activeProjects} label="Active Projects" color={c.green} />
           <SummaryTile value={metrics.noActionProjects} prevValue={prev?.noActionProjects} label="Idle Projects" color={metrics.noActionProjects > 0 ? c.orange : c.textDim} />
           <SummaryTile value={metrics.totalCommits} prevValue={prev?.totalCommits} label="Total Commits" color={c.accent} />
@@ -511,8 +509,8 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
       {/* ═══════════════════════════════════════════════════════════
           SCROLLABLE CONTENT — charts + tables (only this area scrolls)
           ═══════════════════════════════════════════════════════════ */}
-      <div className="flow-summary-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: space[7], paddingBottom: space[8] }}>
+      <div style={{ position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[7] }}>
 
         {/* ── Projects — bar charts ── */}
         <div className="flow-mission-grid" style={{ padding: `${space[6]}px` }}>

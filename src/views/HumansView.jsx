@@ -559,11 +559,9 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
     const pctDeprioritized = total > 0 ? Math.round((deprioritizedCount / total) * 100) : 0;
 
     return (
-      <div ref={devRef} style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 128px)", marginBottom: -60 }}>
-        {/* ── Frozen top — never scrolls ── */}
-        <div className="flow-view-chrome" style={{
-          flexShrink: 0,
-          paddingBottom: space[3],
+      <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+        {/* ── Top strip — scrolls with the page ── */}
+        <div style={{
           display: "flex", flexDirection: "column", gap: space[3] - 2,
         }}>
 
@@ -634,7 +632,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
         </div>{/* end frozen top */}
 
         {/* ═══ SCROLLABLE CONTENT ═══ */}
-        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
+        <div style={{ overflowX: "auto", position: "relative", zIndex: 1 }}>
 
         {/* People table — grouped by operational status */}
         {(() => {
@@ -695,7 +693,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                   <thead>
                     <tr>
-                      <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
+                      <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
                       <Th col="person" style={{ minWidth: 150, borderLeft: dotBorder }}>Name</Th>
                       <Th col="role" style={{ minWidth: 100, borderLeft: dotBorder }}>Role</Th>
                       <Th col="filled" style={{ minWidth: 120, textAlign: "center", borderLeft: dotBorder }}>Filled</Th>
