@@ -1,6 +1,6 @@
 // Flow — Main App Shell
 import React, { useState, useCallback, useRef, useMemo } from "react";
-import { setTheme, c, body } from "./styles/theme";
+import { setTheme, c, body, space } from "./styles/theme";
 import AnimStyles from "./components/AnimStyles";
 import CommandPalette from "./components/CommandPalette";
 import ShortcutHintBar from "./components/ShortcutHintBar";
@@ -391,7 +391,7 @@ function FlowDashboard({ auth }) {
 
       {/* ═══ MAIN CANVAS ═══ */}
       {activeTab !== "terminal" && (
-      <main key={activeTab} className="flow-page" style={{ maxWidth: 1260, margin: "0 auto", padding: "24px 40px 60px" }}>
+      <main key={activeTab} className="flow-page" style={{ maxWidth: 1440, margin: "0 auto", padding: `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
         {activeTab === "summary" && <SummaryView history={history} commitments={effectiveCommitments} projects={projects} people={people} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} />}
         {activeTab === "pulse" && <PulseView loading={loading} error={error} commitments={effectiveCommitments} projects={projects} people={people} onNavigate={handleNavigate} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} appSettings={appSettings} />}
         {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} onSave={flushDirtyToDB} />}

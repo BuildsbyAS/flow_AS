@@ -3,7 +3,7 @@
 // Layer 2: Week controls · Filter trigger · Applied chips
 // Filter drawer slides from right when triggered
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { c, typo, layout, space, motion } from "../styles/theme";
+import { c, typo, layout, space, motion, mono } from "../styles/theme";
 import { FilterChip, Btn } from "./shared";
 import FlowLogo from "./FlowLogo";
 import { supabase } from "../lib/supabase";
@@ -273,20 +273,14 @@ export function Header({
     {/* ═══ LAYER 1 — Primary navigation bar ═══ */}
     <header ref={devRef} className="flow-header" style={{
       height: 52, display: "flex", alignItems: "center",
-      padding: `0 ${space[5]}px`,
-      background: c.surfaceSolid,
+      padding: `0 ${space[7]}px`,
+      background: c.surface,
       borderBottom: `1px solid ${c.border}`,
+      boxShadow: c.shadowSm,
       position: "relative", zIndex: 2,
     }}>
 
-      {/* ── Accent edge — top of shell ── */}
-      <div className="flow-header-accent-edge" style={{
-        position: "absolute", top: 0, left: 0, right: 0, height: 1,
-        background: `linear-gradient(90deg, ${c.accent}00 0%, ${c.accent}35 20%, ${c.cyan}25 50%, ${c.purple}20 80%, ${c.accent}00 100%)`,
-        pointerEvents: "none",
-      }} />
-
-      {/* ── Logo ── */}
+      {/* ── Logo — orange dot + FLOW wordmark ── */}
       <div onClick={onLogoClick} className="flow-logo-group" style={{
         display: "flex", alignItems: "center", gap: space[2] + 2,
         cursor: "pointer", marginRight: space[5], flexShrink: 0,
@@ -295,17 +289,16 @@ export function Header({
           flexShrink: 0, position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <FlowLogo size={30} />
+          <FlowLogo size={28} />
         </div>
         <span style={{
-          fontFamily: "'Space Grotesk', 'Inter', sans-serif", fontSize: 17,
-          fontWeight: 700, color: c.text, letterSpacing: "-0.05em",
-          textShadow: `0 0 20px ${c.accent}15`,
-        }}>Flow</span>
+          fontFamily: mono, fontSize: 15,
+          fontWeight: 700, color: c.text, letterSpacing: "0.04em",
+        }}>FLOW</span>
       </div>
 
       {/* ── Vertical separator ── */}
-      <div style={{ width: 1, height: 28, background: `linear-gradient(180deg, ${c.border}00, ${c.border}, ${c.border}00)`, marginRight: space[3], flexShrink: 0 }} />
+      <div style={{ width: 1, height: 24, background: c.border, marginRight: space[3], flexShrink: 0 }} />
 
       {/* ── Nav tabs (or breadcrumb in detail mode) ── */}
       {detailLabel ? (
@@ -325,37 +318,34 @@ export function Header({
               <button key={tab.key} onClick={() => onTabSwitch(tab.key)} className="flow-header-tab" style={{
                 padding: `0 ${space[3] + 2}px`, borderRadius: 0,
                 border: "none", cursor: "pointer",
-                background: active ? `linear-gradient(180deg, ${c.accent}08 0%, ${c.accent}14 100%)` : "transparent",
-                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                fontWeight: active ? 700 : 500,
-                color: active ? c.text : c.textMid,
+                background: "transparent",
+                fontFamily: typo.bodySm.font, fontSize: 13,
+                fontWeight: 600,
+                color: active ? c.accent : c.textDim,
                 display: "flex", alignItems: "center", gap: 6,
                 position: "relative",
-                transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-                borderLeft: active ? `1px solid ${c.accent}15` : "1px solid transparent",
-                borderRight: active ? `1px solid ${c.accent}15` : "1px solid transparent",
+                transition: `color ${motion.fast.duration} ${motion.fast.easing}`,
               }}>
                 {tab.label}
                 {/* Numeric shortcut hint — subtle hotkey */}
                 {tab.num && <span style={{
                   fontFamily: typo.monoSm.font, fontSize: 11,
-                  fontWeight: 600, letterSpacing: typo.monoSm.tracking,
-                  color: active ? c.textMid : c.textDim,
-                  opacity: active ? 0.6 : 0.35,
+                  fontWeight: 700, letterSpacing: typo.monoSm.tracking,
+                  color: c.textGhost || c.textDim,
+                  opacity: active ? 0.7 : 0.5,
                   lineHeight: 1, flexShrink: 0,
-                  padding: "2px 4px",
-                  border: `1px solid ${active ? c.textDim + '40' : c.textDim + '25'}`,
-                  borderRadius: 4,
-                  transition: `all ${motion.interaction.duration}`,
+                  padding: "2px 5px",
+                  border: `1px solid ${c.border}`,
+                  borderRadius: 3,
+                  transition: `all ${motion.fast.duration}`,
                   position: "relative", top: -1,
                 }}>{tab.num}</span>}
-                {/* Active indicator — bottom bar with glow */}
+                {/* Active indicator — 2px accent underline, no glow */}
                 {active && (
                   <div style={{
-                    position: "absolute", bottom: -1, left: "15%",
-                    width: "70%", height: 2, borderRadius: 1,
+                    position: "absolute", bottom: -1, left: 0, right: 0,
+                    height: 2,
                     background: c.accent,
-                    boxShadow: `0 0 8px ${c.accent}60, 0 1px 3px ${c.accent}40`,
                   }} />
                 )}
               </button>
@@ -377,9 +367,9 @@ export function Header({
           style={{
             width: 34, height: 34, borderRadius: layout.radiusSm,
             border: `1px solid ${["terminal","settings","logs","rant"].includes(activeTab) ? c.green + "40" : c.border}`,
-            background: ["terminal","settings","logs","rant"].includes(activeTab) ? c.green + "12" : "transparent",
+            background: ["terminal","settings","logs","rant"].includes(activeTab) ? c.greenDim : c.surfaceAlt,
             cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+            transition: `all ${motion.fast.duration} ${motion.fast.easing}`,
           }}
           title="Terminal"
         >
@@ -405,20 +395,18 @@ export function Header({
     {showContextBar && (
       <div className="flow-context-bar" style={{
         height: 52, display: "flex", alignItems: "center",
-        padding: `0 ${space[5]}px`, gap: space[2],
-        background: `linear-gradient(180deg, ${c.surfaceSolid} 0%, ${c.bg} 100%)`,
+        padding: `0 ${space[7]}px`, gap: space[2],
+        background: c.surface,
         borderBottom: `1px solid ${c.border}`,
         position: "relative", zIndex: 1,
-        boxShadow: `0 1px 4px ${c.bg}80`,
       }}>
 
         {/* ── Week navigator (tactical) ── */}
         <div className="flow-week-nav" style={{
           display: "flex", alignItems: "center",
           borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-          background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.surfaceAlt}B0 100%)`,
+          background: c.surfaceAlt,
           overflow: "hidden", flexShrink: 0,
-          boxShadow: `inset 0 1px 0 rgba(0,0,0,0.03)`,
         }}>
           <button onClick={onWeekPrev} className="flow-btn" style={{
             padding: `2px ${space[1] + 2}px`, border: "none", background: "transparent",
