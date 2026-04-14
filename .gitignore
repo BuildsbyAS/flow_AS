@@ -15,3 +15,9 @@ task-runner-logs/
 tasks.md
 docs/
 .claude/
+
+# Screenshots & ad-hoc snapshots (not code)
+*.png
+snapshot*.md
+test-screenshots/
+.playwright-mcp/

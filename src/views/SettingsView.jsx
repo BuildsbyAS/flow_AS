@@ -1,8 +1,9 @@
 // Flow — Settings View (Phase 5+6: Admin Console Design System)
 import React, { useState, useRef, useEffect } from "react";
 import { c, typo, phaseNames, phaseColors as getPhaseColors, layout, space, motion } from "../styles/theme";
-import { Badge, Tag, Surface, Btn, Inp, Sel, Label, TelemetryLabel, EmptyState } from "../components/shared";
+import { Badge, Tag, Surface, Modal, Btn, Inp, Sel, Label, TelemetryLabel, EmptyState } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
+import useDevLabel from "../hooks/useDevLabel";
 
 /* ── Severity helper for audit ──────────────────────────── */
 const getAuditSeverity = (action) => {
@@ -20,6 +21,7 @@ const getAuditSeverity = (action) => {
 /* ═══════════════════════════════════════════════════════════ */
 
 const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, projects, setProjects, commitments }) => {
+  const devRef = useDevLabel('Admin console for managing squads, roles, and people with audit log');
   const [subTab, setSubTab] = useState("people");
   const subTabKeys = ["people", "squads", "roles"];
 
@@ -76,12 +78,6 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
     setConfirmAction(null);
   };
 
-  /* ── Keyboard ── */
-  useKeyboard([
-    { key: "ArrowLeft", fn: () => setSubTab(t => { const i = subTabKeys.indexOf(t); return subTabKeys[Math.max(0, i - 1)]; }) },
-    { key: "ArrowRight", fn: () => setSubTab(t => { const i = subTabKeys.indexOf(t); return subTabKeys[Math.min(subTabKeys.length - 1, i + 1)]; }) },
-  ], [subTab]);
-
   /* ── Form state: Squads & Roles ── */
   const [newSquad, setNewSquad] = useState("");
   const [newRole, setNewRole] = useState("");
@@ -96,32 +92,71 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
   const addSquad = () => {
     const v = newSquad.trim();
-    if (!v || squads.includes(v)) return;
+    if (!v || squads.includes(v)) return false;
     setSquads(prev => [...prev, v]);
     logAction("add", "squad", v, "Created", null, v);
     setNewSquad("");
+    return true;
   };
   const addRole = () => {
     const v = newRole.trim();
-    if (!v || roles.includes(v)) return;
+    if (!v || roles.includes(v)) return false;
     setRoles(prev => [...prev, v]);
     logAction("add", "role", v, "Created", null, v);
     setNewRole("");
+    return true;
   };
   const addPerson = () => {
-    if (!pName.trim() || !pRole || !pSquad) return;
+    if (!pName.trim() || !pRole || !pSquad) return false;
     const name = pName.trim();
+    if (people.some(p => p.name === name)) return false;
     setPeople(prev => [...prev, { name, role: pRole, squad: pSquad }]);
     logAction("add", "person", name, `${pRole}, ${pSquad}`, null, `${name} (${pRole}, ${pSquad})`);
     setPName(""); setPRole(""); setPSquad("");
+    return true;
+  };
+
+  // Edit person state
+  const [editPerson, setEditPerson] = useState(null); // { idx, name, role, squad }
+  const [editName, setEditName] = useState("");
+  const [editRole, setEditRole] = useState("");
+  const [editSquad, setEditSquad] = useState("");
+
+  const startEdit = (gi, p) => {
+    setEditPerson({ idx: gi, name: p.name });
+    setEditName(p.name);
+    setEditRole(p.role || "");
+    setEditSquad(p.squad || "");
+    setPanel({ type: "editPerson" });
+  };
+  const saveEdit = () => {
+    if (!editName.trim() || !editRole || !editSquad || !editPerson) return false;
+    const oldName = editPerson.name;
+    const newName = editName.trim();
+    // Block duplicate name (unless unchanged)
+    if (newName !== oldName && people.some(p => p.name === newName)) return false;
+    setPeople(prev => prev.map(p =>
+      p.name === oldName ? { ...p, name: newName, role: editRole, squad: editSquad } : p
+    ));
+    logAction("edit", "person", newName, `${editRole}, ${editSquad}`, `${oldName} (${editPerson.name})`, `${newName} (${editRole}, ${editSquad})`);
+    setEditPerson(null);
+    return true;
   };
 
   const closePanel = () => {
     setNewSquad(""); setNewRole("");
     setPName(""); setPRole(""); setPSquad("");
+    setEditPerson(null);
     setPanel(null);
     setPanelStep(0);
   };
+
+  /* ── Keyboard ── */
+  useKeyboard([
+    { key: "ArrowLeft", fn: () => { const tag = document.activeElement?.tagName; if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return; setSubTab(t => { const i = subTabKeys.indexOf(t); return subTabKeys[Math.max(0, i - 1)]; }); } },
+    { key: "ArrowRight", fn: () => { const tag = document.activeElement?.tagName; if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return; setSubTab(t => { const i = subTabKeys.indexOf(t); return subTabKeys[Math.min(subTabKeys.length - 1, i + 1)]; }); } },
+    { key: "Escape", fn: () => { if (confirmAction) { setConfirmAction(null); return; } if (panel) { closePanel(); } } },
+  ], [subTab, confirmAction, panel]);
 
   const subTabs = [
     { key: "people", label: "People", count: people.length },
@@ -134,7 +169,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
   /* ═══ RENDER ════════════════════════════════════════════ */
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
+    <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
       {/* ── TAB SWITCHER — segmented toggle (matches Projects/Pulse pattern) ── */}
       <div style={{
@@ -157,7 +192,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             <span style={{
               fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
               padding: "1px 5px", borderRadius: layout.radiusTag + 1,
-              background: subTab === tab.key ? "rgba(255,255,255,0.2)" : `${c.accent}15`,
+              background: subTab === tab.key ? `${c.accent}20` : `${c.accent}08`,
               color: subTab === tab.key ? c.textCrit : c.accent,
             }}>{tab.count}</span>
           </button>
@@ -312,12 +347,75 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                   <Tag color={c.accent} bg={c.accentDim}>{members.length}</Tag>
                 </div>
                 <div className="flow-data-grid">
-                  <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 1fr 80px" }}>
+                  <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 1fr 120px" }}>
                     <span>Name</span>
                     <span>Role</span>
                     <span style={{ textAlign: "right" }}></span>
                   </div>
                   {members.map((p, i) => {
+                    const gi = people.indexOf(p);
+                    return (
+                      <div key={p.name} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 1fr 120px" }}>
+                        <span style={{
+                          fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+                          fontWeight: typo.bodyLg.weight, color: c.text,
+                        }}>{p.name}</span>
+                        <span style={{
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size,
+                          color: c.textMid,
+                        }}>{p.role}</span>
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: space[1] }}>
+                          <button onClick={() => startEdit(gi, p)} style={{
+                            background: "transparent", border: `1px solid transparent`, cursor: "pointer",
+                            fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
+                            padding: "4px 10px", borderRadius: 4,
+                            transition: "all 0.15s ease",
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.color = c.accent; e.currentTarget.style.borderColor = c.accent + "30"; e.currentTarget.style.background = c.accent + "08"; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                          >Edit</button>
+                          <button onClick={() => requestDelete("person", gi, p.name)} style={{
+                            background: "transparent", border: `1px solid transparent`, cursor: "pointer",
+                            fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
+                            padding: "4px 10px", borderRadius: 4,
+                            transition: "all 0.15s ease",
+                          }}
+                            onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
+                            onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                          >Delete</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Unassigned people (squad missing or not in squads list) */}
+          {(() => {
+            const unassigned = people.filter(p => !p.squad || !squads.includes(p.squad));
+            if (!unassigned.length) return null;
+            return (
+              <div>
+                <div style={{
+                  display: "flex", alignItems: "baseline", gap: space[2],
+                  marginBottom: space[2],
+                }}>
+                  <span style={{
+                    fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+                    fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+                    color: c.textDim,
+                  }}>Unassigned</span>
+                  <Tag color={c.textDim} bg={c.accentDim}>{unassigned.length}</Tag>
+                </div>
+                <div className="flow-data-grid">
+                  <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 1fr 80px" }}>
+                    <span>Name</span>
+                    <span>Role</span>
+                    <span style={{ textAlign: "right" }}></span>
+                  </div>
+                  {unassigned.map((p, i) => {
                     const gi = people.indexOf(p);
                     return (
                       <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 1fr 80px" }}>
@@ -326,7 +424,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                           fontWeight: typo.bodyLg.weight, color: c.text,
                         }}>{p.name}</span>
                         <span style={{
-                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size,
                           color: c.textMid,
                         }}>{p.role}</span>
                         <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -346,7 +444,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                 </div>
               </div>
             );
-          })}
+          })()}
 
           {people.length === 0 && (
             <EmptyState
@@ -401,7 +499,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                     letterSpacing: typo.monoSm.tracking, color: c.textDim,
                   }}>{log.entity}</span>
                   <span style={{
-                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size,
                     fontWeight: 600, color: c.text,
                   }}>{log.name}</span>
                   {(log.before || log.after) && (
@@ -442,8 +540,28 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
       {panel && (
         <div className="flow-slide-over-overlay" style={{ position: "fixed", inset: 0, zIndex: 190, display: "flex", justifyContent: "flex-end" }} onClick={closePanel}>
           <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)" }} />
-          <div className="flow-slide-over" onClick={e => e.stopPropagation()} style={{
-            position: "relative", width: 460, height: "100%",
+          <div
+            className="flow-slide-over"
+            role="dialog"
+            aria-modal="true"
+            ref={el => {
+              if (!el) return;
+              // Focus trap for slide-over
+              const handleTab = (e) => {
+                if (e.key !== "Tab") return;
+                const focusable = el.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+                if (!focusable.length) return;
+                const first = focusable[0], last = focusable[focusable.length - 1];
+                if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+              };
+              el._trapHandler = el._trapHandler || handleTab;
+              el.removeEventListener("keydown", el._trapHandler);
+              el.addEventListener("keydown", el._trapHandler);
+            }}
+            onClick={e => e.stopPropagation()}
+            style={{
+            position: "relative", width: "min(460px, 100vw)", height: "100%",
             background: c.surfaceOverlay, borderLeft: `1px solid ${c.border}`,
             boxShadow: c.shadowOverlay,
             display: "flex", flexDirection: "column", overflow: "hidden",
@@ -459,12 +577,12 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                   fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
                   color: c.text,
                 }}>
-                  {panel.type === "squad" ? "Add Squad" : panel.type === "role" ? "Add Role" : "Add Person"}
+                  {panel.type === "squad" ? "Add Squad" : panel.type === "role" ? "Add Role" : panel.type === "editPerson" ? "Edit Person" : "Add Person"}
                 </span>
                 <Btn variant="ghost" size="sm" onClick={closePanel} style={{
                   width: 28, height: 28, padding: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: typo.bodySm.size, color: c.textDim,
+                  fontSize: typo.bodyMd.size, color: c.textDim,
                 }}>✕</Btn>
               </div>
             </div>
@@ -501,7 +619,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                 </div>
               )}
 
-              {/* Person form */}
+              {/* Person form (add) */}
               {panel.type === "person" && (
                 <>
                   <div>
@@ -527,6 +645,35 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                 </>
               )}
 
+              {/* Person form (edit) */}
+              {panel.type === "editPerson" && (
+                <>
+                  <div>
+                    <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>NAME</TelemetryLabel>
+                    <Inp value={editName} onChange={e => setEditName(e.target.value)}
+                      placeholder="Full name" autoFocus style={{ width: "100%" }}
+                    />
+                    {editName.trim() && editName.trim() !== editPerson?.name && people.some(p => p.name === editName.trim()) && (
+                      <div style={{ fontSize: typo.bodyMd.size, color: c.red, marginTop: space[1] }}>Name already taken</div>
+                    )}
+                  </div>
+                  <div>
+                    <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>ROLE</TelemetryLabel>
+                    <Sel value={editRole} onChange={e => setEditRole(e.target.value)} style={{ width: "100%" }}>
+                      <option value="">Select...</option>
+                      {roles.map((r, i) => <option key={i} value={r}>{r}</option>)}
+                    </Sel>
+                  </div>
+                  <div>
+                    <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>SQUAD</TelemetryLabel>
+                    <Sel value={editSquad} onChange={e => setEditSquad(e.target.value)} style={{ width: "100%" }}>
+                      <option value="">Select...</option>
+                      {squads.map((s, i) => <option key={i} value={s}>{s}</option>)}
+                    </Sel>
+                  </div>
+                </>
+              )}
+
             </div>
 
             {/* Panel footer */}
@@ -539,16 +686,20 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
               <div style={{ display: "flex", gap: space[2] }}>
                 {panel.type === "squad" && (
-                  <Btn variant="primary" onClick={() => { addSquad(); closePanel(); }}
-                    disabled={!newSquad.trim()}>Add Squad</Btn>
+                  <Btn variant="primary" onClick={() => { if (addSquad()) closePanel(); }}
+                    disabled={!newSquad.trim() || squads.includes(newSquad.trim())}>Add Squad</Btn>
                 )}
                 {panel.type === "role" && (
-                  <Btn variant="primary" onClick={() => { addRole(); closePanel(); }}
-                    disabled={!newRole.trim()}>Add Role</Btn>
+                  <Btn variant="primary" onClick={() => { if (addRole()) closePanel(); }}
+                    disabled={!newRole.trim() || roles.includes(newRole.trim())}>Add Role</Btn>
                 )}
                 {panel.type === "person" && (
-                  <Btn variant="primary" onClick={() => { addPerson(); closePanel(); }}
-                    disabled={!(pName.trim() && pRole && pSquad)}>Add Person</Btn>
+                  <Btn variant="primary" onClick={() => { if (addPerson()) closePanel(); }}
+                    disabled={!(pName.trim() && pRole && pSquad) || people.some(p => p.name === pName.trim())}>Add Person</Btn>
+                )}
+                {panel.type === "editPerson" && (
+                  <Btn variant="primary" onClick={() => { if (saveEdit()) closePanel(); }}
+                    disabled={!(editName.trim() && editRole && editSquad) || (editName.trim() !== editPerson?.name && people.some(p => p.name === editName.trim()))}>Save Changes</Btn>
                 )}
               </div>
             </div>
@@ -569,17 +720,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             : "Mark project as completed?";
         const confirmLabel = isDelete ? "Delete" : "Yes, mark done";
         return (
-          <div style={{
-            position: "fixed", inset: 0, display: "flex", alignItems: "center",
-            justifyContent: "center", zIndex: 200, background: "rgba(0,0,0,0.5)",
-          }} onClick={() => setConfirmAction(null)}>
-            <div onClick={e => e.stopPropagation()} style={{
-              background: c.surfaceOverlay, borderRadius: layout.radiusLg + 4, // 16px
-              padding: `${space[6]}px ${space[7] - 4}px`, // 24px 28px
-              width: 420,
-              border: `1px solid ${confirmAction.blocked ? c.red + "60" : c.border}`,
-              boxShadow: c.shadowOverlay,
-            }}>
+          <Modal open onClose={() => setConfirmAction(null)} accent={confirmAction.blocked ? c.red : undefined} width={420}>
               <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: space[4] }}>
                 <div style={{
                   width: 36, height: 36, borderRadius: layout.radiusMd + 2,
@@ -618,7 +759,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                       <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                         <span style={{ color: confirmAction.blocked ? c.red : c.orange, fontSize: 12 }}>•</span>
                         <span style={{
-                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size,
                           color: confirmAction.blocked ? c.red : c.orange,
                         }}>{d.text}</span>
                       </div>
@@ -666,8 +807,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                   <Btn variant="danger" onClick={executeConfirmAction}>{confirmLabel}</Btn>
                 )}
               </div>
-            </div>
-          </div>
+          </Modal>
         );
       })()}
     </div>

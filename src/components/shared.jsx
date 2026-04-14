@@ -1,6 +1,135 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import { c, typo, layout, space, motion, btnVariants, entityColors } from "../styles/theme";
+import useDevLabel from "../hooks/useDevLabel";
+
+// ══════════════════════════════════════════════════════════════
+// Modal — accessible centered dialog with focus trap
+// Props:
+//   open: boolean — controls visibility
+//   onClose: () => void — called on Escape / backdrop click
+//   title?: string — dialog title (sets aria-labelledby)
+//   accent?: string — optional colored border (e.g. c.red, c.orange)
+//   width?: number — max-width in px (default 460)
+//   blur?: number — backdrop blur in px (default 4)
+//   children: ReactNode — dialog body content
+// ══════════════════════════════════════════════════════════════
+export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, children, style: s }) => {
+  const dialogRef = React.useRef(null);
+  const previousFocusRef = React.useRef(null);
+  const titleId = React.useId ? React.useId() : React.useMemo(() => `modal-title-${Math.random().toString(36).slice(2, 8)}`, []);
+
+  // Capture focus on open, restore on close
+  React.useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current = document.activeElement;
+    // Focus first focusable element or the dialog itself
+    const timer = setTimeout(() => {
+      if (!dialogRef.current) return;
+      const focusable = dialogRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const autoFocused = dialogRef.current.querySelector('[autofocus], [data-autofocus]');
+      if (autoFocused) autoFocused.focus();
+      else if (focusable.length) focusable[0].focus();
+      else dialogRef.current.focus();
+    }, 30);
+    return () => clearTimeout(timer);
+  }, [open]);
+
+  // Restore focus on close
+  React.useEffect(() => {
+    if (open) return;
+    if (previousFocusRef.current && typeof previousFocusRef.current.focus === 'function') {
+      previousFocusRef.current.focus();
+      previousFocusRef.current = null;
+    }
+  }, [open]);
+
+  // Escape key
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, onClose]);
+
+  // Focus trap
+  React.useEffect(() => {
+    if (!open || !dialogRef.current) return;
+    const trap = (e) => {
+      if (e.key !== "Tab") return;
+      const focusable = dialogRef.current.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener("keydown", trap);
+    return () => document.removeEventListener("keydown", trap);
+  }, [open]);
+
+  if (!open) return null;
+
+  return ReactDOM.createPortal(
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 999,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        aria-hidden="true"
+        style={{
+          position: "absolute", inset: 0,
+          background: "rgba(0,0,0,0.55)",
+          backdropFilter: blur ? `blur(${blur}px)` : undefined,
+          WebkitBackdropFilter: blur ? `blur(${blur}px)` : undefined,
+        }}
+      />
+      {/* Dialog */}
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        tabIndex={-1}
+        style={{
+          position: "relative", zIndex: 1, outline: "none",
+          background: c.surfaceOverlay,
+          border: `1px solid ${accent ? accent + "40" : c.border}`,
+          borderRadius: layout.radiusLg + 2,
+          padding: `${space[6]}px ${space[7] - 4}px`,
+          width, maxWidth: "90vw",
+          boxShadow: c.shadowOverlay,
+          animation: `fadeIn 0.2s ${motion.interaction.easing} both`,
+          ...s,
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {title && (
+          <div
+            id={titleId}
+            style={{
+              fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
+              fontWeight: typo.displayMd.weight, color: c.text, marginBottom: space[2],
+            }}
+          >{title}</div>
+        )}
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+};
 
 // ══════════════════════════════════════════════════════════════
 // Badge — semantic color pill (uppercase, rounded)
@@ -42,9 +171,10 @@ const SURFACE_BG = {
 };
 
 export const Surface = ({ children, style: s, accent, className = "", compact = false, variant = "panel", id }) => {
+  const devRef = useDevLabel('Container panel with variant backgrounds and optional accent border');
   const bgFn = SURFACE_BG[variant] || SURFACE_BG.panel;
   return (
-    <div id={id} className={`flow-card ${className}`} style={{
+    <div ref={devRef} id={id} className={`flow-card ${className}`} style={{
       background: bgFn(),
       border: `1px solid ${c.border}`,
       borderLeft: accent ? `3px solid ${accent}` : `1px solid ${c.border}`,
@@ -95,10 +225,11 @@ export const Label = ({ children, style: s }) => (
 // size: "default" | "sm"
 // ══════════════════════════════════════════════════════════════
 export const Btn = ({ children, variant = "secondary", size = "default", style: s, ...rest }) => {
+  const devRef = useDevLabel('System button with primary, secondary, ghost, danger, command variants');
   const v = (btnVariants() || {})[variant] || btnVariants().secondary;
   const isSm = size === "sm";
   return (
-    <button {...rest} className="flow-btn" style={{
+    <button ref={devRef} {...rest} className="flow-btn" style={{
       padding: isSm ? `${space[1]}px ${space[3]}px` : `${space[2]}px ${space[5]}px`,
       borderRadius: layout.radiusSm,
       border: v.border,
@@ -156,9 +287,10 @@ export const TextArea = ({ style: s, ...rest }) => (
 // mono: true → uses monoMd tokens (for type codes); false → bodySm (for labels)
 // ══════════════════════════════════════════════════════════════
 export const ChoiceGroup = ({ options, value, onChange, mono = false }) => {
+  const devRef = useDevLabel('Single-select toggle button group for stage and type pickers');
   const font = mono ? typo.monoMd : typo.bodySm;
   return (
-    <div style={{ display: "flex", gap: space[1], flexWrap: "wrap" }}>
+    <div ref={devRef} style={{ display: "flex", gap: space[1], flexWrap: "wrap" }}>
       {options.map(opt => {
         const active = value === opt.value;
         const clr = opt.color || c.accent;
@@ -199,6 +331,7 @@ export const Sel = ({ children, style: s, ...rest }) => (
 // SearchSelect — filterable dropdown with keyboard nav
 // ══════════════════════════════════════════════════════════════
 export const SearchSelect = ({ value, onChange, options, placeholder = "Search..." }) => {
+  const devRef = useDevLabel('Filterable dropdown with keyboard navigation and portal menu');
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
   const [focusIdx, setFocusIdx] = React.useState(0);
@@ -254,7 +387,7 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
   }, [open]);
 
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
+    <div ref={(el) => { containerRef.current = el; if (devRef) devRef.current = el; }} style={{ position: "relative" }}>
       <button onClick={() => setOpen(!open)} className="flow-input" style={{
         width: "100%", height: 40, padding: `0 ${space[3]}px`,
         borderRadius: layout.radiusSm,
@@ -265,13 +398,13 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
         transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}`,
       }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || placeholder}</span>
-        <span style={{ color: c.textDim, fontSize: 10, marginLeft: space[2], flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+        <span style={{ color: c.textDim, fontSize: typo.monoSm.size, marginLeft: space[2], flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && ReactDOM.createPortal(
         <div ref={dropdownRef} style={{
           position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width,
           background: c.surfaceOverlay, border: `1px solid ${c.border}`,
-          borderRadius: layout.radiusSm, boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+          borderRadius: layout.radiusSm, boxShadow: c.shadowOverlay,
           zIndex: 10000, maxHeight: 240, display: "flex", flexDirection: "column",
         }}>
           <div style={{ padding: `${space[2]}px ${space[2]}px 0` }}>
@@ -313,28 +446,31 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
 // ══════════════════════════════════════════════════════════════
 // EmptyState — with explicit next-action
 // ══════════════════════════════════════════════════════════════
-export const EmptyState = ({ icon = "📭", title, message, action, onAction }) => (
-  <div style={{
-    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-    padding: `${space[8]}px ${space[5]}px`,
-    borderRadius: layout.radius, border: `1px dashed ${c.border}`,
-    background: c.surfaceAlt, textAlign: "center",
-  }}>
-    <span style={{ fontSize: 32, marginBottom: space[3], opacity: 0.7 }}>{icon}</span>
-    <div style={{
-      fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
-      fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[1],
-    }}>{title}</div>
-    <div style={{
-      fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-      color: c.textMid, maxWidth: 320, lineHeight: typo.bodyMd.lineHeight,
-      marginBottom: action ? space[4] : 0,
-    }}>{message}</div>
-    {action && onAction && (
-      <Btn variant="command" size="sm" onClick={onAction}>{action}</Btn>
-    )}
-  </div>
-);
+export const EmptyState = ({ icon = "📭", title, message, action, onAction }) => {
+  const devRef = useDevLabel('Empty state placeholder with icon, message, and action button');
+  return (
+    <div ref={devRef} style={{
+      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+      padding: `${space[8]}px ${space[5]}px`,
+      borderRadius: layout.radius, border: `1px dashed ${c.border}`,
+      background: c.surfaceAlt, textAlign: "center",
+    }}>
+      <span style={{ fontSize: 32, marginBottom: space[3], opacity: 0.7 }}>{icon}</span>
+      <div style={{
+        fontFamily: typo.displaySm.font, fontSize: 20,
+        fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2],
+      }}>{title}</div>
+      <div style={{
+        fontFamily: typo.bodyMd.font, fontSize: 16,
+        color: c.textMid, maxWidth: 320, lineHeight: 1.5,
+        marginBottom: action ? space[4] : 0,
+      }}>{message}</div>
+      {action && onAction && (
+        <Btn variant="command" size="sm" onClick={onAction}>{action}</Btn>
+      )}
+    </div>
+  );
+};
 
 // ══════════════════════════════════════════════════════════════
 // KbdHint — inline keyboard shortcut hint
@@ -390,7 +526,7 @@ export const MetricCompact = ({ value, label, color, prevValue, hero }) => (
       <span style={{
         fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
         fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
-        color, lineHeight: 1,
+        color, lineHeight: typo.displayMd.lineHeight,
       }}>{value}</span>
       {prevValue !== undefined && <DeltaIndicator value={value - prevValue} />}
     </div>
@@ -460,7 +596,7 @@ export const StatCell = ({ value, label, color, highlight, highlightBg, style: s
     <div style={{
       fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size,
       fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking,
-      color, lineHeight: 1,
+      color, lineHeight: typo.displayLg.lineHeight,
     }}>{value}</div>
     <div style={{
       fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
@@ -497,59 +633,122 @@ export const SectionDivider = ({ label, count, color, style: s }) => (
 );
 
 // ══════════════════════════════════════════════════════════════
+// KPIBar — standardized container for KPI summary strips
+// Use for: all KPI/stat bars across views (Pulse, Summary, Projects, People)
+// Props:
+//   children: ReactNode — SummaryTile(s) or KPIBar.Section groups
+//   style?: object — override container styles
+// ══════════════════════════════════════════════════════════════
+export const KPIBar = ({ children, style: s, className }) => {
+  const devRef = useDevLabel('Standardized KPI summary bar container');
+  // Detect if children include KPIBar.Section — if so, use sectioned layout
+  const childArray = React.Children.toArray(children);
+  const hasSections = childArray.some(ch => ch.type === KPIBarSection);
+
+  return (
+    <div className={`flow-mission-grid${className ? ` ${className}` : ''}`} style={{ padding: `${space[4]}px ${space[5]}px`, ...s }}>
+      <div
+        ref={devRef}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          ...(hasSections
+            ? { gap: 0 }
+            : { gap: space[2], justifyContent: "center", flexWrap: "wrap" }),
+          position: "relative",
+          zIndex: 1,
+        }}
+      >
+        {hasSections
+          ? childArray.map((child, i) => {
+              if (child.type !== KPIBarSection) return child;
+              return (
+                <React.Fragment key={child.key || i}>
+                  {i > 0 && childArray[i - 1]?.type === KPIBarSection && (
+                    <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
+                  )}
+                  {child}
+                </React.Fragment>
+              );
+            })
+          : children}
+      </div>
+    </div>
+  );
+};
+
+// KPIBar.Section — flex group within a sectioned KPI bar
+const KPIBarSection = ({ children, flex = 1 }) => (
+  <div style={{ flex, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
+    {children}
+  </div>
+);
+KPIBar.Section = KPIBarSection;
+
+// ══════════════════════════════════════════════════════════════
 // SummaryTile — compact inline tile for KPI/status summary strips
 // Use for: phase counts, status counts, clickable filter tiles
 // Shared across Pulse (phase/ship/no-action) and Commit (locked/ready/partial/empty)
 // ══════════════════════════════════════════════════════════════
-export const SummaryTile = ({ value, label, color, active, onClick, icon, prevValue, hero }) => (
-  <div
-    onClick={onClick}
-    className="flow-glass-tile"
-    style={{
-      display: "flex", flexDirection: "column", alignItems: "center", gap: space[1],
-      padding: `${space[3] - 2}px ${space[3]}px`, minWidth: 56,
-      borderRadius: layout.radiusMd, cursor: onClick ? "pointer" : "default",
-      background: active ? `${color}12` : "transparent",
-      border: `1px solid ${active ? color + "40" : "transparent"}`,
-      transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-    }}
-  >
-    <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+export const SummaryTile = ({ value, label, color, active, onClick, icon, prevValue, hero, suffix }) => {
+  const devRef = useDevLabel('Clickable KPI tile for phase counts and status filters');
+  return (
+    <div
+      ref={devRef}
+      onClick={onClick}
+      className="flow-glass-tile"
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: hero ? space[2] : space[1],
+        padding: hero ? `${space[6]}px` : `${space[4]}px ${space[5]}px`, minWidth: 56,
+        borderRadius: layout.radiusMd, cursor: onClick ? "pointer" : "default",
+        background: active ? `${color}12` : "transparent",
+        border: `1px solid ${active ? color + "40" : "transparent"}`,
+        transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+        <span style={{
+          fontFamily: hero ? typo.displayHero.font : typo.displayLg.font,
+          fontSize: hero ? typo.displayHero.size : typo.displayLg.size,
+          fontWeight: hero ? typo.displayHero.weight : typo.displayLg.weight,
+          letterSpacing: hero ? typo.displayHero.tracking : typo.displayLg.tracking,
+          color: active ? color : (Number(value) > 0 ? c.text : c.textDim),
+          lineHeight: 1.1,
+        }}>{value}{suffix || ""}</span>
+        {prevValue !== undefined && <DeltaIndicator value={value - prevValue} />}
+      </div>
       <span style={{
-        fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
-        fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
-        color: active ? color : (value > 0 ? c.text : c.textDim),
-        lineHeight: 1,
-      }}>{value}</span>
-      {prevValue !== undefined && <DeltaIndicator value={value - prevValue} />}
+        fontFamily: hero ? typo.bodyMd.font : typo.bodySm.font,
+        fontSize: hero ? typo.bodyMd.size : typo.bodySm.size,
+        fontWeight: hero ? 700 : 500, letterSpacing: "0",
+        color: hero ? c.text : (active ? color : c.textMid),
+        whiteSpace: "nowrap",
+      }}>{icon ? `${icon} ` : ""}{label}</span>
     </div>
-    <span style={{
-      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-      fontWeight: hero ? 700 : 500, letterSpacing: "0",
-      color: hero ? c.text : (active ? color : c.textMid),
-      whiteSpace: "nowrap",
-    }}>{icon ? `${icon} ` : ""}{label}</span>
-  </div>
-);
+  );
+};
 
 // ══════════════════════════════════════════════════════════════
 // Th — shared sortable table header cell
 // Use for: all sortable table headers across Registry, Analytics, Admin tables
 // Props: col (sort key), sortKey, sortDir, onSort, children, style
 // ══════════════════════════════════════════════════════════════
-export const Th = ({ col, sortKey, sortDir, onSort, children, style: s }) => (
-  <th onClick={() => onSort && onSort(col)} style={{
-    padding: `${space[2]}px ${space[2] - 2}px`, textAlign: "left",
-    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-    fontWeight: 600, letterSpacing: "0",
-    cursor: onSort ? "pointer" : "default", userSelect: "none",
-    borderBottom: `1px solid ${c.border}`,
-    background: c.bg, color: sortKey === col ? c.accent : c.textMid,
-    transition: `color ${motion.interaction.duration}`,
-    position: "sticky", top: 0, zIndex: 2,
-    whiteSpace: "nowrap", ...s,
-  }}>{children}{sortKey === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}</th>
-);
+export const Th = ({ col, sortKey, sortDir, onSort, children, style: s }) => {
+  const devRef = useDevLabel('Sortable table header cell shared across registry tables');
+  return (
+    <th ref={devRef} onClick={() => onSort && onSort(col)} style={{
+      padding: `${space[2]}px ${space[3]}px`, textAlign: "left",
+      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+      fontWeight: 600, letterSpacing: "0",
+      cursor: onSort ? "pointer" : "default", userSelect: "none",
+      borderBottom: `1px solid ${c.border}`,
+      background: c.bg, color: sortKey === col ? c.accent : c.textMid,
+      transition: `color ${motion.interaction.duration}`,
+      position: "sticky", top: 0, zIndex: 2,
+      whiteSpace: "nowrap", ...s,
+    }}>{children}{sortKey === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}</th>
+  );
+};
 
 // ══════════════════════════════════════════════════════════════
 // EntityLink — clickable cross-reference for project or person entities

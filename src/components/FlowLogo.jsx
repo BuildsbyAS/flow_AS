@@ -11,6 +11,7 @@
  */
 
 import React from "react";
+import useDevLabel from "../hooks/useDevLabel";
 
 const CYAN = "#00F0FF";
 const PINK = "#FF2D78";
@@ -78,9 +79,10 @@ const KEYFRAMES = `
 `;
 
 export default function FlowLogo({ size = 64, animated = true }) {
+  const devRef = useDevLabel("FlowLogo", "Animated gravity well logo with orbiting particles and golden sphere");
   if (!animated) {
     return (
-      <svg viewBox="0 0 200 200" width={size} height={size}>
+      <svg ref={devRef} viewBox="0 0 200 200" width={size} height={size}>
         <circle cx="100" cy="100" r="32" fill="none" stroke={GOLD} strokeWidth="1.5" opacity="0.35" />
         <circle cx="100" cy="100" r="24" fill={GOLD_BRIGHT} style={{ filter: `drop-shadow(0 0 10px ${GOLD})` }} />
         <circle cx="93" cy="93" r="8" fill="white" opacity="0.45" />
@@ -89,7 +91,7 @@ export default function FlowLogo({ size = 64, animated = true }) {
   }
 
   return (
-    <svg viewBox="0 0 200 200" width={size} height={size}>
+    <svg ref={devRef} viewBox="0 0 200 200" width={size} height={size}>
       <defs>
         <style>{KEYFRAMES}</style>
       </defs>

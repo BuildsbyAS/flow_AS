@@ -1,96 +1,17 @@
 // Flow — Pulse View (Phase 2: full design-system compliance)
 // Leadership command center — highest intensity, futuristic, tactical
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, typeConfig, phaseColors, density, entityColors } from "../styles/theme";
-import { Badge, Tag, Card, Surface, Label, Btn, EmptyState, DeltaIndicator, VDivider, TelemetryLabel, MetricCompact, SummaryTile, Th as SharedTh, EntityLink } from "../components/shared";
+import { c, typo, space, layout, motion, phaseNames, shipPhases, typeConfig, phaseColors, entityColors } from "../styles/theme";
+import { Badge, Tag, Surface, Btn, EmptyState, VDivider, TelemetryLabel, MetricCompact, SummaryTile, KPIBar, Th as SharedTh, EntityLink } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
-import { weekConfig as fallbackWeekConfig } from "../data/seed";
-
-// ─── ANIMATED KPI COUNTER ─────────────────────────────────────
-const KpiCounter = ({ value, label, color, delay = 0 }) => {
-  const [display_val, setDisplayVal] = useState(0);
-  useEffect(() => {
-    let frame;
-    const start = performance.now();
-    const dur = parseFloat(motion.critical.duration) * 1000 * 2;
-    const animate = (now) => {
-      const t = Math.min((now - start) / dur, 1);
-      const ease = 1 - Math.pow(1 - t, 3);
-      setDisplayVal(Math.round(ease * value));
-      if (t < 1) frame = requestAnimationFrame(animate);
-    };
-    const timeout = setTimeout(() => { frame = requestAnimationFrame(animate); }, delay);
-    return () => { clearTimeout(timeout); cancelAnimationFrame(frame); };
-  }, [value, delay]);
-
-  return (
-    <div className="flow-kpi-num" style={{
-      display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
-      animationDelay: `${delay}ms`,
-    }}>
-      <span style={{
-        fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size,
-        fontWeight: typo.displayXl.weight, letterSpacing: typo.displayXl.tracking,
-        color, lineHeight: typo.displayXl.lineHeight,
-      }}>{display_val}</span>
-      <span style={{
-        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-        fontWeight: 500, letterSpacing: "0",
-        color: c.textMid,
-      }}>{label}</span>
-    </div>
-  );
-};
-
-// ─── RISK LEVEL BAR ───────────────────────────────────────────
-const RiskLevelBar = ({ level, pct }) => {
-  const cfg = {
-    low:    { color: c.green, label: "LOW RISK" },
-    medium: { color: c.orange, label: "MEDIUM RISK" },
-    high:   { color: c.red, label: "HIGH RISK" },
-  }[level] || { color: c.green, label: "LOW" };
-
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: space[2], flex: 1 }}>
-      <TelemetryLabel style={{ flexShrink: 0 }}>RISK</TelemetryLabel>
-      <div style={{
-        flex: 1, height: 6, borderRadius: layout.radiusTag,
-        background: c.surfaceAlt, overflow: "hidden",
-      }}>
-        <div style={{
-          width: `${Math.min(100, pct)}%`, height: "100%",
-          borderRadius: layout.radiusTag,
-          background: `linear-gradient(90deg, ${cfg.color}80, ${cfg.color})`,
-          transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
-        }} />
-      </div>
-      <span style={{
-        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-        fontWeight: 800, letterSpacing: typo.monoMd.tracking, flexShrink: 0,
-        color: cfg.color,
-      }}>{pct}%</span>
-      <span style={{
-        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-        fontWeight: 700, letterSpacing: typo.monoSm.tracking,
-        color: cfg.color, flexShrink: 0,
-      }}>{cfg.label}</span>
-    </div>
-  );
-};
-
-// ─── DELTA TOKEN (scope churn) ────────────────────────────────
-const DeltaToken = ({ gained, lost }) => {
-  const net = gained - lost;
-  if (net === 0 && gained === 0) return <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>—</span>;
-  return <DeltaIndicator value={net} style={{ fontSize: typo.bodyXs.size }} />;
-};
+import useDevLabel from "../hooks/useDevLabel";
 
 // ─── SIDE PANEL (project telemetry) ────────────────────────────
-const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
+const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, weekLabel }) => {
+  const devRef = useDevLabel('SidePanel', 'Slide-out project detail panel with metrics, members, and scope changes');
   if (!proj) return null;
-  const d = deltaMap[proj.id];
   const ec = entityColors();
-  const healthColor = proj.health >= 70 ? c.green : proj.health >= 40 ? c.orange : c.red;
+  const hColor = healthColor(proj.health);
 
   const formatDate = (d) => {
     if (!d) return "—";
@@ -105,23 +26,13 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
     display: "block",
   };
 
-  const metaLabel = {
-    fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-    color: c.textDim, marginBottom: 2, display: "block",
-  };
-
-  const metaValue = {
-    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-    fontWeight: 600, color: c.text,
-  };
-
   return (
-    <div className="flow-side-panel" style={{
+    <div ref={devRef} role="dialog" aria-modal="true" aria-label="Project details" className={`flow-side-panel${exiting ? " flow-side-panel-exit" : ""}`} style={{
       padding: 0, background: c.surfaceOverlay,
     }}>
       {/* ── Header ── */}
       <div style={{
-        padding: `${space[4]}px ${space[5]}px ${space[3]}px`,
+        padding: `${space[6]}px ${space[6]}px ${space[5]}px`,
         borderBottom: `1px solid ${c.border}`,
       }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -135,10 +46,10 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
             <div style={{
               fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
               fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
-              color: c.text, marginTop: 3,
+              color: c.text, marginTop: space[1],
             }}>{proj.name}</div>
           </div>
-          <Btn variant="ghost" size="sm" onClick={onClose} style={{ padding: `3px ${space[2]}px`, flexShrink: 0 }}>✕</Btn>
+          <Btn variant="ghost" size="sm" onClick={onClose} aria-label="Close panel" style={{ padding: `${space[1]}px ${space[2]}px`, flexShrink: 0 }}>✕</Btn>
         </div>
 
         {/* Phase + Squad + Owner row */}
@@ -158,10 +69,11 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
       </div>
 
       {/* ── Content sections ── */}
-      <div style={{ padding: `${space[4]}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[5] }}>
+      <div style={{ padding: `${space[6]}px`, display: "flex", flexDirection: "column", gap: space[5] }}>
 
         {/* ── Timeline ── */}
         {(() => {
+          const hasTimeline = proj.startDate && proj.endDate;
           const pct = proj.planned > 0 ? Math.min(100, Math.round((proj.age / proj.planned) * 100)) : 0;
           const overdue = proj.remaining != null && proj.remaining < 0;
           const ageColor = proj.age > 60 ? c.red : proj.age > 30 ? c.orange : c.cyan;
@@ -170,6 +82,9 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
           return (
             <div>
               <span style={sectionTitle}>Timeline</span>
+              {!hasTimeline ? (
+                <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim, padding: `${space[2]}px 0` }}>{proj.startDate ? "No end date set" : "No timeline set"}</div>
+              ) : (<>
               {/* Progress bar */}
               <div style={{
                 position: "relative", height: 6, borderRadius: 3,
@@ -179,7 +94,7 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
                   position: "absolute", left: 0, top: 0, height: "100%",
                   width: `${Math.min(pct, 100)}%`, borderRadius: 3,
                   background: barColor,
-                  transition: "width 0.4s ease",
+                  transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
                 }} />
               </div>
               {/* Date range row */}
@@ -202,25 +117,26 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
               <div style={{ display: "flex", gap: space[2] }}>
                 <div style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: `${space[1] + 1}px ${space[3]}px`,
+                  padding: `${space[2]}px ${space[3]}px`,
                   background: `${ageColor}10`, borderRadius: layout.radiusMd,
                   border: `1px solid ${ageColor}20`,
                 }}>
-                  <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textDim }}>Age</span>
+                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Age</span>
                   <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: ageColor }}>{proj.age}d</span>
                 </div>
                 <div style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: `${space[1] + 1}px ${space[3]}px`,
+                  padding: `${space[2]}px ${space[3]}px`,
                   background: `${remColor}10`, borderRadius: layout.radiusMd,
                   border: `1px solid ${remColor}20`,
                 }}>
-                  <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textDim }}>Remaining</span>
+                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Remaining</span>
                   <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: remColor }}>
                     {proj.remaining != null ? `${proj.remaining}d` : "—"}
                   </span>
                 </div>
               </div>
+              </>)}
             </div>
           );
         })()}
@@ -234,52 +150,52 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
               background: c.surfaceAlt, overflow: "hidden",
             }}>
               <div style={{
-                width: `${proj.health}%`, height: "100%",
+                width: `${Math.round(proj.health)}%`, height: "100%",
                 borderRadius: layout.radiusTag,
-                background: healthColor,
+                background: hColor,
                 transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
               }} />
             </div>
             <span style={{
               fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
-              fontWeight: 700, color: healthColor, minWidth: 28, textAlign: "right",
+              fontWeight: 700, color: hColor, minWidth: 28, textAlign: "right",
             }}>{proj.health}</span>
           </div>
         </div>
 
         {/* ── This week's commits ── */}
         <div>
-          <span style={sectionTitle}>This week's commits · {proj.items.length}</span>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={sectionTitle}>{isHistorical ? `${weekLabel || "Past week"} commitments` : "This week's commitments"} · {proj.items.length}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
             {proj.items.map((it, ii) => (
               <div key={ii} style={{
                 display: "flex", alignItems: "center", gap: space[2],
-                padding: `${space[2]}px ${space[2] + 2}px`,
+                padding: `${space[2]}px ${space[3]}px`,
                 background: c.surfaceAlt, borderRadius: layout.radiusSm,
                 border: `1px solid ${c.border}`,
               }}>
                 <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
                 <span style={{
-                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                   color: c.text, flex: 1,
                 }}>{it.title || "—"}</span>
                 <span style={{
-                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                   fontWeight: 500, color: c.cyan, whiteSpace: "nowrap",
                 }}>{it.person}</span>
               </div>
             ))}
             {proj.items.length === 0 && (
               <div style={{
-                padding: `${space[3]}px ${space[2] + 2}px`,
+                padding: `${space[3]}px ${space[3]}px`,
                 background: c.surfaceAlt, borderRadius: layout.radiusSm,
                 border: `1px solid ${c.border}`,
                 textAlign: "center",
               }}>
                 <span style={{
-                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                   color: c.textDim,
-                }}>No commit items this week</span>
+                }}>No commitment items this week</span>
               </div>
             )}
           </div>
@@ -297,12 +213,19 @@ const SidePanel = ({ proj, deltaMap, tc, pc, onNavigate, onClose }) => {
 
 
 
+// ── Health thresholds (shared across all health displays) ──
+const HEALTH_GOOD = 70;
+const HEALTH_WARN = 40;
+const healthColor = (h) => h >= HEALTH_GOOD ? c.green : h >= HEALTH_WARN ? c.orange : c.red;
+const healthLabel = (h) => h >= HEALTH_GOOD ? "Good" : h >= HEALTH_WARN ? "Fair" : "Poor";
+
 // ═══════════════════════════════════════════════════════════════
 // PULSE VIEW — main component
 // ═══════════════════════════════════════════════════════════════
-const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globalFilters = {}, isHistorical, selectedWeekKey, weekConfig: weekConfigProp, appSettings = {} }) => {
-  const weekConfig = weekConfigProp || fallbackWeekConfig;
-  const [expandedProject, setExpandedProject] = useState(null);
+const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projects, people, onNavigate, searchRef, globalFilters = {}, isHistorical, selectedWeekKey, weekConfig: weekConfigProp, appSettings = {} }) => {
+  const devRef = useDevLabel('PulseView', 'src/views/PulseView.jsx', 'Leadership command center — project status grid with KPIs');
+  const weekConfig = weekConfigProp || { _weeks: [], _currentWeekId: null, today: new Date().toISOString().split("T")[0] };
+  const todayStr = weekConfig.today || new Date().toISOString().split("T")[0];
   const initParams = useRef(new URLSearchParams(window.location.search)).current;
   const [filterPhase, setFilterPhase] = useState(initParams.get("phase") || null);
   const [sortCol, setSortCol] = useState(initParams.get("sort") || "squad");
@@ -314,38 +237,47 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
   const [showRisksOnly, setShowRisksOnly] = useState(initParams.get("risks") === "1");
   const [drillCell, setDrillCell] = useState(null);
   const [pulseMode, setPulseMode] = useState(initParams.get("mode") === "people" ? "people" : "matrix");
-  const [matrixDensity, setMatrixDensity] = useState(initParams.get("density") || "default");
-  const [hoveredProject, setHoveredProject] = useState(null);
-  const [sidePanelProj, setSidePanelProj] = useState(null);
+  const [sidePanelId, _setSidePanelId] = useState(null);
+  const [sidePanelExiting, setSidePanelExiting] = useState(false);
+  const sidePanelTimerRef = useRef(null);
+  const setSidePanelProj = useCallback((projOrId) => {
+    const id = projOrId && typeof projOrId === "object" ? projOrId.id : projOrId;
+    if (id) {
+      clearTimeout(sidePanelTimerRef.current);
+      setSidePanelExiting(false);
+      _setSidePanelId(id);
+    } else {
+      setSidePanelExiting(true);
+      sidePanelTimerRef.current = setTimeout(() => { _setSidePanelId(null); setSidePanelExiting(false); }, 180);
+    }
+  }, []);
   const [morphKey, setMorphKey] = useState(0);
   const [rowAnimKey, setRowAnimKey] = useState(0);
-  const hoverTimerRef = useRef(null);
-
-  const allItems = commitments.flatMap(cm =>
-    cm.items.filter((_, idx) => cm.deselected !== idx).map(it => ({ ...it, person: cm.person }))
-  );
-
-  const calcAge = (d) => d ? Math.max(0, Math.ceil((new Date(weekConfig.today) - new Date(d)) / 86400000)) : 0;
+  const calcAge = (d) => { if (!d) return 0; const ms = new Date(todayStr) - new Date(d); return isNaN(ms) ? 0 : Math.max(0, Math.ceil(ms / 86400000)); };
   const tc = typeConfig();
   const pc = phaseColors();
 
   const calcPlanned = (s, e) => (s && e) ? Math.max(1, Math.ceil((new Date(e) - new Date(s)) / 86400000)) : 0;
 
-  const projectData = projects.map(proj => {
+  const projectData = React.useMemo(() => {
+  const allItems = commitments.flatMap(cm =>
+    cm.items.filter((_, idx) => cm.deselected !== idx).map(it => ({ ...it, person: cm.person }))
+  );
+  return projects.map(proj => {
     const items = allItems.filter(it => it.project === proj.id);
     const typeCounts = {};
     items.forEach(it => { typeCounts[it.type] = (typeCounts[it.type] || 0) + 1; });
     const ppl = [...new Set(items.map(it => it.person))];
     const age = calcAge(proj.startDate);
     const planned = calcPlanned(proj.startDate, proj.endDate);
-    const remaining = proj.endDate ? Math.ceil((new Date(proj.endDate) - new Date(weekConfig.today)) / 86400000) : null;
+    const remaining = proj.endDate ? Math.ceil((new Date(proj.endDate) - new Date(todayStr)) / 86400000) : null;
 
     // ── Risk signals ──
     const risks = [];
     if (!proj.owner) risks.push({ key: "no_dri", label: "No owner", color: c.red, icon: "⚠" });
     if (items.length === 0 && !shipPhases.includes(proj.phase)) risks.push({ key: "no_commits", label: "No activity", color: c.red, icon: "⚠" });
     if ((typeCounts.JAM || 0) > (typeCounts.BUILD || 0) && items.length > 1) risks.push({ key: "jam_heavy", label: "JAM > BUILD", color: c.orange, icon: "⚡" });
-    if (proj.phase === "Dev" && age > 30) risks.push({ key: "stale_eng", label: "Stuck in Dev " + age + "d", color: c.orange, icon: "🐌" });
+    if (proj.phase === "Dev" && age > 30) risks.push({ key: "stale_eng", label: "In Dev " + age + "d", color: c.orange, icon: "🐌" });
     if (age > 60) risks.push({ key: "aging", label: "Aging " + age + "d", color: c.red, icon: "⏰" });
     if (remaining !== null && remaining < 0) risks.push({ key: "overdue", label: "Overdue", color: c.red, icon: "🚨" });
     const outcomeItems = items.filter(it => it.outcome);
@@ -370,8 +302,6 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
       health -= 25;
     } else {
       if (items.length > 0 && !typeCounts.BUILD && typeCounts.JAM) health -= 10;
-      const blockedItems = typeCounts.BLOCKED || 0;
-      if (blockedItems > 0) health -= Math.min(15, blockedItems * 5);
     }
 
     // 3. Ownership & accountability (max −20)
@@ -385,25 +315,28 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
     health -= Math.min(15, outcomePenalty);
 
     // 5. Scope stability (max −10)
-    const depriOnProj = commitments.filter(cm => cm.deselected >= 0 && cm.items[cm.deselected]?.project === proj.id).length;
+    const depriOnProj = commitments.filter(cm => cm.deselected != null && cm.deselected >= 0 && cm.items[cm.deselected]?.project === proj.id).length;
     if (depriOnProj > 0) health -= Math.min(10, depriOnProj * 5);
 
     health = Math.max(0, Math.min(100, health));
 
     return { ...proj, items, typeCounts, people: ppl, totalCommitments: items.length, age, planned, remaining, risks, health };
   });
+  }, [projects, commitments, todayStr]);
+
+  const sidePanelProj = sidePanelId ? projectData.find(p => p.id === sidePanelId) || null : null;
 
   // ── GA auto-hide: hide GA projects older than threshold ──
   const gaVisibilityWeeks = parseInt(appSettings.ga_visibility_weeks, 10);
   const gaThresholdMs = !isNaN(gaVisibilityWeeks) ? gaVisibilityWeeks * 7 * 24 * 60 * 60 * 1000 : null;
-  const isGaHidden = (proj) => gaThresholdMs !== null && proj.phase === "GA" && proj.gaEnteredAt && (Date.now() - new Date(proj.gaEnteredAt).getTime()) > gaThresholdMs;
+  const isGaHidden = (proj) => gaThresholdMs !== null && proj.phase === "GA" && proj.gaEnteredAt && (new Date(todayStr).getTime() - new Date(proj.gaEnteredAt).getTime()) > gaThresholdMs;
 
   // ── Apply global filters to summary data ──
   const summaryData = projectData.filter(proj => {
     if (isGaHidden(proj)) return false;
-    if (globalFilters.owner.length > 0 && !globalFilters.owner.includes(proj.owner)) return false;
-    if (globalFilters.squad.length > 0 && !globalFilters.squad.includes(proj.squad)) return false;
-    if (globalFilters.person.length > 0) {
+    if (globalFilters.owner?.length > 0 && !globalFilters.owner.includes(proj.owner)) return false;
+    if (globalFilters.squad?.length > 0 && !globalFilters.squad.includes(proj.squad)) return false;
+    if (globalFilters.person?.length > 0) {
       const hasPersonCommitment = proj.items.some(it => globalFilters.person.includes(it.person));
       if (!hasPersonCommitment) return false;
     }
@@ -412,40 +345,48 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
 
   // ── Derived KPI metrics (from globally filtered data) ──
   const shippingProjects = summaryData.filter(p => shipPhases.includes(p.phase));
-  const totalRiskProjects = summaryData.filter(p => p.risks.length > 0).length;
   const avgHealth = summaryData.length > 0 ? Math.round(summaryData.reduce((s, p) => s + p.health, 0) / summaryData.length) : 0;
   const summaryItems = summaryData.flatMap(p => p.items);
   const totalCommitments = summaryItems.length;
   const noActionCount = summaryData.filter(p => p.items.length === 0).length;
 
-  // ── Commit-level metrics ──
-  const lockedItems = commitments.filter(cm => !!cm.lockedAt).flatMap(cm => cm.items.filter((_, idx) => cm.deselected !== idx));
-  const lockedCount = lockedItems.length;
-  const lockedPct = totalCommitments > 0 ? Math.round((lockedCount / totalCommitments) * 100) : 0;
-  // Outcome breakdown (from all items across all commits)
-  const allOutcomeItems = commitments.flatMap(cm => cm.items.filter((_, idx) => cm.deselected !== idx));
+  // ── Commit-level metrics (uses summaryItems for consistent scope) ──
+  const filteredCommitments = commitments.filter(cm => {
+    if (globalFilters.person?.length > 0 && !globalFilters.person.includes(cm.person)) return false;
+    if (globalFilters.squad?.length > 0) {
+      const pObj = people.find(p => p.name === cm.person);
+      if (!globalFilters.squad.includes(pObj?.squad)) return false;
+    }
+    return true;
+  });
+  // Scope all item-level metrics to the same item pool for consistent percentages
+  const allOutcomeItems = filteredCommitments.flatMap(cm => cm.items.filter((_, idx) => cm.deselected !== idx));
   const outcomeTotal = allOutcomeItems.length;
+  const lockedItems = filteredCommitments.filter(cm => !!cm.lockedAt).flatMap(cm => cm.items.filter((_, idx) => cm.deselected !== idx));
+  const lockedCount = lockedItems.length;
+  const lockedPct = outcomeTotal > 0 ? Math.round((lockedCount / outcomeTotal) * 100) : 0;
   const completedCount = allOutcomeItems.filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
+  const partialCount = allOutcomeItems.filter(it => it.outcome === "partial").length;
   const carriedCount = allOutcomeItems.filter(it => it.outcome === "carry").length;
   const blockedCount = allOutcomeItems.filter(it => it.outcome === "blocked").length;
-  const depriCount = commitments.filter(cm => cm.deselected >= 0).length;
+  // Count deselected items (not commitments) for consistent unit with outcomeTotal
+  const depriItemCount = filteredCommitments.filter(cm => cm.deselected != null && cm.deselected >= 0).reduce((n, cm) => n + 1, 0);
   const completedPct = outcomeTotal > 0 ? Math.round((completedCount / outcomeTotal) * 100) : 0;
+  const partialPct = outcomeTotal > 0 ? Math.round((partialCount / outcomeTotal) * 100) : 0;
   const carriedPct = outcomeTotal > 0 ? Math.round((carriedCount / outcomeTotal) * 100) : 0;
   const blockedPct = outcomeTotal > 0 ? Math.round((blockedCount / outcomeTotal) * 100) : 0;
-  const depriPct = outcomeTotal > 0 ? Math.round((depriCount / outcomeTotal) * 100) : 0;
-
-  // Risk level
-  const riskPct = summaryData.length > 0 ? Math.round((totalRiskProjects / summaryData.length) * 100) : 0;
-  const riskLevel = riskPct >= 50 ? "high" : riskPct >= 20 ? "medium" : "low";
+  // depriItemCount is per-commitment (1 deselection each), divide by total items + deselected for accurate pct
+  const depriDenominator = outcomeTotal + depriItemCount;
+  const depriPct = depriDenominator > 0 ? Math.round((depriItemCount / depriDenominator) * 100) : 0;
 
   // Phase counts
   const phaseCounts = {};
   phaseNames.forEach(ph => { phaseCounts[ph] = 0; });
   summaryData.forEach(proj => { if (phaseCounts[proj.phase] !== undefined) phaseCounts[proj.phase]++; });
 
-  // ── Delta map ──
+  // ── Delta map (scoped to filtered commitments) ──
   const deltaMap = {};
-  commitments.forEach(cm => {
+  filteredCommitments.forEach(cm => {
     if (cm.deselected >= 0 && cm.deselected < cm.items.length) {
       const lostProj = cm.items[cm.deselected]?.project;
       if (lostProj) { if (!deltaMap[lostProj]) deltaMap[lostProj] = { lost: 0, gained: 0 }; deltaMap[lostProj].lost++; }
@@ -460,11 +401,13 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
   let filtered = projectData.filter(proj => {
     // Auto-hide old GA projects (unless user explicitly filters to GA phase)
     if (!filterPhase && isGaHidden(proj)) return false;
+    // Hide deprioritized projects by default (only show when explicitly filtered)
+    if (proj.status === "deprioritized" && filterStatus !== "deprioritized") return false;
     if (showRisksOnly && proj.risks.length === 0) return false;
     if (filterPhase && proj.phase !== filterPhase) return false;
-    if (globalFilters.owner.length > 0 && !globalFilters.owner.includes(proj.owner)) return false;
-    if (globalFilters.squad.length > 0 && !globalFilters.squad.includes(proj.squad)) return false;
-    if (globalFilters.person.length > 0) {
+    if (globalFilters.owner?.length > 0 && !globalFilters.owner.includes(proj.owner)) return false;
+    if (globalFilters.squad?.length > 0 && !globalFilters.squad.includes(proj.squad)) return false;
+    if (globalFilters.person?.length > 0) {
       const hasPersonCommitment = proj.items.some(it => globalFilters.person.includes(it.person));
       if (!hasPersonCommitment) return false;
     }
@@ -479,7 +422,6 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
       let va, vb;
       if (sortCol === "age") { va = a.age; vb = b.age; }
       else if (sortCol === "health") { va = a.health; vb = b.health; }
-      else if (sortCol === "blocked") { va = a.typeCounts.BLOCKED || 0; vb = b.typeCounts.BLOCKED || 0; }
       else if (sortCol === "churn") { const da = deltaMap[a.id], db = deltaMap[b.id]; va = da ? da.lost + da.gained : 0; vb = db ? db.lost + db.gained : 0; }
       else { va = a[sortCol] || ""; vb = b[sortCol] || ""; }
       if (typeof va === "number") return sortDir === "asc" ? va - vb : vb - va;
@@ -488,17 +430,38 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
   }
 
   const toggleSort = (col) => { if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortCol(col); setSortDir("asc"); } };
-  const sortIcon = (col) => sortCol === col ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+  const dp = { cellPad: `${space[2]}px ${space[3]}px`, headerPad: `${space[2]}px ${space[3]}px`, minTable: 600 };
+  // Total column count: Squad + Project + Owner + Status + Health + phase columns + Ship
+  const matrixColCount = phaseNames.length + 6;
 
-  const densityPresets = {
-    compact:   { showAge: false, showBlocked: false, showChurn: false, cellPad: `${space[1]}px ${space[1]}px`, headerPad: `${space[2] - 2}px ${space[1]}px`, minTable: 500 },
-    default:   { showAge: false, showBlocked: false, showChurn: false, cellPad: `${space[1]}px ${space[2] - 2}px`, headerPad: `${space[2]}px ${space[2] - 2}px`, minTable: 600 },
-    detailed:  { showAge: true,  showBlocked: true,  showChurn: true,  cellPad: `${space[1]}px ${space[2] - 2}px`, headerPad: `${space[2]}px ${space[2] - 2}px`, minTable: 850 },
-  };
-  const dp = densityPresets[matrixDensity] || densityPresets.default;
+  const localActiveFilters = [filterPhase, filterStatus, showRisksOnly].filter(Boolean).length;
+  const clearLocalFilters = () => { setFilterPhase(null); setFilterStatus(""); setShowRisksOnly(false); setDrillCell(null); };
 
-  const localActiveFilters = [filterPhase, filterStatus].filter(Boolean).length;
-  const clearLocalFilters = () => { setFilterPhase(null); setFilterStatus(""); setShowRisksOnly(false); };
+  // Scroll to a status group after switching to people mode — polls until element renders
+  const [scrollFeedback, setScrollFeedback] = useState(null);
+  const scrollToGroup = useCallback((groupKey) => {
+    handleModeChange("people");
+    let attempts = 0;
+    const tryScroll = () => {
+      const el = document.querySelector(`[data-status-group="${groupKey}"]`);
+      if (el) {
+        const sc = el.closest('[data-pulse-scroll]');
+        if (sc) {
+          const elTop = el.offsetTop - sc.offsetTop;
+          sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" });
+        } else {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      } else if (attempts < 10) {
+        attempts++;
+        requestAnimationFrame(tryScroll);
+      } else {
+        setScrollFeedback(`No ${groupKey.toLowerCase()} items`);
+        setTimeout(() => setScrollFeedback(null), 2000);
+      }
+    };
+    requestAnimationFrame(tryScroll);
+  }, []);
 
   // View morph: bump key on mode change
   const handleModeChange = useCallback((mode) => {
@@ -506,24 +469,10 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
     setMorphKey(k => k + 1);
     setSortCol("squad");
     setSortDir("asc");
-  }, []);
+    setSidePanelProj(null);
+    setDrillCell(null);
+  }, [setSidePanelProj]);
 
-  // Hover side panel with debounce
-  const handleRowHover = useCallback((projId) => {
-    clearTimeout(hoverTimerRef.current);
-    if (projId) {
-      hoverTimerRef.current = setTimeout(() => {
-        const proj = projectData.find(p => p.id === projId);
-        if (proj) setSidePanelProj(proj);
-      }, 400);
-    }
-    setHoveredProject(projId);
-  }, [projectData]);
-
-  const handleRowLeave = useCallback(() => {
-    clearTimeout(hoverTimerRef.current);
-    setHoveredProject(null);
-  }, []);
 
   // ── Sync local state → URL ──
   useEffect(() => {
@@ -531,25 +480,23 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
     if (filterPhase) p.set("phase", filterPhase);
     if (sortCol !== "squad") p.set("sort", sortCol);
     if (sortDir !== "asc") p.set("dir", sortDir);
-    if (filterStatus === "shipping") p.set("status", "shipping");
+    if (filterStatus) p.set("status", filterStatus);
     if (showRisksOnly) p.set("risks", "1");
     if (pulseMode !== "matrix") p.set("mode", pulseMode);
-    if (matrixDensity !== "default") p.set("density", matrixDensity);
-    if (filterStatus) p.set("status", filterStatus);
     const qs = p.toString();
     const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname;
     window.history.replaceState(null, "", url);
-  }, [filterPhase, sortCol, sortDir, showRisksOnly, pulseMode, matrixDensity, filterStatus]);
+  }, [filterPhase, sortCol, sortDir, showRisksOnly, pulseMode, filterStatus]);
 
   // ── Keyboard shortcuts ──
   useKeyboard([
     { key: "ArrowUp", fn: () => { setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } },
     { key: "ArrowDown", fn: () => { setKbActive(true); setFocusIdx(i => Math.min(filtered.length - 1, i + 1)); } },
-    { key: "Enter", fn: () => { if (filtered[focusIdx]) { const p = filtered[focusIdx]; setSidePanelProj(sidePanelProj?.id === p.id ? null : p); } } },
+    { key: "Enter", fn: () => { if (filtered[focusIdx]) { const p = filtered[focusIdx]; setSidePanelProj(sidePanelId === p.id ? null : p.id); } } },
     { key: "s", fn: () => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); } },
     { key: "c", fn: () => { clearLocalFilters(); } },
-    { key: "Escape", fn: () => { if (sidePanelProj) { setSidePanelProj(null); } else { clearLocalFilters(); } } },
-  ], [filtered.length, focusIdx, filterStatus, showRisksOnly, sidePanelProj]);
+    { key: "Escape", fn: () => { if (sidePanelId) { setSidePanelProj(null); } else { clearLocalFilters(); } } },
+  ], [filtered.length, focusIdx, filterStatus, showRisksOnly, sidePanelId]);
 
   // Re-trigger row animation only on mode change
   useEffect(() => {
@@ -566,152 +513,179 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
       style={{ padding: dp.headerPad, ...s }}>{children}</SharedTh>
   );
 
-  // ── People view data — flat rows: one row per commit item ──
-  const buildPeopleRows = () => {
-    const rows = [];
-    people.forEach(person => {
-      if (globalFilters.person.length > 0 && !globalFilters.person.includes(person.name)) return;
-      if (globalFilters.squad.length > 0 && !globalFilters.squad.includes(person.squad)) return;
-      const cm = commitments.find(cm => cm.person === person.name);
-      const isLocked = !!cm?.lockedAt;
-      const items = cm ? cm.items.filter((_, idx) => cm.deselected !== idx) : [];
-      if (items.length === 0) {
-        if (globalFilters.owner.length === 0) {
-          rows.push({ squad: person.squad, personName: person.name, role: person.role, projectId: null, projectName: null, owner: null, title: null, type: null, stage: null, status: null });
-        }
-      } else {
-        items.forEach((item, itemIdx) => {
-          const proj = projects.find(pr => pr.id === item.project);
-          if (globalFilters.owner.length > 0 && (!proj || !globalFilters.owner.includes(proj.owner))) return;
-          // Skip rows where both project and title are empty (corrupt/stale data)
-          if (!item.project && !item.title) return;
-          const stage = (!item.project && !proj) ? null : (item.stage || proj?.phase || null);
-          const status = isLocked ? "Locked" : "Open";
-          rows.push({
-            squad: person.squad, personName: person.name, role: person.role,
-            projectId: item.project || null, projectName: proj?.name || item.project || null,
-            owner: proj?.owner || "—",
-            title: item.title || "—", type: item.project ? item.type : null, stage, status: item.project ? status : null,
-            commitIdx: itemIdx,
-          });
-        });
-      }
-    });
-    // Sort
-    rows.sort((a, b) => {
-      let va, vb;
-      if (sortCol === "person") { va = a.personName; vb = b.personName; }
-      else if (sortCol === "name" || sortCol === "project") { va = a.projectName || ""; vb = b.projectName || ""; }
-      else if (sortCol === "owner") { va = a.owner || ""; vb = b.owner || ""; }
-      else if (sortCol === "type") { va = a.type || ""; vb = b.type || ""; }
-      else if (sortCol === "stage") { va = a.stage || ""; vb = b.stage || ""; }
-      else if (sortCol === "status") { va = a.status || ""; vb = b.status || ""; }
-      else { va = a.squad || ""; vb = b.squad || ""; }
-      return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
-    });
-    return rows;
-  };
+  // Loading state
+  if (loadingProp) {
+    return (
+      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "calc(100vh - 128px)", flexDirection: "column", gap: space[3] }}>
+        <div style={{ width: 32, height: 32, border: `3px solid ${c.border}`, borderTopColor: c.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Loading pulse data...</span>
+      </div>
+    );
+  }
+
+  // Error state
+  if (errorProp) {
+    return (
+      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "calc(100vh - 128px)", flexDirection: "column", gap: space[3] }}>
+        <EmptyState icon="⚠" title="Failed to load pulse data" message={typeof errorProp === "string" ? errorProp : "An unexpected error occurred."} action="Retry" onAction={() => window.location.reload()} />
+      </div>
+    );
+  }
+
+  // Empty state — no data (legitimate for new org)
+  if (projects.length === 0) {
+    return (
+      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "calc(100vh - 128px)" }}>
+        <EmptyState icon="📡" title="No pulse data yet" message="Once projects and commitments are added, the leadership command center will populate here." />
+      </div>
+    );
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 128px)", marginBottom: -60 }}>
+    <div ref={devRef} style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 128px)" }}>
+
+      {/* Scroll feedback toast */}
+      {scrollFeedback && (
+        <div style={{
+          position: "fixed", bottom: space[5], left: "50%", transform: "translateX(-50%)",
+          background: c.surfaceOverlay, border: `1px solid ${c.border}`, borderRadius: layout.radiusMd,
+          padding: `${space[2]}px ${space[4]}px`, zIndex: 100,
+          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid,
+          boxShadow: c.shadowOverlay,
+        }}>{scrollFeedback}</div>
+      )}
+
+      {/* Historical week banner */}
+      {isHistorical && (
+        <div style={{
+          background: `${c.orange}12`, border: `1px solid ${c.orange}30`, borderRadius: layout.radiusMd,
+          padding: `${space[2]}px ${space[4]}px`, marginBottom: space[2],
+          display: "flex", alignItems: "center", gap: space[2],
+          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.orange,
+        }}>
+          <span style={{ fontWeight: 700 }}>Historical view</span>
+          <span style={{ color: c.textMid }}>— viewing {selectedWeekKey || "past week"} (read-only)</span>
+        </div>
+      )}
 
       {/* ═══════════════════════════════════════════════════════════
           FROZEN TOP — summary + toggle (never scrolls)
           ═══════════════════════════════════════════════════════════ */}
-      <div style={{
+      <div className="flow-view-chrome" style={{
         flexShrink: 0,
         paddingBottom: space[3],
-        display: "flex", flexDirection: "column", gap: space[3] - 2,
+        display: "flex", flexDirection: "column", gap: space[3],
       }}>
 
       {/* UNIFIED SUMMARY — phase counts + commit metrics + outcomes */}
-      <div className="flow-mission-grid" style={{ padding: `${space[3]}px ${space[4]}px` }}>
-        <div style={{
-          display: "flex", alignItems: "center",
-          position: "relative", zIndex: 1,
-        }}>
-          {/* Section 1: Phase tiles — clickable */}
-          <div style={{ flex: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
-            {phaseNames.map(ph => (
+      {pulseMode === "matrix" && (
+        <KPIBar>
+          {/* ── Projects KPI bar: Phase tiles + Avg Health ── */}
+          <KPIBar.Section flex={6}>
+              {phaseNames.map(ph => (
+                <SummaryTile
+                  key={ph}
+                  value={phaseCounts[ph]}
+                  label={ph}
+                  color={pc[ph]}
+                  active={filterPhase === ph}
+                  onClick={() => { setFilterPhase(filterPhase === ph ? null : ph); setFilterStatus(""); }}
+                />
+              ))}
               <SummaryTile
-                key={ph}
-                value={phaseCounts[ph]}
-                label={ph}
-                color={pc[ph]}
-                active={filterPhase === ph}
-                onClick={() => { setFilterPhase(filterPhase === ph ? null : ph); setFilterStatus(""); setPulseMode("matrix"); }}
+                value={shippingProjects.length}
+                label="Ship"
+                color={c.green}
+                active={filterStatus === "shipping"}
+                onClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); }}
               />
-            ))}
-            <SummaryTile
-              value={shippingProjects.length}
-              label="Ship"
-              color={"#1FAA59"}
-              active={filterStatus === "shipping"}
-              onClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); setPulseMode("matrix"); }}
-            />
-            <SummaryTile
-              value={noActionCount}
-              label="No commits"
-              color={c.orange}
-              active={filterStatus === "no_action"}
-              onClick={() => { setFilterStatus(filterStatus === "no_action" ? "" : "no_action"); setFilterPhase(null); setPulseMode("matrix"); }}
-            />
-          </div>
+              <SummaryTile
+                value={noActionCount}
+                label="No activity"
+                color={c.orange}
+                active={filterStatus === "no_action"}
+                onClick={() => { setFilterStatus(filterStatus === "no_action" ? "" : "no_action"); setFilterPhase(null); }}
+              />
+              {(() => { const depriTotal = summaryData.filter(p => p.status === "deprioritized").length; return depriTotal > 0 ? (
+                <SummaryTile
+                  value={depriTotal}
+                  label="Depri'd"
+                  color={c.textDim}
+                  active={filterStatus === "deprioritized"}
+                  onClick={() => { setFilterStatus(filterStatus === "deprioritized" ? "" : "deprioritized"); setFilterPhase(null); }}
+                />
+              ) : null; })()}
+          </KPIBar.Section>
 
-          <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
-
-          {/* Section 2: Commit metrics — non-clickable */}
-          <div style={{ flex: 3, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
-            <MetricCompact value={totalCommitments} label="Commits" color={c.text} hero />
-            <MetricCompact value={lockedCount} label="Locked" color={lockedCount > 0 ? c.green : c.textDim} />
-            <MetricCompact value={`${lockedPct}%`} label="Lock Rate" color={lockedPct >= 80 ? c.green : lockedPct >= 50 ? c.orange : c.textDim} />
-          </div>
-
-          <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
-
-          {/* Section 3: Outcome breakdown — clickable, deep-links to commits */}
-          <div style={{ flex: 4, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
-            <SummaryTile value={`${completedPct}%`} label="Completed" color={completedPct > 0 ? c.green : c.textDim} hero
-              onClick={() => { setPulseMode("people"); setTimeout(() => { const el = document.querySelector('[data-status-group="Completed"]'); if (el) { const sc = el.closest('[style*="overflow"]'); if (sc) { const elTop = el.offsetTop - sc.offsetTop; sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" }); } else { el.scrollIntoView({ behavior: "smooth", block: "center" }); } } }, 100); }} />
-            <SummaryTile value={`${carriedPct}%`} label="Carried" color={carriedPct > 0 ? c.orange : c.textDim}
-              onClick={() => { setPulseMode("people"); setTimeout(() => { const el = document.querySelector('[data-status-group="Carry"]'); if (el) { const sc = el.closest('[style*="overflow"]'); if (sc) { const elTop = el.offsetTop - sc.offsetTop; sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" }); } else { el.scrollIntoView({ behavior: "smooth", block: "center" }); } } }, 100); }} />
-            <SummaryTile value={`${blockedPct}%`} label="Blocked" color={blockedPct > 0 ? c.red : c.textDim}
-              onClick={() => { setPulseMode("people"); setTimeout(() => { const el = document.querySelector('[data-status-group="Blocked"]'); if (el) { const sc = el.closest('[style*="overflow"]'); if (sc) { const elTop = el.offsetTop - sc.offsetTop; sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" }); } else { el.scrollIntoView({ behavior: "smooth", block: "center" }); } } }, 100); }} />
-            <SummaryTile value={`${depriPct}%`} label="Depri'd" color={depriPct > 0 ? c.red : c.textDim}
-              onClick={() => { setPulseMode("people"); setTimeout(() => { const el = document.querySelector('[data-status-group="Deprioritized"]'); if (el) { const sc = el.closest('[style*="overflow"]'); if (sc) { const elTop = el.offsetTop - sc.offsetTop; sc.scrollTo({ top: Math.max(0, elTop - 10), behavior: "smooth" }); } else { el.scrollIntoView({ behavior: "smooth", block: "center" }); } } }, 100); }} />
-          </div>
-
-          <VDivider height={32} style={{ margin: `0 ${space[3]}px` }} />
-
-          {/* Section 4: Avg Health with progress bar */}
-          <div style={{ flex: 2, display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
-            <div style={{ textAlign: "center", minWidth: 80 }}>
-              <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: 700, color: avgHealth >= 70 ? c.green : avgHealth >= 40 ? c.orange : c.red }}>{avgHealth}</div>
-              <div style={{
-                width: "100%", height: 4, borderRadius: 2, background: c.surfaceAlt, marginTop: 4, overflow: "hidden",
-              }}>
+          {/* Avg Health with progress bar */}
+          <KPIBar.Section flex={2}>
+              <div style={{ textAlign: "center", minWidth: 80 }}>
+                <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking, color: healthColor(avgHealth) }}>{avgHealth}</div>
                 <div style={{
-                  width: `${avgHealth}%`, height: "100%", borderRadius: 2,
-                  background: avgHealth >= 70 ? c.green : avgHealth >= 40 ? c.orange : c.red,
-                  transition: "width 0.5s ease",
-                }} />
+                  width: "100%", height: 4, borderRadius: 2, background: c.surfaceAlt, marginTop: space[1], overflow: "hidden",
+                }}>
+                  <div style={{
+                    width: `${avgHealth}%`, height: "100%", borderRadius: 2,
+                    background: healthColor(avgHealth),
+                    transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
+                  }} />
+                </div>
+                <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid, marginTop: space[1], letterSpacing: "0.05em" }}>Avg Health</div>
               </div>
-              <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginTop: 3, letterSpacing: "0.05em" }}>Avg Health</div>
-            </div>
-          </div>
-        </div>
-      </div>
+          </KPIBar.Section>
+        </KPIBar>
+      )}
+
+      {/* ── People KPI bar: Commitments + Outcomes ── */}
+      {pulseMode === "people" && (
+        <KPIBar>
+          <KPIBar.Section flex={3}>
+              <SummaryTile value={totalCommitments} label="Commitments" color={c.text} />
+              <SummaryTile value={lockedCount} label="Locked" color={lockedCount > 0 ? c.green : c.textDim} />
+              <SummaryTile value={`${lockedPct}%`} label="Lock Rate" color={lockedPct >= 80 ? c.green : lockedPct >= 50 ? c.orange : c.textDim} />
+          </KPIBar.Section>
+
+          <KPIBar.Section flex={4}>
+              <SummaryTile value={`${completedPct}%`} label="Completed" color={completedPct > 0 ? c.green : c.textDim}
+                onClick={() => scrollToGroup("Completed")} />
+              <SummaryTile value={`${partialPct}%`} label="Partial" color={partialPct > 0 ? c.orange : c.textDim}
+                onClick={() => scrollToGroup("Partial")} />
+              <SummaryTile value={`${carriedPct}%`} label="Carried" color={carriedPct > 0 ? c.orange : c.textDim}
+                onClick={() => scrollToGroup("Carry")} />
+              <SummaryTile value={`${blockedPct}%`} label="Blocked" color={blockedPct > 0 ? c.red : c.textDim}
+                onClick={() => scrollToGroup("Blocked")} />
+              <SummaryTile value={`${depriPct}%`} label="Depri'd" color={depriPct > 0 ? c.red : c.textDim}
+                onClick={() => scrollToGroup("Deprioritized")} />
+          </KPIBar.Section>
+
+          <KPIBar.Section flex={2}>
+              <div style={{ textAlign: "center", minWidth: 80 }}>
+                <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking, color: healthColor(avgHealth) }}>{avgHealth}</div>
+                <div style={{
+                  width: "100%", height: 4, borderRadius: 2, background: c.surfaceAlt, marginTop: space[1], overflow: "hidden",
+                }}>
+                  <div style={{
+                    width: `${avgHealth}%`, height: "100%", borderRadius: 2,
+                    background: healthColor(avgHealth),
+                    transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
+                  }} />
+                </div>
+                <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid, marginTop: space[1], letterSpacing: "0.05em" }}>Avg Health</div>
+              </div>
+          </KPIBar.Section>
+        </KPIBar>
+      )}
 
       {/* VIEW MODE TOGGLE — Projects / People */}
       <div style={{
-        display: "flex", gap: 2,
-        background: c.accentDim, borderRadius: layout.radiusMd, padding: 3,
+        display: "flex", gap: space[1],
+        background: c.accentDim, borderRadius: layout.radiusMd, padding: space[1],
       }}>
         {[
           { key: "matrix", label: "Projects" },
-          { key: "people", label: "Commits" },
+          { key: "people", label: "People" },
         ].map(v => (
-          <button key={v.key} onClick={() => handleModeChange(v.key)} style={{
+          <button key={v.key} onClick={() => handleModeChange(v.key)} className="flow-btn" style={{
             flex: 1, padding: `${space[2]}px ${space[4]}px`,
             borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
             background: pulseMode === v.key ? c.accent : "transparent",
@@ -720,6 +694,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
             color: pulseMode === v.key ? c.textCrit : c.accent,
             transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
             boxShadow: pulseMode === v.key ? `0 1px 3px ${c.shadow}` : "none",
+            outline: "none",
           }}>{v.label}</button>
         ))}
       </div>
@@ -730,7 +705,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
       {/* ═══════════════════════════════════════════════════════════
           SCROLLABLE CONTENT (only this area scrolls)
           ═══════════════════════════════════════════════════════════ */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
+      <div data-pulse-scroll style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "auto", position: "relative", zIndex: 1 }}>
       <div key={morphKey} className="flow-view-morph">
 
       {/* ═══════════════════════════════════════════════════════════
@@ -751,9 +726,6 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                   <Th col="owner" style={{ minWidth: 80, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
                   <Th col="phase" style={{ minWidth: 64, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>
                   <Th col="health" style={{ minWidth: 48, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Health</Th>
-                  {dp.showAge && <Th col="age" style={{ minWidth: 44, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Age</Th>}
-                  {dp.showBlocked && <Th col="blocked" style={{ minWidth: 32, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>BLK</Th>}
-                  {dp.showChurn && <Th col="churn" style={{ minWidth: 32, textAlign: "center", borderLeft: `1px dotted ${c.border}` }} title="Net scope change — additions minus removals">Δ</Th>}
                   {phaseNames.map(ph => (
                     <th key={ph} style={{
                       position: "sticky", top: 0, background: c.bg, zIndex: 2,
@@ -771,8 +743,8 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                     padding: dp.headerPad, textAlign: "center",
                     fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                     fontWeight: 600, letterSpacing: "0",
-                    color: "#4ADE80",
-                    borderBottom: `1px solid ${"#4ADE80"}40`,
+                    color: c.green,
+                    borderBottom: `1px solid ${c.green}40`,
                     borderLeft: `1px dotted ${c.border}`, minWidth: 76,
                     cursor: "default", whiteSpace: "nowrap",
                   }}>Ship</th>
@@ -780,38 +752,34 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
               </thead>
               <tbody key={rowAnimKey}>
                 {filtered.length === 0 && (
-                  <tr><td colSpan={phaseNames.length + 6 + (dp.showAge ? 1 : 0) + (dp.showBlocked ? 1 : 0) + (dp.showChurn ? 1 : 0)}>
+                  <tr><td colSpan={matrixColCount}>
                     <EmptyState icon="🔍" title="No projects match" message="Try adjusting your filters to see results."
                       action={localActiveFilters > 0 ? "Clear filters" : null} onAction={clearLocalFilters} />
                   </td></tr>
                 )}
                 {filtered.map((proj, fi) => {
-                  const isExp = expandedProject === proj.id;
                   const isFocused = kbActive && fi === focusIdx;
-                  const isHovered = hoveredProject === proj.id;
                   const api = phaseNames.indexOf(proj.phase);
                   const byPhase = {};
                   phaseNames.forEach(ph => { byPhase[ph] = []; });
                   proj.items.forEach(it => { const ph = it.stage || proj.phase; if (byPhase[ph]) byPhase[ph].push(it); });
-                  const hasCriticalRisk = proj.risks.length >= 2;
-
                   return (
                     <React.Fragment key={proj.id}>
                       <tr
                         className={`flow-row${isFocused ? " flow-kb-focus" : ""}`}
-                        onClick={() => { setSidePanelProj(sidePanelProj?.id === proj.id ? null : proj); }}
+                        onClick={() => { setSidePanelProj(sidePanelId === proj.id ? null : proj.id); }}
                         style={{
                           cursor: "pointer",
-                          background: sidePanelProj?.id === proj.id ? c.surfaceAlt : isFocused ? `${c.accent}08` : "transparent",
+                          background: sidePanelId === proj.id ? c.surfaceAlt : isFocused ? `${c.accent}08` : "transparent",
                           transition: `background ${motion.interaction.duration}`,
                           animation: `rowSlideIn 0.3s ${motion.critical.easing} both`,
-                          animationDelay: `${Math.min(fi * 30, 600)}ms`,
+                          animationDelay: `${Math.min(fi * 20, 400)}ms`,
                         }}
                       >
                         {/* Squad */}
                         <td style={{
                           padding: dp.cellPad,
-                          fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                           fontWeight: 600, color: c.textMid,
                           borderBottom: `1px dotted ${c.border}`,
                           position: "sticky", left: 0, background: c.bg, zIndex: 1,
@@ -822,7 +790,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                           borderBottom: `1px dotted ${c.border}`,
                           borderLeft: `1px dotted ${c.border}`,
                         }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                             <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", proj.id); }} style={{
                               fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                               fontWeight: 700, color: entityColors().project, cursor: "pointer",
@@ -832,14 +800,15 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                             <span style={{
                               fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
                               fontWeight: 600, color: c.text,
-                            }}>{proj.name}</span>
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180,
+                            }} title={proj.name}>{proj.name}</span>
                             {proj.items.length === 0 && (
                               <span style={{
                                 marginLeft: "auto", flexShrink: 0,
                                 border: `1px solid ${c.orange}20`,
                                 background: `${c.orange}10`,
-                                padding: `1px 6px`,
-                                fontSize: 9,
+                                padding: `${space[1]}px ${space[2]}px`,
+                                fontSize: typo.monoSm.size,
                                 fontFamily: typo.monoSm.font,
                                 fontWeight: 600,
                                 letterSpacing: typo.monoSm.tracking,
@@ -847,7 +816,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                                 borderRadius: layout.radiusTag,
                                 color: c.orange,
                                 whiteSpace: "nowrap",
-                              }}>No commits</span>
+                              }}>No commitments</span>
                             )}
                           </div>
                         </td>
@@ -856,9 +825,9 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                           padding: dp.cellPad,
                           borderBottom: `1px dotted ${c.border}`,
                           borderLeft: `1px dotted ${c.border}`,
-                          fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                           fontWeight: 500, color: proj.owner ? c.textMid : c.red,
-                          whiteSpace: "nowrap",
+                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120,
                         }}>
                           {proj.owner || "—"}
                         </td>
@@ -871,13 +840,13 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                           <Badge color={pc[proj.phase] || c.textMid} bg={`${pc[proj.phase] || c.textMid}15`}>{proj.phase}</Badge>
                         </td>
                         {/* Health */}
-                        <td title={`Health ${proj.health}/100\n${proj.risks.map(r => r.label).join(", ") || "No risks"}`} style={{
+                        <td title={`Health ${proj.health}/100 — ${proj.risks.map(r => r.label).join(", ") || "No risks"}`} style={{
                           padding: dp.cellPad,
                           borderBottom: `1px dotted ${c.border}`,
                           borderLeft: `1px dotted ${c.border}`,
                         }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                             <div style={{
                               width: 48, height: 8, borderRadius: layout.radiusTag + 1,
                               background: c.surfaceAlt, overflow: "hidden",
@@ -885,63 +854,22 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                               <div style={{
                                 width: `${proj.health}%`, height: "100%",
                                 borderRadius: layout.radiusTag + 1,
-                                background: proj.health >= 70 ? c.green : proj.health >= 40 ? c.orange : c.red,
+                                background: healthColor(proj.health),
                               }} />
                             </div>
                             <span style={{
                               fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                              fontWeight: 800, color: proj.health >= 70 ? c.green : proj.health >= 40 ? c.orange : c.red,
+                              fontWeight: 800, color: healthColor(proj.health),
                             }}>{proj.health}</span>
                             <span style={{
                               fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                               fontWeight: 600,
-                              color: proj.health >= 70 ? c.green : proj.health >= 40 ? c.orange : c.red,
+                              color: healthColor(proj.health),
                               opacity: 0.8,
-                            }}>{proj.health >= 70 ? "Good" : proj.health >= 40 ? "Fair" : "Poor"}</span>
+                            }}>{healthLabel(proj.health)}</span>
                           </div>
                           </div>
                         </td>
-                        {/* Age */}
-                        {dp.showAge && (
-                        <td style={{
-                          padding: dp.cellPad, textAlign: "center",
-                          borderBottom: `1px dotted ${c.border}`,
-                          borderLeft: `1px dotted ${c.border}`,
-                        }}>
-                          <span style={{
-                            fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                            fontWeight: 700,
-                            color: proj.age > 60 ? c.red : proj.age > 30 ? c.orange : c.textMid,
-                          }}>{proj.age}d</span>
-                        </td>
-                        )}
-                        {/* Blocked */}
-                        {dp.showBlocked && (
-                        <td style={{
-                          padding: dp.cellPad, textAlign: "center",
-                          borderBottom: `1px dotted ${c.border}`,
-                          borderLeft: `1px dotted ${c.border}`,
-                          fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                          fontWeight: 800,
-                          color: (proj.typeCounts.BLOCKED || 0) > 0 ? c.red : c.textDim,
-                          background: (proj.typeCounts.BLOCKED || 0) > 0 ? `${c.red}10` : "transparent",
-                        }}>
-                          {proj.typeCounts.BLOCKED || "—"}
-                        </td>
-                        )}
-                        {/* Churn (Δ) */}
-                        {dp.showChurn && (() => {
-                          const d = deltaMap[proj.id];
-                          return (
-                        <td style={{
-                          padding: dp.cellPad, textAlign: "center",
-                          borderBottom: `1px dotted ${c.border}`,
-                          borderLeft: `1px dotted ${c.border}`,
-                        }}>
-                          <DeltaToken gained={d ? d.gained : 0} lost={d ? d.lost : 0} />
-                        </td>
-                          );
-                        })()}
                         {phaseNames.map((ph, i) => {
                           const items = byPhase[ph];
                           const isActive = i === api;
@@ -958,9 +886,9 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                                 cursor: items.length > 0 ? "pointer" : "default",
                               }}>
                               {items.length > 0 && (
-                                <div style={{ display: "flex", gap: 2, flexWrap: "wrap", justifyContent: "center" }}>
+                                <div style={{ display: "flex", gap: space[1], flexWrap: "wrap", justifyContent: "center" }}>
                                   {Object.entries(ct).map(([t, n]) => {
-                                    const letter = { BUILD: "B", JAM: "J", COMMIT: "C" }[t] || t[0];
+                                    const letter = { BUILD: "B", JAM: "J" }[t] || t[0];
                                     return <Tag key={t} color={tc[t]?.color} bg={tc[t]?.bg}>{n}{letter}</Tag>;
                                   })}
                                 </div>
@@ -983,32 +911,32 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                       {/* Cell drilldown */}
                       {drillCell && drillCell.projId === proj.id && (() => {
                         const drillItems = byPhase[drillCell.phase] || [];
-                        const colSpan = phaseNames.length + 6 + (dp.showAge ? 1 : 0) + (dp.showBlocked ? 1 : 0) + (dp.showChurn ? 1 : 0);
+                        const colSpan = matrixColCount;
                         return (
                           <tr>
                             <td colSpan={colSpan} style={{
-                              padding: `${space[1]}px ${space[4] - 2}px ${space[2] - 2}px`,
+                              padding: `${space[1]}px ${space[4]}px ${space[2]}px`,
                               background: `${pc[drillCell.phase]}08`,
                               borderBottom: `1px solid ${pc[drillCell.phase]}30`,
                             }}>
-                              <div className="flow-expand" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                              <div className="flow-expand" style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
                                 <TelemetryLabel color={pc[drillCell.phase]} style={{ marginBottom: 1 }}>
                                   {drillCell.phase} · {drillItems.length}
                                 </TelemetryLabel>
                                 {drillItems.map((it, ii) => (
                                   <div key={ii} style={{
                                     display: "flex", alignItems: "center", gap: space[2],
-                                    padding: `3px 0`,
+                                    padding: `${space[1]}px 0`,
                                   }}>
                                     <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("people", it.person); }} style={{
-                                      fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                                      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                                       fontWeight: 600, color: c.text, cursor: "pointer",
                                       textDecoration: "underline", textDecorationColor: c.textMid + "40",
                                       textUnderlineOffset: 2, minWidth: 100,
                                     }}>{it.person}</span>
                                     <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
                                     <span style={{
-                                      fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                                      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                                       color: c.textMid,
                                     }}>{it.title || "—"}</span>
                                   </div>
@@ -1016,71 +944,6 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                               </div>
                             </td>
                           </tr>
-                        );
-                      })()}
-                      {/* Full row expand */}
-                      {isExp && (() => {
-                        const colSpan = phaseNames.length + 6 + (dp.showAge ? 1 : 0) + (dp.showBlocked ? 1 : 0) + (dp.showChurn ? 1 : 0);
-                        const keyRisks = proj.risks.filter(r => r.key !== "no_dri" && r.key !== "blocked" && r.key !== "aging");
-                        const drillPhase = drillCell && drillCell.projId === proj.id ? drillCell.phase : null;
-                        const extraItems = drillPhase
-                          ? proj.items.filter(it => (it.stage || proj.phase) !== drillPhase)
-                          : proj.items;
-                        const hasHiddenItems = drillPhase && extraItems.length < proj.items.length;
-                        return (
-                        <tr>
-                          <td colSpan={colSpan} style={{
-                            padding: `${space[1]}px ${space[4] - 2}px ${space[2]}px`,
-                            background: c.surfaceAlt,
-                            borderBottom: `1px dotted ${c.border}`,
-                          }}>
-                            {keyRisks.length > 0 && (
-                              <div style={{ display: "flex", gap: space[1], flexWrap: "wrap", marginBottom: space[1] }}>
-                                {keyRisks.map(r => (
-                                  <Badge key={r.key} color={r.color} bg={`${r.color}12`} style={{ border: `1px solid ${r.color}30` }}>{r.icon} {r.label}</Badge>
-                                ))}
-                              </div>
-                            )}
-                            <div className="flow-expand" style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                              {extraItems.length > 0 ? extraItems.map((it, ii) => (
-                                <div key={ii} style={{
-                                  display: "flex", alignItems: "center", gap: space[2],
-                                  padding: "3px 0",
-                                  borderBottom: ii < extraItems.length - 1 ? `1px dotted ${c.border}` : "none",
-                                }}>
-                                  <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("people", it.person); }} style={{
-                                    fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                                    fontWeight: 600, color: c.text, cursor: "pointer",
-                                    textDecoration: "underline", textDecorationColor: c.textMid + "40",
-                                    textUnderlineOffset: 2, minWidth: 100,
-                                  }}>{it.person}</span>
-                                  <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
-                                  <span style={{
-                                    fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                                    color: c.textMid, flex: 1,
-                                  }}>{it.title || "—"}</span>
-                                </div>
-                              )) : (
-                                <div style={{
-                                  padding: `${space[1]}px 0`,
-                                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                                  color: c.textDim,
-                                }}>
-                                  {hasHiddenItems ? `All ${proj.items.length} commits shown in ${drillPhase} drilldown above` : "No commits"}
-                                </div>
-                              )}
-                              {hasHiddenItems && extraItems.length > 0 && (
-                                <div style={{
-                                  padding: "2px 0 0",
-                                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                                  color: c.textDim, fontStyle: "italic",
-                                }}>
-                                  {proj.items.length - extraItems.length} more in {drillPhase} drilldown above
-                                </div>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
                         );
                       })()}
                     </React.Fragment>
@@ -1101,15 +964,15 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
         commitments.forEach(cm => {
           const pObj = people.find(p => p.name === cm.person);
           if (!pObj) return;
-          if (globalFilters.person.length > 0 && !globalFilters.person.includes(cm.person)) return;
-          if (globalFilters.squad.length > 0 && !globalFilters.squad.includes(pObj.squad)) return;
+          if (globalFilters.person?.length > 0 && !globalFilters.person.includes(cm.person)) return;
+          if (globalFilters.squad?.length > 0 && !globalFilters.squad.includes(pObj.squad)) return;
           const isLocked = !!cm.lockedAt;
           const isClosed = !!cm.closedAt;
 
-          const items = cm.items.slice(0, 3).filter(it => it.title && it.title.trim());
+          const items = cm.items.slice(0, 3).filter(it => (it.title && it.title.trim()) || it.project);
           if (items.length === 0) {
             // Person with no commits — show empty row
-            if (globalFilters.owner.length === 0) {
+            if (!globalFilters.owner || globalFilters.owner.length === 0) {
               allCommitRows.push({
                 person: cm.person, squad: pObj.squad, role: pObj.role,
                 project: null, projectName: null, title: null,
@@ -1121,10 +984,10 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
             items.forEach((it, idx) => {
               const isDepri = cm.deselected === idx;
               const proj = projects.find(pr => pr.id === it.project);
-              if (globalFilters.owner.length > 0 && (!proj || !globalFilters.owner.includes(proj.owner))) return;
+              if (globalFilters.owner?.length > 0 && (!proj || !globalFilters.owner.includes(proj.owner))) return;
               const status = isDepri ? "Deprioritized"
-                : isClosed ? (it.outcome === "done" || it.outcome === "done_carry" ? "Completed" : it.outcome === "blocked" ? "Blocked" : it.outcome === "carry" ? "Carry" : "Closed")
-                : isLocked ? (it.outcome === "done" || it.outcome === "done_carry" ? "Completed" : it.outcome === "blocked" ? "Blocked" : it.outcome === "carry" ? "Carry" : "WIP")
+                : isClosed ? (it.outcome === "done" || it.outcome === "done_carry" ? "Completed" : it.outcome === "blocked" ? "Blocked" : it.outcome === "carry" ? "Carry" : it.outcome === "partial" ? "Partial" : "Closed")
+                : isLocked ? (it.outcome === "done" || it.outcome === "done_carry" ? "Completed" : it.outcome === "blocked" ? "Blocked" : it.outcome === "carry" ? "Carry" : it.outcome === "partial" ? "Partial" : "WIP")
                 : it.project && it.stage && it.type ? "Ready"
                 : "Open";
               allCommitRows.push({
@@ -1140,11 +1003,11 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
           // Buffer item
           if (cm.deselected >= 0 && cm.buffer && cm.buffer.trim() && cm.bufferProject) {
             const proj = projects.find(pr => pr.id === cm.bufferProject);
-            if (globalFilters.owner.length === 0 || (proj && globalFilters.owner.includes(proj.owner))) {
+            if (!globalFilters.owner || globalFilters.owner.length === 0 || (proj && globalFilters.owner.includes(proj.owner))) {
               const bufStatus = isClosed
-                ? (cm.bufferOutcome === "done" || cm.bufferOutcome === "done_carry" ? "Completed" : cm.bufferOutcome === "blocked" ? "Blocked" : cm.bufferOutcome === "carry" ? "Carry" : "Closed")
+                ? (cm.bufferOutcome === "done" || cm.bufferOutcome === "done_carry" ? "Completed" : cm.bufferOutcome === "blocked" ? "Blocked" : cm.bufferOutcome === "carry" ? "Carry" : cm.bufferOutcome === "partial" ? "Partial" : "Closed")
                 : isLocked
-                ? (cm.bufferOutcome === "done" || cm.bufferOutcome === "done_carry" ? "Completed" : cm.bufferOutcome === "blocked" ? "Blocked" : "Buffer")
+                ? (cm.bufferOutcome === "done" || cm.bufferOutcome === "done_carry" ? "Completed" : cm.bufferOutcome === "blocked" ? "Blocked" : cm.bufferOutcome === "carry" ? "Carry" : cm.bufferOutcome === "partial" ? "Partial" : "Buffer")
                 : "Buffer";
               allCommitRows.push({
                 person: cm.person, squad: pObj.squad, role: pObj.role,
@@ -1157,14 +1020,15 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
           }
         });
         const outcomeColors = {
-          Completed: c.green, WIP: c.cyan, Ready: c.cyan, Carry: c.cyan,
-          Open: c.textMid, Buffer: c.purple, Blocked: c.red,
+          Completed: c.green, WIP: c.cyan, Ready: c.cyan, Carry: c.orange,
+          Partial: c.orange, Open: c.textMid, Buffer: c.purple, Blocked: c.red,
           Deprioritized: c.textDim, Closed: c.textMid, Empty: c.red,
         };
 
         // Group order — mirrors Commit People table pattern
         const groupOrder = [
           { key: "Completed", label: "Completed", color: c.green },
+          { key: "Partial", label: "Partial", color: c.orange },
           { key: "WIP", label: "Work in Progress", color: c.cyan },
           { key: "Ready", label: "Ready", color: c.cyan },
           { key: "Open", label: "Open", color: c.textMid },
@@ -1184,7 +1048,10 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
           else if (sortCol === "type") { va = a.type || ""; vb = b.type || ""; }
           else if (sortCol === "stage") { va = a.stage || ""; vb = b.stage || ""; }
           else if (sortCol === "title") { va = a.title || ""; vb = b.title || ""; }
+          else if (sortCol === "status") { va = a._status || ""; vb = b._status || ""; }
+          else if (sortCol === "duration") { va = a.duration || 0; vb = b.duration || 0; }
           else { va = a.squad || ""; vb = b.squad || ""; }
+          if (typeof va === "number") return sortDir === "asc" ? va - vb : vb - va;
           return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
         });
 
@@ -1195,7 +1062,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
 
         let globalRowIdx = 0;
         const dotBorder = `1px dotted ${c.border}`;
-        const colCount = 7;
+        const colCount = 8;
 
         return (
           <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, background: c.surfaceData }}>
@@ -1206,23 +1073,23 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                     <Th col="squad" style={{ position: "sticky", left: 0, top: 0, background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
                     <Th col="person" style={{ minWidth: 120, borderLeft: dotBorder }}>Person</Th>
                     <Th col="project" style={{ minWidth: 140, borderLeft: dotBorder }}>Project</Th>
-                    <Th col="title" style={{ minWidth: 160, borderLeft: dotBorder }}>Commit</Th>
+                    <Th col="title" style={{ minWidth: 160, borderLeft: dotBorder }}>Commitment</Th>
                     <Th col="type" style={{ minWidth: 64, textAlign: "center", borderLeft: dotBorder }}>Type</Th>
+                    <Th col="stage" style={{ minWidth: 64, textAlign: "center", borderLeft: dotBorder }}>Stage</Th>
                     <Th col="status" style={{ minWidth: 80, textAlign: "center", borderLeft: dotBorder }}>Status</Th>
                     <Th col="duration" style={{ minWidth: 64, textAlign: "center", borderLeft: dotBorder }}>Timeline</Th>
                   </tr>
                 </thead>
                 <tbody key={rowAnimKey}>
                   {groupedData.length === 0 && (
-                    <tr><td colSpan={colCount} style={{ textAlign: "center", padding: `${space[7]}px 0`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No commits yet</td></tr>
+                    <tr><td colSpan={colCount} style={{ textAlign: "center", padding: `${space[7]}px 0`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No commitments yet</td></tr>
                   )}
                   {groupedData.map((group) => {
                     const sectionRows = group.rows.map((it) => {
                       const ri = globalRowIdx++;
                       const sClr = outcomeColors[it._status] || c.textDim;
                       const isDepri = it._status === "Deprioritized";
-                      const rowBg = it._status === "Completed" ? `${c.green}08`
-                        : it._status === "Blocked" ? `${c.red}08`
+                      const rowBg = it._status === "Blocked" ? `${c.red}08`
                         : "transparent";
                       return (
                         <tr key={`${it.person}-${it.project || "none"}-${ri}`} className="flow-row" style={{
@@ -1230,9 +1097,6 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                           animationDelay: `${Math.min(ri * 20, 600)}ms`,
                           opacity: isDepri ? 0.45 : 1,
                           background: rowBg,
-                          textDecoration: isDepri ? "line-through" : "none",
-                          textDecorationStyle: isDepri ? "dotted" : undefined,
-                          textDecorationColor: isDepri ? "#ffffffaa" : undefined,
                           pointerEvents: "auto",
                         }}>
                           {/* Squad */}
@@ -1261,17 +1125,31 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                           <td style={{ padding: dp.cellPad, borderBottom: dotBorder, borderLeft: dotBorder, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.text }}>
                             {it.title ? (
                               <span
-                                onClick={() => onNavigate && onNavigate("commit", { person: it.person, commitIdx: it.commitIdx })}
-                                style={{ cursor: "pointer", textDecoration: "underline", textDecorationColor: c.textMid + "30", textUnderlineOffset: 2 }}
+                                onClick={() => onNavigate && onNavigate("commit", { person: it.person, commitIdx: it.commitIdx != null ? it.commitIdx : undefined })}
+                                style={{
+                                  cursor: "pointer",
+                                  textDecoration: isDepri ? "line-through" : "underline",
+                                  textDecorationStyle: isDepri ? "dotted" : undefined,
+                                  textDecorationColor: isDepri ? c.textMid : c.textMid + "30",
+                                  textUnderlineOffset: isDepri ? undefined : 2,
+                                }}
                               >{it.title}</span>
                             ) : (
-                              <Badge color={c.orange} bg={`${c.orange}12`} style={{ border: `1px solid ${c.orange}20` }}>No commit</Badge>
+                              <Badge color={c.orange} bg={`${c.orange}12`} style={{ border: `1px solid ${c.orange}20` }}>No commitment</Badge>
                             )}
                           </td>
                           {/* Type */}
                           <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: dotBorder, borderLeft: dotBorder }}>
                             {it.type ? (
-                              <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{tc[it.type]?.label || it.type}</Badge>
+                              <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
+                            ) : (
+                              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>{"\u2014"}</span>
+                            )}
+                          </td>
+                          {/* Stage */}
+                          <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: dotBorder, borderLeft: dotBorder }}>
+                            {it.stage ? (
+                              <Badge color={pc[it.stage] || c.textDim} bg={(pc[it.stage] || c.textDim) + "10"}>{it.stage}</Badge>
                             ) : (
                               <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>{"\u2014"}</span>
                             )}
@@ -1296,7 +1174,7 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
                       /* Section header row */
                       <tr key={`section-${group.key}`} data-status-group={group.key}>
                         <td colSpan={colCount} style={{
-                          padding: `${space[2]}px ${space[2] - 2}px`,
+                          padding: `${space[2]}px ${space[2]}px`,
                           background: `${group.color}06`,
                           borderBottom: dotBorder,
                           borderTop: dotBorder,
@@ -1341,11 +1219,13 @@ const PulseView = ({ commitments, projects, people, onNavigate, searchRef, globa
           <div className="flow-side-panel-backdrop" onClick={() => setSidePanelProj(null)} />
           <SidePanel
             proj={sidePanelProj}
-            deltaMap={deltaMap}
             tc={tc}
             pc={pc}
             onNavigate={onNavigate}
             onClose={() => setSidePanelProj(null)}
+            exiting={sidePanelExiting}
+            isHistorical={isHistorical}
+            weekLabel={selectedWeekKey}
           />
         </>
       )}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { c, typo, layout, space, motion } from "../styles/theme";
 import { NAV } from "./AppShell";
+import useDevLabel from "../hooks/useDevLabel";
 
 // ═══════════════════════════════════════════════════════════════
 // UNIVERSAL SEARCH — F / Cmd+K
@@ -11,7 +12,7 @@ import { NAV } from "./AppShell";
 const CAT_COLORS = () => ({
   all:        { color: c.accent, dim: c.accentDim },
   projects:   { color: c.projectGold, dim: c.projectGoldDim },
-  people:     { color: c.green,  dim: c.greenDim   },
+  people:     { color: c.cyan,   dim: c.cyanDim    },
   navigation: { color: c.orange, dim: c.orangeDim  },
   settings:   { color: c.purple, dim: c.purpleDim  },
 });
@@ -21,7 +22,7 @@ const SECTION_COLORS = () => ({
   Navigation: c.accent,
   Actions:    c.orange,
   Projects:   c.projectGold,
-  People:     c.green,
+  People:     c.cyan,
   Settings:   c.purple,
 });
 
@@ -61,6 +62,7 @@ function multiWordMatch(query, ...fields) {
 
 
 const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNavigate }) => {
+  const devRef = useDevLabel("CommandPalette", "src/components/CommandPalette.jsx", "Universal search palette triggered by Cmd+K for projects, people, and navigation");
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
   const [category, setCategory] = useState("all");
@@ -85,7 +87,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
     const cmds = [];
 
     // ── Navigation ──
-    NAV.forEach(tab => {
+    NAV.filter(tab => !tab.separator).forEach(tab => {
       cmds.push({
         id: `nav-${tab.key}`,
         label: tab.label.replace("⚙️ ", ""),
@@ -105,7 +107,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
         cmds.push({
           id: `proj-${p.id}`,
           label: `${p.id} — ${p.name}`,
-          hint: `${p.squad} · ${p.owner || "No owner"} · ${p.phase}`,
+          hint: `${p.squad || "No squad"} · ${p.owner || "No owner"} · ${p.phase || ""}`,
           section: "Projects",
           cat: "projects",
           icon: p.id.slice(0, 3),
@@ -121,12 +123,12 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
         cmds.push({
           id: `person-${p.name}`,
           label: p.name,
-          hint: `${p.role} · ${p.squad}`,
+          hint: `${p.role || "No role"} · ${p.squad || "No squad"}`,
           section: "People",
           cat: "people",
-          icon: p.name.split(" ").map(w => w[0]).join(""),
-          iconColor: c.green,
-          action: () => { if (onNavigate) onNavigate("people", p.name); onClose(); },
+          icon: p.name.split(" ").filter(Boolean).map(w => w?.[0] || "").join(""),
+          iconColor: c.cyan,
+          action: () => { if (onNavigate) onNavigate("commit", p.name); onClose(); },
         });
       });
     }
@@ -186,7 +188,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
 
   // Keyboard
   const handleKeyDown = useCallback((e) => {
-    if (e.key === "Escape") { e.preventDefault(); onClose(); return; }
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); onClose(); return; }
     if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx(i => Math.min(filtered.length - 1, i + 1)); return; }
     if (e.key === "ArrowUp") { e.preventDefault(); setActiveIdx(i => Math.max(0, i - 1)); return; }
     if (e.key === "Enter") {
@@ -237,8 +239,8 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
   const activeCatColor = catColors[category]?.color || c.accent;
 
   return (
-    <div className="flow-cmd-overlay" onClick={onClose}>
-      <div className="flow-cmd-box" onClick={e => e.stopPropagation()} style={{ width: 600, maxHeight: 540 }}>
+    <div ref={devRef} className="flow-cmd-overlay" onClick={onClose}>
+      <div className="flow-cmd-box" role="dialog" aria-modal="true" aria-label="Command palette" onClick={e => e.stopPropagation()} style={{ width: 600, maxHeight: 540 }}>
 
         {/* ── Gradient top accent bar ── */}
         <div className="flow-cmd-topbar" />
@@ -306,15 +308,15 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
                   background: active ? cc.dim : "transparent",
                   fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
                   fontWeight: active ? 700 : 500,
-                  color: active ? cc.color : c.textDim,
+                  color: active ? cc.color : c.textMid,
                   transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
                   letterSpacing: typo.bodyXs.tracking,
                   position: "relative",
                 }}>
                 <span style={{
                   marginRight: 5, fontSize: typo.monoSm.size,
-                  opacity: active ? 1 : 0.5,
-                  color: active ? cc.color : c.textDim,
+                  opacity: active ? 1 : 0.6,
+                  color: active ? cc.color : c.textMid,
                 }}>{cat.icon}</span>
                 {cat.label}
               </button>
@@ -338,7 +340,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
               fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim,
             }}>
               <div style={{ fontSize: 24, marginBottom: space[2], opacity: 0.3 }}>⊘</div>
-              No results for &ldquo;{query}&rdquo;
+              {query.trim() ? <>No results for &ldquo;{query}&rdquo;</> : "No items in this category"}
             </div>
           )}
           {sections.map((entry, si) => {

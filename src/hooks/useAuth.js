@@ -22,6 +22,10 @@ export default function useAuth() {
       setSession(s);
       if (s) fetchProfile(s.user.id);
       else setLoading(false);
+    }).catch((err) => {
+      console.error("Failed to get session:", err);
+      setLoading(false);
+      setInitialLoadDone(true);
     });
 
     // Subscribe to changes (login, logout, token refresh)
@@ -30,12 +34,21 @@ export default function useAuth() {
       if (s) {
         if (event === "SIGNED_IN") {
           fetchProfile(s.user.id);
-          // Only log if this is a genuine new sign-in, not a page reload with existing session
-          if (!hadSessionOnMount) logLogin();
+          // Only log if this is a genuine new sign-in, not a token refresh or page reload
+          const lastLog = sessionStorage.getItem("flow_last_login_log");
+          const now = Date.now();
+          if (!hadSessionOnMount && (!lastLog || now - parseInt(lastLog) > 60000)) {
+            logLogin();
+            sessionStorage.setItem("flow_last_login_log", String(now));
+          }
+          hadSessionOnMount = true;
+        } else if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+          fetchProfile(s.user.id);
           hadSessionOnMount = true;
         }
       } else {
         hadSessionOnMount = false;
+        sessionStorage.removeItem("flow_last_login_log");
         setPersonProfile(null);
         setLoading(false);
       }
@@ -68,21 +81,33 @@ export default function useAuth() {
 
   // ── Sign in with Google ──
   const signIn = useCallback(async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-      },
-    });
-    if (error) console.error("Sign-in error:", error);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin,
+        },
+      });
+      if (error) {
+        console.error("Sign-in error:", error);
+        return { error: error.message };
+      }
+      return { error: null };
+    } catch (err) {
+      console.error("Sign-in failed:", err);
+      return { error: err.message || "Sign-in failed. Please try again." };
+    }
   }, []);
 
   // ── Sign out ──
   const signOut = useCallback(async () => {
-    logLogout();
+    try { await logLogout(); } catch (e) { console.error("Logout log failed:", e); }
+    sessionStorage.removeItem("flow_terminal_unlocked");
+    sessionStorage.removeItem("flow_last_login_log");
     await supabase.auth.signOut();
     setSession(null);
     setPersonProfile(null);
+    setInitialLoadDone(false);
   }, []);
 
   // ── Complete onboarding (create people record linked to auth user) ──
@@ -115,7 +140,7 @@ export default function useAuth() {
 
     // Derived
     isAuthenticated: !!session,
-    needsOnboarding: !!session && !personProfile && !checkingProfile && !loading,
+    needsOnboarding: !!session && initialLoadDone && !personProfile && !checkingProfile && !loading,
 
     // Actions
     signIn,

@@ -17,7 +17,7 @@ export const space = {
 
 // ── Density scale ──
 export const density = {
-  executive:    { rowPad: "14px 20px", cellPad: "12px 16px", gap: 16, fontSize: 15, headerSize: 14 },
+  executive:    { rowPad: "14px 20px", cellPad: "12px 16px", gap: 16, fontSize: 16, headerSize: 14 },
   comfortable:  { rowPad: "12px 16px", cellPad: "10px 14px", gap: 12, fontSize: 14, headerSize: 13 },
   compact:      { rowPad: "8px 12px",  cellPad: "6px 10px",  gap: 6,  fontSize: 13, headerSize: 12 },
 };
@@ -100,6 +100,7 @@ export const themes = {
 export const phaseNames = ["PRD", "Design", "Dev", "QA"];
 export const shipPhases = ["Alpha", "Beta", "GA"];
 export const allPhases = [...phaseNames, ...shipPhases];
+export const commitPhases = ["PRD", "Design", "Dev", "QA"]; // Work activities only — no lifecycle stages
 
 // Mutable color reference - updated on theme change
 export let c = themes.dark;
@@ -112,14 +113,15 @@ export function setTheme(isDark) {
 export const typeConfig = () => ({
   BUILD: { color: c.green, bg: c.greenDim, emoji: "~", label: "Build" },
   JAM: { color: c.accent, bg: c.accentDim, emoji: "~", label: "Jam" },
-  BLOCKED: { color: c.red, bg: c.redDim, emoji: "~", label: "Blocked" },
 });
 
 // ── Canonical outcome semantics ──
 export const outcomeConfig = () => ({
   done: { color: c.green, bg: c.greenDim, label: "Completed", icon: "✓" },
   partial: { color: c.orange, bg: c.orangeDim, label: "Partial", icon: "◐" },
-  carry: { color: c.blue, bg: c.blueDim, label: "Carry", icon: "→" },
+  carry: { color: c.orange, bg: c.orangeDim, label: "Carry", icon: "→" },
+  done_carry: { color: c.orange, bg: c.orangeDim, label: "Done + Carry", icon: "✓→" },
+  blocked: { color: c.red, bg: c.redDim, label: "Blocked", icon: "✕" },
 });
 
 // ── Canonical risk semantics ──
@@ -142,21 +144,21 @@ export const statusColors = () => ({
 
 // ── Canonical entity reference color ──
 // Project references always use orange. Person references always use cyan.
-export const entityColors = () => ({ project: c.projectGold, person: c.cyan });
+export const entityColors = () => ({ project: c.orange, person: c.cyan });
 
 // ── Canonical typography ramp ─────────────────────────────────
 // Every text style in the product must map to one of these tokens.
 export const typo = {
   // Display — page titles, hero numbers, KPI values
-  displayHero: { font: display, size: 36, weight: 800, tracking: "-0.04em", lineHeight: 1.0 },
-  displayXl:   { font: display, size: 28, weight: 800, tracking: "-0.03em", lineHeight: 1.0 },
-  displayLg:   { font: display, size: 24, weight: 700, tracking: "-0.02em", lineHeight: 1.05 },
+  displayHero: { font: display, size: 36, weight: 800, tracking: "-0.04em", lineHeight: 1.1 },
+  displayXl:   { font: display, size: 28, weight: 800, tracking: "-0.03em", lineHeight: 1.1 },
+  displayLg:   { font: display, size: 24, weight: 700, tracking: "-0.02em", lineHeight: 1.1 },
   displayMd:   { font: display, size: 20, weight: 700, tracking: "-0.02em", lineHeight: 1.1 },
   displaySm:   { font: display, size: 16, weight: 700, tracking: "-0.02em", lineHeight: 1.15 },
   // Body — tables, paragraphs, buttons, forms, labels
-  bodyLg:      { font: body,    size: 15, weight: 600, tracking: "0",       lineHeight: 1.5 },
+  bodyLg:      { font: body,    size: 16, weight: 600, tracking: "0",       lineHeight: 1.5 },
   bodyMd:      { font: body,    size: 14, weight: 500, tracking: "0",       lineHeight: 1.5 },
-  bodySm:      { font: body,    size: 13, weight: 500, tracking: "0",       lineHeight: 1.45 },
+  bodySm:      { font: body,    size: 13, weight: 500, tracking: "0",       lineHeight: 1.5 },
   bodyXs:      { font: body,    size: 12, weight: 400, tracking: "0",       lineHeight: 1.4 },
   // Mono — telemetry labels, chips, timestamps, counters
   monoLg:      { font: mono,    size: 13, weight: 700, tracking: "0.04em",  lineHeight: 1.35 },
@@ -164,11 +166,11 @@ export const typo = {
   monoSm:      { font: mono,    size: 11, weight: 600, tracking: "0.06em",  lineHeight: 1.25 },
 
   // ── Legacy aliases (map to canonical tokens) ──
-  metric:      { font: display, size: 24, weight: 700, tracking: "-0.02em", lineHeight: 1.05 },
-  metricLg:    { font: display, size: 28, weight: 800, tracking: "-0.03em", lineHeight: 1.0 },
+  metric:      { font: display, size: 24, weight: 700, tracking: "-0.02em", lineHeight: 1.1 },
+  metricLg:    { font: display, size: 28, weight: 800, tracking: "-0.03em", lineHeight: 1.1 },
   sectionLbl:  { font: display, size: 16, weight: 700, tracking: "-0.02em", lineHeight: 1.15 },
   rowText:     { font: body,    size: 14, weight: 600, tracking: "0",       lineHeight: 1.5 },
-  rowSub:      { font: body,    size: 13, weight: 500, tracking: "0",       lineHeight: 1.45 },
+  rowSub:      { font: body,    size: 13, weight: 500, tracking: "0",       lineHeight: 1.5 },
   helper:      { font: body,    size: 12, weight: 400, tracking: "0",       lineHeight: 1.4 },
   fieldLbl:    { font: mono,    size: 11, weight: 600, tracking: "0.06em",  lineHeight: 1.25 },
   badge:       { font: body,    size: 12, weight: 600, tracking: "0.02em",  lineHeight: 1.4 },
@@ -187,9 +189,9 @@ export const layout = {
   radiusSm: 6,     // inputs, icon buttons
   radiusPill: 20,  // rounded pills
   radiusTag: 3,    // compact tags
-  padCard: 16,     // space-4
+  padCard: 24,     // space-6 — design mandate: card padding >= 24px
   padSection: 20,  // space-5
-  padCompact: 12,  // space-3
+  padCompact: 16,  // space-4
 };
 
 // ── Button variant tokens ─────────────────────────────────────

@@ -23,8 +23,8 @@ export async function logActivity(action, {
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;
 
-    // Prefer Flow people-record name over Google profile name
-    let userName = user?.user_metadata?.full_name || user?.email || "anonymous";
+    // Only use Flow people-record name; fall back to "anonymous" if not onboarded
+    let userName = "anonymous";
     if (user?.id) {
       const { data: profile } = await supabase
         .from("people")
@@ -53,14 +53,27 @@ export async function logActivity(action, {
 export const logLogin = () => logActivity("login", { entityType: "session" });
 export const logLogout = () => logActivity("logout", { entityType: "session" });
 
-export const logCommitmentLock = (personName) =>
-  logActivity("lock_commitment", { entityType: "commitment", entityName: personName });
+export const logCommitmentLock = (personName, items) => {
+  const projects = (items || [])
+    .filter(it => it.projectId || it.project_id)
+    .map(it => `${it.projectId || it.project_id}: ${it.title || "untitled"}`)
+    .join(", ");
+  logActivity("lock_commitment", {
+    entityType: "commitment",
+    entityName: personName,
+    details: projects ? { projects } : null,
+  });
+};
 
 export const logCommitmentUnlock = (personName) =>
   logActivity("unlock_commitment", { entityType: "commitment", entityName: personName });
 
-export const logCommitmentEdit = (personName, field) =>
-  logActivity("edit_commitment", { entityType: "commitment", entityName: personName, details: { field } });
+export const logCommitmentEdit = (personName, field, changeDetails) =>
+  logActivity("edit_commitment", {
+    entityType: "commitment",
+    entityName: personName,
+    details: changeDetails || { field },
+  });
 
 export const logProjectEdit = (projectId, projectName, changes) =>
   logActivity("edit_project", { entityType: "project", entityId: projectId, entityName: projectName, details: changes });

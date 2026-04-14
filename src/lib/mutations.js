@@ -59,10 +59,32 @@ export async function deletePersonFromDB(name) {
   if (error) logError('deletePerson', error);
 }
 
+export async function updatePersonInDB(oldName, newName, squadName, roleName) {
+  // Look up the person by old name to get their UUID
+  const { data: person } = await supabase.from('people').select('id').eq('name', oldName).single();
+  if (!person) { logError('updatePerson', { message: `Person not found: ${oldName}` }); return false; }
+
+  // Look up squad and role IDs
+  const [{ data: squad }, { data: role }] = await Promise.all([
+    supabase.from('squads').select('id').eq('name', squadName).single(),
+    supabase.from('roles').select('id').eq('name', roleName).single(),
+  ]);
+  if (!squad || !role) { logError('updatePerson', { message: `Squad or role not found: ${squadName}, ${roleName}` }); return false; }
+
+  const { error } = await supabase.from('people').update({
+    name: newName,
+    squad_id: squad.id,
+    role_id: role.id,
+  }).eq('id', person.id);
+  if (error) { logError('updatePerson', error); return false; }
+  return true;
+}
+
 // ─── PROJECTS ────────────────────────────────────────────────
 
 export async function createProjectInDB(project) {
-  // project = { id, name, owner, squad, phase, startDate, endDate, ship, status }
+  // project = { name, owner, squad, phase, startDate, endDate, status }
+  // ID is generated server-side by the set_project_id trigger
   const [{ data: ownerRow }, { data: squadRow }] = await Promise.all([
     project.owner
       ? supabase.from('people').select('id').eq('name', project.owner).single()
@@ -70,17 +92,19 @@ export async function createProjectInDB(project) {
     supabase.from('squads').select('id').eq('name', project.squad).single(),
   ]);
 
-  const { error } = await supabase.from('projects').insert({
-    id: project.id,
+  if (!squadRow?.id) { logError('createProject', { message: `Squad not found: ${project.squad}` }); return null; }
+
+  const { data, error } = await supabase.from('projects').insert({
     name: project.name,
     owner_id: ownerRow?.id || null,
-    squad_id: squadRow?.id,
+    squad_id: squadRow.id,
     phase: project.phase || 'PRD',
     status: project.status || 'active',
     start_date: project.startDate || null,
     end_date: project.endDate || null,
-  });
-  if (error) logError('createProject', error);
+  }).select('id').single();
+  if (error) { logError('createProject', error); return null; }
+  return data?.id || null;
 }
 
 export async function updateProjectInDB(projectId, changes) {
@@ -109,6 +133,38 @@ export async function updateProjectInDB(projectId, changes) {
   if (error) logError('updateProject', error);
 }
 
+/**
+ * Checks how many active commitment items reference this project.
+ * Returns { commitmentCount, peopleNames } for the confirmation UI.
+ */
+export async function getProjectDependencies(projectId) {
+  const { data, error } = await supabase
+    .from('commitment_items')
+    .select('commitment_id, commitments!inner(people!inner(name))')
+    .eq('project_id', projectId);
+  if (error) { logError('getProjectDependencies', error); return { commitmentCount: 0, peopleNames: [] }; }
+  const names = [...new Set((data || []).map(r => r.commitments?.people?.name).filter(Boolean))];
+  return { commitmentCount: (data || []).length, peopleNames: names };
+}
+
+/**
+ * Deletes a project after clearing commitment_items references.
+ * project_history cascades automatically (ON DELETE CASCADE).
+ */
+export async function deleteProjectFromDB(projectId) {
+  // 1. Clear project references from commitment items (nullable FK, no cascade)
+  const { error: clearErr } = await supabase
+    .from('commitment_items')
+    .update({ project_id: null })
+    .eq('project_id', projectId);
+  if (clearErr) { logError('deleteProject:clearItems', clearErr); return false; }
+
+  // 2. Delete the project (project_history cascades)
+  const { error } = await supabase.from('projects').delete().eq('id', projectId);
+  if (error) { logError('deleteProject', error); return false; }
+  return true;
+}
+
 // ─── COMMITS ─────────────────────────────────────────────────
 
 /**
@@ -119,56 +175,86 @@ export async function updateProjectInDB(projectId, changes) {
  * This is simpler and safer than tracking individual field changes.
  */
 export async function syncCommitmentToDB(commitment, lookups) {
-  const { personMap, weekMap } = lookups;
+  const { personMap } = lookups;
 
   const personId = personMap[commitment.person];
-  // Find current week ID (the non-closed week)
-  const currentWeekId = Object.values(weekMap).find(id => id); // We'll pass this directly
-
   if (!personId) return logError('syncCommitment', { message: `Person not found: ${commitment.person}` });
+  if (!commitment._weekId) return logError('syncCommitment', { message: `Missing _weekId for: ${commitment.person}` });
 
   try {
     // 1. Upsert the commitment row
+    const upsertData = {
+      person_id: personId,
+      week_id: commitment._weekId,
+      buffer: commitment.buffer || null,
+      deselected: commitment.deselected ?? -1,
+      // Preserve original lock timestamp; only set on first lock
+      locked_at: commitment.lockedAt
+        ? (commitment._lockedAtISO || new Date().toISOString())
+        : null,
+    };
+    // Buffer metadata fields (require migration 005)
+    // Only include if values exist to avoid schema errors on unmigrated DBs
+    if (commitment.bufferProject) upsertData.buffer_project = commitment.bufferProject;
+    if (commitment.bufferType) upsertData.buffer_type = commitment.bufferType;
+    if (commitment.bufferStage) upsertData.buffer_stage = commitment.bufferStage;
+    if (commitment.bufferDuration) upsertData.buffer_duration = commitment.bufferDuration;
+    if (commitment.bufferOutcome) upsertData.buffer_outcome = commitment.bufferOutcome;
+    if (commitment.bufferCarryTo) upsertData.buffer_carry_to = commitment.bufferCarryTo;
+    if (commitment.bufferBlockedReason) upsertData.buffer_blocked_reason = commitment.bufferBlockedReason;
+    if (commitment.depriReason) upsertData.depri_reason = commitment.depriReason;
+    if (commitment.closedAt) upsertData.closed_at = commitment.closedAt;
+
     const { data: commitRow, error: commitError } = await supabase
       .from('commitments')
-      .upsert({
-        person_id: personId,
-        week_id: commitment._weekId,
-        buffer: commitment.buffer || null,
-        deselected: commitment.deselected ?? -1,
-        // lockedAt from the UI is a display string (e.g. "Wed, Mar 19, 1:05 PM")
-        // Convert to ISO timestamp for the DB, or null if not locked
-        locked_at: commitment.lockedAt ? new Date().toISOString() : null,
-      }, { onConflict: 'person_id,week_id' })
+      .upsert(upsertData, { onConflict: 'person_id,week_id' })
       .select('id')
       .single();
 
     if (commitError) throw commitError;
 
-    // 2. Delete existing items and re-insert
-    const { error: delError } = await supabase
-      .from('commitment_items')
-      .delete()
-      .eq('commitment_id', commitRow.id);
-    if (delError) throw delError;
-
-    // 3. Insert current items
+    // 2. Build new items first, insert, then delete old (safer order)
     if (commitment.items && commitment.items.length > 0) {
-      const items = commitment.items.map((item, idx) => ({
-        commitment_id: commitRow.id,
-        slot: idx,
-        project_id: item.project || null,
-        type: item.type || '',
-        stage: item.stage || '',
-        title: item.title || '',
-        duration: item.duration || null,
-        outcome: item.outcome || null,
-      }));
+      const items = commitment.items.map((item, idx) => {
+        const row = {
+          commitment_id: commitRow.id,
+          slot: idx,
+          project_id: item.project || null,
+          type: item.type || '',
+          stage: item.stage || '',
+          title: item.title || '',
+          duration: item.duration || null,
+          outcome: item.outcome || null,
+        };
+        // Closing-phase fields (require migration 005)
+        if (item.blockedReason) row.blocked_reason = item.blockedReason;
+        if (item.carryTo) row.carry_to = item.carryTo;
+        if (item.weeksRemaining) row.weeks_remaining = item.weeksRemaining;
+        if (item.carriedFrom) row.carried_from = item.carriedFrom;
+        return row;
+      });
 
-      const { error: insertError } = await supabase
+      // Upsert items by (commitment_id, slot) to avoid delete-then-insert race condition
+      const { error: upsertError } = await supabase
         .from('commitment_items')
-        .insert(items);
-      if (insertError) throw insertError;
+        .upsert(items, { onConflict: 'commitment_id,slot' });
+      if (upsertError) throw upsertError;
+
+      // Remove any extra slots beyond what we just wrote (e.g., if items shrunk)
+      const maxSlot = items.length - 1;
+      const { error: cleanupError } = await supabase
+        .from('commitment_items')
+        .delete()
+        .eq('commitment_id', commitRow.id)
+        .gt('slot', maxSlot);
+      if (cleanupError) console.warn('[Flow] Slot cleanup failed:', cleanupError);
+    } else {
+      // No items — just clear existing
+      const { error: delError } = await supabase
+        .from('commitment_items')
+        .delete()
+        .eq('commitment_id', commitRow.id);
+      if (delError) throw delError;
     }
   } catch (err) {
     logError('syncCommitment', err);

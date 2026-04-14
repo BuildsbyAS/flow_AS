@@ -1,5 +1,5 @@
 import React from "react";
-import { c, motion, mono, body } from "../styles/theme";
+import { c, motion, mono, body, layout } from "../styles/theme";
 
 const AnimStyles = () => (
   <style>{`
@@ -9,6 +9,12 @@ const AnimStyles = () => (
        interaction: snappy user feedback
        critical:    attention-grabbing
        ═══════════════════════════════════════════════════════════════ */
+
+    /* ── Utility keyframes ── */
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
 
     /* ── Ambient keyframes ── */
     @keyframes rowSlideIn {
@@ -87,8 +93,8 @@ const AnimStyles = () => (
 
     /* ── Neon edge glow for mission grid ── */
     @keyframes neonEdge {
-      0%, 100% { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), inset 0 0 8px rgba(59,130,246,0.08); }
-      50% { box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10), inset 0 0 14px rgba(59,130,246,0.12); }
+      0%, 100% { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.07), inset 0 0 8px rgba(59,130,246,0.08); }
+      50% { box-shadow: inset 0 0 0 1px rgba(0,0,0,0.07), inset 0 0 14px rgba(59,130,246,0.12); }
     }
 
     /* ── Risk level bar pulse — severity-driven ── */
@@ -175,7 +181,7 @@ const AnimStyles = () => (
       content: '';
       position: absolute;
       inset: 0;
-      background: rgba(0, 0, 0, 0.45);
+      background: rgba(255, 255, 255, 0.45);
       pointer-events: none;
     }
     .flow-mission-grid::after {
@@ -201,7 +207,7 @@ const AnimStyles = () => (
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.04) 50%, transparent 70%);
+      background: linear-gradient(105deg, transparent 30%, rgba(0,0,0,0.02) 50%, transparent 70%);
       background-size: 200% 100%;
       animation: gradientSweep 6s ${motion.ambient.easing} infinite;
       pointer-events: none;
@@ -541,7 +547,7 @@ const AnimStyles = () => (
       content: '';
       position: absolute;
       inset: 0;
-      background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.03) 50%, transparent 70%);
+      background: linear-gradient(105deg, transparent 30%, rgba(0,0,0,0.015) 50%, transparent 70%);
       background-size: 300% 100%;
       animation: commandCardShimmer 8s ${motion.ambient.easing} infinite;
       pointer-events: none;
@@ -759,7 +765,7 @@ const AnimStyles = () => (
     /* ── Profile telemetry panel ── */
     .flow-telemetry-panel {
       position: relative;
-      border-radius: 16px;
+      border-radius: ${layout.radius}px;
       overflow: hidden;
       background: transparent;
       border: 1px solid ${c.border};
@@ -1511,8 +1517,8 @@ const AnimStyles = () => (
       box-shadow:
         0 30px 100px rgba(0,0,0,0.7),
         0 0 80px ${c.accentDim},
-        0 0 1px rgba(255,255,255,0.1),
-        inset 0 1px 0 rgba(255,255,255,0.06);
+        0 0 1px rgba(0,0,0,0.08),
+        inset 0 1px 0 rgba(0,0,0,0.04);
       overflow: hidden;
       animation: scaleIn 0.15s ${motion.interaction.easing} both;
       display: flex;

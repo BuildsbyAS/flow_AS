@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { space } from "../styles/theme";
 import { supabase } from "../lib/supabase";
+import useDevLabel from "../hooks/useDevLabel";
 
 const CATEGORIES = [
   { key: "feature", label: "Feature Request", icon: "✦", color: "#A78BFA" },
@@ -20,6 +21,7 @@ const STATUS_CONFIG = {
 const MONO = "'SF Mono', 'Fira Code', 'Cascadia Code', monospace";
 
 export default function RantView({ onBack, auth }) {
+  const devRef = useDevLabel('Feature request and bug report submission with list and detail views');
   const [rants, setRants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("list"); // "list" | "new" | "detail"
@@ -47,6 +49,8 @@ export default function RantView({ onBack, auth }) {
       setRants(data || []);
     } catch (err) {
       console.error("Failed to fetch rants:", err);
+      setToast({ type: "error", msg: "Failed to load rants — the table may not exist yet" });
+      setTimeout(() => setToast(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -77,6 +81,7 @@ export default function RantView({ onBack, auth }) {
 
   // ── Submit rant ──
   const handleSubmit = async () => {
+    if (submitting) return;
     if (!title.trim()) {
       setToast({ type: "error", msg: "Give your rant a title" });
       setTimeout(() => setToast(null), 3000);
@@ -114,6 +119,8 @@ export default function RantView({ onBack, auth }) {
           .upload(path, imageFile, { cacheControl: "3600", upsert: false });
         if (uploadErr) {
           console.warn("Image upload failed:", uploadErr);
+          setToast({ type: "error", msg: "Image upload failed — submitting without it" });
+          setTimeout(() => setToast(null), 4000);
         } else {
           const { data: urlData } = supabase.storage
             .from("rant-images")
@@ -137,7 +144,7 @@ export default function RantView({ onBack, auth }) {
 
       if (error) throw error;
 
-      setToast({ type: "success", msg: `Rant submitted — ID: ${data.id.slice(0, 8)}` });
+      setToast({ type: "success", msg: `Rant submitted — ID: ${data.id?.toString().slice(0, 8) || "?"}` });
       setTimeout(() => setToast(null), 4000);
 
       setTitle("");
@@ -211,8 +218,8 @@ export default function RantView({ onBack, auth }) {
           <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
             {r.title}
           </div>
-          <div style={{ fontSize: 11, color: "#00ff4160", marginBottom: space[4] }}>
-            by {r.user_name} · {timeAgo(r.created_at)} · ID: {r.id.slice(0, 8)}
+          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[4] }}>
+            by {r.user_name} · {timeAgo(r.created_at)} · ID: {r.id?.toString().slice(0, 8) || "?"}
           </div>
 
           {r.body && (
@@ -277,10 +284,10 @@ export default function RantView({ onBack, auth }) {
 
         {/* Category selector */}
         <div style={{ marginBottom: space[4] }}>
-          <div style={{ fontSize: 11, color: "#00ff4160", marginBottom: space[2], letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[2], letterSpacing: "0.08em" }}>
             CATEGORY
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {CATEGORIES.map(cat => (
               <button
                 key={cat.key}
@@ -302,13 +309,14 @@ export default function RantView({ onBack, auth }) {
 
         {/* Title */}
         <div style={{ marginBottom: space[4] }}>
-          <div style={{ fontSize: 11, color: "#00ff4160", marginBottom: space[2], letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[2], letterSpacing: "0.08em" }}>
             TITLE *
           </div>
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
             placeholder="What's on your mind?"
+            aria-label="Rant title"
             maxLength={200}
             style={{
               width: "100%", padding: "10px 14px",
@@ -323,12 +331,13 @@ export default function RantView({ onBack, auth }) {
 
         {/* Body */}
         <div style={{ marginBottom: space[4] }}>
-          <div style={{ fontSize: 11, color: "#00ff4160", marginBottom: space[2], letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[2], letterSpacing: "0.08em" }}>
             DETAILS
           </div>
           <textarea
             value={body}
             onChange={e => setBody(e.target.value)}
+            aria-label="Rant details"
             placeholder="Describe the feature, bug, or just rant away..."
             rows={6}
             style={{
@@ -345,13 +354,14 @@ export default function RantView({ onBack, auth }) {
 
         {/* Image upload */}
         <div style={{ marginBottom: space[5] }}>
-          <div style={{ fontSize: 11, color: "#00ff4160", marginBottom: space[2], letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[2], letterSpacing: "0.08em" }}>
             SCREENSHOT / IMAGE
           </div>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            aria-label="Attach screenshot or image"
             onChange={handleImageChange}
             style={{ display: "none" }}
           />
@@ -427,6 +437,15 @@ export default function RantView({ onBack, auth }) {
     );
   };
 
+  // ── List filters ──
+  const [filterCat, setFilterCat] = useState("all");
+  const [filterSt, setFilterSt] = useState("all");
+
+  const visibleRants = rants.filter(r =>
+    (filterCat === "all" || r.category === filterCat) &&
+    (filterSt === "all" || (r.status || "pending") === filterSt)
+  );
+
   // ── Render list ──
   const renderList = () => (
     <div style={{ animation: "flow-load-fade-in 0.3s ease-out" }}>
@@ -468,27 +487,88 @@ export default function RantView({ onBack, auth }) {
         </button>
       </div>
 
+      {/* Category filter tabs */}
+      <div style={{ display: "flex", gap: 6, marginBottom: space[3], flexWrap: "wrap" }}>
+        {[{ key: "all", label: "All", icon: "◈", color: "#00ff41" }, ...CATEGORIES].map(cat => {
+          const count = cat.key === "all" ? rants.length : rants.filter(r => r.category === cat.key).length;
+          const active = filterCat === cat.key;
+          return (
+            <button
+              key={cat.key}
+              onClick={() => setFilterCat(cat.key)}
+              style={{
+                padding: "6px 14px", borderRadius: 4,
+                border: `1px solid ${active ? cat.color + "70" : "#ffffff20"}`,
+                background: active ? cat.color + "20" : "transparent",
+                color: active ? cat.color : "#ffffffaa",
+                fontFamily: MONO, fontSize: 12, cursor: "pointer",
+                transition: "all 0.15s ease", fontWeight: active ? 700 : 500,
+              }}
+            >
+              {cat.icon} {cat.label} <span style={{ opacity: 0.6 }}>({count})</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Status filter pills */}
+      <div style={{ display: "flex", gap: 5, marginBottom: space[4], flexWrap: "wrap" }}>
+        {[{ key: "all", label: "Any status", color: "#00ff41" },
+          ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ key: k, ...v }))
+        ].map(st => {
+          const count = st.key === "all"
+            ? rants.length
+            : rants.filter(r => (r.status || "pending") === st.key).length;
+          const active = filterSt === st.key;
+          return (
+            <button
+              key={st.key}
+              onClick={() => setFilterSt(st.key)}
+              style={{
+                padding: "4px 12px", borderRadius: 12,
+                border: `1px solid ${active ? st.color + "60" : "#ffffff18"}`,
+                background: active ? st.color + "15" : "transparent",
+                color: active ? st.color : "#ffffff80",
+                fontFamily: MONO, fontSize: 11, cursor: "pointer",
+                transition: "all 0.15s ease", fontWeight: active ? 600 : 400,
+              }}
+            >
+              {st.icon || "◈"} {st.label} ({count})
+            </button>
+          );
+        })}
+      </div>
+
       {/* Rant list */}
       {loading ? (
         <div style={{ color: "#00ff4160", fontSize: 12, padding: space[5] }}>
           Loading rants...
         </div>
-      ) : rants.length === 0 ? (
+      ) : visibleRants.length === 0 ? (
         <div style={{
           textAlign: "center", padding: `${space[8]}px ${space[5]}px`,
-          color: "#00ff4140",
+          color: "#00ff4180",
         }}>
           <div style={{ fontSize: 32, marginBottom: space[3] }}>🔥</div>
-          <div style={{ fontSize: 13, marginBottom: space[2] }}>No rants yet</div>
-          <div style={{ fontSize: 11, opacity: 0.6 }}>
-            Be the first to rant. We won't judge. Much.
+          <div style={{ fontSize: 13, marginBottom: space[2] }}>
+            {rants.length === 0 ? "No rants yet" : "No rants match filters"}
+          </div>
+          <div style={{ fontSize: 11, opacity: 0.7 }}>
+            {rants.length === 0 ? "Be the first to rant. We won't judge. Much." : "Try a different filter."}
           </div>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {rants.map((r, i) => {
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {visibleRants.map((r, i) => {
             const status = STATUS_CONFIG[r.status] || STATUS_CONFIG.pending;
             const cat = CATEGORIES.find(c => c.key === r.category) || CATEGORIES[0];
+            const hasReply = !!r.admin_note;
+            const isResolved = r.status === "approved" || r.status === "shipped";
+            // Green tint for replied/resolved, subtle default
+            const borderColor = hasReply ? "#84FF9530" : "#00ff4115";
+            const bgBase = hasReply ? "#84FF9506" : "transparent";
+            const bgHover = hasReply ? "#84FF9512" : "#00ff4108";
+
             return (
               <button
                 key={r.id}
@@ -496,24 +576,33 @@ export default function RantView({ onBack, auth }) {
                 style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: `${space[3]}px ${space[4]}px`,
-                  border: "1px solid #00ff4115", borderRadius: 4,
-                  background: "transparent", cursor: "pointer",
+                  border: `1px solid ${borderColor}`, borderRadius: 6,
+                  background: bgBase, cursor: "pointer",
                   fontFamily: MONO, textAlign: "left", width: "100%",
                   transition: "all 0.15s ease",
-                  animation: `flow-load-fade-in 0.3s ease-out ${i * 40}ms both`,
+                  animation: `flow-load-fade-in 0.3s ease-out ${Math.min(i, 10) * 40}ms both`,
+                  ...(hasReply ? { borderLeft: "3px solid #84FF9560" } : {}),
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.background = "#00ff4108";
-                  e.currentTarget.style.borderColor = "#00ff4130";
+                  e.currentTarget.style.background = bgHover;
+                  e.currentTarget.style.borderColor = hasReply ? "#84FF9550" : "#00ff4130";
                 }}
                 onMouseLeave={e => {
-                  e.currentTarget.style.background = "transparent";
-                  e.currentTarget.style.borderColor = "#00ff4115";
+                  e.currentTarget.style.background = bgBase;
+                  e.currentTarget.style.borderColor = borderColor;
                 }}
               >
-                <span style={{ fontSize: 14, flexShrink: 0, width: 20, textAlign: "center" }}>
+                {/* Category icon */}
+                <span style={{
+                  fontSize: 14, flexShrink: 0, width: 28, height: 28,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  borderRadius: 6, background: cat.color + "12",
+                  border: `1px solid ${cat.color}20`,
+                }}>
                   {cat.icon}
                 </span>
+
+                {/* Title + meta */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     fontSize: 13, color: "#fff", fontWeight: 600,
@@ -521,29 +610,35 @@ export default function RantView({ onBack, auth }) {
                   }}>
                     {r.title}
                   </div>
-                  <div style={{ fontSize: 11, color: "#00ff4150", marginTop: 2 }}>
-                    {r.user_name} · {timeAgo(r.created_at)}
+                  <div style={{ fontSize: 11, color: "#00ff4190", marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
+                    <span>{r.user_name}</span>
+                    <span style={{ opacity: 0.4 }}>·</span>
+                    <span>{timeAgo(r.created_at)}</span>
+                    {r.image_url && <span style={{ opacity: 0.5 }}>📎</span>}
                   </div>
                 </div>
+
+                {/* Status badge */}
                 <span style={{
-                  fontSize: 10, fontWeight: 700, letterSpacing: "0.05em",
-                  color: status.color, padding: "3px 8px",
-                  border: `1px solid ${status.color}30`, borderRadius: 3,
+                  fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
+                  color: status.color, padding: "3px 10px",
+                  background: status.color + "12",
+                  border: `1px solid ${status.color}30`, borderRadius: 4,
                   flexShrink: 0,
                 }}>
                   {status.icon} {status.label.toUpperCase()}
                 </span>
-                {r.admin_note && (
+
+                {/* Reply indicator */}
+                {hasReply && (
                   <span style={{
-                    fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
-                    color: "#FBBF24", padding: "2px 6px",
-                    background: "#FBBF2415", border: "1px solid #FBBF2430",
-                    borderRadius: 3, flexShrink: 0,
-                  }}>REPLY</span>
+                    fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
+                    color: "#84FF95", padding: "3px 8px",
+                    background: "#84FF9515", border: "1px solid #84FF9530",
+                    borderRadius: 4, flexShrink: 0,
+                  }}>✓ REPLIED</span>
                 )}
-                {r.image_url && (
-                  <span style={{ fontSize: 11, color: "#00ff4140", flexShrink: 0 }}>📎</span>
-                )}
+
                 <span style={{ fontSize: 11, color: "#00ff4120", flexShrink: 0 }}>→</span>
               </button>
             );
@@ -555,7 +650,7 @@ export default function RantView({ onBack, auth }) {
 
   // No outer shell — TerminalView provides the CRT container
   return (
-    <div>
+    <div ref={devRef}>
       {view === "list" && renderList()}
       {view === "new" && renderNewForm()}
       {view === "detail" && renderDetail()}

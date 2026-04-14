@@ -36,6 +36,66 @@ async function fetchWeeks() {
   return data;
 }
 
+// Helper: format YYYY-MM-DD without timezone shift
+function toDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Auto-provision: ensure week rows exist from the last known week up to the current Monday
+async function ensureCurrentWeek(existingWeeks) {
+  const today = new Date();
+  const day = today.getDay();
+  const diff = today.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  const currentMonday = new Date(today.getFullYear(), today.getMonth(), diff);
+  const currentMondayStr = toDateStr(currentMonday);
+
+  // Check if any existing week covers this Monday
+  const alreadyExists = existingWeeks.some(w => w.start_date === currentMondayStr);
+  if (alreadyExists) return existingWeeks;
+
+  // Find the latest week to know where to start filling gaps
+  const latest = existingWeeks.length > 0
+    ? existingWeeks.reduce((a, b) => a.start_date > b.start_date ? a : b)
+    : null;
+  if (latest && latest.start_date >= currentMondayStr) return existingWeeks;
+
+  // Build all missing weeks from the week after the latest through the current Monday
+  const startFrom = latest
+    ? new Date(latest.start_date + 'T00:00:00')
+    : new Date(currentMonday);
+  if (latest) startFrom.setDate(startFrom.getDate() + 7); // next Monday after latest
+
+  const newWeeks = [];
+  const cursor = new Date(startFrom);
+  while (toDateStr(cursor) <= currentMondayStr) {
+    const mondayStr = toDateStr(cursor);
+    const friday = new Date(cursor);
+    friday.setDate(friday.getDate() + 4);
+    const fridayStr = toDateStr(friday);
+    // Label: "Mon D" format (e.g., "Mar 30", "Apr 6")
+    const label = cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    newWeeks.push({ label, start_date: mondayStr, end_date: fridayStr, status: 'declare' });
+    cursor.setDate(cursor.getDate() + 7);
+  }
+
+  if (newWeeks.length === 0) return existingWeeks;
+
+  const { data, error } = await supabase
+    .from('weeks')
+    .insert(newWeeks)
+    .select();
+
+  if (error) {
+    console.warn('[Flow] Could not auto-create week rows:', error);
+    return existingWeeks;
+  }
+
+  return [...existingWeeks, ...data];
+}
+
 async function fetchCommitments(weekId) {
   const { data, error } = await supabase
     .from('commitments')
@@ -111,9 +171,22 @@ function toSeedProjects(rows) {
 }
 
 function toWeekConfig(weeks, historyRows = []) {
+  const today = new Date().toISOString().split('T')[0];
+
+  // Guard: empty weeks table
+  if (!weeks || weeks.length === 0) {
+    return {
+      weekOf: "",
+      weekStart: today,
+      today,
+      historyWeeks: [],
+      _weeks: [],
+      _currentWeekId: null,
+    };
+  }
+
   // Current week = the week whose start_date is <= today (most recent one),
   // so the dashboard auto-advances when a new week begins (every Sunday/Monday).
-  const today = new Date().toISOString().split('T')[0];
   const sorted = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
   const current = [...sorted].reverse().find(w => w.start_date <= today) || sorted[sorted.length - 1];
   // Only include history weeks that actually have project_history entries
@@ -126,7 +199,7 @@ function toWeekConfig(weeks, historyRows = []) {
   return {
     weekOf: current.label,
     weekStart: current.start_date,
-    today: new Date().toISOString().split('T')[0],
+    today,
     historyWeeks,
     // Include the raw week data for ID lookups
     _weeks: weeks,
@@ -145,6 +218,10 @@ function toSeedCommitments(rows) {
         stage: ci.stage || '',
         ...(ci.duration ? { duration: ci.duration } : {}),
         ...(ci.outcome ? { outcome: ci.outcome } : {}),
+        ...(ci.blocked_reason ? { blockedReason: ci.blocked_reason } : {}),
+        ...(ci.carry_to ? { carryTo: ci.carry_to } : {}),
+        ...(ci.weeks_remaining ? { weeksRemaining: ci.weeks_remaining } : {}),
+        ...(ci.carried_from ? { carriedFrom: ci.carried_from } : {}),
       }));
 
     // Pad to 3 items — views assume exactly 3 slots exist
@@ -161,6 +238,16 @@ function toSeedCommitments(rows) {
         lockedAt: new Date(r.locked_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
         lockedAtTime: new Date(r.locked_at).getTime(),
       } : {}),
+      // Buffer metadata
+      ...(r.buffer_project ? { bufferProject: r.buffer_project } : {}),
+      ...(r.buffer_type ? { bufferType: r.buffer_type } : {}),
+      ...(r.buffer_stage ? { bufferStage: r.buffer_stage } : {}),
+      ...(r.buffer_duration ? { bufferDuration: r.buffer_duration } : {}),
+      ...(r.buffer_outcome ? { bufferOutcome: r.buffer_outcome } : {}),
+      ...(r.buffer_carry_to ? { bufferCarryTo: r.buffer_carry_to } : {}),
+      ...(r.buffer_blocked_reason ? { bufferBlockedReason: r.buffer_blocked_reason } : {}),
+      ...(r.depri_reason ? { depriReason: r.depri_reason } : {}),
+      ...(r.closed_at ? { closedAt: r.closed_at } : {}),
     };
   });
 }
@@ -220,7 +307,7 @@ export default function useSupabaseData() {
       if (!hasLoadedOnce.current) setLoading(true);
       setError(null);
 
-      const [squadsRaw, rolesRaw, peopleRaw, projectsRaw, weeksRaw, historyRaw, settingsRaw] = await Promise.all([
+      const [squadsRaw, rolesRaw, peopleRaw, projectsRaw, weeksRawInitial, historyRaw, settingsRaw] = await Promise.all([
         fetchSquads(),
         fetchRoles(),
         fetchPeople(),
@@ -230,6 +317,9 @@ export default function useSupabaseData() {
         fetchSettings(),
       ]);
 
+      // Auto-provision current week if it doesn't exist yet
+      const weeksRaw = await ensureCurrentWeek(weeksRawInitial);
+
       // Build lookup maps (name → id) for writes
       lookups.current.squadMap = Object.fromEntries(squadsRaw.map(s => [s.name, s.id]));
       lookups.current.roleMap = Object.fromEntries(rolesRaw.map(r => [r.name, r.id]));
@@ -238,8 +328,8 @@ export default function useSupabaseData() {
 
       const wc = toWeekConfig(weeksRaw, historyRaw);
 
-      // Fetch commitments for current week
-      const commitmentsRaw = await fetchCommitments(wc._currentWeekId);
+      // Fetch commitments for current week (skip if no weeks exist)
+      const commitmentsRaw = wc._currentWeekId ? await fetchCommitments(wc._currentWeekId) : [];
 
       const seedPeople = toSeedPeople(peopleRaw);
       const seedCommitments = toSeedCommitments(commitmentsRaw);
@@ -248,7 +338,8 @@ export default function useSupabaseData() {
       const committedNames = new Set(seedCommitments.map(cm => cm.person));
       for (const p of seedPeople) {
         if (!committedNames.has(p.name)) {
-          seedCommitments.push({ person: p.name, items: [], buffer: '', deselected: -1 });
+          const emptyItem = { title: '', type: '', project: '', stage: '' };
+          seedCommitments.push({ person: p.name, items: [{ ...emptyItem }, { ...emptyItem }, { ...emptyItem }], buffer: '', deselected: -1 });
         }
       }
 

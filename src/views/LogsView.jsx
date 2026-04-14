@@ -4,25 +4,28 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { c, typo, space, layout, motion } from "../styles/theme";
 import { supabase } from "../lib/supabase";
+import useDevLabel from "../hooks/useDevLabel";
 
 const ACTION_CONFIG = {
-  login:              { icon: "→", color: "#22D3EE", label: "signed in" },
-  logout:             { icon: "←", color: "#6E7894", label: "signed out" },
-  lock_commitment:    { icon: "🔒", color: "#84FF95", label: "locked commit" },
-  unlock_commitment:  { icon: "🔓", color: "#FBBF24", label: "unlocked commit" },
-  edit_commitment:    { icon: "✎", color: "#A78BFA", label: "edited commit" },
-  edit_project:       { icon: "✎", color: "#3B82F6", label: "edited project" },
-  create_project:     { icon: "+", color: "#84FF95", label: "created project" },
-  add_person:         { icon: "+", color: "#22D3EE", label: "added person" },
-  settings_change:    { icon: "⚙", color: "#FBBF24", label: "changed settings" },
-  onboard:            { icon: "★", color: "#FFB800", label: "joined Flow" },
-  terminal_unlock:    { icon: "🔓", color: "#00ff41", label: "unlocked terminal" },
-  terminal_attempt:   { icon: "⚠", color: "#FF5F57", label: "failed terminal attempt" },
-  admin_unlock:       { icon: "🔓", color: "#FBBF24", label: "unlocked admin" },
-  admin_attempt:      { icon: "⚠", color: "#FF5F57", label: "failed admin attempt" },
+  login:              { icon: "→", color: () => c.cyan, label: "signed in" },
+  logout:             { icon: "←", color: () => c.textDim, label: "signed out" },
+  lock_commitment:    { icon: "🔒", color: () => c.green, label: "locked commitment" },
+  unlock_commitment:  { icon: "🔓", color: () => c.orange, label: "unlocked commitment" },
+  edit_commitment:    { icon: "✎", color: () => c.purple, label: "edited commitment" },
+  edit_project:       { icon: "✎", color: () => c.accent, label: "edited project" },
+  create_project:     { icon: "+", color: () => c.green, label: "created project" },
+  add_person:         { icon: "+", color: () => c.cyan, label: "added person" },
+  settings_change:    { icon: "⚙", color: () => c.orange, label: "changed settings" },
+  onboard:            { icon: "★", color: () => c.orange, label: "joined Flow" },
+  terminal_unlock:    { icon: "🔓", color: () => c.green, label: "unlocked terminal" },
+  terminal_attempt:   { icon: "⚠", color: () => c.red, label: "failed terminal attempt" },
+  admin_unlock:       { icon: "🔓", color: () => c.orange, label: "unlocked admin" },
+  admin_attempt:      { icon: "⚠", color: () => c.red, label: "failed admin attempt" },
+  edit_person:        { icon: "✎", color: () => c.cyan, label: "edited person" },
+  delete_person:      { icon: "−", color: () => c.red, label: "deleted person" },
 };
 
-const DEFAULT_ACTION = { icon: "·", color: "#6E7894", label: "action" };
+const DEFAULT_ACTION = { icon: "·", color: () => c.textDim, label: "action" };
 
 function formatTime(ts) {
   const d = new Date(ts);
@@ -48,8 +51,10 @@ function formatFullTime(ts) {
 }
 
 export default function LogsView() {
+  const devRef = useDevLabel('Terminal-style activity ledger showing user actions chronologically');
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(null);
   const [filterEmail, setFilterEmail] = useState("");
   const [filterAction, setFilterAction] = useState("");
 
@@ -63,7 +68,7 @@ export default function LogsView() {
         .limit(500);
 
       if (data) setLogs(data);
-      if (error) console.error("Failed to fetch logs:", error);
+      if (error) { console.error("Failed to fetch logs:", error); setFetchError(error.message); }
       setLoading(false);
     })();
 
@@ -71,7 +76,7 @@ export default function LogsView() {
     const channel = supabase
       .channel("activity_log_changes")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_log" }, (payload) => {
-        setLogs(prev => [payload.new, ...prev]);
+        setLogs(prev => [payload.new, ...prev].slice(0, 500));
       })
       .subscribe();
 
@@ -110,7 +115,7 @@ export default function LogsView() {
   }, [filtered]);
 
   const selectStyle = {
-    padding: "6px 10px", fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+    padding: "6px 10px", fontSize: 11, fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
     background: c.surfaceAlt, border: `1px solid ${c.border}`, borderRadius: 6,
     color: c.text, outline: "none", cursor: "pointer", appearance: "none",
     paddingRight: 24,
@@ -119,7 +124,7 @@ export default function LogsView() {
   };
 
   return (
-    <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: space[4] }}>
+    <div ref={devRef} style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: space[4] }}>
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -136,20 +141,20 @@ export default function LogsView() {
         </div>
 
         {/* Filters */}
-        <div style={{ display: "flex", gap: space[2] }}>
-          <select value={filterEmail} onChange={e => setFilterEmail(e.target.value)} style={selectStyle}>
+        <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
+          <select value={filterEmail} onChange={e => setFilterEmail(e.target.value)} aria-label="Filter by user" style={selectStyle}>
             <option value="">All users</option>
             {uniqueEmails.map(e => <option key={e} value={e} style={{ background: c.bg }}>{e}</option>)}
           </select>
-          <select value={filterAction} onChange={e => setFilterAction(e.target.value)} style={selectStyle}>
+          <select value={filterAction} onChange={e => setFilterAction(e.target.value)} aria-label="Filter by action" style={selectStyle}>
             <option value="">All actions</option>
-            {uniqueActions.map(a => <option key={a} value={a} style={{ background: c.bg }}>{a}</option>)}
+            {uniqueActions.map(a => <option key={a} value={a} style={{ background: c.bg }}>{(ACTION_CONFIG[a] || DEFAULT_ACTION).label}</option>)}
           </select>
           {(filterEmail || filterAction) && (
             <button
               onClick={() => { setFilterEmail(""); setFilterAction(""); }}
               style={{
-                padding: "6px 10px", fontSize: 11, fontFamily: "'JetBrains Mono', monospace",
+                padding: "6px 10px", fontSize: 11, fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
                 background: "transparent", border: `1px solid ${c.border}`, borderRadius: 6,
                 color: c.textDim, cursor: "pointer",
               }}
@@ -160,39 +165,44 @@ export default function LogsView() {
 
       {/* Terminal-style log */}
       <div style={{
-        background: "#060A12", border: `1px solid ${c.border}`,
+        background: c.bg, border: `1px solid ${c.border}`,
         borderRadius: layout.radiusMd, overflow: "hidden",
       }}>
         {/* Terminal header */}
         <div style={{
           display: "flex", alignItems: "center", gap: 6,
           padding: "10px 16px",
-          background: "rgba(255,255,255,0.02)",
+          background: "rgba(0,0,0,0.02)",
           borderBottom: `1px solid ${c.border}`,
         }}>
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#FF5F57" }} />
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#FEBC2E" }} />
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#28C840" }} />
           <span style={{
-            fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+            fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace", fontSize: 11,
             color: c.textDim, marginLeft: 8,
           }}>flow@logs ~ tail -f activity.log</span>
         </div>
 
         {/* Log entries */}
-        <div style={{ padding: "8px 0", maxHeight: "calc(100vh - 280px)", overflowY: "auto" }}>
+        <div style={{ padding: "8px 0", maxHeight: "calc(100vh - 280px)", minHeight: 200, overflowY: "auto" }}>
           {loading && (
             <div style={{
-              padding: "20px 16px", fontFamily: "'JetBrains Mono', monospace",
+              padding: "20px 16px", fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
               fontSize: 11, color: c.textDim, textAlign: "center",
             }}>Loading logs...</div>
           )}
 
           {!loading && filtered.length === 0 && (
             <div style={{
-              padding: "40px 16px", fontFamily: "'JetBrains Mono', monospace",
-              fontSize: 11, color: c.textDim, textAlign: "center",
-            }}>No activity recorded yet. Actions will appear here as your team uses Flow.</div>
+              padding: "40px 16px", fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+              fontSize: 12, color: c.textDim, textAlign: "center",
+            }}>{logs.length > 0 && (filterEmail || filterAction)
+              ? "No logs match your filters. Try clearing them."
+              : fetchError
+                ? `Failed to load logs: ${fetchError}`
+                : "No activity recorded yet. Actions will appear here as your team uses Flow."
+            }</div>
           )}
 
           {grouped.map(([dateLabel, entries]) => (
@@ -204,9 +214,9 @@ export default function LogsView() {
               }}>
                 <div style={{ height: 1, flex: 1, background: c.border }} />
                 <span style={{
-                  fontFamily: "'JetBrains Mono', monospace", fontSize: 10,
+                  fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
                   fontWeight: 700, color: c.textDim, textTransform: "uppercase",
-                  letterSpacing: "0.06em",
+                  letterSpacing: "0.06em", fontSize: 11,
                 }}>{dateLabel}</span>
                 <div style={{ height: 1, flex: 1, background: c.border }} />
               </div>
@@ -216,11 +226,11 @@ export default function LogsView() {
                 return (
                   <div key={log.id} style={{
                     display: "flex", alignItems: "flex-start", gap: 10,
-                    padding: "6px 16px",
-                    fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+                    padding: "8px 16px",
+                    fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace", fontSize: 11,
                     transition: "background 0.1s",
                   }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.02)"}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   >
                     {/* Timestamp */}
@@ -231,21 +241,21 @@ export default function LogsView() {
 
                     {/* Action icon */}
                     <span style={{
-                      color: cfg.color, flexShrink: 0, width: 18, textAlign: "center",
+                      color: cfg.color(), flexShrink: 0, width: 18, textAlign: "center",
                       fontSize: 12,
                     }}>{cfg.icon}</span>
 
                     {/* User */}
-                    <span style={{ color: "#22D3EE", flexShrink: 0, minWidth: 120, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    <span style={{ color: c.cyan, flexShrink: 0, minWidth: 120, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                       title={log.user_email}>
                       {log.user_name || log.user_email}
                     </span>
 
                     {/* Action badge */}
                     <span style={{
-                      fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                      fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
                       textTransform: "uppercase",
-                      color: cfg.color, background: `${cfg.color}12`,
+                      color: cfg.color(), background: `${cfg.color()}12`,
                       padding: "2px 6px", borderRadius: 3, flexShrink: 0,
                     }}>{cfg.label}</span>
 
@@ -260,9 +270,13 @@ export default function LogsView() {
                     {log.details && (
                       <span style={{ color: c.textDim, opacity: 0.7 }}
                         title={JSON.stringify(log.details)}>
-                        → {Object.entries(log.details).map(([k, v]) =>
-                          `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`
-                        ).join(", ")}
+                        → {log.details.projects
+                          ? log.details.projects
+                          : Object.entries(log.details)
+                              .filter(([k]) => k !== "success")
+                              .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
+                              .join(", ")
+                        }
                       </span>
                     )}
                   </div>
@@ -274,7 +288,7 @@ export default function LogsView() {
           {/* Terminal cursor */}
           {!loading && filtered.length > 0 && (
             <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: c.accent }}>$</span>
+              <span style={{ fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace", fontSize: 11, color: c.accent }}>$</span>
               <span style={{
                 width: 7, height: 14, background: c.accent,
                 animation: "sync-cursor-blink 1s step-end infinite",

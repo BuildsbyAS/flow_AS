@@ -4,6 +4,7 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import { c, body } from "../styles/theme";
 import FlowLogo from "./FlowLogo";
+import useDevLabel from "../hooks/useDevLabel";
 
 const GOOGLE_ICON = (
   <svg width="18" height="18" viewBox="0 0 24 24">
@@ -65,13 +66,13 @@ function drawCell(ctx, cell, drawX, drawY, smoothX, smoothY) {
   }
   // Day label
   ctx.font = `600 ${8 + prox * 2}px Inter`;
-  ctx.fillStyle = `rgba(255,255,255,${0.05 + prox * 0.25})`;
+  ctx.fillStyle = `rgba(0,0,0,${0.08 + prox * 0.3})`;
   ctx.fillText(cell.day, drawX + 7, drawY + 14);
   // Progress bar
   if (cell.progress > 0) {
     const bW = CW - 14, bH = 2.5, bX = drawX + 7, bY = drawY + CH - 10;
     ctx.beginPath(); ctx.roundRect(bX, bY, bW, bH, 1.5);
-    ctx.fillStyle = `rgba(255,255,255,${op * 0.25})`; ctx.fill();
+    ctx.fillStyle = `rgba(0,0,0,${op * 0.12})`; ctx.fill();
     ctx.beginPath(); ctx.roundRect(bX, bY, bW * cell.progress, bH, 1.5);
     ctx.fillStyle = `rgba(${r},${g},${b},${op * 2.5 + prox * 0.4})`; ctx.fill();
   }
@@ -90,13 +91,14 @@ function drawCell(ctx, cell, drawX, drawY, smoothX, smoothY) {
       ctx.beginPath(); ctx.arc(drawX + 7 + t * 8, drawY + CH - 22, 1.5, 0, Math.PI * 2);
       ctx.fillStyle = t < cell.tasksCompleted
         ? `rgba(${r},${g},${b},${prox * 0.5})`
-        : `rgba(255,255,255,${prox * 0.1})`;
+        : `rgba(0,0,0,${prox * 0.1})`;
       ctx.fill();
     }
   }
 }
 
-export default function LoginScreen({ onSignIn, loading: signingIn }) {
+export default function LoginScreen({ onSignIn, loading: signingIn, error: authError }) {
+  const devRef = useDevLabel("LoginScreen", "src/components/LoginScreen.jsx", "Login screen with perspective calendar grid and Google OAuth sign-in");
   const canvasRef = useRef(null);
   const heroRef = useRef(null);
   const mouseRef = useRef({ x: 0, y: 0, smoothX: 0, smoothY: 0 });
@@ -183,7 +185,7 @@ export default function LoginScreen({ onSignIn, loading: signingIn }) {
   }, [initCells]);
 
   return (
-    <div style={{
+    <div ref={devRef} style={{
       minHeight: "100vh", background: c.bg, color: c.text, fontFamily: body,
       display: "flex", alignItems: "center", justifyContent: "center",
       position: "relative", overflow: "hidden",
@@ -200,15 +202,20 @@ export default function LoginScreen({ onSignIn, loading: signingIn }) {
         .flow-login-btn { transition: all 0.25s ease; }
         .flow-login-btn:hover {
           transform: translateY(-2px) !important;
-          background: rgba(255,255,255,0.09) !important;
-          border-color: rgba(255,255,255,0.18) !important;
-          box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05) !important;
+          background: rgba(0,0,0,0.06) !important;
+          border-color: rgba(0,0,0,0.12) !important;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.05) !important;
         }
         .flow-login-btn:active { transform: translateY(0) !important; }
+        .flow-login-btn:focus-visible { outline: 2px solid ${c.accent}; outline-offset: 2px; }
+        @media (max-width: 768px) {
+          .flow-login-grid-wrap { display: none !important; }
+          .flow-login-cta-wrap { position: absolute !important; }
+        }
       `}</style>
 
       {/* ── Perspective-tilted calendar grid (left side) ── */}
-      <div style={{
+      <div className="flow-login-grid-wrap" style={{
         position: "absolute", left: 0, top: 0, width: "55%", height: "100%",
         perspective: 1200, overflow: "hidden", zIndex: 0,
       }}>
@@ -226,12 +233,12 @@ export default function LoginScreen({ onSignIn, loading: signingIn }) {
       {/* Right-side fade from grid to dark */}
       <div style={{
         position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none",
-        background: "linear-gradient(90deg, transparent 25%, #06090F 55%)",
+        background: `linear-gradient(90deg, transparent 25%, ${c.bg} 55%)`,
       }} />
       {/* Top/bottom fade */}
       <div style={{
         position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none",
-        background: "linear-gradient(180deg, #06090F 0%, transparent 20%, transparent 80%, #06090F 100%)",
+        background: `linear-gradient(180deg, ${c.bg} 0%, transparent 20%, transparent 80%, ${c.bg} 100%)`,
       }} />
 
       {/* ── Centered hero ── */}
@@ -249,9 +256,9 @@ export default function LoginScreen({ onSignIn, loading: signingIn }) {
 
         {/* Title */}
         <div style={{
-          fontSize: 56, fontWeight: 800, letterSpacing: "-0.05em",
-          lineHeight: 1, marginBottom: 24,
-          background: "linear-gradient(180deg, #FFFFFF 0%, #C0C8D8 100%)",
+          fontSize: "clamp(36px, 8vw, 56px)", fontWeight: 800, letterSpacing: "-0.05em",
+          lineHeight: 1.1, marginBottom: 24,
+          background: "linear-gradient(180deg, #0F172A 0%, #475569 100%)",
           WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
           animation: "login-fade-up 0.6s ease-out both",
           animationDelay: "0.1s",
@@ -266,16 +273,16 @@ export default function LoginScreen({ onSignIn, loading: signingIn }) {
           animation: "login-fade-up 0.6s ease-out both",
           animationDelay: "0.25s",
         }}>
-          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#00F0FF" }}>Commit</span>
+          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: c.cyan }}>Commit</span>
           <span style={{ fontSize: 18, opacity: 0.2, fontWeight: 300, color: c.textDim }}>/</span>
-          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#FF2D78" }}>Lock</span>
+          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: c.red }}>Lock</span>
           <span style={{ fontSize: 18, opacity: 0.2, fontWeight: 300, color: c.textDim }}>/</span>
-          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: "#39FF14" }}>Ship</span>
+          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: c.green }}>Ship</span>
         </div>
 
         {/* Subtext */}
         <div style={{
-          fontSize: 14, color: c.textDim, fontWeight: 500, lineHeight: 1.5,
+          fontSize: 16, color: c.textDim, fontWeight: 500, lineHeight: 1.5,
           animation: "login-fade-up 0.6s ease-out both",
           animationDelay: "0.35s",
         }}>
@@ -284,11 +291,11 @@ export default function LoginScreen({ onSignIn, loading: signingIn }) {
       </div>
 
       {/* ── Bottom CTA ── */}
-      <div style={{
+      <div className="flow-login-cta-wrap" style={{
         position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 50,
         display: "flex", flexDirection: "column", alignItems: "center",
         padding: "0 24px 36px",
-        background: "linear-gradient(0deg, #06090F 50%, transparent 100%)",
+        background: `linear-gradient(0deg, ${c.bg} 50%, transparent 100%)`,
         pointerEvents: "none",
       }}>
         <button
@@ -297,12 +304,12 @@ export default function LoginScreen({ onSignIn, loading: signingIn }) {
           disabled={signingIn}
           style={{
             pointerEvents: "all",
-            display: "flex", alignItems: "center", gap: 12,
+            display: "flex", alignItems: "center", gap: 10,
             padding: "14px 36px", borderRadius: 12,
-            fontSize: 14, fontWeight: 600, fontFamily: body,
+            fontSize: 16, fontWeight: 600, fontFamily: body,
             cursor: signingIn ? "wait" : "pointer",
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid rgba(255,255,255,0.10)",
+            background: c.surfaceAlt,
+            border: `1px solid ${c.border}`,
             color: c.text,
             backdropFilter: "blur(24px)",
             boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
@@ -314,9 +321,14 @@ export default function LoginScreen({ onSignIn, loading: signingIn }) {
           {GOOGLE_ICON}
           {signingIn ? "Redirecting\u2026" : "Sign in with Google"}
         </button>
+        {authError && (
+          <div style={{ marginTop: 12, fontSize: 14, color: c.red, pointerEvents: "all", textAlign: "center" }}>
+            {authError}
+          </div>
+        )}
         <span style={{
-          marginTop: 14, fontSize: 11, color: c.textDim,
-          opacity: 0.5, letterSpacing: "0.04em", pointerEvents: "all",
+          marginTop: 14, fontSize: 12, color: c.textDim,
+          letterSpacing: "0.04em", pointerEvents: "all",
         }}>
           Secured by Supabase
         </span>

@@ -5,29 +5,39 @@ import React, { useState, useEffect } from "react";
 import { c, body, typo, space } from "../styles/theme";
 import { supabase } from "../lib/supabase";
 import FlowLogo from "./FlowLogo";
+import useDevLabel from "../hooks/useDevLabel";
 
 export default function OnboardingScreen({ user, onComplete }) {
+  const devRef = useDevLabel("OnboardingScreen", "src/components/OnboardingScreen.jsx", "First-login onboarding form for name, squad, and role selection");
   const [name, setName] = useState(user?.user_metadata?.full_name || "");
   const [squadId, setSquadId] = useState("");
   const [roleId, setRoleId] = useState("");
   const [squads, setSquads] = useState([]);
   const [roles, setRoles] = useState([]);
+  const [loadingDropdowns, setLoadingDropdowns] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   // Fetch squads and roles for dropdowns
   useEffect(() => {
     (async () => {
-      const [sq, ro] = await Promise.all([
-        supabase.from("squads").select("id, name").order("name"),
-        supabase.from("roles").select("id, name").order("name"),
-      ]);
-      if (sq.data) setSquads(sq.data);
-      if (ro.data) setRoles(ro.data);
+      try {
+        const [sq, ro] = await Promise.all([
+          supabase.from("squads").select("id, name").order("name"),
+          supabase.from("roles").select("id, name").order("name"),
+        ]);
+        if (sq.data) setSquads(sq.data);
+        if (ro.data) setRoles(ro.data);
+        if (sq.error || ro.error) setError("Failed to load options. Please refresh.");
+      } catch (err) {
+        setError("Failed to load options. Please refresh.");
+      } finally {
+        setLoadingDropdowns(false);
+      }
     })();
   }, []);
 
-  const canSubmit = name.trim() && squadId && roleId && !submitting;
+  const canSubmit = name.trim().length >= 2 && squadId && roleId && !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -43,22 +53,22 @@ export default function OnboardingScreen({ user, onComplete }) {
 
   const inputStyle = {
     width: "100%", padding: "10px 14px",
-    background: "rgba(255,255,255,0.04)",
-    border: `1px solid rgba(255,255,255,0.1)`,
+    background: c.surfaceAlt,
+    border: `1px solid ${c.borderHover}`,
     borderRadius: 8, color: c.text,
-    fontSize: 14, fontFamily: body,
+    fontSize: 16, fontFamily: body,
     outline: "none",
     transition: "border-color 0.2s ease",
   };
 
   const labelStyle = {
-    fontSize: 11, fontWeight: 600, letterSpacing: "0.06em",
-    textTransform: "uppercase", color: "rgba(255,255,255,0.35)",
+    fontSize: 12, fontWeight: 600, letterSpacing: "0.06em",
+    textTransform: "uppercase", color: c.textDim,
     marginBottom: 6, display: "block",
   };
 
   return (
-    <div style={{
+    <div ref={devRef} style={{
       minHeight: "100vh", background: c.bg, color: c.text, fontFamily: body,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       position: "relative",
@@ -69,7 +79,11 @@ export default function OnboardingScreen({ user, onComplete }) {
           100% { opacity: 1; transform: translateY(0); }
         }
         .flow-onboard-input:focus {
-          border-color: rgba(168,85,247,0.5) !important;
+          border-color: rgba(59,130,246,0.5) !important;
+        }
+        .flow-onboard-input:focus-visible {
+          outline: 2px solid rgba(59,130,246,0.4);
+          outline-offset: 1px;
         }
         .flow-onboard-select {
           appearance: none;
@@ -83,7 +97,11 @@ export default function OnboardingScreen({ user, onComplete }) {
         }
         .flow-onboard-btn:hover:not(:disabled) {
           transform: translateY(-1px);
-          box-shadow: 0 4px 20px rgba(168,85,247,0.3) !important;
+          box-shadow: 0 4px 20px rgba(59,130,246,0.3) !important;
+        }
+        .flow-onboard-btn:focus-visible {
+          outline: 2px solid ${c.accent};
+          outline-offset: 2px;
         }
         .flow-onboard-btn:active:not(:disabled) {
           transform: translateY(0);
@@ -93,7 +111,7 @@ export default function OnboardingScreen({ user, onComplete }) {
       {/* Ambient glow */}
       <div style={{
         position: "absolute", inset: 0,
-        background: `radial-gradient(ellipse 50% 40% at 50% 40%, rgba(168,85,247,0.03), transparent 70%)`,
+        background: `radial-gradient(ellipse 50% 40% at 50% 40%, rgba(59,130,246,0.03), transparent 70%)`,
         pointerEvents: "none",
       }} />
 
@@ -105,13 +123,13 @@ export default function OnboardingScreen({ user, onComplete }) {
       {/* Welcome */}
       <div style={{
         fontSize: 22, fontWeight: 700, letterSpacing: "-0.03em",
-        marginBottom: 4,
+        marginBottom: 8,
         animation: "onboard-fade-up 0.5s ease-out both",
         animationDelay: "0.1s",
       }}>Welcome to Flow</div>
 
       <div style={{
-        fontSize: 13, opacity: 0.35, marginBottom: 36,
+        fontSize: 14, color: c.textMid, marginBottom: 36,
         animation: "onboard-fade-up 0.5s ease-out both",
         animationDelay: "0.15s",
       }}>Set up your profile to get started</div>
@@ -121,9 +139,9 @@ export default function OnboardingScreen({ user, onComplete }) {
         <div style={{
           display: "flex", alignItems: "center", gap: 10,
           padding: "8px 16px", borderRadius: 8,
-          background: "rgba(255,255,255,0.03)",
-          border: "1px solid rgba(255,255,255,0.06)",
-          marginBottom: 28,
+          background: c.surfaceAlt,
+          border: `1px solid ${c.border}`,
+          marginBottom: 24,
           animation: "onboard-fade-up 0.5s ease-out both",
           animationDelay: "0.2s",
         }}>
@@ -132,13 +150,13 @@ export default function OnboardingScreen({ user, onComplete }) {
             alt=""
             style={{ width: 28, height: 28, borderRadius: "50%" }}
           />
-          <span style={{ fontSize: 13, opacity: 0.5 }}>{user.email}</span>
+          <span style={{ fontSize: 14, color: c.textMid }}>{user.email}</span>
         </div>
       )}
 
       {/* Form */}
       <div style={{
-        width: 320, display: "flex", flexDirection: "column", gap: 18,
+        width: "min(320px, calc(100% - 48px))", display: "flex", flexDirection: "column", gap: 18,
         animation: "onboard-fade-up 0.5s ease-out both",
         animationDelay: "0.25s",
       }}>
@@ -154,6 +172,8 @@ export default function OnboardingScreen({ user, onComplete }) {
             placeholder="e.g., Tariq A."
             style={inputStyle}
             autoFocus
+            maxLength={100}
+            minLength={2}
           />
         </div>
 
@@ -164,9 +184,9 @@ export default function OnboardingScreen({ user, onComplete }) {
             className="flow-onboard-input flow-onboard-select"
             value={squadId}
             onChange={e => setSquadId(e.target.value)}
-            style={{ ...inputStyle, cursor: "pointer", color: squadId ? c.text : "rgba(255,255,255,0.3)" }}
+            style={{ ...inputStyle, cursor: "pointer", color: squadId ? c.text : c.textDim }}
           >
-            <option value="" disabled>Select your squad</option>
+            <option value="" disabled>{loadingDropdowns ? "Loading..." : squads.length === 0 ? "No squads available" : "Select your squad"}</option>
             {squads.map(s => (
               <option key={s.id} value={s.id} style={{ background: c.bg, color: c.text }}>{s.name}</option>
             ))}
@@ -180,9 +200,9 @@ export default function OnboardingScreen({ user, onComplete }) {
             className="flow-onboard-input flow-onboard-select"
             value={roleId}
             onChange={e => setRoleId(e.target.value)}
-            style={{ ...inputStyle, cursor: "pointer", color: roleId ? c.text : "rgba(255,255,255,0.3)" }}
+            style={{ ...inputStyle, cursor: "pointer", color: roleId ? c.text : c.textDim }}
           >
-            <option value="" disabled>Select your role</option>
+            <option value="" disabled>{loadingDropdowns ? "Loading..." : roles.length === 0 ? "No roles available" : "Select your role"}</option>
             {roles.map(r => (
               <option key={r.id} value={r.id} style={{ background: c.bg, color: c.text }}>{r.name}</option>
             ))}
@@ -191,7 +211,7 @@ export default function OnboardingScreen({ user, onComplete }) {
 
         {/* Error */}
         {error && (
-          <div style={{ fontSize: 12, color: "#ef4444", padding: "4px 0" }}>{error}</div>
+          <div style={{ fontSize: 14, color: c.red, padding: "4px 0" }}>{error}</div>
         )}
 
         {/* Submit */}
@@ -202,13 +222,13 @@ export default function OnboardingScreen({ user, onComplete }) {
           style={{
             marginTop: 8, padding: "12px 0",
             background: canSubmit
-              ? "linear-gradient(135deg, #A855F7, #7C3AED)"
-              : "rgba(255,255,255,0.04)",
+              ? `linear-gradient(135deg, ${c.accent}, #2563EB)`
+              : c.surfaceAlt,
             border: "none", borderRadius: 8,
-            color: canSubmit ? "#fff" : "rgba(255,255,255,0.2)",
-            fontSize: 14, fontWeight: 600, fontFamily: body,
+            color: canSubmit ? "#fff" : c.textDim,
+            fontSize: 16, fontWeight: 600, fontFamily: body,
             cursor: canSubmit ? "pointer" : "not-allowed",
-            boxShadow: canSubmit ? "0 2px 16px rgba(168,85,247,0.2)" : "none",
+            boxShadow: canSubmit ? "0 2px 16px rgba(59,130,246,0.2)" : "none",
           }}
         >
           {submitting ? "Setting up…" : "Enter Flow →"}

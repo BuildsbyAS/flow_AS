@@ -11,7 +11,6 @@ import { useSyncedSetters } from "./hooks/useSyncedSetters";
 import useAuth from "./hooks/useAuth";
 import LoginScreen from "./components/LoginScreen";
 import OnboardingScreen from "./components/OnboardingScreen";
-import { seedHistory as fallbackHistory, weekConfig as fallbackWeekConfig } from "./data/seed";
 import { Header, NAV, getCycleStage, getStageConfig, getAttentionItems } from "./components/AppShell";
 import SummaryView from "./views/SummaryView";
 import PulseView from "./views/PulseView";
@@ -24,10 +23,23 @@ import LogsView from "./views/LogsView";
 import TerminalView from "./views/TerminalView";
 import FlowLogo from "./components/FlowLogo";
 import SyncToast from "./components/SyncToast";
+import DevOverlayProvider from "./components/DevOverlay";
 
 export default function FlowApp() {
   // ── Auth ──
   const auth = useAuth();
+  const [signInError, setSignInError] = React.useState(null);
+  const [signingIn, setSigningIn] = React.useState(false);
+
+  const handleSignIn = React.useCallback(async () => {
+    setSignInError(null);
+    setSigningIn(true);
+    const result = await auth.signIn();
+    if (result?.error) {
+      setSignInError(result.error);
+      setSigningIn(false);
+    }
+  }, [auth.signIn]);
 
   // ── Auth gates ──
   if (auth.loading) {
@@ -35,8 +47,18 @@ export default function FlowApp() {
       <div style={{
         minHeight: "100vh", background: c.bg, color: c.text, fontFamily: body,
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        position: "relative", overflow: "hidden",
       }}>
-        <FlowLogo size={100} />
+        <style>{`
+          @keyframes flow-auth-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.06); opacity: 1; }
+          }
+        `}</style>
+        <div style={{ animation: "flow-auth-pulse 2s ease-in-out infinite" }}>
+          <FlowLogo size={100} />
+        </div>
+        <div style={{ marginTop: 20, fontSize: 16, color: c.textDim, fontWeight: 500 }}>Loading...</div>
       </div>
     );
   }
@@ -46,20 +68,20 @@ export default function FlowApp() {
   const isDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || import.meta.env.VITE_SKIP_AUTH === "true";
 
   if (!isDev && !auth.isAuthenticated) {
-    return <LoginScreen onSignIn={auth.signIn} />;
+    return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={signInError} />;
   }
 
   if (!isDev && auth.needsOnboarding) {
     return <OnboardingScreen user={auth.user} onComplete={auth.completeOnboarding} />;
   }
 
-  return <FlowDashboard auth={auth} />;
+  return <DevOverlayProvider><FlowDashboard auth={auth} /></DevOverlayProvider>;
 }
 
 function FlowDashboard({ auth }) {
   const [activeTab, setActiveTab] = useState("pulse");
   const [navPayload, setNavPayload] = useState(null);
-  const darkMode = true;
+  const darkMode = false;
   const [terminalUnlocked, setTerminalUnlocked] = useState(() => sessionStorage.getItem("flow_terminal_unlocked") === "true");
 
   // ── Supabase data (replaces seed.js) ──
@@ -76,9 +98,16 @@ function FlowDashboard({ auth }) {
     lookups,
   } = useSupabaseData();
 
-  // Use Supabase data when loaded, fallbacks for safety
-  const history = supabaseHistory && Object.keys(supabaseHistory).length > 0 ? supabaseHistory : fallbackHistory;
-  const weekConfig = supabaseWeekConfig || fallbackWeekConfig;
+  // Use Supabase data directly — no seed fallbacks
+  const history = supabaseHistory && Object.keys(supabaseHistory).length > 0 ? supabaseHistory : {};
+  const weekConfig = supabaseWeekConfig || (() => {
+    // Fallback: compute Monday of current week so week navigation math works correctly
+    const now = new Date(); const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(now.getFullYear(), now.getMonth(), diff);
+    const ws = monday.toISOString().split('T')[0];
+    return { weeks: [], currentWeek: null, historyWeeks: [], weekStart: ws, weekOf: "", today: new Date().toISOString().split('T')[0] };
+  })();
 
   // ── Synced setters: optimistic UI + background Supabase writes ──
   const {
@@ -115,7 +144,7 @@ function FlowDashboard({ auth }) {
     if (weekOffset === 0) return "current";
     const idx = weekConfig.historyWeeks.length + weekOffset;
     return weekConfig.historyWeeks[idx] || "current";
-  }, [weekOffset]);
+  }, [weekOffset, weekConfig]);
   const isHistorical = weekOffset < 0;
 
   // Derive commitments-like data from history for past weeks
@@ -129,14 +158,16 @@ function FlowDashboard({ auth }) {
           if (!personMap[e.person]) personMap[e.person] = [];
           personMap[e.person].push({
             type: e.type, project: projId, stage: e.stage,
-            title: e.task || "", outcome: "done",
+            title: e.task || "", outcome: e.outcome || null,
           });
         });
       }
     });
-    return Object.entries(personMap).map(([person, items]) => ({
-      person, items, buffer: "", deselected: -1, lockedAt: "historical",
-    }));
+    const emptyItem = { title: "", type: "", project: "", stage: "" };
+    return Object.entries(personMap).map(([person, items]) => {
+      while (items.length < 3) items.push({ ...emptyItem });
+      return { person, items, buffer: "", deselected: -1, lockedAt: "historical" };
+    });
   }, [weekOffset, selectedWeekKey, commitments]);
 
   // ── Global filters (header bar) ──
@@ -162,24 +193,41 @@ function FlowDashboard({ auth }) {
     sessionStorage.setItem("flow_terminal_unlocked", "true");
     setTerminalUnlocked(true);
     if (moduleKey === "settings" || moduleKey === "logs") {
+      flushDirtyToDB();
       setActiveTab(moduleKey);
+      setNavPayload(null);
+      setDetailLabel(null);
+      goBackRef.current = null;
     }
-  }, []);
+  }, [flushDirtyToDB]);
+
+  const [terminalResetKey, setTerminalResetKey] = useState(0);
 
   const handleTabSwitch = useCallback((key) => {
     // Flush any unsaved commit drafts to DB before leaving
     flushDirtyToDB();
-    // Gate settings/logs behind terminal
+    // If already on terminal and clicking terminal again, reset to root
+    if (key === "terminal" && activeTab === "terminal") {
+      setTerminalResetKey(k => k + 1);
+      tactile.click();
+      return;
+    }
+    // Gate settings/logs/rant behind terminal — these render inside TerminalView
     if ((key === "settings" || key === "logs" || key === "rant") && !terminalUnlocked) {
       setActiveTab("terminal");
+      setNavPayload(null);
+    } else if (key === "rant") {
+      // Rant only renders inside TerminalView as a module, not as a top-level tab
+      setActiveTab("terminal");
+      setNavPayload("rant");
     } else {
       setActiveTab(key);
+      setNavPayload(null);
     }
-    setNavPayload(null);
     setDetailLabel(null);
     goBackRef.current = null;
     tactile.click();
-  }, [flushDirtyToDB, terminalUnlocked]);
+  }, [flushDirtyToDB, terminalUnlocked, activeTab]);
 
   const handleBack = useCallback(() => {
     if (goBackRef.current) {
@@ -191,9 +239,10 @@ function FlowDashboard({ auth }) {
   }, [flushDirtyToDB]);
 
   const handleNavigate = useCallback((tab, id) => {
+    flushDirtyToDB();
     setNavPayload(id);
     setActiveTab(tab);
-  }, []);
+  }, [flushDirtyToDB]);
 
   const c = setTheme(darkMode);
   const activeNavItem = NAV.find(n => n.key === activeTab);
@@ -208,10 +257,10 @@ function FlowDashboard({ auth }) {
 
   useKeyboard([
     { key: "1", fn: () => handleTabSwitch("summary") },
-    { key: "2", fn: () => handleTabSwitch("pulse") },
-    { key: "3", fn: () => handleTabSwitch("commit") },
-    { key: "4", fn: () => handleTabSwitch("projects") },
-    { key: "5", fn: () => handleTabSwitch("people") },
+    { key: "2", fn: () => handleTabSwitch("projects") },
+    { key: "3", fn: () => handleTabSwitch("people") },
+    { key: "4", fn: () => handleTabSwitch("pulse") },
+    { key: "5", fn: () => handleTabSwitch("commit") },
     { key: "6", fn: () => handleTabSwitch("guide") },
     { key: "k", ctrl: true, fn: () => { setCmdOpen(v => !v); tactile.cmdOpen(); }, force: true },
     { key: "k", meta: true, fn: () => { setCmdOpen(v => !v); tactile.cmdOpen(); }, force: true },
@@ -256,7 +305,7 @@ function FlowDashboard({ auth }) {
         {/* "Flow" text */}
         <div style={{
           fontSize: 28, fontWeight: 700, letterSpacing: "-0.04em",
-          opacity: 0.4,
+          color: c.textDim,
           animation: "flow-load-fade-in 0.6s ease-out both",
           animationDelay: "0.2s",
         }}>Flow</div>
@@ -264,11 +313,11 @@ function FlowDashboard({ auth }) {
         {/* Progress bar — fixed to bottom */}
         <div style={{
           position: "fixed", bottom: 0, left: 0, right: 0, height: 6,
-          background: "rgba(255,255,255,0.03)", overflow: "hidden",
+          background: "rgba(0,0,0,0.04)", overflow: "hidden",
         }}>
           <div style={{
             width: "100%", height: "100%",
-            background: "linear-gradient(90deg, #A855F7, #00F0FF, #FF2D78, #A855F7)",
+            background: `linear-gradient(90deg, ${c.purple}, ${c.cyan}, ${c.red}, ${c.purple})`,
             backgroundSize: "200% 100%",
             animation: "flow-load-bar 1s cubic-bezier(0.4, 0, 0.2, 1) infinite",
           }} />
@@ -280,9 +329,21 @@ function FlowDashboard({ auth }) {
   if (error) {
     return (
       <div style={{ minHeight: "100vh", background: c.bg, color: c.text, fontFamily: body, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center", color: "#ef4444" }}>
-          <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Failed to load data</div>
-          <div style={{ fontSize: 13, opacity: 0.7 }}>{error}</div>
+        <div style={{ textAlign: "center", padding: 40, background: c.surfaceAlt, border: `1px solid ${c.border}`, borderRadius: 12, maxWidth: 400 }}>
+          <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 12, color: c.red }}>Failed to load data</div>
+          <div style={{ fontSize: 16, color: c.textMid, marginBottom: 8 }}>{error}</div>
+          <div style={{ fontSize: 14, color: c.textDim, marginBottom: 24 }}>If the problem persists, check your connection.</div>
+          <button
+            className="flow-btn"
+            onClick={() => window.location.reload()}
+            style={{
+              padding: "10px 24px", borderRadius: 8,
+              background: c.surfaceAlt, border: `1px solid ${c.borderHover}`,
+              color: c.text, fontSize: 16, fontWeight: 500, fontFamily: body, cursor: "pointer",
+            }}
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -326,19 +387,19 @@ function FlowDashboard({ auth }) {
       />
 
       {/* ═══ TERMINAL VIEW (full-bleed, outside main) ═══ */}
-      {activeTab === "terminal" && <TerminalView onUnlock={handleTerminalUnlock} unlockedSections={terminalUnlocked} auth={auth} appSettings={appSettings} setAppSettings={setAppSettings} />}
+      {activeTab === "terminal" && <TerminalView onUnlock={handleTerminalUnlock} unlockedSections={terminalUnlocked} auth={auth} appSettings={appSettings} setAppSettings={setAppSettings} resetKey={terminalResetKey} initialModule={navPayload} onConsumePayload={() => setNavPayload(null)} />}
 
       {/* ═══ MAIN CANVAS ═══ */}
       {activeTab !== "terminal" && (
-      <main key={activeTab} className="flow-page" style={{ maxWidth: 1260, margin: "0 auto", padding: "24px 40px 60px", overflow: "hidden" }}>
-        {activeTab === "summary" && <SummaryView history={history} commitments={commitments} projects={projects} people={people} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} />}
-        {activeTab === "pulse" && <PulseView commitments={effectiveCommitments} projects={projects} people={people} onNavigate={handleNavigate} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} appSettings={appSettings} />}
-        {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} onSave={flushDirtyToDB} />}
+      <main key={activeTab} className="flow-page" style={{ maxWidth: 1260, margin: "0 auto", padding: "24px 40px 60px" }}>
+        {activeTab === "summary" && <SummaryView history={history} commitments={effectiveCommitments} projects={projects} people={people} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} />}
+        {activeTab === "pulse" && <PulseView loading={loading} error={error} commitments={effectiveCommitments} projects={projects} people={people} onNavigate={handleNavigate} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} appSettings={appSettings} />}
+        {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} onSave={flushDirtyToDB} />}
         {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} history={history} weekConfig={weekConfig} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
         {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} people={people} commitments={effectiveCommitments} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} />}
         {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} commitments={commitments} />}
         {activeTab === "guide" && (
-          <React.Suspense fallback={<div>Loading...</div>}>
+          <React.Suspense fallback={<div style={{ padding: 40, color: c.textDim, fontFamily: body, fontSize: 16, textAlign: "center" }}>Loading...</div>}>
             <ErrorCatcher><GuideView onNavigate={handleTabSwitch} /></ErrorCatcher>
           </React.Suspense>
         )}
@@ -369,10 +430,21 @@ class ErrorCatcher extends React.Component {
   static getDerivedStateFromError(e) { return { error: e }; }
   render() {
     if (this.state.error) return (
-      <div style={{ padding: 40, color: "#ef4444", fontFamily: "monospace", fontSize: 13 }}>
-        <div style={{ fontWeight: 700, marginBottom: 8 }}>Render Error</div>
-        <pre style={{ whiteSpace: "pre-wrap" }}>{this.state.error?.message}</pre>
-        <pre style={{ whiteSpace: "pre-wrap", opacity: 0.5, marginTop: 8 }}>{this.state.error?.stack}</pre>
+      <div style={{ padding: 40, color: c.red, fontFamily: body, fontSize: 14 }}>
+        <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 16 }}>Render Error</div>
+        <pre style={{ whiteSpace: "pre-wrap", color: c.textMid }}>{this.state.error?.message}</pre>
+        <pre style={{ whiteSpace: "pre-wrap", color: c.textDim, marginTop: 8 }}>{this.state.error?.stack}</pre>
+        <button
+          className="flow-btn"
+          onClick={() => window.location.reload()}
+          style={{
+            marginTop: 16, padding: "8px 20px", borderRadius: 8,
+            background: c.surfaceAlt, border: `1px solid ${c.border}`,
+            color: c.text, fontSize: 14, fontFamily: body, cursor: "pointer",
+          }}
+        >
+          Reload
+        </button>
       </div>
     );
     return this.props.children;

@@ -2,6 +2,7 @@
 // Pure CSS/div-based timeline visualization, no external chart libs
 import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import { c, typo, space, layout, motion, phaseColors as getPhaseColors, shipPhases } from "../styles/theme";
+import useDevLabel from "../hooks/useDevLabel";
 
 /* ── Helpers ── */
 const parseDate = (s) => new Date(s + "T00:00:00");
@@ -17,12 +18,13 @@ const ROW_H = 48;
 const HDR_H = 52;
 const LEFT_W = 280;
 
-const phaseColorMap = { PRD: () => c.purple, Design: () => c.accent, Dev: () => c.orange, QA: () => c.cyan };
+const phaseColorMap = { PRD: () => c.purple, Design: () => c.accent, Dev: () => c.orange, QA: () => c.cyan, Alpha: () => c.green, Beta: () => c.green, GA: () => c.green };
 
 /* ══════════════════════════════════════════════════════════════════
    GANTT CHART
    ══════════════════════════════════════════════════════════════════ */
 export default function GanttChart({ projects, weekConfig, onProjectClick }) {
+  const devRef = useDevLabel("GanttChart", "Interactive timeline visualization for project schedules with zoom and tooltips");
   const today = useMemo(() => parseDate(weekConfig?.today || new Date().toISOString().split("T")[0]), [weekConfig]);
 
   // ── Compute time axis ──
@@ -153,7 +155,7 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
   const pc = getPhaseColors();
 
   return (
-    <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", borderRadius: layout.radius, border: `1px solid ${c.border}` }}>
+    <div ref={devRef} style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden", borderRadius: layout.radius, border: `1px solid ${c.border}` }}>
 
       {/* ── LEFT PANEL (frozen) ── */}
       <div ref={leftRef} onScroll={onLeftScroll} style={{
@@ -182,11 +184,11 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
             <div key={p.id + "-left"} onClick={() => scrollToProject(p)}
               style={{
                 height: ROW_H, display: "flex", alignItems: "center", padding: `0 ${space[4]}px`,
-                gap: space[3], cursor: "pointer", borderBottom: `1px solid rgba(255,255,255,0.04)`,
+                gap: space[3], cursor: "pointer", borderBottom: `1px solid rgba(0,0,0,0.04)`,
                 transition: "background 0.4s ease",
-                background: highlightId === p.id ? "rgba(255,255,255,0.06)" : "transparent",
+                background: highlightId === p.id ? "rgba(0,0,0,0.04)" : "transparent",
               }}
-              onMouseEnter={(e) => { if (highlightId !== p.id) e.currentTarget.style.background = `rgba(255,255,255,0.03)`; }}
+              onMouseEnter={(e) => { if (highlightId !== p.id) e.currentTarget.style.background = `rgba(0,0,0,0.03)`; }}
               onMouseLeave={(e) => { if (highlightId !== p.id) e.currentTarget.style.background = "transparent"; }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: c.orange, letterSpacing: "0.3px",
                 fontFamily: typo.monoSm.font, flexShrink: 0, minWidth: 32 }}>{p.id}</span>
@@ -196,8 +198,8 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
                 <div style={{ fontSize: 11, color: c.textDim,
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3 }}>{p.squad}</div>
               </div>
-              {shipPhases.includes(p.phase) && <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 5px", borderRadius: 3,
-                background: `${pc[p.phase] || "#1FAA59"}20`, color: pc[p.phase] || "#1FAA59", letterSpacing: "0.5px", flexShrink: 0 }}>{p.phase}</span>}
+              {shipPhases.includes(p.phase) && <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 5px", borderRadius: 3,
+                background: `${pc[p.phase] || c.green}20`, color: pc[p.phase] || c.green, letterSpacing: "0.5px", flexShrink: 0 }}>{p.phase}</span>}
             </div>
           );
         })}
@@ -216,7 +218,7 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
             {monthSpans.map((ms, i) => (
               <div key={i} style={{ width: ms.width, flexShrink: 0, fontSize: 12, fontWeight: 700,
                 color: c.textMid, padding: "5px 0 0 0", textAlign: "center",
-                borderLeft: `1px solid rgba(255,255,255,0.08)`, letterSpacing: "0.2px",
+                borderLeft: `1px solid rgba(0,0,0,0.06)`, letterSpacing: "0.2px",
                 overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{ms.label}</div>
             ))}
           </div>
@@ -225,9 +227,9 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
             {weeks.map((w, i) => {
               const isMonthStart = i === 0 || w.getMonth() !== weeks[i - 1].getMonth();
               return (
-                <div key={i} style={{ width: COL_W, flexShrink: 0, fontSize: 10, color: c.textDim,
+                <div key={i} style={{ width: COL_W, flexShrink: 0, fontSize: 11, color: c.textDim,
                   textAlign: "center", padding: "3px 0",
-                  borderLeft: `1px solid ${isMonthStart ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)"}` }}>
+                  borderLeft: `1px solid ${isMonthStart ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.03)"}` }}>
                   {fmtShort(w)}
                 </div>
               );
@@ -243,7 +245,7 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
             return (
               <div key={`g-${i}`} style={{ position: "absolute", top: 0, bottom: 0,
                 left: i * COL_W, width: 1, pointerEvents: "none", zIndex: 0,
-                background: isMonthStart ? "rgba(255,255,255,0.06)" : "rgba(255,255,255,0.02)" }} />
+                background: isMonthStart ? "rgba(0,0,0,0.04)" : "rgba(0,0,0,0.02)" }} />
             );
           })}
 
@@ -252,7 +254,7 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
             position: "absolute", top: 0, bottom: 0, left: todayOffset, width: 2, zIndex: 3,
             background: c.accent, opacity: 0.5, pointerEvents: "none",
           }}>
-            <span style={{ position: "absolute", top: 4, left: 6, fontSize: 9, fontWeight: 700,
+            <span style={{ position: "absolute", top: 4, left: 6, fontSize: 11, fontWeight: 700,
               letterSpacing: "0.8px", color: c.accent, whiteSpace: "nowrap" }}>TODAY</span>
           </div>
 
@@ -274,8 +276,8 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
 
             return (
               <div key={p.id + "-bar"} style={{ height: ROW_H, position: "relative",
-                borderBottom: "1px solid rgba(255,255,255,0.04)",
-                background: highlightId === p.id ? "rgba(255,255,255,0.06)" : "transparent",
+                borderBottom: "1px solid rgba(0,0,0,0.04)",
+                background: highlightId === p.id ? "rgba(0,0,0,0.04)" : "transparent",
                 transition: "background 0.4s ease",
               }}>
 
@@ -300,7 +302,7 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
                       ? `repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(110,120,148,0.25) 3px, rgba(110,120,148,0.25) 6px)`
                       : color,
                     opacity: isComplete ? 0.1 : 0.18,
-                    border: isComplete ? `1px dashed rgba(255,255,255,0.15)` : "none",
+                    border: isComplete ? `1px dashed rgba(0,0,0,0.12)` : "none",
                   }} />
 
                   {/* Fill (progress for active, full for complete) */}
@@ -318,7 +320,7 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
                   {/* Label */}
                   {width > 80 && (
                     <span style={{
-                      position: "relative", zIndex: 1, fontSize: 10, fontWeight: 600,
+                      position: "relative", zIndex: 1, fontSize: 11, fontWeight: 600,
                       padding: "0 8px", whiteSpace: "nowrap",
                       color: (pct < 40 || isComplete || isDepri) ? c.text : c.bg,
                       textShadow: (pct >= 40 && !isComplete && !isDepri) ? "0 0 4px rgba(0,0,0,0.3)" : "none",
@@ -397,7 +399,7 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <div style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
               <span style={{ fontSize: 14, fontWeight: 700, color: c.text, flex: 1 }}>{p.name}</span>
-              <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 8px", borderRadius: 4,
+              <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4,
                 background: `${color}22`, color }}>{p.phase}</span>
             </div>
             {[

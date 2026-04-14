@@ -7,6 +7,7 @@ import { c, typo, layout, space, motion } from "../styles/theme";
 import { FilterChip, Btn } from "./shared";
 import FlowLogo from "./FlowLogo";
 import { supabase } from "../lib/supabase";
+import useDevLabel from "../hooks/useDevLabel";
 
 // weekConfig now passed via props from App.jsx
 
@@ -15,10 +16,12 @@ import { supabase } from "../lib/supabase";
    ════════════════════════════════════════════════════════════════════ */
 export const NAV = [
   { key: "summary",  label: "Summary",  num: 1 },
-  { key: "pulse",    label: "Pulse",    num: 2 },
-  { key: "commit",   label: "Commit",   num: 3 },
-  { key: "projects", label: "Projects", num: 4 },
-  { key: "people",   label: "People",   num: 5 },
+  { key: "projects", label: "Projects", num: 2 },
+  { key: "people",   label: "People",   num: 3 },
+  { key: "sep1",     separator: true },
+  { key: "pulse",    label: "Pulse",    num: 4 },
+  { key: "commit",   label: "Commit",   num: 5 },
+  { key: "sep2",     separator: true },
   { key: "guide",    label: "Guide",    num: 6 },
   { key: "settings", label: "Settings", num: null },
   { key: "logs",     label: "Logs",     num: null },
@@ -26,7 +29,7 @@ export const NAV = [
 ];
 
 // Primary nav = tabs shown in the header bar (guide stays here)
-const PRIMARY_NAV = NAV.filter(t => !["settings", "logs", "rant"].includes(t.key));
+const PRIMARY_NAV = NAV.filter(t => !["settings", "logs", "rant"].includes(t.key) || t.separator);
 // Utility nav = behind the terminal icon
 const UTILITY_NAV = NAV.filter(t => ["settings", "logs", "rant"].includes(t.key));
 
@@ -70,7 +73,7 @@ export function getAttentionItems(commitments, projects) {
   const total = commitments.length;
   if (total === 0) return items;
   const unlocked = commitments.filter(x => !x.lockedAt).length;
-  const blocked = 0;
+  const blocked = commitments.filter(x => x.items?.some(i => i.outcome === "blocked")).length;
   const soon = 14 * 86400000;
   const atRisk = projects.filter(p =>
     !["Alpha","Beta","GA"].includes(p.phase) && p.endDate &&
@@ -124,8 +127,71 @@ export function Header({
   currentUser,
 }) {
 
+  const devRef = useDevLabel('Header', 'src/components/AppShell.jsx', 'Two-layer app header with nav, week controls, and filters');
   const showContextBar = !detailLabel;
   const [drawerOpen, setDrawerOpen] = React.useState(false);
+
+  // ── Scroll-aware collapse: hide headers on scroll-down, reveal on scroll-up/hover ──
+  // Listen in capture phase so we catch scroll on any inner container
+  // (several views use internal overflow:auto scrollers, not window scroll).
+  const [scrollHidden, setScrollHidden] = React.useState(false);
+  const [hoverPeek, setHoverPeek] = React.useState(false);
+  const lastYMapRef = React.useRef(new WeakMap());
+  const peekTimerRef = React.useRef(null);
+  React.useEffect(() => {
+    const REVEAL_TOP = 40;
+    const DELTA = 6;
+    const HIDE_AFTER = 120;
+    const onAnyScroll = (e) => {
+      const t = e.target;
+      const isDoc = (t === document || t === document.documentElement || t === document.body);
+      const el = isDoc ? (document.scrollingElement || document.documentElement) : t;
+      if (!el || typeof el.scrollTop !== "number") return;
+      // Ignore tiny inner scrollers (tables, dropdowns, popovers) — only the main
+      // page scroll region should drive header collapse.
+      if (!isDoc) {
+        const vh = window.innerHeight || 800;
+        if (el.clientHeight < vh * 0.5) return;
+      }
+      const y = el.scrollTop;
+      const prev = lastYMapRef.current.get(el) ?? 0;
+      const dy = y - prev;
+      if (y <= REVEAL_TOP) {
+        setScrollHidden(false);
+      } else if (dy > DELTA && y > HIDE_AFTER) {
+        setScrollHidden(true);
+      } else if (dy < -DELTA) {
+        setScrollHidden(false);
+      }
+      lastYMapRef.current.set(el, y);
+    };
+    document.addEventListener('scroll', onAnyScroll, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', onAnyScroll, { capture: true });
+  }, []);
+
+  // Reset collapse state when the active tab or detail context changes
+  React.useEffect(() => { setScrollHidden(false); }, [activeTab, detailLabel]);
+
+  const collapsed = scrollHidden && !hoverPeek;
+
+  // Sync a body class so per-view "frozen top" sections can collapse in sync
+  React.useEffect(() => {
+    document.body.classList.toggle('flow-chrome-collapsed', collapsed);
+    return () => document.body.classList.remove('flow-chrome-collapsed');
+  }, [collapsed]);
+
+  const triggerPeek = () => {
+    setHoverPeek(true);
+    if (peekTimerRef.current) clearTimeout(peekTimerRef.current);
+  };
+  const endPeek = () => {
+    if (peekTimerRef.current) clearTimeout(peekTimerRef.current);
+    peekTimerRef.current = setTimeout(() => setHoverPeek(false), 180);
+  };
+
+  // Current page label for the floating pill
+  const currentNav = NAV.find(n => n.key === activeTab && !n.separator);
+  const floatingLabel = detailLabel || currentNav?.label || "";
 
   // Local draft state for the drawer — syncs from pendingFilters when opening
   const [draft, setDraft] = React.useState({ owner: [], squad: [], person: [] });
@@ -170,13 +236,40 @@ export function Header({
 
   return (
     <>
+    {/* ─── Top hover-peek trigger: invisible strip that reveals collapsed header ─── */}
+    <div
+      aria-hidden
+      onMouseEnter={triggerPeek}
+      onMouseLeave={endPeek}
+      style={{
+        position: "fixed", top: 0, left: 0, right: 0, height: 14,
+        zIndex: 54,
+        pointerEvents: collapsed ? "auto" : "none",
+      }}
+    />
+
+    {/* ═══ SCROLL-AWARE HEADER WRAPPER — slides up on scroll down ═══
+       Uses transform (GPU, no layout reflow) rather than height animation —
+       resizing the wrapper mid-scroll causes the main scroll container's
+       scrollTop to shift, which creates artifact scroll events and oscillation. */}
+    <div
+      onMouseEnter={() => { if (scrollHidden) triggerPeek(); }}
+      onMouseLeave={endPeek}
+      style={{
+        position: "sticky", top: 0, zIndex: 50,
+        transform: collapsed ? "translate3d(0,-100%,0)" : "translate3d(0,0,0)",
+        opacity: collapsed ? 0 : 1,
+        transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease",
+        willChange: "transform",
+      }}
+    >
     {/* ═══ LAYER 1 — Primary navigation bar ═══ */}
-    <header className="flow-header" style={{
+    <header ref={devRef} className="flow-header" style={{
       height: 52, display: "flex", alignItems: "center",
       padding: `0 ${space[5]}px`,
       background: c.surfaceSolid,
       borderBottom: `1px solid ${c.border}`,
-      position: "sticky", top: 0, zIndex: 50,
+      position: "relative", zIndex: 2,
     }}>
 
       {/* ── Accent edge — top of shell ── */}
@@ -217,6 +310,9 @@ export function Header({
       ) : (
         <nav className="flow-nav-rail" style={{ display: "flex", alignItems: "stretch", gap: 2, flexShrink: 0, height: "100%" }}>
           {PRIMARY_NAV.map(tab => {
+            if (tab.separator) {
+              return <div key={tab.key} style={{ width: 1, height: 20, alignSelf: "center", background: c.border, margin: `0 ${space[1]}px`, flexShrink: 0 }} />;
+            }
             const active = activeTab === tab.key;
             return (
               <button key={tab.key} onClick={() => onTabSwitch(tab.key)} className="flow-header-tab" style={{
@@ -235,7 +331,7 @@ export function Header({
                 {tab.label}
                 {/* Numeric shortcut hint — subtle hotkey */}
                 {tab.num && <span style={{
-                  fontFamily: typo.monoSm.font, fontSize: 9,
+                  fontFamily: typo.monoSm.font, fontSize: 11,
                   fontWeight: 600, letterSpacing: typo.monoSm.tracking,
                   color: active ? c.textMid : c.textDim,
                   opacity: active ? 0.6 : 0.35,
@@ -273,14 +369,14 @@ export function Header({
           onClick={() => onTabSwitch("terminal")}
           style={{
             width: 34, height: 34, borderRadius: layout.radiusSm,
-            border: `1px solid ${["terminal","settings","logs"].includes(activeTab) ? "#00ff4140" : c.border}`,
-            background: ["terminal","settings","logs"].includes(activeTab) ? "#00ff4112" : "transparent",
+            border: `1px solid ${["terminal","settings","logs","rant"].includes(activeTab) ? c.green + "40" : c.border}`,
+            background: ["terminal","settings","logs","rant"].includes(activeTab) ? c.green + "12" : "transparent",
             cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
             transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
           }}
           title="Terminal"
         >
-          <TerminalIcon size={16} color={["terminal","settings","logs"].includes(activeTab) ? "#00ff41" : c.textMid} />
+          <TerminalIcon size={16} color={["terminal","settings","logs","rant"].includes(activeTab) ? c.green : c.textMid} />
         </button>
 
         {/* ── Notification bell (admin rant replies) ── */}
@@ -305,7 +401,7 @@ export function Header({
         padding: `0 ${space[5]}px`, gap: space[2],
         background: `linear-gradient(180deg, ${c.surfaceSolid} 0%, ${c.bg} 100%)`,
         borderBottom: `1px solid ${c.border}`,
-        position: "sticky", top: 52, zIndex: 49,
+        position: "relative", zIndex: 1,
         boxShadow: `0 1px 4px ${c.bg}80`,
       }}>
 
@@ -315,7 +411,7 @@ export function Header({
           borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
           background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.surfaceAlt}B0 100%)`,
           overflow: "hidden", flexShrink: 0,
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+          boxShadow: `inset 0 1px 0 rgba(0,0,0,0.03)`,
         }}>
           <button onClick={onWeekPrev} className="flow-btn" style={{
             padding: `2px ${space[1] + 2}px`, border: "none", background: "transparent",
@@ -343,7 +439,7 @@ export function Header({
             }}>{weekLabel}</span>
             {weekOffset !== 0 && (
               <span style={{
-                fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+                fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
                 color: c.accent, padding: "1px 3px", borderRadius: layout.radiusTag,
                 background: `${c.accent}12`, border: `1px solid ${c.accent}25`,
                 letterSpacing: typo.monoSm.tracking, lineHeight: 1,
@@ -411,7 +507,7 @@ export function Header({
             <>
               {globalFilterCount} filter{globalFilterCount !== 1 ? "s" : ""} applied
               <span style={{
-                fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+                fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
                 color: c.accent, background: `${c.accent}18`,
                 padding: "1px 5px", borderRadius: layout.radiusTag + 1, lineHeight: 1.4,
               }}>{globalFilterCount}</span>
@@ -420,6 +516,18 @@ export function Header({
         </button>
       </div>
     )}
+    </div>
+    {/* ═══ END SCROLL-AWARE HEADER WRAPPER ═══ */}
+
+    {/* ═══ FLOATING GLASS PILLS — visible when header collapsed ═══ */}
+    <FloatingHeaderPills
+      visible={collapsed}
+      label={floatingLabel}
+      onLogoClick={onLogoClick}
+      onSearchClick={onCmdOpen}
+      onPeekEnter={triggerPeek}
+      onPeekLeave={endPeek}
+    />
 
     {/* ═══ FILTER DRAWER — slides from right ═══ */}
     <FilterDrawer
@@ -442,6 +550,115 @@ export function Header({
 
 
 /* ════════════════════════════════════════════════════════════════════
+   FLOATING HEADER PILLS — shown when the main header is collapsed.
+   Left pill: Flow logo mark. Right pill: current page label + search.
+   ════════════════════════════════════════════════════════════════════ */
+function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPeekEnter, onPeekLeave }) {
+  const pillBg = `linear-gradient(180deg, ${c.surfaceSolid}F2 0%, ${c.surfaceAlt}E6 100%)`;
+  const pillBorder = `1px solid ${c.border}`;
+  const pillShadow = `0 8px 28px rgba(0,0,0,0.38), 0 1px 0 rgba(255,255,255,0.04) inset`;
+  const radius = 999;
+
+  return (
+    <div
+      onMouseEnter={onPeekEnter}
+      onMouseLeave={onPeekLeave}
+      style={{
+        position: "fixed", top: 12, left: 16, right: 16,
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        gap: space[3], zIndex: 55,
+        pointerEvents: visible ? "auto" : "none",
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(-8px)",
+        transition: "opacity 0.28s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
+      }}
+    >
+      {/* ── Left pill: logo mark ── */}
+      <button
+        onClick={onLogoClick}
+        title="Home"
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "6px 14px 6px 8px", height: 40,
+          borderRadius: radius, border: pillBorder,
+          background: pillBg,
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          boxShadow: pillShadow,
+          cursor: "pointer",
+          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+        }}
+      >
+        <FlowLogo size={24} />
+        <span style={{
+          fontFamily: "'Space Grotesk', 'Inter', sans-serif",
+          fontSize: 14, fontWeight: 700,
+          color: c.text, letterSpacing: "-0.04em",
+        }}>Flow</span>
+      </button>
+
+      {/* ── Right pill: page label + search ── */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 0,
+        height: 40, padding: "0 6px 0 16px",
+        borderRadius: radius, border: pillBorder,
+        background: pillBg,
+        backdropFilter: "blur(18px) saturate(160%)",
+        WebkitBackdropFilter: "blur(18px) saturate(160%)",
+        boxShadow: pillShadow,
+      }}>
+        {label && (
+          <>
+            <span style={{
+              fontFamily: typo.bodySm.font, fontSize: 13,
+              fontWeight: 600, color: c.text,
+              letterSpacing: "-0.01em",
+              whiteSpace: "nowrap", maxWidth: 240,
+              overflow: "hidden", textOverflow: "ellipsis",
+            }}>{label}</span>
+            <div style={{
+              width: 1, height: 18, margin: `0 ${space[3]}px`,
+              background: c.border, flexShrink: 0,
+            }} />
+          </>
+        )}
+        <button
+          onClick={onSearchClick}
+          title="Search (⌘K)"
+          className="flow-hide-mobile"
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            height: 28, padding: "0 10px 0 8px",
+            borderRadius: radius,
+            border: `1px solid ${c.border}`,
+            background: c.surfaceAlt,
+            cursor: "pointer",
+            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.6, flexShrink: 0 }}>
+            <circle cx="7" cy="7" r="5" stroke={c.textDim} strokeWidth="1.5" />
+            <path d="M11 11l3 3" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+          <span style={{
+            fontFamily: typo.bodyXs.font, fontSize: 12,
+            color: c.textMid, userSelect: "none",
+          }}>Search</span>
+          <span style={{
+            fontFamily: typo.monoSm.font, fontSize: 10,
+            fontWeight: 600, color: c.textDim,
+            background: c.surface, border: `1px solid ${c.border}`,
+            padding: "0px 5px", borderRadius: layout.radiusTag + 1,
+            lineHeight: 1.4,
+          }}>⌘K</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
    FILTER DRAWER — full-height right panel with search per group
    ════════════════════════════════════════════════════════════════════ */
 function FilterDrawer({
@@ -451,6 +668,7 @@ function FilterDrawer({
   draftCount, draftChanged, globalFilterCount,
   allOwners, allSquads, allPeople,
 }) {
+  const devRef = useDevLabel('FilterDrawer', 'src/components/AppShell.jsx', 'Full-height right panel with search-per-group filter controls');
   const drawerRef = React.useRef(null);
 
   // Close on Escape
@@ -488,7 +706,7 @@ function FilterDrawer({
 
       {/* Drawer panel */}
       <div
-        ref={drawerRef}
+        ref={(el) => { drawerRef.current = el; if (devRef) devRef.current = el; }}
         style={{
           position: "fixed", top: 0, right: 0, bottom: 0,
           width: 360,
@@ -518,7 +736,7 @@ function FilterDrawer({
             }}>Filters</span>
             {activeCount > 0 && (
               <span style={{
-                fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
                 color: c.accent, background: c.accentDim,
                 padding: "1px 6px", borderRadius: layout.radiusPill,
                 lineHeight: 1.4,
@@ -656,7 +874,7 @@ function DrawerFilterGroup({ label, options, value = [], onChange }) {
           }}>{label}</span>
           {value.length > 0 && (
             <span style={{
-              fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+              fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
               color: c.accent, background: c.accentDim,
               padding: "1px 5px", borderRadius: layout.radiusPill,
               lineHeight: 1.4,
@@ -667,7 +885,7 @@ function DrawerFilterGroup({ label, options, value = [], onChange }) {
           <span
             onClick={() => { onChange([]); setSearch(""); }}
             style={{
-              fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 500,
+              fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 500,
               color: c.textDim, cursor: "pointer",
               padding: "1px 5px", borderRadius: layout.radiusTag,
               transition: `all ${motion.interaction.duration}`,
@@ -960,7 +1178,7 @@ function DayRhythmPill({ onNavigateToGuide }) {
         onMouseEnter={(e) => { e.currentTarget.style.background = `${color}20`; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = `${color}12`; }}
       >
-        <span style={{ fontSize: 10, lineHeight: 1 }}>{rhythm.icon}</span>
+        <span style={{ fontSize: 11, lineHeight: 1 }}>{rhythm.icon}</span>
         {rhythm.label}
       </span>
 
@@ -977,7 +1195,7 @@ function DayRhythmPill({ onNavigateToGuide }) {
           fontFamily: typo.bodyXs.font,
         }}>
           <div style={{
-            fontSize: 10, fontWeight: 600, textTransform: "uppercase",
+            fontSize: 11, fontWeight: 600, textTransform: "uppercase",
             letterSpacing: "0.08em", color: c.textDim,
             marginBottom: space[2],
           }}>
@@ -1048,6 +1266,7 @@ function DayRhythmPill({ onNavigateToGuide }) {
    NOTIFICATION BELL — admin rant replies for current user
    ════════════════════════════════════════════════════════════════════ */
 function NotificationBell({ userEmail, onNavigate }) {
+  const devRef = useDevLabel('NotificationBell', 'src/components/AppShell.jsx', 'Bell icon with dropdown for admin rant reply notifications');
   const [notifications, setNotifications] = React.useState([]);
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef(null);
@@ -1118,13 +1337,13 @@ function NotificationBell({ userEmail, onNavigate }) {
   if (notifications.length === 0) return null;
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={(el) => { ref.current = el; if (devRef) devRef.current = el; }} style={{ position: "relative" }}>
       <button
         onClick={() => { setOpen(v => !v); }}
         style={{
           width: 34, height: 34, borderRadius: layout.radiusSm,
-          border: `1px solid ${open ? "#FBBF2440" : c.border}`,
-          background: open ? "#FBBF2412" : "transparent",
+          border: `1px solid ${open ? "${c.orange}40" : c.border}`,
+          background: open ? "${c.orange}12" : "transparent",
           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
           position: "relative",
           transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
@@ -1132,7 +1351,7 @@ function NotificationBell({ userEmail, onNavigate }) {
         title="Notifications"
       >
         {/* Bell icon */}
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={open ? "#FBBF24" : c.textMid} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={open ? c.orange : c.textMid} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
         </svg>
@@ -1141,8 +1360,8 @@ function NotificationBell({ userEmail, onNavigate }) {
           <div style={{
             position: "absolute", top: 4, right: 4,
             width: 8, height: 8, borderRadius: "50%",
-            background: "#FBBF24",
-            boxShadow: "0 0 6px #FBBF2480",
+            background: c.orange,
+            boxShadow: "0 0 6px ${c.orange}80",
           }} />
         )}
       </button>
@@ -1169,7 +1388,7 @@ function NotificationBell({ userEmail, onNavigate }) {
                 onClick={(e) => { e.stopPropagation(); markAllSeen(); }}
                 style={{
                   background: "transparent", border: "none", cursor: "pointer",
-                  fontSize: 11, color: "#FBBF24", fontFamily: "inherit",
+                  fontSize: 11, color: c.orange, fontFamily: "inherit",
                 }}
               >
                 Mark all read
@@ -1189,19 +1408,19 @@ function NotificationBell({ userEmail, onNavigate }) {
               }}
               style={{
                 width: "100%", padding: "10px 14px",
-                background: n._seen ? "transparent" : "#FBBF2406",
+                background: n._seen ? "transparent" : "${c.orange}06",
                 border: "none", borderBottom: `1px solid ${c.border}`,
                 cursor: "pointer", textAlign: "left", fontFamily: "inherit",
                 display: "flex", gap: 10, alignItems: "flex-start",
                 transition: "background 0.1s",
               }}
-              onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}
-              onMouseLeave={e => e.currentTarget.style.background = n._seen ? "transparent" : "#FBBF2406"}
+              onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.03)"}
+              onMouseLeave={e => e.currentTarget.style.background = n._seen ? "transparent" : "${c.orange}06"}
             >
               {/* Unread dot */}
               <div style={{
                 width: 6, height: 6, borderRadius: "50%", marginTop: 5, flexShrink: 0,
-                background: n._seen ? "transparent" : "#FBBF24",
+                background: n._seen ? "transparent" : c.orange,
               }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{
@@ -1216,7 +1435,7 @@ function NotificationBell({ userEmail, onNavigate }) {
                 }}>
                   {n.admin_note}
                 </div>
-                <div style={{ fontSize: 10, color: c.textDim, opacity: 0.5, marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: c.textDim, opacity: 0.5, marginTop: 2 }}>
                   {timeAgo(n.updated_at)}
                 </div>
               </div>
@@ -1233,6 +1452,7 @@ function NotificationBell({ userEmail, onNavigate }) {
    USER BADGE — avatar + dropdown with logout
    ════════════════════════════════════════════════════════════════════ */
 function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
+  const devRef = useDevLabel('UserBadge', 'src/components/AppShell.jsx', 'User avatar with dropdown menu for profile editing and sign-out');
   const [open, setOpen] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
   const [editName, setEditName] = React.useState("");
@@ -1286,8 +1506,8 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
 
   const inputStyle = {
     width: "100%", padding: "6px 10px",
-    background: "rgba(255,255,255,0.04)",
-    border: `1px solid rgba(255,255,255,0.1)`,
+    background: "rgba(0,0,0,0.04)",
+    border: `1px solid rgba(0,0,0,0.07)`,
     borderRadius: 6, color: c.text,
     fontSize: 12, fontFamily: "inherit",
     outline: "none",
@@ -1302,7 +1522,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
   };
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={(el) => { ref.current = el; if (devRef) devRef.current = el; }} style={{ position: "relative" }}>
       <button
         onClick={() => { setOpen(v => !v); if (open) setEditing(false); }}
         style={{
@@ -1360,7 +1580,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
               <button
                 onClick={startEditing}
                 style={menuBtn}
-                onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.04)"}
+                onMouseEnter={e => e.target.style.background = "rgba(0,0,0,0.04)"}
                 onMouseLeave={e => e.target.style.background = "transparent"}
               >
                 Edit profile
@@ -1370,7 +1590,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
               <button
                 onClick={() => { setOpen(false); onSignOut(); }}
                 style={menuBtn}
-                onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.04)"}
+                onMouseEnter={e => e.target.style.background = "rgba(0,0,0,0.04)"}
                 onMouseLeave={e => e.target.style.background = "transparent"}
               >
                 Sign out
@@ -1432,7 +1652,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
                   disabled={saving || !editName.trim() || !editSquadId || !editRoleId}
                   style={{
                     flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, fontFamily: "inherit",
-                    background: saving ? "rgba(168,85,247,0.3)" : "linear-gradient(135deg, #A855F7, #7C3AED)",
+                    background: saving ? c.accentDim : `linear-gradient(135deg, ${c.accent}, #2563EB)`,
                     border: "none", borderRadius: 6, color: "#fff", cursor: saving ? "wait" : "pointer",
                   }}
                 >{saving ? "Saving…" : "Save"}</button>
@@ -1455,10 +1675,10 @@ function CompactSearch({ onClick }) {
       position: "relative", width: 200, cursor: "pointer",
       display: "flex", alignItems: "center",
       padding: `8px ${space[3] + 2}px`, gap: 9,
-      borderRadius: layout.radiusMd, border: `1px solid rgba(255,255,255,0.22)`,
+      borderRadius: layout.radiusMd, border: `1px solid rgba(0,0,0,0.12)`,
       background: `linear-gradient(135deg, ${c.surfaceAlt} 0%, ${c.surfaceAlt}C0 100%)`,
       transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-      boxShadow: `inset 0 1px 0 rgba(255,255,255,0.04), 0 0 0 0.5px rgba(255,255,255,0.08)`,
+      boxShadow: `inset 0 1px 0 rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.06)`,
     }}>
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.55, flexShrink: 0 }}>
         <circle cx="7" cy="7" r="5" stroke={c.textDim} strokeWidth="1.5" />
@@ -1471,7 +1691,7 @@ function CompactSearch({ onClick }) {
         userSelect: "none",
       }}>Search</span>
       <span style={{
-        fontFamily: typo.monoSm.font, fontSize: 9,
+        fontFamily: typo.monoSm.font, fontSize: 11,
         fontWeight: 600,
         color: c.textDim, background: c.surface,
         border: `1px solid ${c.border}`, padding: "1px 5px",

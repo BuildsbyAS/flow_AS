@@ -4,6 +4,7 @@ import React from "react";
 import { c, typo, space, layout, motion, entityColors, phaseColors, typeConfig } from "../styles/theme";
 import { Surface, Badge } from "../components/shared";
 import FlowLogo from "../components/FlowLogo";
+import useDevLabel from "../hooks/useDevLabel";
 
 /* ══════════════════════════════════════════════════════════════════
    VISUAL HELPERS — inline examples that mirror the real UI
@@ -68,7 +69,7 @@ const Dot = ({ filled, label }) => (
       background: filled ? c.accent : "transparent",
       border: `2px solid ${filled ? c.accent : c.textDim}`,
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: 9, fontWeight: 700, color: filled ? "#fff" : c.textDim,
+      fontSize: 11, fontWeight: 700, color: filled ? "#fff" : c.textDim,
       fontFamily: typo.monoSm.font,
     }}>{label}</div>
   </div>
@@ -78,11 +79,12 @@ const Dot = ({ filled, label }) => (
    GUIDE VIEW
    ══════════════════════════════════════════════════════════════════ */
 const GuideView = ({ onNavigate }) => {
+  const devRef = useDevLabel('Onboarding guide explaining Flow pillars with inline visual examples');
   const pc = phaseColors();
   const tc = typeConfig();
 
   return (
-    <div style={{
+    <div ref={devRef} style={{
       maxWidth: 800, margin: "0 auto",
       display: "flex", flexDirection: "column", gap: space[6],
       paddingBottom: space[8],
@@ -157,7 +159,7 @@ const GuideView = ({ onNavigate }) => {
                   padding: `2px ${space[2]}px`, borderRadius: layout.radiusTag,
                   display: "flex", alignItems: "center", gap: 4,
                 }}>
-                  <span style={{ fontSize: 9, opacity: 0.6 }}>{t.num}</span> {t.label}
+                  <span style={{ fontSize: 11, opacity: 0.6 }}>{t.num}</span> {t.label}
                 </span>
               ))}
             </div>
@@ -192,7 +194,7 @@ const GuideView = ({ onNavigate }) => {
                   padding: `2px ${space[2]}px`, borderRadius: layout.radiusTag,
                   display: "flex", alignItems: "center", gap: 4,
                 }}>
-                  <span style={{ fontSize: 9, opacity: 0.6 }}>{t.num}</span> {t.label}
+                  <span style={{ fontSize: 11, opacity: 0.6 }}>{t.num}</span> {t.label}
                 </span>
               ))}
             </div>
@@ -429,9 +431,9 @@ const GuideView = ({ onNavigate }) => {
               })}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim }}>Feb 3</span>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim }}>7 weeks</span>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim }}>Now</span>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, color: c.textDim }}>Feb 3</span>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, color: c.textDim }}>7 weeks</span>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, color: c.textDim }}>Now</span>
             </div>
           </ExampleCard>
 
@@ -624,7 +626,7 @@ const GuideView = ({ onNavigate }) => {
           <ExampleCard style={{ display: "flex", alignItems: "center", gap: space[2] }}>
             <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{'>'}</span>
             <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.text, fontWeight: 500 }}>checkout</span>
-            <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: 9, color: c.textDim, letterSpacing: "0.05em" }}>ESC TO CLOSE</span>
+            <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: 11, color: c.textDim, letterSpacing: "0.05em" }}>ESC TO CLOSE</span>
           </ExampleCard>
           <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, lineHeight: 1.6, color: c.textDim }}>
             Finds <ProjectId id="X03" /> Checkout Flow, <ProjectId id="X31" /> Checkout V3, and any related people or navigation options.
@@ -653,10 +655,10 @@ const GuideView = ({ onNavigate }) => {
       {/* TERMINAL */}
       <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
         <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-          <div style={{ width: 4, height: 28, borderRadius: 2, background: "#00ff41" }} />
+          <div style={{ width: 4, height: 28, borderRadius: 2, background: c.green }} />
           <div>
             <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking, color: c.text, lineHeight: 1 }}>Terminal</div>
-            <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: "#00ff41", textTransform: "uppercase", marginTop: 4 }}>Behind the gate</div>
+            <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.green, textTransform: "uppercase", marginTop: 4 }}>Behind the gate</div>
           </div>
         </div>
 
@@ -721,7 +723,7 @@ const GuideView = ({ onNavigate }) => {
                     }}>{r.label}</span>
                     {isToday && (
                       <span style={{
-                        fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+                        fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
                         letterSpacing: "0.08em", textTransform: "uppercase",
                         color: r.color, background: `${r.color}18`,
                         padding: "1px 5px", borderRadius: layout.radiusTag,
@@ -746,10 +748,11 @@ const GuideView = ({ onNavigate }) => {
         <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Quick Reference</div>
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: `${space[2]}px ${space[4]}px`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size }}>
           {[
-            ["1 – 5", "Navigate tabs: Summary, Pulse, Commit, Projects, People"],
-            ["6", "Open this Guide"],
+            ["1 – 6", "Navigate tabs: Summary, Pulse, Commit, Projects, People, Guide"],
             ["T", "Open Terminal (Settings, Logs, Rant, Admin)"],
             ["F", "Open command palette / universal search"],
+            ["⌘K", "Open command palette (also Ctrl+K)"],
+            ["/", "Focus in-tab search bar"],
             ["?", "Toggle keyboard shortcut hints"],
             ["Esc", "Go back / close palette"],
           ].map(([key, desc], i) => (
@@ -779,8 +782,23 @@ const GuideView = ({ onNavigate }) => {
           fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
           color: c.textDim, marginTop: space[4],
         }}>
-          Search anything with <Kbd>F</Kbd> — project IDs, names, squads, people. It works everywhere.
+          Search anything with <Kbd>F</Kbd> or <Kbd>⌘K</Kbd> — project IDs, names, squads, people. It works everywhere.
         </p>
+        <div style={{ marginTop: space[5], display: "flex", gap: space[3], justifyContent: "center" }}>
+          <button onClick={() => onNavigate("summary")} className="flow-btn" style={{
+            padding: `${space[3]}px ${space[5]}px`, borderRadius: layout.radiusMd,
+            border: `1px solid ${c.green}40`, background: `${c.green}10`,
+            color: c.green, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+            fontWeight: 600, cursor: "pointer",
+          }}>Start with Summary</button>
+          <button onClick={() => onNavigate("pulse")} className="flow-btn" style={{
+            padding: `${space[3]}px ${space[5]}px`, borderRadius: layout.radiusMd,
+            border: "none", background: c.accent,
+            color: "#fff", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+            fontWeight: 700, cursor: "pointer",
+            boxShadow: `0 4px 16px ${c.accent}40`,
+          }}>Jump to Pulse →</button>
+        </div>
       </div>
 
       {/* ═══ FOOTER — CREDITS ═══ */}
@@ -806,7 +824,7 @@ const GuideView = ({ onNavigate }) => {
           <span style={{ color: c.red }}>Red Bull</span>!
         </div>
         <div style={{
-          fontFamily: "'Press Start 2P', monospace", fontSize: 9,
+          fontFamily: "'Press Start 2P', monospace", fontSize: 11,
           lineHeight: 2, color: c.textDim, opacity: 0.7,
         }}>
           thoughts? feedback?{" "}

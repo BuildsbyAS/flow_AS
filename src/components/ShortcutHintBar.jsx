@@ -1,6 +1,7 @@
 import React from "react";
 import { c, typo, layout, space } from "../styles/theme";
 import { KbdHint } from "./shared";
+import useDevLabel from "../hooks/useDevLabel";
 
 /**
  * ShortcutHintBar — fixed bar at bottom showing contextual keyboard shortcuts.
@@ -11,14 +12,14 @@ import { KbdHint } from "./shared";
  *   visible      — controlled visibility
  */
 const ShortcutHintBar = ({ activeTab, hasDetail, isLocked, visible }) => {
+  const devRef = useDevLabel("ShortcutHintBar", "Fixed bottom bar showing contextual keyboard shortcuts");
   if (!visible) return null;
 
   // Build contextual hints
   const hints = [];
 
   // Global hints always shown
-  hints.push({ keys: "1–5", label: "Tabs" });
-  hints.push({ keys: "D", label: "Theme" });
+  hints.push({ keys: "1–6", label: "Tabs" });
 
   if (hasDetail) {
     hints.push({ keys: "Esc", label: "Back" });
@@ -28,8 +29,6 @@ const ShortcutHintBar = ({ activeTab, hasDetail, isLocked, visible }) => {
   if (activeTab === "pulse") {
     hints.push({ keys: "↑↓", label: "Navigate" });
     hints.push({ keys: "↵", label: "Expand" });
-    hints.push({ keys: "S", label: "Ship view" });
-    hints.push({ keys: "C", label: "Clear filters" });
   } else if (activeTab === "commit") {
     if (hasDetail) {
       hints.push({ keys: "↑↓", label: "Commits" });
@@ -37,37 +36,35 @@ const ShortcutHintBar = ({ activeTab, hasDetail, isLocked, visible }) => {
         hints.push({ keys: "L", label: "Lock" });
       } else {
         hints.push({ keys: "U", label: "Unlock" });
+        hints.push({ keys: "F", label: "Finish" });
       }
     } else {
       hints.push({ keys: "↑↓", label: "Navigate" });
       hints.push({ keys: "↵", label: "Open" });
     }
   } else if (activeTab === "projects" || activeTab === "people") {
-    if (hasDetail) {
-      // no extra shortcuts in detail other than Esc
-    } else {
+    if (!hasDetail) {
       hints.push({ keys: "↑↓", label: "Navigate" });
       hints.push({ keys: "↵", label: "Open" });
-      hints.push({ keys: "C", label: "Clear filters" });
     }
   } else if (activeTab === "settings") {
     hints.push({ keys: "←→", label: "Sub-tabs" });
   }
 
+  hints.push({ keys: "T", label: "Terminal" });
   hints.push({ keys: "/", label: "Search" });
   hints.push({ keys: "?", label: "Hide hints" });
 
   return (
-    <div style={{
+    <div ref={devRef} style={{
       position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
-      display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] - 2,
+      display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
       padding: `${space[2]}px ${space[5]}px`,
       background: c.surfaceSolid,
       borderTop: `1px solid ${c.border}`,
-      opacity: 0.9,
     }}>
       {hints.map((h, i) => (
-        <KbdHint key={i} keys={[h.keys]} label={h.label} style={{ marginRight: space[2] - 2 }} />
+        <KbdHint key={i} keys={[h.keys]} label={h.label} style={{ marginRight: space[2] }} />
       ))}
     </div>
   );

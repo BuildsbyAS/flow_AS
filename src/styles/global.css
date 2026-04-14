@@ -23,6 +23,24 @@ body {
   scrollbar-width: none;
 }
 
+/* ── Scroll-aware view chrome: in-view frozen-top strips slide up when the app header does.
+   We use transform (GPU, no reflow) instead of height animation — changing the flow height of
+   the chrome mid-scroll causes the main scroll container's scrollTop to shift, which creates
+   artifact scroll events and a violent oscillation. Chrome keeps its flow space; the floating
+   pill sits over the reserved area. */
+.flow-view-chrome {
+  transition:
+    transform 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.2s ease;
+  will-change: transform;
+  transform-origin: top center;
+}
+body.flow-chrome-collapsed .flow-view-chrome {
+  transform: translate3d(0, -110%, 0);
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* ── Focus ring — visible keyboard focus ── */
 .flow-input:focus {
   border-color: rgba(59, 130, 246, 0.5);
@@ -36,13 +54,12 @@ body {
 
 /* ── Dropdown item hover ── */
 .flow-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 /* ── Header tab hover ── */
 .flow-header-tab:hover {
   background: linear-gradient(180deg, rgba(59,130,246,0.04) 0%, rgba(59,130,246,0.08) 100%) !important;
-  color: #ECF0F6 !important;
 }
 
 /* ── Search trigger hover ── */
@@ -59,20 +76,18 @@ body {
 
 /* ── Breadcrumb back button hover ── */
 .flow-breadcrumb:hover {
-  color: #ECF0F6 !important;
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08) !important;
 }
 
 /* ── Context bar week nav button hover ── */
 .flow-week-nav button:hover {
-  color: #ECF0F6 !important;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 /* ── Filter icon area hover ── */
 .flow-context-bar .flow-btn:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 /* ── Scrollbar styling (Webkit) ── */
@@ -84,11 +99,11 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.10);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.18);
 }
 
 /* ── Focus-visible for interactive shell elements ── */
@@ -127,7 +142,7 @@ body {
 
 /* ── Row hover — beam highlight, no translate ── */
 .flow-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 0, 0, 0.03);
 }
 
 /* ── Keyboard focus row ── */
@@ -138,9 +153,9 @@ body {
 
 /* ── Mission grid — hero strip surface ── */
 .flow-mission-grid {
-  background: #06090F;
+  background: var(--flow-bg, #F0F2F7);
   border: none;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.10);
+  box-shadow: inset 0 0 0 1px var(--flow-border, rgba(0, 0, 0, 0.07));
   border-radius: 12px;
   position: relative;
   overflow: hidden;
@@ -149,7 +164,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(255, 255, 255, 0.45);
   pointer-events: none;
 }
 
@@ -189,8 +204,8 @@ body {
 
 /* ── Glass tile hover (Summary + Pulse KPI tiles) ── */
 .flow-glass-tile:hover {
-  background: rgba(255, 255, 255, 0.06) !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.10) !important;
 }
 
 /* ── Command palette overlay ── */
@@ -209,11 +224,11 @@ body {
 /* ── Command palette box ── */
 .flow-cmd-box {
   border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
 }
 
 /* ── Command palette top bar gradient ── */
@@ -230,12 +245,12 @@ body {
 
 /* ── Command item hover ── */
 .flow-cmd-item:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 0, 0, 0.03);
 }
 
 /* ── Command palette results scrollbar ── */
 .flow-cmd-results::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* ── Commit: lock glow breathe ── */

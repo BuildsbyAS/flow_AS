@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Flow — Option B: Orange (Typography Refined)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800;14..32,900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    /* ── Steel-gray aluminum base ── */
+    --bg-page: #EDEDF0;
+    --bg-card: #FFFFFF;
+    --bg-inset: #F3F3F6;
+    --bg-table-header: #F7F7FA;
+
+    --text-primary: #1A1A1E;
+    --text-secondary: #4A4A52;
+    --text-tertiary: #7E7E8A;
+    --text-ghost: #AEAEB8;
+
+    --border: rgba(0,0,0,0.07);
+    --border-hover: rgba(0,0,0,0.12);
+
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.03), 0 4px 16px rgba(0,0,0,0.05);
+    --shadow-elevated: 0 2px 8px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.07);
+
+    --radius: 14px;
+    --radius-sm: 8px;
+    --radius-xs: 5px;
+
+    /* ── Orange accent ── */
+    --accent: #E8590C;
+    --accent-soft: rgba(232,89,12,0.08);
+    --accent-glow: rgba(232,89,12,0.25);
+
+    /* ── Semantic ── */
+    --green: #059669; --green-bg: #ECFDF5;
+    --red: #DC2626; --red-bg: #FEF2F2;
+    --amber: #B45309; --amber-bg: #FFFBEB;
+    --purple: #6D28D9; --purple-bg: #F5F3FF;
+    --blue: #1D4ED8; --blue-bg: #EFF6FF;
+    --cyan: #0E7490; --cyan-bg: #ECFEFF;
+
+    /* ── Fonts ── */
+    --sans: 'Inter', system-ui, -apple-system, sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+
+    /*
+      TYPE SCALE (nothing below 11px)
+      ────────────────────────────────
+      KPI hero:     36px / mono / 700
+      KPI label:    12px / sans / 600 / uppercase 0.06em
+      Nav:          13px / sans / 600
+      Section head: 12px / mono / 700 / uppercase 0.08em
+      Table head:   12px / sans / 600 / uppercase 0.04em
+      Table body:   14px / sans / 500
+      Body small:   13px / sans / 500
+      Mono data:    12px / mono / 700
+      Tag:          11px / mono / 700
+      Micro label:  11px / sans / 600
+    */
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: var(--sans); background: var(--bg-page); color: var(--text-primary);
+    -webkit-font-smoothing: antialiased; font-size: 14px; line-height: 1.5;
+  }
+
+  /* Subtle noise texture on page */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.018;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 256px;
+  }
+
+  .app { position: relative; z-index: 1; min-height: 100vh; }
+
+  /* ════════════════════════════════════════════════════ */
+  /*  HEADER                                              */
+  /* ════════════════════════════════════════════════════ */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px; height: 56px;
+    background: var(--bg-card); border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-sm);
+  }
+  .h-left { display: flex; align-items: center; }
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    margin-right: 40px;
+  }
+  .logo-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+  }
+  .logo-text {
+    font-family: var(--mono); font-size: 15px; font-weight: 700;
+    color: var(--text-primary); letter-spacing: 0.04em;
+  }
+  .nav { display: flex; gap: 0; height: 56px; }
+  .nav-item {
+    display: flex; align-items: center; padding: 0 16px;
+    font-size: 13px; font-weight: 600; color: var(--text-ghost);
+    border-bottom: 2px solid transparent; cursor: default;
+    transition: color 0.15s;
+  }
+  .nav-item:hover { color: var(--text-tertiary); }
+  .nav-item.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .nav-item .nav-key {
+    font-size: 11px; font-weight: 500; color: var(--text-ghost);
+    margin-left: 6px; opacity: 0.6;
+  }
+  .h-right { display: flex; align-items: center; gap: 8px; }
+  .search-box {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 14px; border-radius: var(--radius-sm);
+    background: var(--bg-inset); border: 1px solid var(--border);
+    font-size: 13px; color: var(--text-ghost);
+  }
+  .search-box kbd {
+    font-size: 11px; font-family: var(--mono); color: var(--text-ghost);
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px;
+  }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: var(--radius-sm);
+    background: var(--bg-inset); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 14px; color: var(--text-tertiary);
+    cursor: default;
+  }
+
+  /* ════════════════════════════════════════════════════ */
+  /*  CONTEXT BAR                                        */
+  /* ════════════════════════════════════════════════════ */
+  .ctx {
+    display: flex; align-items: center; gap: 20px;
+    padding: 10px 32px;
+    background: var(--bg-card); border-bottom: 1px solid var(--border);
+  }
+  .ctx-wk {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+  }
+  .wk-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: var(--text-ghost); cursor: default;
+  }
+  .ctx-live {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 500; color: var(--text-tertiary);
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--accent); animation: pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 6px var(--accent-glow);
+  }
+  @keyframes pulse { 0%,100%{opacity:0.3;transform:scale(0.9)}50%{opacity:1;transform:scale(1)} }
+  .ctx-right { margin-left: auto; display: flex; gap: 8px; }
+  .pill-btn {
+    padding: 6px 14px; border-radius: var(--radius-sm);
+    background: var(--bg-card); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 500; color: var(--text-secondary); cursor: default;
+  }
+
+  /* ════════════════════════════════════════════════════ */
+  /*  BODY                                               */
+  /* ════════════════════════════════════════════════════ */
+  .body { padding: 28px 32px 64px; max-width: 1440px; margin: 0 auto; }
+
+  /* ════════════════════════════════════════════════════ */
+  /*  KPI CARDS                                          */
+  /* ════════════════════════════════════════════════════ */
+  .kpi-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 32px; }
+  .kpi-card {
+    padding: 24px; border-radius: var(--radius);
+    background: var(--bg-card); border: 1px solid var(--border);
+    box-shadow: var(--shadow-card);
+  }
+  .kpi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .kpi-label {
+    font-size: 12px; font-weight: 600; color: var(--text-tertiary);
+    letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .kpi-delta { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+  .d-up { color: var(--green); } .d-dn { color: var(--red); } .d-flat { color: var(--text-ghost); }
+  .kpi-value {
+    font-family: var(--mono); font-size: 36px; font-weight: 700;
+    color: var(--text-primary); letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .kpi-sub { font-size: 13px; color: var(--text-tertiary); margin-top: 6px; }
+
+  /* Phase pills */
+  .phase-pills { display: flex; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
+  .pp {
+    padding: 5px 11px; border-radius: 6px;
+    font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .pp-n { font-family: var(--mono); font-weight: 800; }
+  .pp-prd { background: var(--purple-bg); color: var(--purple); }
+  .pp-des { background: var(--blue-bg); color: var(--blue); }
+  .pp-dev { background: var(--amber-bg); color: var(--amber); }
+  .pp-qa { background: var(--cyan-bg); color: var(--cyan); }
+  .pp-ship { background: var(--green-bg); color: var(--green); }
+
+  /* Sparkline */
+  .spark { display: flex; align-items: flex-end; gap: 3px; margin-top: 16px; height: 40px; }
+  .s-bar { flex: 1; border-radius: 3px; min-height: 4px; }
+  .s-bar.muted { background: var(--bg-inset); }
+  .s-bar.accent { background: var(--accent); opacity: 0.25; }
+  .s-bar.current { background: var(--accent); opacity: 1; }
+
+  /* Health card (inverted) */
+  .kpi-card.health {
+    background: #1A1A1E; border-color: #1A1A1E;
+  }
+  .kpi-card.health .kpi-label { color: #6B6B78; }
+  .kpi-card.health .kpi-value { color: #F0F0F4; }
+  .kpi-card.health .kpi-sub { color: #6B6B78; }
+  .h-track { height: 4px; border-radius: 2px; background: #2E2E36; margin-top: 16px; overflow: hidden; }
+  .h-track-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #DC2626 0%, #F59E0B 50%, #10B981 100%); }
+  .h-ticks { display: flex; justify-content: space-between; margin-top: 6px; }
+  .h-ticks span { font-family: var(--mono); font-size: 11px; color: #4A4A52; }
+
+  /* ════════════════════════════════════════════════════ */
+  /*  SECTION HEADER                                     */
+  /* ════════════════════════════════════════════════════ */
+  .sec-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .sec-title {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-tertiary);
+  }
+  .seg {
+    display: inline-flex; border-radius: 10px;
+    background: var(--bg-inset); padding: 3px; border: 1px solid var(--border);
+  }
+  .seg-btn {
+    padding: 7px 28px; border-radius: 8px; cursor: default;
+    font-size: 13px; font-weight: 600; color: var(--text-tertiary);
+  }
+  .seg-btn.active {
+    background: var(--bg-card); color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* ════════════════════════════════════════════════════ */
+  /*  TABLE                                              */
+  /* ════════════════════════════════════════════════════ */
+  .table-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+    box-shadow: var(--shadow-card);
+  }
+  table { width: 100%; border-collapse: collapse; }
+
+  thead th {
+    text-align: left; padding: 12px 16px;
+    font-size: 12px; font-weight: 600; color: var(--text-tertiary);
+    letter-spacing: 0.03em; text-transform: uppercase;
+    background: var(--bg-table-header);
+    border-bottom: 1px solid var(--border);
+  }
+  thead th.c { text-align: center; }
+  thead th .sort { color: var(--accent); margin-left: 3px; font-size: 10px; }
+
+  tbody td {
+    padding: 13px 16px; font-size: 14px; font-weight: 500;
+    color: var(--text-secondary); border-bottom: 1px solid rgba(0,0,0,0.03);
+    vertical-align: middle;
+  }
+  tbody td.c { text-align: center; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background 0.1s; }
+  tbody tr:hover td { background: rgba(0,0,0,0.012); }
+
+  .t-squad { font-size: 13px; font-weight: 500; color: var(--text-tertiary); }
+  .t-proj { display: flex; align-items: center; gap: 10px; min-width: 200px; }
+  .t-id {
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    color: var(--amber); letter-spacing: 0.02em; flex-shrink: 0;
+  }
+  .t-name { font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t-nocommit {
+    flex-shrink: 0; font-size: 11px; font-weight: 600;
+    color: var(--amber); background: var(--amber-bg);
+    border: 1px solid #FEF3C7; padding: 3px 8px; border-radius: var(--radius-xs);
+  }
+  .t-owner { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
+
+  .badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 3px 10px; border-radius: var(--radius-xs);
+    font-size: 12px; font-weight: 700; min-width: 44px;
+  }
+  .b-ga { background: var(--green-bg); color: var(--green); }
+  .b-beta { background: var(--green-bg); color: #059669; }
+  .b-dev { background: var(--amber-bg); color: var(--amber); }
+  .b-prd { background: var(--purple-bg); color: var(--purple); }
+  .b-qa { background: var(--cyan-bg); color: var(--cyan); }
+  .b-design { background: var(--blue-bg); color: var(--blue); }
+
+  .health-cell { display: flex; align-items: center; gap: 8px; }
+  .health-bar { width: 48px; height: 5px; border-radius: 3px; background: var(--bg-inset); overflow: hidden; position: relative; }
+  .health-fill { height: 100%; border-radius: 3px; position: absolute; left: 0; top: 0; }
+  .hf-g { background: var(--green); } .hf-f { background: #F59E0B; } .hf-l { background: var(--red); }
+  .health-num { font-family: var(--mono); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .hn-g { color: var(--green); } .hn-f { color: #D97706; } .hn-l { color: var(--red); }
+  .health-word { font-size: 11px; font-weight: 600; color: var(--text-ghost); }
+
+  .phase-tag {
+    display: inline-flex; padding: 3px 8px; border-radius: var(--radius-xs);
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+  }
+  .pt-prd { background: var(--purple-bg); color: var(--purple); }
+  .pt-des { background: var(--blue-bg); color: var(--blue); }
+  .pt-dev { background: var(--amber-bg); color: var(--amber); }
+  .pt-qa { background: var(--cyan-bg); color: var(--cyan); }
+
+  .ship-badge {
+    display: inline-flex; padding: 3px 10px; border-radius: var(--radius-xs);
+    font-size: 12px; font-weight: 700;
+    background: var(--green-bg); color: var(--green);
+  }
+
+  /* ════════════════════════════════════════════════════ */
+  /*  COMMITMENTS                                        */
+  /* ════════════════════════════════════════════════════ */
+  .commit-section { margin-top: 32px; }
+  .commit-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+  .commit-card {
+    padding: 20px 22px; border-radius: var(--radius);
+    background: var(--bg-card); border: 1px solid var(--border);
+    box-shadow: var(--shadow-card);
+  }
+  .cc-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .cc-avatar {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: var(--bg-inset); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 12px; font-weight: 700; color: var(--text-tertiary);
+  }
+  .cc-name { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .cc-role { font-size: 12px; color: var(--text-tertiary); margin-top: 1px; }
+  .cc-items { display: flex; flex-direction: column; gap: 10px; }
+  .cc-item { display: flex; align-items: flex-start; gap: 10px; }
+  .cc-dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    border: 2px solid var(--accent); flex-shrink: 0; margin-top: 5px;
+  }
+  .cc-dot.filled { background: var(--accent); }
+  .cc-text { font-size: 13px; color: var(--text-secondary); font-weight: 500; line-height: 1.45; }
+  .cc-meta {
+    display: flex; align-items: center; gap: 8px; margin-top: 3px;
+  }
+  .cc-type {
+    font-family: var(--mono); font-size: 11px; font-weight: 700;
+    letter-spacing: 0.04em;
+  }
+  .cc-build { color: var(--green); } .cc-jam { color: var(--accent); }
+  .cc-proj {
+    font-family: var(--mono); font-size: 11px; font-weight: 600;
+    color: var(--text-ghost);
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- ═══ HEADER ═══ -->
+  <div class="header">
+    <div class="h-left">
+      <div class="logo"><div class="logo-dot"></div><span class="logo-text">FLOW</span></div>
+      <div class="nav">
+        <div class="nav-item">Summary <span class="nav-key">1</span></div>
+        <div class="nav-item active">Pulse <span class="nav-key">4</span></div>
+        <div class="nav-item">Projects <span class="nav-key">2</span></div>
+        <div class="nav-item">People <span class="nav-key">3</span></div>
+        <div class="nav-item">Commit <span class="nav-key">5</span></div>
+        <div class="nav-item">Guide <span class="nav-key">6</span></div>
+      </div>
+    </div>
+    <div class="h-right">
+      <div class="search-box">Search <kbd>F</kbd></div>
+      <div class="icon-btn">&gt;_</div>
+    </div>
+  </div>
+
+  <!-- ═══ CONTEXT BAR ═══ -->
+  <div class="ctx">
+    <div class="ctx-wk"><div class="wk-btn">&lsaquo;</div> WK Mar 30, 2026 <div class="wk-btn">&rsaquo;</div></div>
+    <div class="ctx-live"><div class="live-dot"></div> Live team activity &mdash; who's doing what right now</div>
+    <div class="ctx-right"><div class="pill-btn">Rest day</div><div class="pill-btn">Filters</div></div>
+  </div>
+
+  <!-- ═══ BODY ═══ -->
+  <div class="body">
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Active Projects</span><span class="kpi-delta d-up">+5 vs prev</span></div>
+        <div class="kpi-value">108</div>
+        <div class="kpi-sub">across all squads and phases</div>
+        <div class="phase-pills">
+          <span class="pp pp-prd"><span class="pp-n">22</span> PRD</span>
+          <span class="pp pp-des"><span class="pp-n">21</span> Design</span>
+          <span class="pp pp-dev"><span class="pp-n">23</span> Dev</span>
+          <span class="pp pp-qa"><span class="pp-n">20</span> QA</span>
+          <span class="pp pp-ship"><span class="pp-n">22</span> Ship</span>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Shipped This Week</span><span class="kpi-delta d-up">+4</span></div>
+        <div class="kpi-value">22</div>
+        <div class="kpi-sub">reached Alpha / Beta / GA</div>
+        <div class="spark">
+          <div class="s-bar accent" style="height:35%"></div><div class="s-bar accent" style="height:50%"></div>
+          <div class="s-bar accent" style="height:30%"></div><div class="s-bar accent" style="height:65%"></div>
+          <div class="s-bar accent" style="height:45%"></div><div class="s-bar current" style="height:100%"></div>
+        </div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Deprioritized</span><span class="kpi-delta d-flat">&mdash;</span></div>
+        <div class="kpi-value">6</div>
+        <div class="kpi-sub">paused projects</div>
+        <div class="spark">
+          <div class="s-bar muted" style="height:80%"></div><div class="s-bar muted" style="height:60%"></div>
+          <div class="s-bar muted" style="height:70%"></div><div class="s-bar muted" style="height:50%"></div>
+          <div class="s-bar muted" style="height:40%"></div><div class="s-bar muted" style="height:30%"></div>
+        </div>
+      </div>
+      <div class="kpi-card health">
+        <div class="kpi-top"><span class="kpi-label">Avg Health</span><span class="kpi-delta d-dn">-4 pts</span></div>
+        <div class="kpi-value">59</div>
+        <div class="kpi-sub">portfolio health score</div>
+        <div class="h-track"><div class="h-track-fill" style="width:59%"></div></div>
+        <div class="h-ticks"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="sec-head">
+      <span class="sec-title">Project Matrix</span>
+      <div class="seg"><div class="seg-btn active">Projects</div><div class="seg-btn">People</div></div>
+    </div>
+    <div class="table-card">
+      <table>
+        <thead><tr>
+          <th>Squad <span class="sort">&uarr;</span></th><th>Project</th><th></th><th>Owner</th>
+          <th class="c">Status</th><th>Health</th>
+          <th class="c">PRD</th><th class="c">Design</th><th class="c">Dev</th><th class="c">QA</th><th class="c">Ship</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X08</span><span class="t-name">Product Recs</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Tariq A.</td><td class="c"><span class="badge b-ga">GA</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-f" style="width:65%"></div></div><span class="health-num hn-f">65</span><span class="health-word">Fair</span></div></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"><span class="ship-badge">GA</span></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X104</span><span class="t-name">test test testing</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">AJ</td><td class="c"><span class="badge b-beta">Beta</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-f" style="width:65%"></div></div><span class="health-num hn-f">65</span><span class="health-word">Fair</span></div></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"><span class="ship-badge">Beta</span></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X16</span><span class="t-name">App Performance</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Mariam R.</td><td class="c"><span class="badge b-ga">GA</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-f" style="width:65%"></div></div><span class="health-num hn-f">65</span><span class="health-word">Fair</span></div></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"><span class="ship-badge">GA</span></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X24</span><span class="t-name">Size Guide</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Noura S.</td><td class="c"><span class="badge b-prd">PRD</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-f" style="width:65%"></div></div><span class="health-num hn-f">65</span><span class="health-word">Fair</span></div></td><td class="c"><span class="phase-tag pt-prd">1B</span></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X40</span><span class="t-name">Email Campaigns</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Nadia F.</td><td class="c"><span class="badge b-dev">Dev</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-f" style="width:50%"></div></div><span class="health-num hn-f">50</span><span class="health-word">Fair</span></div></td><td class="c"></td><td class="c"></td><td class="c"><span class="phase-tag pt-dev">1B</span></td><td class="c"></td><td class="c"></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X48</span><span class="t-name">Route Optimization</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Hana W.</td><td class="c"><span class="badge b-dev">Dev</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-l" style="width:40%"></div></div><span class="health-num hn-l">40</span><span class="health-word">Fair</span></div></td><td class="c"></td><td class="c"></td><td class="c"><span class="phase-tag pt-dev">2B</span></td><td class="c"></td><td class="c"></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X56</span><span class="t-name">Search Autocomplete</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Lina B.</td><td class="c"><span class="badge b-qa">QA</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-l" style="width:40%"></div></div><span class="health-num hn-l">40</span><span class="health-word">Fair</span></div></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"><span class="phase-tag pt-qa">1B</span></td><td class="c"></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X64</span><span class="t-name">Loyalty Tiers</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Faisal M.</td><td class="c"><span class="badge b-qa">QA</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-g" style="width:75%"></div></div><span class="health-num hn-g">75</span><span class="health-word">Good</span></div></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X73</span><span class="t-name">In-App Chat</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Tariq A.</td><td class="c"><span class="badge b-dev">Dev</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-f" style="width:50%"></div></div><span class="health-num hn-f">50</span><span class="health-word">Fair</span></div></td><td class="c"></td><td class="c"></td><td class="c"><span class="phase-tag pt-dev">1J</span></td><td class="c"></td><td class="c"></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X81</span><span class="t-name">Promo Scheduler</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Mariam R.</td><td class="c"><span class="badge b-design">Design</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-l" style="width:40%"></div></div><span class="health-num hn-l">40</span><span class="health-word">Fair</span></div></td><td class="c"></td><td class="c"><span class="phase-tag pt-des">1B</span></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+          <tr><td class="t-squad">Ads</td><td><div class="t-proj"><span class="t-id">X91</span><span class="t-name">Coupon Engine V2</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Tariq A.</td><td class="c"><span class="badge b-ga">GA</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-f" style="width:65%"></div></div><span class="health-num hn-f">65</span><span class="health-word">Fair</span></div></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"><span class="ship-badge">GA</span></td></tr>
+          <tr><td class="t-squad">Consumer</td><td><div class="t-proj"><span class="t-id">X01</span><span class="t-name">Loyalty V2</span></div></td><td><span class="t-nocommit">No commitments</span></td><td class="t-owner">Rania K.</td><td class="c"><span class="badge b-prd">PRD</span></td><td><div class="health-cell"><div class="health-bar"><div class="health-fill hf-g" style="width:75%"></div></div><span class="health-num hn-g">75</span><span class="health-word">Good</span></div></td><td class="c"><span class="phase-tag pt-prd">1B</span></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Commitments -->
+    <div class="commit-section">
+      <div class="sec-head"><span class="sec-title">This Week's Commitments</span></div>
+      <div class="commit-grid">
+        <div class="commit-card">
+          <div class="cc-header"><div class="cc-avatar">TA</div><div><div class="cc-name">Tariq A.</div><div class="cc-role">Ads &middot; Engineering</div></div></div>
+          <div class="cc-items">
+            <div class="cc-item"><div class="cc-dot filled"></div><div><div class="cc-text">Finish recs model A/B test</div><div class="cc-meta"><span class="cc-type cc-build">BUILD</span><span class="cc-proj">X08</span></div></div></div>
+            <div class="cc-item"><div class="cc-dot"></div><div><div class="cc-text">Code review chat SDK</div><div class="cc-meta"><span class="cc-type cc-jam">JAM</span><span class="cc-proj">X73</span></div></div></div>
+            <div class="cc-item"><div class="cc-dot"></div><div><div class="cc-text">Deploy coupon v2 hotfix</div><div class="cc-meta"><span class="cc-type cc-build">BUILD</span><span class="cc-proj">X91</span></div></div></div>
+          </div>
+        </div>
+        <div class="commit-card">
+          <div class="cc-header"><div class="cc-avatar">MR</div><div><div class="cc-name">Mariam R.</div><div class="cc-role">Ads &middot; Design</div></div></div>
+          <div class="cc-items">
+            <div class="cc-item"><div class="cc-dot filled"></div><div><div class="cc-text">Promo scheduler wireframes v2</div><div class="cc-meta"><span class="cc-type cc-build">BUILD</span><span class="cc-proj">X81</span></div></div></div>
+            <div class="cc-item"><div class="cc-dot"></div><div><div class="cc-text">App perf dashboard spec</div><div class="cc-meta"><span class="cc-type cc-build">BUILD</span><span class="cc-proj">X16</span></div></div></div>
+            <div class="cc-item"><div class="cc-dot"></div><div><div class="cc-text">Design review with Hana</div><div class="cc-meta"><span class="cc-type cc-jam">JAM</span><span class="cc-proj">X48</span></div></div></div>
+          </div>
+        </div>
+        <div class="commit-card">
+          <div class="cc-header"><div class="cc-avatar">RK</div><div><div class="cc-name">Rania K.</div><div class="cc-role">Consumer &middot; Product</div></div></div>
+          <div class="cc-items">
+            <div class="cc-item"><div class="cc-dot filled"></div><div><div class="cc-text">Loyalty V2 PRD final draft</div><div class="cc-meta"><span class="cc-type cc-build">BUILD</span><span class="cc-proj">X01</span></div></div></div>
+            <div class="cc-item"><div class="cc-dot"></div><div><div class="cc-text">Stakeholder alignment meeting</div><div class="cc-meta"><span class="cc-type cc-jam">JAM</span><span class="cc-proj">X01</span></div></div></div>
+            <div class="cc-item"><div class="cc-dot"></div><div><div class="cc-text">Competitive analysis doc</div><div class="cc-meta"><span class="cc-type cc-build">BUILD</span><span class="cc-proj">X01</span></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

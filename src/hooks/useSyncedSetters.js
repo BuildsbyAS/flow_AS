@@ -17,7 +17,7 @@ import { useCallback, useRef, useEffect } from 'react';
 import {
   addSquadToDB, deleteSquadFromDB,
   addRoleToDB, deleteRoleFromDB,
-  addPersonToDB, deletePersonFromDB,
+  addPersonToDB, deletePersonFromDB, updatePersonInDB,
   createProjectInDB, updateProjectInDB,
   syncCommitmentToDB,
 } from '../lib/mutations';
@@ -89,8 +89,9 @@ export function useSyncedSetters({
   const onSyncDoneRef = useRef(onSyncDone);
   onSyncDoneRef.current = onSyncDone;
 
-  // Track which person indices have dirty (unsaved) drafts
+  // Track which person names have dirty (unsaved) drafts
   const dirtySet = useRef(new Set());
+  const flushingRef = useRef(false);
 
   // ─── Core sync function ────────────────────────────────────
   const syncPersonToDB = useCallback(async (commitment) => {
@@ -110,36 +111,50 @@ export function useSyncedSetters({
       if (onSyncDoneRef.current) onSyncDoneRef.current(commitment.person);
     } catch (err) {
       console.error('[Flow DB] Sync failed for', commitment.person, err);
+      // Signal error to SyncToast so it doesn't hang forever
+      if (window.__flowSyncToast?.error) window.__flowSyncToast.error(commitment.person);
     }
   }, []);
 
-  // Flush all dirty commitments to DB
-  const flushDirtyToDB = useCallback(() => {
+  // Flush all dirty commitments to DB (with double-flush guard)
+  const flushDirtyToDB = useCallback(async () => {
+    if (flushingRef.current) return;
     const cms = commitmentsRef.current;
     const dirty = dirtySet.current;
     if (dirty.size === 0) return;
 
-    dirty.forEach(idx => {
-      if (cms[idx]) syncPersonToDB(cms[idx]);
-    });
-    dirty.clear();
+    flushingRef.current = true;
+    const names = [...dirty];
+    try {
+      const results = await Promise.allSettled(
+        names.map(name => {
+          const cm = cms.find(c => c.person === name);
+          return cm ? syncPersonToDB(cm) : Promise.resolve();
+        })
+      );
+      // Only clear successfully synced names
+      results.forEach((result, i) => {
+        if (result.status === 'fulfilled') dirty.delete(names[i]);
+      });
+    } finally {
+      flushingRef.current = false;
+    }
   }, [syncPersonToDB]);
 
   // ─── Flush on tab close / navigation ───────────────────────
   useEffect(() => {
     const handleBeforeUnload = () => {
-      // Synchronous flush — save drafts are already in localStorage
-      // Try to fire DB syncs (may not complete but that's OK — drafts survive)
+      // Best-effort DB sync on tab close — these async calls may not complete
+      // localStorage drafts (Tier 1) are the real safety net here
       const cms = commitmentsRef.current;
-      dirtySet.current.forEach(idx => {
-        if (cms[idx]) {
-          // Use navigator.sendBeacon for reliability on tab close
+      dirtySet.current.forEach(name => {
+        const cm = cms.find(c => c.person === name);
+        if (cm) {
           const wc = weekConfigRef.current;
           const lk = lookupsRef.current;
           if (wc && lk?.current) {
-            // Best effort — localStorage draft is the safety net
             syncCommitmentToDB(
-              { ...cms[idx], _weekId: wc._currentWeekId },
+              { ...cm, _weekId: wc._currentWeekId },
               lk.current
             );
           }
@@ -164,6 +179,15 @@ export function useSyncedSetters({
       } else if (next.length < prev.length) {
         const removed = prev.find(s => !next.includes(s));
         if (removed) { deleteSquadFromDB(removed); logSettingsChange('delete_squad', { name: removed }); }
+      } else {
+        // Same length — check for renames
+        for (let i = 0; i < next.length; i++) {
+          if (next[i] !== prev[i]) {
+            deleteSquadFromDB(prev[i]);
+            addSquadToDB(next[i]);
+            logSettingsChange('rename_squad', { from: prev[i], to: next[i] });
+          }
+        }
       }
     }, 0);
   }, [rawSetSquads]);
@@ -181,6 +205,15 @@ export function useSyncedSetters({
       } else if (next.length < prev.length) {
         const removed = prev.find(r => !next.includes(r));
         if (removed) { deleteRoleFromDB(removed); logSettingsChange('delete_role', { name: removed }); }
+      } else {
+        // Same length — check for renames
+        for (let i = 0; i < next.length; i++) {
+          if (next[i] !== prev[i]) {
+            deleteRoleFromDB(prev[i]);
+            addRoleToDB(next[i]);
+            logSettingsChange('rename_role', { from: prev[i], to: next[i] });
+          }
+        }
       }
     }, 0);
   }, [rawSetRoles]);
@@ -217,6 +250,28 @@ export function useSyncedSetters({
           // Remove their commitment from state
           rawSetCommitments(prev => prev.filter(cm => cm.person !== removed.name));
         }
+      } else if (next.length === prev.length) {
+        // Detect edits (same length, changed properties)
+        for (let i = 0; i < next.length; i++) {
+          const p = prev[i], n = next[i];
+          if (p && n && (p.name !== n.name || p.squad !== n.squad || p.role !== n.role)) {
+            updatePersonInDB(p.name, n.name, n.squad, n.role);
+            logSettingsChange('edit_person', { old: p.name, name: n.name, squad: n.squad, role: n.role });
+            // If name changed, update commitments and localStorage drafts
+            if (p.name !== n.name) {
+              rawSetCommitments(cms => cms.map(cm =>
+                cm.person === p.name ? { ...cm, person: n.name } : cm
+              ));
+              // Update lookup map
+              const lk = lookupsRef.current;
+              if (lk?.personMap?.[p.name]) {
+                lk.personMap[n.name] = lk.personMap[p.name];
+                delete lk.personMap[p.name];
+              }
+            }
+            break; // Only one edit at a time
+          }
+        }
       }
     }, 0);
   }, [rawSetPeople, rawSetCommitments]);
@@ -231,7 +286,15 @@ export function useSyncedSetters({
 
       if (next.length > prev.length) {
         const added = next.find(p => !prev.some(pp => pp.id === p.id));
-        if (added) { createProjectInDB(added); logProjectCreate(added.id, added.name); }
+        if (added) {
+          createProjectInDB(added).then(serverId => {
+            if (serverId && serverId !== added.id) {
+              // Replace the temp/optimistic ID with the server-generated one
+              rawSetProjects(cur => cur.map(p => p.id === added.id ? { ...p, id: serverId } : p));
+            }
+          });
+          logProjectCreate(added.id, added.name);
+        }
       } else {
         for (const np of next) {
           const op = prev.find(p => p.id === np.id);
@@ -252,7 +315,7 @@ export function useSyncedSetters({
   }, [rawSetProjects]);
 
   // ─── COMMITS (two-tier: localStorage draft + DB on action) ──
-  const draftTimer = useRef(null);
+  const draftTimers = useRef({});
 
   const setCommitments = useCallback((updater) => {
     const prev = commitmentsRef.current;
@@ -270,19 +333,39 @@ export function useSyncedSetters({
           // TIER 2: Immediate DB sync on lock/unlock
           if (!wasLocked && nowLocked) {
             syncPersonToDB(changed);
-            dirtySet.current.delete(i);
-            logCommitmentLock(changed.person);
+            dirtySet.current.delete(changed.person);
+            logCommitmentLock(changed.person, changed.items);
           } else if (wasLocked && !nowLocked) {
             syncPersonToDB(changed);
-            dirtySet.current.delete(i);
+            dirtySet.current.delete(changed.person);
             logCommitmentUnlock(changed.person);
           } else {
-            // TIER 1: Save draft to localStorage (debounced)
-            dirtySet.current.add(i);
-            clearTimeout(draftTimer.current);
-            draftTimer.current = setTimeout(() => {
+            // TIER 1: Save draft to localStorage (debounced per-person)
+            dirtySet.current.add(changed.person);
+            clearTimeout(draftTimers.current[changed.person]);
+            draftTimers.current[changed.person] = setTimeout(() => {
               saveDraftToLocal(changed.person, changed);
-              logCommitmentEdit(changed.person, 'items');
+              // Build a summary of what changed
+              const oldItems = prev[i]?.items || [];
+              const newItems = changed.items || [];
+              const changes = [];
+              for (let s = 0; s < Math.max(oldItems.length, newItems.length); s++) {
+                const o = oldItems[s], n = newItems[s];
+                const pid = n?.projectId || n?.project_id || o?.projectId || o?.project_id;
+                if (!o && n && pid) { changes.push(`+${pid}`); }
+                else if (o && !n) { changes.push(`-${o.projectId || o.project_id || '?'}`); }
+                else if (o && n) {
+                  const oPid = o.projectId || o.project_id;
+                  const nPid = n.projectId || n.project_id;
+                  if (oPid !== nPid || o.title !== n.title || o.type !== n.type || o.stage !== n.stage) {
+                    changes.push(nPid || '?');
+                  }
+                }
+              }
+              const detail = changes.length > 0
+                ? { projects: changes.join(", ") }
+                : { field: 'items' };
+              logCommitmentEdit(changed.person, 'items', detail);
             }, 600);
           }
         }
