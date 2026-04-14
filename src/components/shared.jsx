@@ -90,7 +90,7 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
         aria-hidden="true"
         style={{
           position: "absolute", inset: 0,
-          background: "rgba(0,0,0,0.55)",
+          background: "rgba(0,0,0,0.4)",
           backdropFilter: blur ? `blur(${blur}px)` : undefined,
           WebkitBackdropFilter: blur ? `blur(${blur}px)` : undefined,
         }}
@@ -104,13 +104,14 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
         tabIndex={-1}
         style={{
           position: "relative", zIndex: 1, outline: "none",
-          background: c.surfaceOverlay,
-          border: `1px solid ${accent ? accent + "40" : c.border}`,
-          borderRadius: layout.radiusLg + 2,
-          padding: `${space[6]}px ${space[7] - 4}px`,
+          background: c.surface,
+          border: accent ? `1px solid ${accent}40` : `1px solid ${c.border}`,
+          borderLeft: accent ? `3px solid ${accent}` : undefined,
+          borderRadius: layout.radiusLg,
+          padding: `${space[6]}px`,
           width, maxWidth: "90vw",
-          boxShadow: c.shadowOverlay,
-          animation: `fadeIn 0.2s ${motion.interaction.easing} both`,
+          boxShadow: c.shadowElevated || c.shadowOverlay,
+          animation: `fadeIn 0.2s ${motion.normal.easing} both`,
           ...s,
         }}
         onClick={e => e.stopPropagation()}
@@ -139,8 +140,8 @@ export const Badge = ({ color, bg, children, style: s }) => (
   <span style={{
     fontSize: typo.badge.size, fontFamily: typo.badge.font, fontWeight: typo.badge.weight,
     letterSpacing: typo.badge.tracking, lineHeight: typo.badge.lineHeight,
-    color, background: bg, padding: `${space[1]}px ${space[3] - 1}px`,
-    borderRadius: layout.radiusPill, ...s,
+    color, background: bg, padding: `3px ${space[3] - 2}px`,
+    borderRadius: layout.radiusXs, ...s,
   }}>{children}</span>
 );
 
@@ -153,8 +154,8 @@ export const Tag = ({ color, bg, children, uppercase = true, style: s }) => (
     fontSize: typo.tag.size, fontFamily: typo.tag.font, fontWeight: typo.tag.weight,
     letterSpacing: typo.tag.tracking, lineHeight: typo.tag.lineHeight,
     textTransform: uppercase ? "uppercase" : "none",
-    color, background: bg, padding: `2px ${space[2] - 2}px`,
-    borderRadius: layout.radiusTag, ...s,
+    color, background: bg, padding: `3px ${space[2]}px`,
+    borderRadius: layout.radiusXs, ...s,
   }}>{children}</span>
 );
 
@@ -173,16 +174,21 @@ const SURFACE_BG = {
 export const Surface = ({ children, style: s, accent, className = "", compact = false, variant = "panel", id }) => {
   const devRef = useDevLabel('Container panel with variant backgrounds and optional accent border');
   const bgFn = SURFACE_BG[variant] || SURFACE_BG.panel;
+  // Steel & Orange: every card on the page canvas gets shadowCard so it
+  // reads as a white panel floating on aluminum. Overlays/heroes escalate.
+  const shadow =
+    variant === "overlay" ? (c.shadowElevated || c.shadowOverlay) :
+    variant === "hero"    ? (c.shadowCard    || c.shadowHero) :
+                            (c.shadowCard    || "none");
   return (
     <div ref={devRef} id={id} className={`flow-card ${className}`} style={{
       background: bgFn(),
       border: `1px solid ${c.border}`,
       borderLeft: accent ? `3px solid ${accent}` : `1px solid ${c.border}`,
-      borderRadius: layout.radius,
+      borderRadius: layout.radiusLg,
       overflow: "clip",
       padding: compact ? layout.padCompact : layout.padCard,
-      ...(variant === "hero" ? { boxShadow: c.shadowHero } : {}),
-      ...(variant === "overlay" ? { boxShadow: c.shadowOverlay } : {}),
+      boxShadow: shadow,
       ...s,
     }}>{children}</div>
   );
@@ -230,17 +236,17 @@ export const Btn = ({ children, variant = "secondary", size = "default", style: 
   const isSm = size === "sm";
   return (
     <button ref={devRef} {...rest} className="flow-btn" style={{
-      padding: isSm ? `${space[1]}px ${space[3]}px` : `${space[2]}px ${space[5]}px`,
+      padding: isSm ? `5px ${space[3]}px` : `7px ${space[4]}px`,
       borderRadius: layout.radiusSm,
       border: v.border,
       background: v.bg,
       color: v.color,
       fontFamily: typo.bodyMd.font,
-      fontSize: isSm ? typo.bodySm.size : typo.bodyMd.size,
+      fontSize: 13,
       fontWeight: 600,
       cursor: rest.disabled ? "default" : "pointer",
-      opacity: rest.disabled ? 0.5 : 1,
-      transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+      opacity: rest.disabled ? 0.4 : 1,
+      transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
       boxSizing: "border-box",
       display: "inline-flex", alignItems: "center", gap: space[2],
       ...s,
@@ -452,17 +458,18 @@ export const EmptyState = ({ icon = "📭", title, message, action, onAction }) 
     <div ref={devRef} style={{
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       padding: `${space[8]}px ${space[5]}px`,
-      borderRadius: layout.radius, border: `1px dashed ${c.border}`,
-      background: c.surfaceAlt, textAlign: "center",
+      borderRadius: layout.radiusLg, border: `1px dashed ${c.border}`,
+      background: c.surface, textAlign: "center",
+      maxWidth: 420, margin: "0 auto",
     }}>
-      <span style={{ fontSize: 32, marginBottom: space[3], opacity: 0.7 }}>{icon}</span>
+      <span style={{ fontSize: 32, marginBottom: space[3], color: c.textGhost || c.textDim, opacity: 0.8 }}>{icon}</span>
       <div style={{
-        fontFamily: typo.displaySm.font, fontSize: 20,
+        fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
         fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2],
       }}>{title}</div>
       <div style={{
-        fontFamily: typo.bodyMd.font, fontSize: 16,
-        color: c.textMid, maxWidth: 320, lineHeight: 1.5,
+        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+        color: c.textDim, maxWidth: 320, lineHeight: 1.5,
         marginBottom: action ? space[4] : 0,
       }}>{message}</div>
       {action && onAction && (
@@ -737,14 +744,16 @@ export const Th = ({ col, sortKey, sortDir, onSort, children, style: s }) => {
   const devRef = useDevLabel('Sortable table header cell shared across registry tables');
   return (
     <th ref={devRef} onClick={() => onSort && onSort(col)} style={{
-      padding: `${space[2]}px ${space[3]}px`, textAlign: "left",
-      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-      fontWeight: 600, letterSpacing: "0",
+      padding: `${space[3]}px ${space[4]}px`, textAlign: "left",
+      fontFamily: typo.tableHeader?.font || typo.bodySm.font,
+      fontSize: 12, fontWeight: 600,
+      letterSpacing: "0.03em", textTransform: "uppercase",
       cursor: onSort ? "pointer" : "default", userSelect: "none",
-      borderBottom: `1px solid ${c.border}`,
-      background: c.bg, color: sortKey === col ? c.accent : c.textMid,
-      transition: `color ${motion.interaction.duration}`,
-      position: "sticky", top: 0, zIndex: 2,
+      borderBottom: `1px solid ${c.borderMedium || c.border}`,
+      background: c.tableHeader || c.surfaceAlt,
+      color: sortKey === col ? c.accent : c.textDim,
+      transition: `color ${motion.fast.duration}`,
+      position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 2,
       whiteSpace: "nowrap", ...s,
     }}>{children}{sortKey === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}</th>
   );

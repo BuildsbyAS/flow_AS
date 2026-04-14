@@ -228,14 +228,14 @@ export const layout = {
   padCompact: 16,
 };
 
-// ── Button variant tokens ─────────────────────────────────────
+// ── Button variant tokens (Steel & Orange, per DESIGN_SYSTEM.md §7.6) ──
 export const btnVariants = () => ({
-  primary:   { bg: c.accent,    color: "#FFFFFF",   border: "none",                  hoverBg: c.accentMid },
-  secondary: { bg: c.surfaceAlt, color: c.text,     border: `1px solid ${c.border}`, hoverBg: c.surface },
-  ghost:     { bg: "transparent", color: c.textMid, border: "1px solid transparent", hoverBg: c.surfaceAlt },
-  danger:    { bg: c.redDim,     color: c.red,      border: `1px solid ${c.red}30`,  hoverBg: `${c.red}18` },
-  command:   { bg: c.surfaceAlt, color: c.accent,   border: `1px solid ${c.border}`, hoverBg: c.accentDim },
-  success:   { bg: `${c.green}18`, color: c.green,  border: `1px solid ${c.green}30`, hoverBg: `${c.green}25` },
+  primary:   { bg: c.accent,      color: "#FFFFFF",    border: "none",                              hoverBg: c.accent },
+  secondary: { bg: c.surface,     color: c.textMid,    border: `1px solid ${c.border}`,             hoverBg: c.surfaceAlt },
+  ghost:     { bg: "transparent", color: c.textDim,    border: "1px solid transparent",             hoverBg: c.surfaceAlt },
+  danger:    { bg: c.redDim,      color: c.red,        border: `1px solid ${c.red}30`,              hoverBg: `${c.red}18` },
+  command:   { bg: c.surface,     color: c.accent,     border: `1px solid ${c.border}`,             hoverBg: c.accentDim },
+  success:   { bg: c.greenDim,    color: c.green,      border: `1px solid ${c.green}30`,            hoverBg: `${c.green}18` },
 });
 
 // ── Elevation tokens ──────────────────────────────────────────
