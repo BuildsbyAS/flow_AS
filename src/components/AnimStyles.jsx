@@ -1636,6 +1636,33 @@ const AnimStyles = () => (
     }
 
     /* ═══════════════════════════════════════════════════════════════
+       STEEL & ORANGE OVERRIDES — neutralize the dark-era decorative
+       effects. The structural keyframes above (fadeInUp, rowSlideIn,
+       entrance/exit) are kept; glow/blob/grid/neon layers are killed
+       since Steel & Orange relies on shadows, not glow.
+       ═══════════════════════════════════════════════════════════════ */
+    .flow-texture-blob,
+    .flow-texture-grid,
+    .flow-texture-noise {
+      display: none !important;
+    }
+    .flow-neon-card::before,
+    .flow-neon-card.flow-neon-active { box-shadow: none !important; animation: none !important; }
+    .flow-neon-card { box-shadow: var(--flow-shadow-card) !important; }
+
+    /* Kill neon-edge border animations on mission grid — shadow-card does the lifting now */
+    .flow-mission-grid {
+      animation: none !important;
+    }
+
+    /* Side panel gets light-mode treatment overriding any dark artifacts */
+    .flow-side-panel {
+      background: var(--flow-card) !important;
+      border-left: 1px solid var(--flow-border-subtle) !important;
+      box-shadow: var(--flow-shadow-elevated) !important;
+    }
+
+    /* ═══════════════════════════════════════════════════════════════
        REDUCED MOTION — respect OS preference
        ═══════════════════════════════════════════════════════════════ */
     @media (prefers-reduced-motion: reduce) {

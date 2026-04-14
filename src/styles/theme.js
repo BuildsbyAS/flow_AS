@@ -1,13 +1,17 @@
-// Flow Design System — Phase 1: Global Foundations
-// Bold futuristic palette · semantic accents · motion tiers · telemetry type
+// Flow Design System — Light theme bridge to ds.js
+// `ds.js` is the source of truth. This file keeps the existing API
+// (themes.light, themes.dark, c, typo, layout, motion, setTheme) but the
+// light theme now pulls its values from ds.js. The dark theme is retained
+// for the Terminal / Rant / Admin exceptions.
+
+import { color as dsColor, fonts as dsFonts, radius as dsRadius, shadow as dsShadow } from "./ds";
 
 // ── Font stack ──────────────────────────────────────────────────
-// Single-font product: all visible UI uses one canonical family.
-// Technical feel comes from weight, spacing, tracking, and casing.
-const _uiFont = "'Inter', 'Figtree', sans-serif";
-export const display = _uiFont;
-export const body = _uiFont;
-export const mono = _uiFont;
+// Steel & Orange uses a two-font system: Inter for prose/UI, JetBrains Mono
+// for numbers, IDs, labels, and section titles. Callers pick by token.
+export const display = dsFonts.sans;
+export const body = dsFonts.sans;
+export const mono = dsFonts.mono;
 
 // ── Spacing scale (4px base) ──
 export const space = {
@@ -67,33 +71,59 @@ export const themes = {
     shadowCard: "none",
     shadowHero: "0 4px 20px rgba(0,0,0,0.35)",
   },
+  // ── Steel & Orange light theme (default, consumed by everything except Terminal) ──
   light: {
-    bg: "#F0F2F7", surface: "rgba(255,255,255,0.90)", surfaceAlt: "rgba(255,255,255,0.65)",
-    surfaceSolid: "#FFFFFF",
-    surfaceHero: "rgba(255,255,255,0.95)",
-    surfaceData: "rgba(255,255,255,0.75)",
-    surfaceOverlay: "#FFFFFF",
-    glass: "rgba(255,255,255,0.80)", glassData: "rgba(255,255,255,0.60)",
-    border: "rgba(0,0,0,0.07)", borderHover: "rgba(0,0,0,0.14)",
-    text: "#0F172A", textMid: "#475569", textDim: "#94A3B8",
-    textCrit: "#111827",
-    accent: "#2563EB", accentDim: "rgba(37,99,235,0.08)", accentMid: "rgba(37,99,235,0.18)",
-    green: "#059669", greenDim: "rgba(5,150,105,0.08)",
-    blue: "#0891B2", blueDim: "rgba(8,145,178,0.08)",
-    cyan: "#0891B2", cyanDim: "rgba(8,145,178,0.08)",
-    purple: "#7C3AED", purpleDim: "rgba(124,58,237,0.08)",
-    red: "#DC2626", redDim: "rgba(220,38,38,0.08)",
-    orange: "#D97706", orangeDim: "rgba(217,119,6,0.08)",
-    projectGold: "#B8860B", projectGoldDim: "rgba(184,134,11,0.08)",
-    glow1: "rgba(37,99,235,0.04)",
-    glow2: "rgba(8,145,178,0.03)",
-    glow3: "rgba(124,58,237,0.02)",
-    gradient: "linear-gradient(145deg, #ECF0F6 0%, #EEF0F4 35%, #F0F2F7 65%, #ECF0F6 100%)",
-    inputScheme: "light",
-    shadow: "rgba(0,0,0,0.08)",
-    shadowOverlay: "0 8px 30px rgba(0,0,0,0.12)",
-    shadowCard: "0 2px 8px rgba(0,0,0,0.06)",
-    shadowHero: "0 4px 20px rgba(0,0,0,0.10)",
+    // Surfaces
+    bg:             dsColor.page,         // steel-gray canvas
+    surface:        dsColor.card,         // white floating card
+    surfaceAlt:     dsColor.inset,        // recessed — inputs, segmented bg
+    surfaceSolid:   dsColor.card,
+    surfaceHero:    dsColor.card,
+    surfaceData:    dsColor.card,
+    surfaceOverlay: dsColor.card,
+    tableHeader:    dsColor.tableHeader,
+    // Glass is legacy — alias to card + inset for backwards compat
+    glass:          dsColor.card,
+    glassData:      dsColor.inset,
+    // Borders
+    border:         dsColor.borderSubtle,
+    borderHover:    dsColor.borderMedium,
+    borderMedium:   dsColor.borderMedium,
+    // Text
+    text:           dsColor.textPrimary,
+    textMid:        dsColor.textSecondary,
+    textDim:        dsColor.textTertiary,
+    textGhost:      dsColor.textGhost,
+    textCrit:       "#FFFFFF",            // text on accent bg
+    // Accent — orange
+    accent:         dsColor.accent,
+    accentDim:      dsColor.accentSoft,
+    accentMid:      dsColor.accentMid,
+    accentGlow:     dsColor.accentGlow,
+    // Semantic — data only
+    green:          dsColor.green,        greenDim:  dsColor.greenDim,
+    red:            dsColor.red,          redDim:    dsColor.redDim,
+    orange:         dsColor.amber,        orangeDim: dsColor.amberDim,  // "orange" = amber in Steel & Orange
+    amber:          dsColor.amber,        amberDim:  dsColor.amberDim,
+    blue:           dsColor.blue,         blueDim:   dsColor.blueDim,
+    cyan:           dsColor.cyan,         cyanDim:   dsColor.cyanDim,
+    purple:         dsColor.purple,       purpleDim: dsColor.purpleDim,
+    // Entity references
+    projectGold:    dsColor.amber,        projectGoldDim: dsColor.amberDim,
+    // Legacy glow tokens — kept near-zero so any stale consumer doesn't emit neon
+    glow1:          "rgba(232,89,12,0.04)",
+    glow2:          "rgba(14,116,144,0.03)",
+    glow3:          "rgba(109,40,217,0.02)",
+    gradient:       `linear-gradient(145deg, ${dsColor.page} 0%, ${dsColor.page} 100%)`,
+    inputScheme:    "light",
+    // Shadows (elevation tiers from DESIGN_SYSTEM.md §4)
+    shadow:         "rgba(0,0,0,0.06)",
+    shadowSm:       dsShadow.sm,
+    shadowCard:     dsShadow.card,
+    shadowElevated: dsShadow.elevated,
+    shadowFloat:    dsShadow.float,
+    shadowOverlay:  dsShadow.elevated,    // legacy alias
+    shadowHero:     dsShadow.card,        // legacy alias
   },
 };
 
@@ -102,8 +132,9 @@ export const shipPhases = ["Alpha", "Beta", "GA"];
 export const allPhases = [...phaseNames, ...shipPhases];
 export const commitPhases = ["PRD", "Design", "Dev", "QA"]; // Work activities only — no lifecycle stages
 
-// Mutable color reference - updated on theme change
-export let c = themes.dark;
+// Mutable color reference - updated on theme change.
+// Default is LIGHT (Steel & Orange). Dark is reserved for Terminal/Rant/Admin.
+export let c = themes.light;
 export function setTheme(isDark) {
   c = isDark ? themes.dark : themes.light;
   return c;
@@ -148,50 +179,53 @@ export const entityColors = () => ({ project: c.orange, person: c.cyan });
 
 // ── Canonical typography ramp ─────────────────────────────────
 // Every text style in the product must map to one of these tokens.
+// Steel & Orange type scale. Mono is data-only (numbers, IDs, labels,
+// section titles). Everything else uses Inter. Minimum 11px everywhere.
 export const typo = {
   // Display — page titles, hero numbers, KPI values
-  displayHero: { font: display, size: 36, weight: 800, tracking: "-0.04em", lineHeight: 1.1 },
-  displayXl:   { font: display, size: 28, weight: 800, tracking: "-0.03em", lineHeight: 1.1 },
-  displayLg:   { font: display, size: 24, weight: 700, tracking: "-0.02em", lineHeight: 1.1 },
-  displayMd:   { font: display, size: 20, weight: 700, tracking: "-0.02em", lineHeight: 1.1 },
-  displaySm:   { font: display, size: 16, weight: 700, tracking: "-0.02em", lineHeight: 1.15 },
-  // Body — tables, paragraphs, buttons, forms, labels
-  bodyLg:      { font: body,    size: 16, weight: 600, tracking: "0",       lineHeight: 1.5 },
+  displayHero: { font: mono,    size: 36, weight: 700, tracking: "-0.03em", lineHeight: 1.1  }, // KPI hero numbers
+  displayXl:   { font: display, size: 28, weight: 700, tracking: "-0.02em", lineHeight: 1.1  },
+  displayLg:   { font: display, size: 24, weight: 700, tracking: "-0.02em", lineHeight: 1.15 }, // page titles
+  displayMd:   { font: display, size: 20, weight: 700, tracking: "-0.02em", lineHeight: 1.2  }, // detail names
+  displaySm:   { font: display, size: 16, weight: 700, tracking: "-0.01em", lineHeight: 1.3  }, // card headers
+  // Body — Inter, rest of the app
+  bodyLg:      { font: body,    size: 15, weight: 500, tracking: "0",       lineHeight: 1.5 },
   bodyMd:      { font: body,    size: 14, weight: 500, tracking: "0",       lineHeight: 1.5 },
   bodySm:      { font: body,    size: 13, weight: 500, tracking: "0",       lineHeight: 1.5 },
-  bodyXs:      { font: body,    size: 12, weight: 400, tracking: "0",       lineHeight: 1.4 },
-  // Mono — telemetry labels, chips, timestamps, counters
-  monoLg:      { font: mono,    size: 13, weight: 700, tracking: "0.04em",  lineHeight: 1.35 },
-  monoMd:      { font: mono,    size: 12, weight: 600, tracking: "0.05em",  lineHeight: 1.3 },
-  monoSm:      { font: mono,    size: 11, weight: 600, tracking: "0.06em",  lineHeight: 1.25 },
+  bodyXs:      { font: body,    size: 12, weight: 500, tracking: "0",       lineHeight: 1.4 },
+  // Mono — numbers, IDs, section titles
+  monoLg:      { font: mono,    size: 13, weight: 700, tracking: "0",       lineHeight: 1.3 },
+  monoMd:      { font: mono,    size: 12, weight: 700, tracking: "0.02em",  lineHeight: 1.3 },
+  monoSm:      { font: mono,    size: 11, weight: 700, tracking: "0.04em",  lineHeight: 1.3 },
 
-  // ── Legacy aliases (map to canonical tokens) ──
-  metric:      { font: display, size: 24, weight: 700, tracking: "-0.02em", lineHeight: 1.1 },
-  metricLg:    { font: display, size: 28, weight: 800, tracking: "-0.03em", lineHeight: 1.1 },
-  sectionLbl:  { font: display, size: 16, weight: 700, tracking: "-0.02em", lineHeight: 1.15 },
+  // ── Legacy aliases — map old names to Steel & Orange tokens ──
+  metric:      { font: mono,    size: 24, weight: 700, tracking: "-0.02em", lineHeight: 1.1 },
+  metricLg:    { font: mono,    size: 28, weight: 700, tracking: "-0.03em", lineHeight: 1.1 },
+  sectionLbl:  { font: mono,    size: 12, weight: 700, tracking: "0.08em",  lineHeight: 1.3 }, // section titles → mono uppercase
   rowText:     { font: body,    size: 14, weight: 600, tracking: "0",       lineHeight: 1.5 },
   rowSub:      { font: body,    size: 13, weight: 500, tracking: "0",       lineHeight: 1.5 },
-  helper:      { font: body,    size: 12, weight: 400, tracking: "0",       lineHeight: 1.4 },
-  fieldLbl:    { font: mono,    size: 11, weight: 600, tracking: "0.06em",  lineHeight: 1.25 },
-  badge:       { font: body,    size: 12, weight: 600, tracking: "0.02em",  lineHeight: 1.4 },
-  tag:         { font: mono,    size: 11, weight: 700, tracking: "0.04em",  lineHeight: 1.25 },
-  mono9:       { font: mono,    size: 11, weight: 600, tracking: "0.04em",  lineHeight: 1.25 },
-  mono10:      { font: mono,    size: 12, weight: 600, tracking: "0",       lineHeight: 1.3 },
-  tele:        { font: mono,    size: 12, weight: 600, tracking: "0.05em",  lineHeight: 1.3 },
-  teleLg:      { font: mono,    size: 13, weight: 700, tracking: "0.04em",  lineHeight: 1.35 },
+  helper:      { font: body,    size: 12, weight: 500, tracking: "0",       lineHeight: 1.4 },
+  fieldLbl:    { font: mono,    size: 12, weight: 600, tracking: "0.04em",  lineHeight: 1.3 },
+  badge:       { font: body,    size: 12, weight: 700, tracking: "0",       lineHeight: 1.3 },
+  tag:         { font: mono,    size: 11, weight: 700, tracking: "0.04em",  lineHeight: 1.3 },
+  mono9:       { font: mono,    size: 11, weight: 700, tracking: "0.04em",  lineHeight: 1.3 },
+  mono10:      { font: mono,    size: 12, weight: 700, tracking: "0.02em",  lineHeight: 1.3 },
+  tele:        { font: mono,    size: 12, weight: 700, tracking: "0.02em",  lineHeight: 1.3 },
+  teleLg:      { font: mono,    size: 13, weight: 700, tracking: "0",       lineHeight: 1.3 },
 };
 
-// ── Layout tokens ─────────────────────────────────────────────
+// ── Layout tokens (Steel & Orange radii from ds.js) ───────────
 export const layout = {
-  radiusLg: 12,
-  radius: 12,      // alias for radiusLg — cards, panels, dialogs
-  radiusMd: 8,     // controls, sub-panels, rows
-  radiusSm: 6,     // inputs, icon buttons
-  radiusPill: 20,  // rounded pills
-  radiusTag: 3,    // compact tags
-  padCard: 24,     // space-6 — design mandate: card padding >= 24px
-  padSection: 20,  // space-5
-  padCompact: 16,  // space-4
+  radiusLg: dsRadius.lg,  // 14 — cards, tables, commit cards, modals
+  radius:   dsRadius.lg,  // alias
+  radiusMd: dsRadius.md,  // 12 — segmented, dropdowns
+  radiusSm: dsRadius.sm,  //  8 — buttons, inputs
+  radiusXs: dsRadius.xs,  //  5 — tags, phase pills
+  radiusTag: dsRadius.xs, //  5 — legacy alias
+  radiusPill: dsRadius.pill,
+  padCard: 24,
+  padSection: 20,
+  padCompact: 16,
 };
 
 // ── Button variant tokens ─────────────────────────────────────
@@ -249,8 +283,14 @@ export const colWidths = {
 // ambient:     slow, continuous, background feel (blobs, breathe)
 // interaction: snappy user feedback (hover, click, toggle)
 // critical:    attention-grabbing (alerts, errors, lock)
+// Steel & Orange motion tiers (DESIGN_SYSTEM.md §6.1)
 export const motion = {
+  instant:     { duration: "100ms", easing: "ease-out" },
+  fast:        { duration: "150ms", easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+  normal:      { duration: "250ms", easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+  slow:        { duration: "400ms", easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+  // ── Legacy aliases for existing callers ──
   ambient:     { duration: "4s",    easing: "ease-in-out" },
-  interaction: { duration: "0.15s", easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
-  critical:    { duration: "0.3s",  easing: "cubic-bezier(0.68, -0.55, 0.265, 1.55)" },
+  interaction: { duration: "150ms", easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+  critical:    { duration: "300ms", easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
 };

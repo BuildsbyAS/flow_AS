@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=Sora:wght@400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 
 @import "tailwindcss";
 
@@ -8,27 +8,34 @@
   box-sizing: border-box;
 }
 
-body {
-  font-family: 'Inter', 'Figtree', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* ── Hide scrollbars but keep scrolling ── */
-.flow-page *::-webkit-scrollbar {
-  display: none;
-}
-.flow-page * {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* ── Natural body scroll. Views no longer wrap their content in fixed-height
-   columns with inner overflow: auto — the page itself is the scroll container.
-   Sticky elements that must sit below the app header (table column headers,
-   section titles) use top: var(--flow-sticky-top, 0) which resolves to the
-   current app header height when expanded, 0 when it is scrolled away. */
+/* ── Steel & Orange canvas. Light-mode first. ────────────────────
+   Page bg is the aluminum chassis; cards sit on top with shadow.
+   Terminal/Rant/Admin swap themes locally and are not affected. */
 :root {
+  --flow-page:          #EDEDF0;
+  --flow-card:          #FFFFFF;
+  --flow-inset:         #F3F3F6;
+  --flow-table-header:  #F7F7FA;
+
+  --flow-text-primary:   #1A1A1E;
+  --flow-text-secondary: #4A4A52;
+  --flow-text-tertiary:  #7E7E8A;
+  --flow-text-ghost:     #AEAEB8;
+
+  --flow-accent:      #E8590C;
+  --flow-accent-soft: rgba(232,89,12,0.08);
+  --flow-accent-mid:  rgba(232,89,12,0.18);
+  --flow-accent-glow: rgba(232,89,12,0.25);
+
+  --flow-border-subtle: rgba(0,0,0,0.07);
+  --flow-border-medium: rgba(0,0,0,0.12);
+
+  --flow-shadow-sm:       0 1px 2px rgba(0,0,0,0.04);
+  --flow-shadow-card:     0 1px 3px rgba(0,0,0,0.03), 0 4px 16px rgba(0,0,0,0.05);
+  --flow-shadow-elevated: 0 2px 8px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.07);
+  --flow-shadow-float:    0 8px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
+
+  /* Scroll container metrics (maintained by AppShell) */
   --flow-header-h: 104px;
   --flow-header-offset: 104px;
   --flow-sticky-top: var(--flow-header-offset, 104px);
@@ -38,174 +45,150 @@ html {
   scroll-padding-top: var(--flow-header-h, 104px);
 }
 
-/* ── Focus ring — visible keyboard focus ── */
-.flow-input:focus {
-  border-color: rgba(59, 130, 246, 0.5);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: var(--flow-text-primary);
+  background: var(--flow-page);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-.flow-btn:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.5);
-  outline-offset: 2px;
+/* Aluminum noise texture on the page canvas — 1.8% opacity SVG noise so
+   cards float on a micro-grained surface instead of digital flat. Cards
+   themselves never get the noise. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.35 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  opacity: 0.05;
+  mix-blend-mode: multiply;
 }
 
-/* ── Dropdown item hover ── */
-.flow-dropdown-item:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
+/* Keep main view content above the noise overlay */
+.flow-page, main { position: relative; z-index: 1; }
 
-/* ── Header tab hover ── */
-.flow-header-tab:hover {
-  background: linear-gradient(180deg, rgba(59,130,246,0.04) 0%, rgba(59,130,246,0.08) 100%) !important;
-}
+/* ── Hide scrollbars on the page (kept for Pulse's horizontal scroller etc) ── */
+.flow-page *::-webkit-scrollbar { display: none; }
+.flow-page *::-webkit-scrollbar-thumb { display: none; }
 
-/* ── Search trigger hover ── */
-.flow-search-trigger:hover {
-  border-color: rgba(59, 130, 246, 0.25) !important;
-  box-shadow: 0 0 8px rgba(59, 130, 246, 0.08);
-}
-
-/* ── Logo mark hover glow ── */
-.flow-logo-group:hover .flow-logo-mark {
-  box-shadow: 0 0 16px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(59, 130, 246, 0.2) !important;
-  border-color: rgba(59, 130, 246, 0.45) !important;
-}
-
-/* ── Breadcrumb back button hover ── */
-.flow-breadcrumb:hover {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.08) !important;
-}
-
-/* ── Context bar week nav button hover ── */
-.flow-week-nav button:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-/* ── Filter icon area hover ── */
-.flow-context-bar .flow-btn:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-/* ── Scrollbar styling (Webkit) ── */
+/* ── Page scrollbar (body) ── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.10);
-  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.18);
-}
+::-webkit-scrollbar-thumb:hover { background-color: rgba(0, 0, 0, 0.22); }
 
-/* ── Focus-visible for interactive shell elements ── */
+/* ── Focus ring — accent orange, visible on all interactive primitives ── */
+.flow-input:focus {
+  border-color: var(--flow-accent);
+  box-shadow: 0 0 0 3px var(--flow-accent-soft);
+}
+.flow-btn:focus-visible,
 .flow-theme-toggle:focus-visible,
 .flow-breadcrumb:focus-visible,
 .flow-context-bar button:focus-visible,
 .flow-week-nav button:focus-visible,
 .flow-cmd-category-pill:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.5);
+  outline: 2px solid var(--flow-accent);
   outline-offset: 2px;
 }
 
-/* Nav tabs have clear active styling — no focus ring needed */
+/* Nav tabs have their own active styling */
 .flow-header-tab:focus,
-.flow-header-tab:focus-visible {
-  outline: none;
+.flow-header-tab:focus-visible { outline: none; }
+
+/* ── Hover states ── */
+.flow-dropdown-item:hover { background: rgba(0, 0, 0, 0.04); }
+
+.flow-header-tab:hover {
+  background: var(--flow-accent-soft) !important;
 }
 
-/* ── Fade-scale animation for dropdowns ── */
-@keyframes fadeScaleIn {
-  from { opacity: 0; transform: scale(0.97) translateY(-4px); }
-  to { opacity: 1; transform: scale(1) translateY(0); }
+.flow-search-trigger:hover {
+  border-color: var(--flow-border-medium) !important;
 }
 
-/* ── Row slide-in animation (Summary + Pulse tables) ── */
-@keyframes rowSlideIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+.flow-logo-group:hover .flow-logo-mark {
+  box-shadow: 0 0 0 4px var(--flow-accent-soft) !important;
 }
 
-/* ── Expand animation for drilldown rows ── */
-@keyframes expandIn {
-  from { opacity: 0; max-height: 0; }
-  to { opacity: 1; max-height: 400px; }
+.flow-breadcrumb:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: var(--flow-border-medium) !important;
 }
 
-/* ── Row hover — beam highlight, no translate ── */
-.flow-row:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
+.flow-week-nav button:hover { background: rgba(0, 0, 0, 0.05); }
+.flow-context-bar .flow-btn:hover { background: rgba(0, 0, 0, 0.04); }
+
+/* ── Table row hover — subtle beam, no translate ── */
+.flow-row:hover { background: rgba(0, 0, 0, 0.025); }
 
 /* ── Keyboard focus row ── */
 .flow-kb-focus {
-  outline: 2px solid rgba(59, 130, 246, 0.3);
+  outline: 2px solid var(--flow-accent);
   outline-offset: -2px;
 }
 
-/* ── Mission grid — hero strip surface ── */
+/* ── Mission grid — recessed inset surface for grouped content ── */
 .flow-mission-grid {
-  background: var(--flow-bg, #F0F2F7);
-  border: none;
-  box-shadow: inset 0 0 0 1px var(--flow-border, rgba(0, 0, 0, 0.07));
-  border-radius: 12px;
-  position: relative;
-  overflow: hidden;
-}
-.flow-mission-grid::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.45);
-  pointer-events: none;
-}
-
-/* ── Side panel styles are in AnimStyles.jsx ── */
-
-/* ── Risk radar pulse ── */
-.flow-risk-radar {
+  background: var(--flow-inset);
+  border: 1px solid var(--flow-border-subtle);
+  border-radius: 14px;
   position: relative;
 }
-.flow-risk-radar::after {
-  content: "";
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 1.5px solid rgba(255, 107, 107, 0.3);
-  animation: radarPulse 2s ease-in-out infinite;
-}
-@keyframes radarPulse {
-  0%, 100% { opacity: 0.3; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.3); }
-}
+/* Legacy: the old variant added a white haze overlay. Removed for Steel & Orange. */
+.flow-mission-grid::before { content: none; }
 
-/* ── View morph transition ── */
-.flow-view-morph {
-  animation: fadeScaleIn 0.2s ease-out;
-}
-
-/* ── Expand row content ── */
-.flow-expand {
-  animation: expandIn 0.2s ease-out;
-}
-
-/* ── KPI counter entrance ── */
-.flow-kpi-num {
-  animation: fadeScaleIn 0.4s ease-out both;
-}
-
-/* ── Glass tile hover (Summary + Pulse KPI tiles) ── */
+/* ── Glass tile hover (kept for KPI tile interactions) ── */
 .flow-glass-tile:hover {
-  background: rgba(0, 0, 0, 0.04) !important;
-  border-color: rgba(0, 0, 0, 0.10) !important;
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: var(--flow-border-medium) !important;
 }
 
-/* ── Command palette overlay ── */
+/* ── Animations ── */
+@keyframes fadeScaleIn {
+  from { opacity: 0; transform: scale(0.97) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes rowSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes expandIn {
+  from { opacity: 0; max-height: 0; }
+  to   { opacity: 1; max-height: 400px; }
+}
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes accentPulse {
+  0%, 100% { opacity: 0.55; transform: scale(0.92); }
+  50%      { opacity: 1;    transform: scale(1); }
+}
+
+.flow-view-morph { animation: fadeScaleIn 0.2s ease-out; }
+.flow-expand     { animation: expandIn 0.2s ease-out; }
+.flow-kpi-num    { animation: fadeScaleIn 0.4s ease-out both; }
+.flow-commit-card { animation: cardFadeIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Live / accent pulse (logo dot, live indicator) ── */
+.flow-accent-pulse { animation: accentPulse 2s ease-in-out infinite; }
+
+/* Legacy radar-style class: keep as no-op border so existing callers don't crash */
+.flow-risk-radar { position: relative; }
+
+/* ── Command palette ── */
 .flow-cmd-overlay {
   position: fixed;
   inset: 0;
@@ -214,77 +197,47 @@ html {
   align-items: flex-start;
   justify-content: center;
   padding-top: 80px;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   animation: fadeScaleIn 0.12s ease-out;
 }
-
-/* ── Command palette box ── */
 .flow-cmd-box {
-  border-radius: 16px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  border: 1px solid var(--flow-border-subtle);
+  background: var(--flow-card);
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--flow-shadow-elevated);
 }
-
-/* ── Command palette top bar gradient ── */
 .flow-cmd-topbar {
-  height: 3px;
-  background: linear-gradient(90deg, #3B82F6, #22D3EE, #A78BFA, #84FF95);
-  opacity: 0.7;
+  height: 2px;
+  background: var(--flow-accent);
+  opacity: 0.8;
 }
+.flow-cmd-search-glow { /* retained selector, no animation in Steel & Orange */ }
+.flow-cmd-item:hover { background: rgba(0, 0, 0, 0.03); }
+.flow-cmd-results::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.14); }
 
-/* ── Command palette search glow ── */
-.flow-cmd-search-glow {
-  animation: radarPulse 3s ease-in-out infinite;
-}
-
-/* ── Command item hover ── */
-.flow-cmd-item:hover {
-  background: rgba(0, 0, 0, 0.03);
-}
-
-/* ── Command palette results scrollbar ── */
-.flow-cmd-results::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.08);
-}
-
-/* ── Commit: lock glow breathe ── */
-.flow-commit-lock-glow {
-  animation: commitLockGlow 3s ease-in-out infinite;
-}
-@keyframes commitLockGlow {
-  0%, 100% { box-shadow: 0 0 0 rgba(132, 255, 149, 0); }
-  50% { box-shadow: 0 0 10px rgba(132, 255, 149, 0.06); }
-}
-
-/* ── Commit: outcome toggle hover ── */
-.flow-outcome-btn:hover {
-  filter: brightness(1.15);
-}
-
-/* ── Commit: lock gate pulse ── */
-.flow-lock-gate-ready {
-  animation: lockGateReady 2s ease-in-out infinite;
-}
-@keyframes lockGateReady {
-  0%, 100% { border-color: rgba(132, 255, 149, 0.15); }
-  50% { border-color: rgba(132, 255, 149, 0.35); }
-}
-
-/* ── Commit: card entrance ── */
-@keyframes cardFadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.flow-commit-card {
-  animation: cardFadeIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
+/* ── Commit view: no more lock glow — use static green border via callers ── */
+.flow-commit-lock-glow { /* intentionally no animation */ }
+.flow-outcome-btn:hover { filter: brightness(1.04); }
+.flow-lock-gate-ready { /* static; color controlled inline */ }
 
 /* ── Commit: responsive 2x2 grid collapse ── */
 @media (max-width: 720px) {
   .flow-commit-grid {
     grid-template-columns: 1fr !important;
+  }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
