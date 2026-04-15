@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { c, typo, space, layout, motion, typeConfig, colWidths, shipPhases } from "../styles/theme";
 import { Surface, Label, TelemetryLabel, EmptyState } from "../components/shared";
-import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
+import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow, Sparkline } from "../components/kpi";
 import useDevLabel from "../hooks/useDevLabel";
 
 
@@ -504,14 +504,18 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
           sub="reached Alpha / Beta / GA"
           delta={prev ? metrics.shippedCount - prev.shippedCount : null}
           deltaLabel="vs prev"
-        />
+        >
+          <Sparkline values={allMetrics.slice(-6).map(m => m.shippedCount || 0)} color={c.green} />
+        </KpiCard>
         <KpiCard
           label="Done Rate"
           value={`${metrics.completionRate}%`}
           sub={metrics.completionRate >= 60 ? "on track" : metrics.completionRate >= 40 ? "behind pace" : "at risk"}
           delta={prev ? metrics.completionRate - prev.completionRate : null}
           deltaLabel="pts"
-        />
+        >
+          <Sparkline values={allMetrics.slice(-6).map(m => m.completionRate || 0)} color={c.accent} />
+        </KpiCard>
         <HealthGauge
           value={metrics.completionRate}
           label="Portfolio Health"

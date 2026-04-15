@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { c, typo, space, layout, motion, phaseNames, shipPhases, typeConfig, phaseColors, entityColors } from "../styles/theme";
 import { Badge, Tag, Surface, Btn, EmptyState, TelemetryLabel, Th as SharedTh, EntityLink } from "../components/shared";
-import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
+import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow, Sparkline } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
 
@@ -272,7 +272,7 @@ const OutcomePills = ({ completedPct, partialPct, carriedPct, blockedPct, onNavi
 // ═══════════════════════════════════════════════════════════════
 // PULSE VIEW — main component
 // ═══════════════════════════════════════════════════════════════
-const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projects, people, onNavigate, searchRef, globalFilters = {}, isHistorical, selectedWeekKey, weekConfig: weekConfigProp, appSettings = {} }) => {
+const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projects, people, history = {}, onNavigate, searchRef, globalFilters = {}, isHistorical, selectedWeekKey, weekConfig: weekConfigProp, appSettings = {} }) => {
   const devRef = useDevLabel('PulseView', 'src/views/PulseView.jsx', 'Leadership command center — project status grid with KPIs');
   const weekConfig = weekConfigProp || { _weeks: [], _currentWeekId: null, today: new Date().toISOString().split("T")[0] };
   const todayStr = weekConfig.today || new Date().toISOString().split("T")[0];
@@ -399,6 +399,44 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   const summaryItems = summaryData.flatMap(p => p.items);
   const totalCommitments = summaryItems.length;
   const noActionCount = summaryData.filter(p => p.items.length === 0).length;
+
+  // ── 6-week trends for KPI sparklines (driven by `history`) ──
+  // history shape: { [projectId]: [{ week, entries: [{ stage, person, type, outcome, ... }] }, ...] }
+  // We derive shipped count + active project count per week from the union
+  // of all per-project weekly entries. The current week is appended last
+  // so the Sparkline's "current" highlight lands on the right.
+  const trends = React.useMemo(() => {
+    const weekKeys = new Set();
+    Object.values(history || {}).forEach(weeks => {
+      (weeks || []).forEach(w => { if (w.week) weekKeys.add(w.week); });
+    });
+    const sortedKeys = [...weekKeys].sort().slice(-6); // oldest → newest, up to 6
+
+    const shipped = sortedKeys.map(wk => {
+      const projs = new Set();
+      Object.entries(history || {}).forEach(([pid, weeks]) => {
+        const w = (weeks || []).find(x => x.week === wk);
+        if (w && (w.entries || []).some(e => shipPhases.includes(e.stage))) projs.add(pid);
+      });
+      return projs.size;
+    });
+
+    const active = sortedKeys.map(wk => {
+      const projs = new Set();
+      Object.entries(history || {}).forEach(([pid, weeks]) => {
+        const w = (weeks || []).find(x => x.week === wk);
+        if (w && (w.entries || []).length > 0) projs.add(pid);
+      });
+      return projs.size;
+    });
+
+    // Append the current week's value as the last bar (highlight target).
+    return {
+      shipped: [...shipped, shippingProjects.length],
+      active:  [...active,  summaryData.length],
+      noAction: [...sortedKeys.map(_ => 0), noActionCount], // history doesn't carry "no action" — show current only
+    };
+  }, [history, shippingProjects.length, summaryData.length, noActionCount]);
 
   // ── Commit-level metrics (uses summaryItems for consistent scope) ──
   const filteredCommitments = commitments.filter(cm => {
@@ -654,7 +692,11 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
               sub="reached Alpha / Beta / GA"
               onClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); }}
               active={filterStatus === "shipping"}
-            />
+            >
+              {trends.shipped.length > 1 && (
+                <Sparkline values={trends.shipped} color={c.green} />
+              )}
+            </KpiCard>
             <KpiCard
               label={(() => { const d = summaryData.filter(p => p.status === "deprioritized").length; return d === 0 ? "No Activity" : "Deprioritized"; })()}
               value={(() => { const d = summaryData.filter(p => p.status === "deprioritized").length; return d > 0 ? d : noActionCount; })()}
@@ -665,7 +707,11 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                 setFilterStatus(filterStatus === next ? "" : next); setFilterPhase(null);
               }}
               active={filterStatus === "deprioritized" || filterStatus === "no_action"}
-            />
+            >
+              {trends.active.length > 1 && (
+                <Sparkline values={trends.active} color={c.orange} muted />
+              )}
+            </KpiCard>
             <HealthGauge value={avgHealth} />
           </>
         ) : (

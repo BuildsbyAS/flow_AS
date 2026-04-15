@@ -205,3 +205,47 @@ export const Pill = ({ count, label, color, active, onClick, style: s }) => (
 export const PillRow = ({ children, style: s }) => (
   <div style={{ display: "flex", gap: 6, marginTop: 16, flexWrap: "wrap", ...s }}>{children}</div>
 );
+
+// ═══════════════════════════════════════════════════════════════
+// Sparkline — bar chart inside a KpiCard (mock §.spark).
+// 6 bars by default, 3px gap, 40px height, last bar full opacity = current.
+// values: array of numbers (oldest first, current last)
+// color:  bar color (defaults to accent)
+// muted:  if true, use inset bg for non-current bars (Deprioritized variant)
+// ═══════════════════════════════════════════════════════════════
+export const Sparkline = ({ values, color, muted = false, height = 40, label }) => {
+  if (!values || values.length === 0) return null;
+  const max = Math.max(1, ...values);
+  const accent = color || c.accent;
+  const lastIdx = values.length - 1;
+  return (
+    <div>
+      <div style={{
+        display: "flex", alignItems: "flex-end", gap: 3,
+        marginTop: 16, height,
+      }}>
+        {values.map((v, i) => {
+          const isCurrent = i === lastIdx;
+          const pct = Math.max(0.04, v / max); // ensure visible min
+          const bg = isCurrent ? accent : muted ? c.surfaceAlt : accent;
+          const opacity = isCurrent ? 1 : muted ? 1 : 0.25;
+          return (
+            <div key={i} style={{
+              flex: 1, borderRadius: 3, minHeight: 4,
+              height: `${pct * 100}%`,
+              background: bg,
+              opacity,
+            }} />
+          );
+        })}
+      </div>
+      {label && (
+        <div style={{
+          fontFamily: typo.monoSm.font, fontSize: 11, color: c.textGhost || c.textDim,
+          marginTop: 4, textAlign: "right",
+          fontVariantNumeric: "tabular-nums",
+        }}>{label}</div>
+      )}
+    </div>
+  );
+};
