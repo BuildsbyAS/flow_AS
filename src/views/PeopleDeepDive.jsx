@@ -262,18 +262,17 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
             <input ref={localSearchRef} value={search} onChange={e => { setSearch(e.target.value); setFocusIdx(0); }} className="flow-input"
               aria-label="Search people by name, squad, or role"
               placeholder="Search by name, squad, or role..."
-              style={{ width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`, borderRadius: layout.radiusMd, border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, outline: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", height: 40, padding: `0 ${space[3]}px 0 38px`, borderRadius: layout.radiusSm, border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: typo.bodyMd.weight, outline: "none", boxSizing: "border-box" }} />
             <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
             </svg>
             {!search && <span style={{
               position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-              fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600,
+              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
               color: c.textDim, lineHeight: 1,
-              padding: "3px 7px 4px", borderRadius: layout.radiusTag,
-              background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.bg} 100%)`,
+              padding: "3px 7px 4px", borderRadius: layout.radiusXs,
+              background: c.surface,
               border: `1px solid ${c.border}`,
-              boxShadow: `0 2px 0 ${c.border}, 0 2px 3px ${c.shadow}`,
               pointerEvents: "none",
             }}>/</span>}
           </div>
@@ -305,9 +304,9 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
           return (
             <div key={squad}>
               <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[3], marginTop: space[4] }}>
-                <div style={{ width: 4, height: 20, borderRadius: 3, background: c.accent }} />
-                <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking, color: c.accent }}>{squad}</span>
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textMid, fontWeight: typo.monoMd.weight }}>{members.length}</span>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textDim, textTransform: "uppercase" }}>{squad}</span>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textDim }}>·</span>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textDim, fontVariantNumeric: "tabular-nums" }}>{members.length}</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: space[4] }}>
                 {members.map((p, gi) => {
@@ -320,29 +319,30 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
                   return (
                     <div key={p.name} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPerson(p.name); } }} className={`flow-row${isFocused ? " flow-kb-focus" : ""}`} onClick={() => openPerson(p.name)} style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: space[6], background: isFocused ? c.accentDim : c.surface,
-                      borderRadius: layout.radius, cursor: "pointer",
-                      border: `1px solid ${isFocused ? c.accent + "40" : c.border}`,
-                      transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                      padding: space[5], background: c.surface,
+                      borderRadius: layout.radiusLg, cursor: "pointer",
+                      border: `1px solid ${isFocused ? c.accent : c.border}`,
+                      boxShadow: c.shadowCard,
+                      transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
                     }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: space[4], minWidth: 0, flex: 1 }}>
-                        <div aria-hidden="true" style={{ width: space[8], height: space[8], borderRadius: "50%", background: c.accentDim, border: `1.5px solid ${c.accent}30`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.accent, flexShrink: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: space[3], minWidth: 0, flex: 1 }}>
+                        <div aria-hidden="true" style={{ width: 36, height: 36, borderRadius: "50%", background: c.surfaceAlt, border: `1px solid ${c.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: typo.monoMd.font, fontSize: 12, fontWeight: 700, color: c.textMid, flexShrink: 0 }}>
                           {p.name.charAt(0).toUpperCase()}
                         </div>
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                            <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: typo.displaySm.tracking, lineHeight: typo.displaySm.lineHeight }}>{p.name}</span>
-                            {hasDeselect && <span style={{ fontSize: 12, color: c.orange }} title="Scope churn">↩</span>}
+                            <span style={{ fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: 700, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3 }}>{p.name}</span>
+                            {hasDeselect && <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.accent }} title="Scope churn">↩</span>}
                           </div>
-                          <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, fontWeight: 500, color: c.textMid, marginTop: space[1], lineHeight: typo.bodySm.lineHeight }}>
+                          <div style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 400, color: c.textDim, marginTop: 2, lineHeight: 1.4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                             {p.role}
                           </div>
                         </div>
                       </div>
                       {/* Momentum indicator */}
-                      <div style={{ textAlign: "center", flexShrink: 0, marginLeft: space[3] }}>
-                        <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking, color: momPct === null ? c.textDim : momPct >= 80 ? c.green : momPct >= 50 ? c.orange : c.red, lineHeight: 1.1 }}>{momPct === null ? "—" : `${momPct}%`}</div>
-                        <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, color: c.textMid, marginTop: space[1] }}>Momentum</div>
+                      <div style={{ textAlign: "right", flexShrink: 0, marginLeft: space[3] }}>
+                        <div style={{ fontFamily: typo.monoLg.font, fontSize: 20, fontWeight: 700, color: momPct === null ? c.textDim : momPct >= 80 ? c.green : momPct >= 50 ? c.accent : c.red, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>{momPct === null ? "—" : `${momPct}%`}</div>
+                        <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textDim, marginTop: 2, textTransform: "uppercase" }}>Momentum</div>
                       </div>
                     </div>
                   );
@@ -386,42 +386,49 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
     <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
       {/* ═══ PROFILE HEADER ═══════════════════════════════ */}
-      <div className="flow-telemetry-panel" style={{ padding: `${space[6]}px ${space[7]}px` }}>
+      <div style={{ padding: space[6], background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
         {/* Person identity — dominant read */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: space[5], position: "relative", zIndex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[4] }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: space[5], gap: space[4] }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[4], minWidth: 0 }}>
             <div style={{
-              width: space[7] + space[6], height: space[7] + space[6], borderRadius: "50%",
-              background: `linear-gradient(135deg, ${c.accentDim}, ${c.purple}15)`,
-              border: `2px solid ${c.accent}40`,
+              width: 56, height: 56, borderRadius: "50%",
+              background: c.surfaceAlt,
+              border: `1px solid ${c.border}`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, color: c.accent,
+              fontFamily: typo.monoLg.font, fontSize: 18, fontWeight: 700, color: c.textMid,
+              flexShrink: 0,
             }}>{selectedPerson.charAt(0).toUpperCase()}</div>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size, fontWeight: typo.displayXl.weight, color: c.text, letterSpacing: typo.displayXl.tracking, lineHeight: 1.15 }}>{selectedPerson}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2] }}>
-                {personObj && <span style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: typo.bodyLg.weight, color: c.textMid }}>{personObj.role}</span>}
-                {personObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>·</span>}
-                {personObj && <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, letterSpacing: typo.monoLg.tracking, color: c.accent }}>{personObj.squad}</span>}
+              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2], flexWrap: "wrap" }}>
+                {personObj && personObj.role && <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, color: c.textMid }}>{personObj.role}</span>}
+                {personObj && personObj.squad && (
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
+                    color: c.accent, background: c.accentDim,
+                    padding: "3px 8px", borderRadius: layout.radiusXs,
+                    textTransform: "uppercase",
+                  }}>{personObj.squad}</span>
+                )}
               </div>
             </div>
           </div>
 
           {/* Momentum highlight */}
-          <div style={{ textAlign: "center", padding: `${space[3]}px ${space[5]}px`, borderRadius: layout.radiusMd, background: momentumPct === null ? c.surfaceAlt : momentumPct >= 80 ? c.greenDim : momentumPct >= 50 ? c.orangeDim : c.redDim, border: `1px solid ${momentumPct === null ? c.border : (momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.orange : c.red) + "20"}` }}>
-            <div style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, letterSpacing: typo.displayHero.tracking, color: momentumPct === null ? c.textDim : momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.orange : c.red, lineHeight: 1 }}>{momentumPct === null ? "—" : `${momentumPct}%`}</div>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, color: c.textMid, marginTop: space[1] }}>Momentum</div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, letterSpacing: typo.displayHero.tracking, color: momentumPct === null ? c.textDim : momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.accent : c.red, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{momentumPct === null ? "—" : `${momentumPct}%`}</div>
+            <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textDim, marginTop: space[1], textTransform: "uppercase" }}>Momentum</div>
           </div>
         </div>
 
         {/* Last 4 weeks — directly below identity */}
-        <div style={{ borderTop: `1px solid ${c.border}`, paddingTop: space[4], position: "relative", zIndex: 1 }}>
+        <div style={{ borderTop: `1px solid ${c.border}`, paddingTop: space[4] }}>
           <Label style={{ marginBottom: space[3] }}>Last 4 Weeks</Label>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: space[3] }}>
-            <StatCell value={`${last4Active}/${last4.length}`} label="Active weeks" color={c.text} style={{ textAlign: "left" }} />
-            <StatCell value={last4Total} label="Commitments" color={c.accent} style={{ textAlign: "left" }} />
-            <StatCell value={momentumPct === null ? "—" : `${momentumPct}%`} label="Momentum" color={momentumPct === null ? c.textDim : momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.orange : c.red} style={{ textAlign: "left" }} />
-            <StatCell value={last4Projects.size} label="Projects" color={c.text} style={{ textAlign: "left" }} />
+            <StatCell value={`${last4Active}/${last4.length}`} label="Active weeks" color={c.text} style={{ textAlign: "left", fontVariantNumeric: "tabular-nums" }} />
+            <StatCell value={last4Total} label="Commitments" color={c.accent} style={{ textAlign: "left", fontVariantNumeric: "tabular-nums" }} />
+            <StatCell value={momentumPct === null ? "—" : `${momentumPct}%`} label="Momentum" color={momentumPct === null ? c.textDim : momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.accent : c.red} style={{ textAlign: "left", fontVariantNumeric: "tabular-nums" }} />
+            <StatCell value={last4Projects.size} label="Projects" color={c.text} style={{ textAlign: "left", fontVariantNumeric: "tabular-nums" }} />
           </div>
         </div>
       </div>
@@ -439,32 +446,32 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
               {currentItems.map((it, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[1]}px ${space[3]}px`, background: c.surfaceAlt, borderRadius: layout.radiusMd, border: `1px solid ${c.border}` }}>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[1]}px ${space[3]}px`, background: c.surfaceAlt, borderRadius: layout.radiusSm, border: `1px solid ${c.border}` }}>
                   <Tag color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Tag>
                   {it.project && (
                     <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", it.project); }}
-                      style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: entityColors().project, cursor: "pointer" }}>
+                      style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, color: entityColors().project, cursor: "pointer" }}>
                       {it.project}
                     </span>
                   )}
-                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, color: c.text }}>{it.title || "—"}</span>
+                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: c.text }}>{it.title || "—"}</span>
                 </div>
               ))}
             </div>
           </div>
           );
         })() : (
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No commitments this week</div>
+          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: typo.bodyMd.weight, color: c.textDim }}>No commitments this week</div>
         )}
         {scopeChurnEvents.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: space[1], padding: `${space[2]}px ${space[3]}px`, marginTop: space[3], background: c.orangeDim, borderRadius: layout.radiusMd, border: `1px solid ${c.orange}15`, fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.5 }}>
-            <span style={{ color: c.orange, fontWeight: 600 }}>↩ Scope churn:</span>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: space[1], padding: `${space[2]}px ${space[3]}px`, marginTop: space[3], background: c.accentDim, borderRadius: layout.radiusSm, border: `1px solid ${c.border}`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: c.textMid, lineHeight: 1.5 }}>
+            <span style={{ color: c.accent, fontWeight: 700 }}>↩ Scope churn:</span>
             {scopeChurnEvents.map((ev, i) => (
               <span key={i} style={{ display: "inline-flex", alignItems: "baseline", gap: space[1] }}>
                 <span>{ev.label}</span>
                 {ev.project && (
                   <span onClick={() => { if (onNavigate) onNavigate("projects", ev.project); }}
-                    style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: entityColors().project, cursor: "pointer", textDecoration: "underline", textDecorationColor: entityColors().project + "40" }}>
+                    style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: entityColors().project, cursor: "pointer", textDecoration: "underline" }}>
                     {ev.project}
                   </span>
                 )}
@@ -477,25 +484,22 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
 
 
       {/* ═══ TIMELINE ═══════════════════════════════════════ */}
-      <div className="flow-terminal-log">
-        <div className="flow-terminal-header">
-          <div className="flow-terminal-dot" style={{ background: c.red }} />
-          <div className="flow-terminal-dot" style={{ background: c.orange }} />
-          <div className="flow-terminal-dot" style={{ background: c.green }} />
-          <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: c.textMid, marginLeft: space[2] }}>timeline@{selectedPerson.split(" ")[0].toLowerCase()}</span>
-          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim, marginLeft: "auto" }}>{weeklyData.length} weeks</span>
+      <div style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[3]}px ${space[4]}px`, borderBottom: `1px solid ${c.border}`, background: c.surfaceAlt }}>
+          <Label style={{ margin: 0 }}>Timeline</Label>
+          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textDim, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>{weeklyData.length} weeks</span>
         </div>
         <div style={{ padding: `${space[2]}px 0`, maxHeight: 540, overflowY: "auto" }}>
           {activeWeeks.length > 0 ? (
             activeWeeks.map((w) => (
               <React.Fragment key={w.week}>
                 {/* Week separator */}
-                <div style={{ padding: `${space[2]}px ${space[4]}px ${space[1]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
-                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: w.isCurrent ? c.accent : c.textDim }}>
-                    {w.isCurrent ? (isHistorical ? `▸ ${(selectedWeekKey || "SELECTED WEEK").toUpperCase()}` : "▸ THIS WEEK") : `▸ ${w.week.toUpperCase()}`}
+                <div style={{ padding: `${space[3]}px ${space[4]}px ${space[1]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: w.isCurrent ? c.accent : c.textDim, textTransform: "uppercase" }}>
+                    {w.isCurrent ? (isHistorical ? (selectedWeekKey || "Selected week") : "This week") : w.week}
                   </span>
-                  <div style={{ flex: 1, height: 1, background: w.isCurrent ? `${c.accent}30` : c.border }} />
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{w.total}</span>
+                  <div style={{ flex: 1, height: 1, background: c.border }} />
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textDim, fontVariantNumeric: "tabular-nums" }}>{w.total}</span>
                 </div>
                 {w.items.map((entry, ei) => {
                   const oc = outcomeConfig();
@@ -517,15 +521,15 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
                       }}>
                         {entry.project ? (
                         <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", entry.project); }}
-                          style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: entityColors().project, cursor: "pointer", flexShrink: 0 }}>
+                          style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, color: entityColors().project, cursor: "pointer", flexShrink: 0 }}>
                           {entry.project}
                         </span>
                         ) : (
-                        <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.textDim, flexShrink: 0 }}>—</span>
+                        <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim, flexShrink: 0 }}>—</span>
                         )}
-                        {projObj && <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, color: c.textDim, flexShrink: 0, marginLeft: space[1] }}>{projObj.name}</span>}
-                        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, color: c.textDim, flexShrink: 0, margin: `0 ${space[1]}px` }}>:</span>
-                        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, color: w.isCurrent ? c.text : c.textDim, overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {projObj && <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: c.textDim, flexShrink: 0, marginLeft: space[1] }}>{projObj.name}</span>}
+                        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, flexShrink: 0, margin: `0 ${space[1]}px` }}>:</span>
+                        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: w.isCurrent ? c.text : c.textMid, overflow: "hidden", textOverflow: "ellipsis" }}>
                           {entry.title || entry.task || "—"}
                         </span>
                       </span>
@@ -536,9 +540,9 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
                       {/* Outcome */}
                       {ocCfg ? (
                         <span style={{
-                          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
+                          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
                           color: ocCfg.color, background: ocCfg.bg,
-                          padding: "1px 6px", borderRadius: layout.radiusTag,
+                          padding: "3px 8px", borderRadius: layout.radiusXs,
                           letterSpacing: typo.monoSm.tracking, textAlign: "center", justifySelf: "center",
                         }}>
                           {ocCfg.icon} {entry.outcome.toUpperCase()}
@@ -550,14 +554,8 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
               </React.Fragment>
             ))
           ) : (
-            <div style={{ padding: `${space[5]}px ${space[4]}px`, textAlign: "center", fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.textDim }}>
-              $ no activity logged<span className="flow-terminal-cursor" />
-            </div>
-          )}
-          {activeWeeks.length > 0 && (
-            <div style={{ padding: `${space[2]}px ${space[4]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.accent }}>$</span>
-              <span className="flow-terminal-cursor" />
+            <div style={{ padding: `${space[5]}px ${space[4]}px`, textAlign: "center", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: typo.bodyMd.weight, color: c.textDim }}>
+              No activity logged
             </div>
           )}
         </div>

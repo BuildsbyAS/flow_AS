@@ -21,14 +21,13 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
   const max = Math.max(...data, 1) * 1.12;
   const gap = chartW / data.length;
   const barW = gap * 0.6;
-  const filterId = `glow-${title.replace(/[^a-zA-Z0-9]/g,"")}`;
 
   return (
     <div style={{ flex: 1, minWidth: 180 }}>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet"
         onMouseLeave={() => setHoverIdx(null)}>
         <line x1={padLR} y1={padTop + chartH} x2={width - padLR} y2={padTop + chartH}
-          stroke={c.border} strokeWidth={0.5} />
+          stroke="rgba(0,0,0,0.04)" strokeWidth={1} />
         {data.map((val, i) => {
           const barH = Math.max(3, (val / max) * chartH);
           const x = padLR + i * gap + (gap - barW) / 2;
@@ -41,15 +40,15 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
               {/* Invisible hit area spanning full column height */}
               <rect x={padLR + i * gap} y={padTop} width={gap} height={chartH + padBot}
                 fill="transparent" />
-              <rect x={x} y={y} width={barW} height={barH} rx={2}
-                fill={color} opacity={lit ? 0.9 : 0.35}
+              <rect x={x} y={y} width={barW} height={barH} rx={3}
+                fill={color} opacity={lit ? 1 : 0.8}
                 style={{ transition: `opacity ${motion.fast.duration} ${motion.fast.easing}` }} />
               <text x={x + barW / 2} y={y - 8} textAnchor="middle"
                 fill={lit ? color : c.textDim}
-                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{val}</text>
+                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, fontVariantNumeric: "tabular-nums", transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{val}</text>
               <text x={x + barW / 2} y={height - 4} textAnchor="middle"
-                fill={lit ? c.textMid : c.textDim}
-                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: lit ? 600 : 400, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{labels[i]}</text>
+                fill={c.textDim}
+                style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600, fontVariantNumeric: "tabular-nums", transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{labels[i]}</text>
             </g>
           );
         })}
@@ -74,7 +73,6 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
   const max = Math.max(...data, 1) * 1.1;
   const min = Math.min(...data, 0) * 0.9;
   const range = max - min || 1;
-  const safeTitle = title.replace(/[^a-zA-Z0-9]/g,"");
 
   if (data.length === 0) return <div style={{ flex: 1, minWidth: 180, height, display: "flex", alignItems: "center", justifyContent: "center", color: c.textDim, fontFamily: typo.bodyMd.font, fontSize: 14 }}>No data</div>;
 
@@ -96,15 +94,9 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
     <div style={{ flex: 1, minWidth: 180 }}>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet"
         onMouseLeave={() => setHoverIdx(null)}>
-        <defs>
-          <linearGradient id={`area-${safeTitle}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.12} />
-            <stop offset="100%" stopColor={color} stopOpacity={0.01} />
-          </linearGradient>
-        </defs>
         <line x1={padLR} y1={padTop + chartH} x2={width - padLR} y2={padTop + chartH}
-          stroke={c.border} strokeWidth={0.5} />
-        {areaPath && <polygon points={areaPath} fill={`url(#area-${safeTitle})`} />}
+          stroke="rgba(0,0,0,0.04)" strokeWidth={1} />
+        {areaPath && <polygon points={areaPath} fill={color} opacity={0.08} />}
         <polyline points={linePath} fill="none" stroke={color} strokeWidth={2}
           strokeLinecap="round" strokeLinejoin="round" opacity={0.8} />
         {pts.map((p, i) => {
@@ -123,10 +115,10 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
                 style={{ transition: `r ${motion.fast.duration} ${motion.fast.easing}` }} />
               <text x={p.x} y={p.y - 12} textAnchor="middle"
                 fill={lit ? color : c.textDim}
-                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{p.val}{suffix}</text>
+                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, fontVariantNumeric: "tabular-nums", transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{p.val}{suffix}</text>
               <text x={p.x} y={height - 4} textAnchor="middle"
-                fill={lit ? c.textMid : c.textDim}
-                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: lit ? 600 : 400, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{labels[i]}</text>
+                fill={c.textDim}
+                style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600, fontVariantNumeric: "tabular-nums", transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{labels[i]}</text>
             </g>
           );
         })}
@@ -167,10 +159,10 @@ const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 220 }) =
           return (
             <g key={pct}>
               <line x1={padLR} y1={y} x2={width - padLR} y2={y}
-                stroke={c.border} strokeWidth={0.5} strokeDasharray={pct === 0 ? "none" : "3,3"} opacity={pct === 0 ? 1 : 0.5} />
+                stroke="rgba(0,0,0,0.04)" strokeWidth={1} strokeDasharray={pct === 0 ? "none" : "3,3"} />
               {pct > 0 && (
                 <text x={padLR - 6} y={y + 3} textAnchor="end"
-                  fill={c.textDim} style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 400 }}>
+                  fill={c.textDim} style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
                   {yVal}
                 </text>
               )}
@@ -195,17 +187,17 @@ const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 220 }) =
                 const segH = maxTotal > 0 ? (val / maxTotal) * chartH : 0;
                 yOffset -= segH;
                 return segH > 0 ? (
-                  <rect key={s.label} x={x} y={yOffset} width={barW} height={segH} rx={layout.radiusTag}
-                    fill={s.color} opacity={lit ? 0.95 : 0.22}
+                  <rect key={s.label} x={x} y={yOffset} width={barW} height={segH} rx={3}
+                    fill={s.color} opacity={lit ? 1 : 0.8}
                     style={{ transition: `background ${motion.critical.duration} ${motion.critical.easing}, border-color ${motion.critical.duration} ${motion.critical.easing}, color ${motion.critical.duration} ${motion.critical.easing}, box-shadow ${motion.critical.duration} ${motion.critical.easing}, transform ${motion.critical.duration} ${motion.critical.easing}, opacity ${motion.critical.duration} ${motion.critical.easing}` }} />
                 ) : null;
               })}
               <text x={x + barW / 2} y={padTop + chartH - (weekTotals[wi] / maxTotal) * chartH - 8}
                 textAnchor="middle" fill={lit ? c.text : c.textDim}
-                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{weekTotals[wi]}</text>
+                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, fontVariantNumeric: "tabular-nums", transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{weekTotals[wi]}</text>
               <text x={x + barW / 2} y={height - 6} textAnchor="middle"
-                fill={lit ? c.textMid : c.textDim}
-                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: lit ? 600 : 400, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{label}</text>
+                fill={c.textDim}
+                style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600, fontVariantNumeric: "tabular-nums", transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{label}</text>
               {/* Native tooltip with breakdown */}
               <title>{`${label}: ${weekTotals[wi]} total\n${breakdown}`}</title>
             </g>
@@ -442,22 +434,24 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
   // ─── Table helpers (token-compliant) ───
   const thStyle = {
     padding: `${space[2]}px ${space[3]}px`, textAlign: "left",
-    fontFamily: typo.bodyMd.font, fontSize: 16,
-    fontWeight: 600, letterSpacing: "0",
-    color: c.textMid, borderBottom: `1px solid ${c.border}`,
-    background: c.bg, position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 2,
+    fontFamily: typo.bodyMd.font, fontSize: 12,
+    fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase",
+    color: c.textDim, borderBottom: `1px solid ${c.border}`,
+    background: c.tableHeader, position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 2,
     whiteSpace: "nowrap",
   };
   const tdBase = {
     padding: `${space[2]}px ${space[3]}px`,
-    fontFamily: typo.monoLg.font, fontSize: 14,
-    fontWeight: typo.monoLg.weight,
+    fontFamily: typo.bodyMd.font, fontSize: 14,
+    fontWeight: 500,
+    fontVariantNumeric: "tabular-nums",
     textAlign: "center", borderBottom: `1px dotted ${c.border}`,
   };
   const pctPill = (val, color, muted) => (
     <span style={{
       fontFamily: typo.monoMd.font, fontSize: 14,
       fontWeight: 700,
+      fontVariantNumeric: "tabular-nums",
       color: muted ? c.textDim : color,
       background: muted ? "transparent" : `${color}10`,
       padding: `2px ${space[2]}px`, borderRadius: layout.radiusSm,
@@ -503,7 +497,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
         <div style={{ display: "flex", flexDirection: "column", gap: space[7] }}>
 
         {/* ── Projects — bar charts ── */}
-        <div className="flow-mission-grid" style={{ padding: `${space[6]}px` }}>
+        <div className="flow-mission-grid" style={{ padding: `${space[6]}px`, background: c.surface, border: "none", borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
           <div style={{ position: "relative", zIndex: 1 }}>
             <Label style={{ color: c.green }}>Projects</Label>
             <div style={{ display: "flex", gap: space[6], marginTop: space[4], flexWrap: "wrap" }}>
@@ -521,7 +515,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
         </div>
 
         {/* ── Commit — sparklines + stacked bar ── */}
-        <div className="flow-mission-grid" style={{ padding: `${space[6]}px` }}>
+        <div className="flow-mission-grid" style={{ padding: `${space[6]}px`, background: c.surface, border: "none", borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
           <div style={{ position: "relative", zIndex: 1 }}>
             <Label style={{ color: c.accent }}>Commit</Label>
             <div style={{ display: "flex", gap: space[6], marginTop: space[4], flexWrap: "wrap" }}>
@@ -540,7 +534,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
         </div>
 
         {/* ── People — bar + sparkline ── */}
-        <div className="flow-mission-grid" style={{ padding: `${space[6]}px` }}>
+        <div className="flow-mission-grid" style={{ padding: `${space[6]}px`, background: c.surface, border: "none", borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
           <div style={{ position: "relative", zIndex: 1 }}>
             <Label style={{ color: c.cyan }}>People</Label>
             <div style={{ display: "flex", gap: space[6], marginTop: space[4], flexWrap: "wrap" }}>

@@ -28,7 +28,7 @@ const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, w
 
   return (
     <div ref={devRef} role="dialog" aria-modal="true" aria-label="Project details" className={`flow-side-panel${exiting ? " flow-side-panel-exit" : ""}`} style={{
-      padding: 0, background: c.surfaceOverlay,
+      padding: 0, background: c.surfaceOverlay, boxShadow: c.shadowElevated,
     }}>
       {/* ── Header ── */}
       <div style={{
@@ -102,14 +102,14 @@ const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, w
                 display: "flex", alignItems: "center", justifyContent: "space-between",
                 marginBottom: space[2],
               }}>
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text }}>
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text, fontVariantNumeric: "tabular-nums" }}>
                   {formatDate(proj.startDate)}
                 </span>
                 <span style={{
                   fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                   color: c.textDim,
                 }}>→</span>
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text }}>
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text, fontVariantNumeric: "tabular-nums" }}>
                   {formatDate(proj.endDate)}
                 </span>
               </div>
@@ -122,7 +122,7 @@ const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, w
                   border: `1px solid ${ageColor}20`,
                 }}>
                   <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Age</span>
-                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: ageColor }}>{proj.age}d</span>
+                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: ageColor, fontVariantNumeric: "tabular-nums" }}>{proj.age}d</span>
                 </div>
                 <div style={{
                   flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -131,7 +131,7 @@ const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, w
                   border: `1px solid ${remColor}20`,
                 }}>
                   <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Remaining</span>
-                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: remColor }}>
+                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: remColor, fontVariantNumeric: "tabular-nums" }}>
                     {proj.remaining != null ? `${proj.remaining}d` : "—"}
                   </span>
                 </div>
@@ -159,6 +159,7 @@ const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, w
             <span style={{
               fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
               fontWeight: 700, color: hColor, minWidth: 28, textAlign: "right",
+              fontVariantNumeric: "tabular-nums",
             }}>{proj.health}</span>
           </div>
         </div>
@@ -430,7 +431,8 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   }
 
   const toggleSort = (col) => { if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortCol(col); setSortDir("asc"); } };
-  const dp = { cellPad: `${space[2]}px ${space[3]}px`, headerPad: `${space[2]}px ${space[3]}px`, minTable: 600 };
+  // Matrix table density per design-directions.html: rows 13px/16px, headers 12px/16px
+  const dp = { cellPad: `13px ${space[4]}px`, headerPad: `12px ${space[4]}px`, minTable: 600 };
   // Total column count: Squad + Project + Owner + Status + Health + phase columns + Ship
   const matrixColCount = phaseNames.length + 6;
 
@@ -615,7 +617,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
           {/* Avg Health with progress bar */}
           <KPIBar.Section flex={2}>
               <div style={{ textAlign: "center", minWidth: 80 }}>
-                <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking, color: healthColor(avgHealth) }}>{avgHealth}</div>
+                <div style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, letterSpacing: typo.displayHero.tracking, lineHeight: typo.displayHero.lineHeight, color: healthColor(avgHealth), fontVariantNumeric: "tabular-nums" }}>{avgHealth}</div>
                 <div style={{
                   width: "100%", height: 4, borderRadius: 2, background: c.surfaceAlt, marginTop: space[1], overflow: "hidden",
                 }}>
@@ -655,7 +657,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
 
           <KPIBar.Section flex={2}>
               <div style={{ textAlign: "center", minWidth: 80 }}>
-                <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking, color: healthColor(avgHealth) }}>{avgHealth}</div>
+                <div style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, letterSpacing: typo.displayHero.tracking, lineHeight: typo.displayHero.lineHeight, color: healthColor(avgHealth), fontVariantNumeric: "tabular-nums" }}>{avgHealth}</div>
                 <div style={{
                   width: "100%", height: 4, borderRadius: 2, background: c.surfaceAlt, marginTop: space[1], overflow: "hidden",
                 }}>
@@ -712,7 +714,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
           ═══════════════════════════════════════════════════════════ */}
       {pulseMode === "matrix" && (
         <Surface variant="data" compact style={{
-          padding: 0,
+          padding: 0, boxShadow: c.shadowCard, overflow: "hidden",
         }}>
           <div style={{
             borderRadius: layout.radius,
@@ -729,8 +731,8 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                     <th key={ph} style={{
                       position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 2,
                       padding: dp.headerPad, textAlign: "center",
-                      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                      fontWeight: 600, letterSpacing: "0",
+                      fontFamily: typo.bodyXs.font, fontSize: 12,
+                      fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase",
                       color: pc[ph],
                       borderBottom: `1px solid ${pc[ph]}40`,
                       borderLeft: `1px dotted ${c.border}`, minWidth: 76,
@@ -740,8 +742,8 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                   <th style={{
                     position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 2,
                     padding: dp.headerPad, textAlign: "center",
-                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                    fontWeight: 600, letterSpacing: "0",
+                    fontFamily: typo.bodyXs.font, fontSize: 12,
+                    fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase",
                     color: c.green,
                     borderBottom: `1px solid ${c.green}40`,
                     borderLeft: `1px dotted ${c.border}`, minWidth: 76,
@@ -778,8 +780,8 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                         {/* Squad */}
                         <td style={{
                           padding: dp.cellPad,
-                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                          fontWeight: 600, color: c.textMid,
+                          fontFamily: typo.bodySm.font, fontSize: 13,
+                          fontWeight: 500, color: c.textDim,
                           borderBottom: `1px dotted ${c.border}`,
                           position: "sticky", left: 0, background: c.bg, zIndex: 1,
                         }}>{proj.squad}</td>
@@ -806,13 +808,13 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                                 marginLeft: "auto", flexShrink: 0,
                                 border: `1px solid ${c.orange}20`,
                                 background: `${c.orange}10`,
-                                padding: `${space[1]}px ${space[2]}px`,
-                                fontSize: typo.monoSm.size,
+                                padding: `3px 8px`,
+                                fontSize: 11,
                                 fontFamily: typo.monoSm.font,
-                                fontWeight: 600,
-                                letterSpacing: typo.monoSm.tracking,
-                                lineHeight: 1.2,
-                                borderRadius: layout.radiusTag,
+                                fontWeight: 700,
+                                letterSpacing: "0.04em",
+                                lineHeight: 1.3,
+                                borderRadius: layout.radiusXs,
                                 color: c.orange,
                                 whiteSpace: "nowrap",
                               }}>No commitments</span>
@@ -824,7 +826,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                           padding: dp.cellPad,
                           borderBottom: `1px dotted ${c.border}`,
                           borderLeft: `1px dotted ${c.border}`,
-                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                          fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
                           fontWeight: 500, color: proj.owner ? c.textMid : c.red,
                           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120,
                         }}>
@@ -857,14 +859,14 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                               }} />
                             </div>
                             <span style={{
-                              fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                              fontWeight: 800, color: healthColor(proj.health),
+                              fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                              fontWeight: 700, color: healthColor(proj.health),
+                              fontVariantNumeric: "tabular-nums",
                             }}>{proj.health}</span>
                             <span style={{
-                              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                              fontFamily: typo.bodyXs.font, fontSize: 11,
                               fontWeight: 600,
-                              color: healthColor(proj.health),
-                              opacity: 0.8,
+                              color: c.textGhost || c.textDim,
                             }}>{healthLabel(proj.health)}</span>
                           </div>
                           </div>
@@ -1064,7 +1066,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
         const colCount = 8;
 
         return (
-          <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, background: c.surfaceData }}>
+          <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, background: c.surfaceData, boxShadow: c.shadowCard, overflow: "hidden" }}>
             <div style={{ borderRadius: layout.radius }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                 <thead>
@@ -1160,7 +1162,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                           {/* Timeline */}
                           <td style={{ padding: dp.cellPad, textAlign: "center", borderBottom: dotBorder, borderLeft: dotBorder }}>
                             {it.duration ? (
-                              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.textMid }}>{it.duration}w</span>
+                              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.textMid, fontVariantNumeric: "tabular-nums" }}>{it.duration}w</span>
                             ) : (
                               <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim }}>{"\u2014"}</span>
                             )}
@@ -1181,7 +1183,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                           <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                             <div style={{
                               width: 6, height: 6, borderRadius: "50%",
-                              background: group.color, boxShadow: `0 0 6px ${group.color}40`,
+                              background: group.color,
                             }} />
                             <span style={{
                               fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
@@ -1190,7 +1192,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                             <span style={{
                               fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
                               fontWeight: typo.monoMd.weight, color: group.color,
-                              opacity: 0.7,
+                              opacity: 0.7, fontVariantNumeric: "tabular-nums",
                             }}>{group.rows.length}</span>
                           </div>
                         </td>

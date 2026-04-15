@@ -24,8 +24,8 @@ const CommitKpi = ({ value, label, color, delay = 0 }) => {
   }, [value, delay]);
   return (
     <div ref={devRef} className="flow-commit-kpi" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: space[1], animationDelay: `${delay}ms` }}>
-      <span style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, color, letterSpacing: typo.displayHero.tracking, lineHeight: typo.displayHero.lineHeight }}>{displayVal}</span>
-      <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, color: c.textMid, letterSpacing: "0" }}>{label}</span>
+      <span style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, color, letterSpacing: typo.displayHero.tracking, lineHeight: typo.displayHero.lineHeight, fontVariantNumeric: "tabular-nums" }}>{displayVal}</span>
+      <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textMid, textTransform: "uppercase" }}>{label}</span>
     </div>
   );
 };
@@ -601,14 +601,14 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             onBlur={() => setSearchGlow(false)}
             placeholder="Search people by name, role, or squad..."
             style={{
-              width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`,
-              borderRadius: layout.radiusMd,
+              width: "100%", height: 40, padding: `0 ${space[4]}px 0 38px`,
+              borderRadius: layout.radiusSm,
               border: `1px solid ${searchGlow ? c.accent : c.border}`,
               background: c.surfaceAlt, color: c.text,
-              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+              fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: 500,
               outline: "none", boxSizing: "border-box",
               boxShadow: searchGlow ? `0 0 0 3px ${c.accentDim}` : "none",
-              transition: `border-color 0.3s ease, box-shadow 0.3s ease`,
+              transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
             }}
           />
           {/* Search icon — minimal line SVG */}
@@ -761,6 +761,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                                 <span style={{
                                   fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
                                   fontWeight: typo.monoMd.weight, color: sColor,
+                                  fontVariantNumeric: "tabular-nums",
                                 }}>{row.filledCount}/3</span>
                               </div>
                             </td>
@@ -785,7 +786,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                               <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                                 <div style={{
                                   width: 6, height: 6, borderRadius: "50%",
-                                  background: group.color, boxShadow: `0 0 6px ${group.color}40`,
+                                  background: group.color,
                                 }} />
                                 <span style={{
                                   fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
@@ -794,7 +795,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                                 <span style={{
                                   fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
                                   fontWeight: typo.monoMd.weight, color: group.color,
-                                  opacity: 0.7,
+                                  opacity: 0.7, fontVariantNumeric: "tabular-nums",
                                 }}>{group.rows.length}</span>
                               </div>
                             </td>
@@ -892,27 +893,27 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
           <div style={{
             position: "absolute", bottom: 0, left: 0, right: 0, height: 2,
             borderRadius: `0 0 ${layout.radius}px ${layout.radius}px`,
-            background: `linear-gradient(90deg, ${c.green}, ${c.green}18)`,
-            boxShadow: `0 0 16px ${c.green}30`,
+            background: c.green,
           }} />
         )}
 
         {/* Left: Avatar + Name + Role·Squad + Date */}
         <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
           <div style={{
-            width: 34, height: 34, borderRadius: "50%",
-            background: c.accentDim, border: `2px solid ${c.accent}40`,
+            width: 36, height: 36, borderRadius: 10,
+            background: c.surfaceAlt, border: `1px solid ${c.border}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontWeight: 800, fontSize: typo.bodyLg.size, color: c.accent, flexShrink: 0,
-          }}>{person.person.charAt(0)}</div>
+            fontFamily: typo.monoMd.font, fontWeight: 700, fontSize: 12,
+            letterSpacing: typo.monoMd.tracking, color: c.text, flexShrink: 0,
+          }}>{person.person.split(" ").map(w => w.charAt(0)).slice(0, 2).join("").toUpperCase()}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{
-              fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
-              fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking, color: c.text,
+              fontFamily: typo.bodyMd.font, fontSize: 14,
+              fontWeight: 700, letterSpacing: "0", color: c.text,
             }}>{person.person}</span>
             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
               {personMeta && (
-                <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.textMid }}>
+                <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 400, color: c.textDim }}>
                   {personMeta.role} · {personMeta.squad}
                 </span>
               )}
@@ -977,7 +978,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                   padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
                   background: `${c.green}08`, border: `1px solid ${c.green}25`,
                 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.green, boxShadow: `0 0 6px ${c.green}60` }} />
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.green }} />
                   <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.green, textTransform: "uppercase" }}>Locked</span>
                 </div>
                 {!isHistorical && (
@@ -1002,6 +1003,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 <span style={{
                   fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
                   fontWeight: typo.monoMd.weight, color: weekComplete ? c.green : c.textMid,
+                  fontVariantNumeric: "tabular-nums",
                 }}>{weekComplete ? "ALL RESOLVED" : `${fullyResolved}/${totalToResolve} RESOLVED`}</span>
                 <div style={{
                   padding: `3px ${space[2] + 2}px`, borderRadius: layout.radiusSm,
@@ -1418,7 +1420,6 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
               width: 72, height: 72, borderRadius: "50%",
               background: `${c.green}12`, border: `2px solid ${c.green}30`,
               display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: `0 0 40px ${c.green}20`,
             }}>
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={c.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />

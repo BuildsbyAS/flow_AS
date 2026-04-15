@@ -485,8 +485,9 @@ export default function ProjectsView({
               onBlur={() => setSearchGlow(false)}
               placeholder="Search projects by name, ID, owner, or squad..."
               style={{
-                width: "100%", padding: `${space[3]}px ${space[4]}px ${space[3]}px 38px`,
-                borderRadius: layout.radiusMd,
+                width: "100%", height: 40,
+                padding: `0 ${space[4]}px 0 38px`,
+                borderRadius: layout.radiusSm,
                 border: `1px solid ${searchGlow ? c.accent : c.border}`,
                 background: c.surfaceAlt, color: c.text,
                 fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
@@ -509,34 +510,26 @@ export default function ProjectsView({
             }}>/</span>}
           </div>
           <div style={{
-            display: "flex", background: c.surfaceAlt, borderRadius: layout.radiusMd,
-            border: `1px solid ${c.border}`, overflow: "hidden", flexShrink: 0,
-            alignSelf: "stretch",
+            display: "flex", gap: 2, background: c.surfaceAlt, borderRadius: layout.radiusSm,
+            padding: 3, flexShrink: 0, height: 40, boxSizing: "border-box",
           }}>
-            <button onClick={() => { setViewMode("registry"); setBoardFullscreen(false); setGanttFullscreen(false); }} style={{
-              padding: `0 ${space[4]}px`, fontSize: typo.bodySm.size, fontWeight: 600,
-              fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
-              background: !boardFullscreen && !ganttFullscreen ? c.accent : "transparent",
-              color: !boardFullscreen && !ganttFullscreen ? "#fff" : c.textDim,
-              transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
-              letterSpacing: typo.bodySm.tracking,
-            }}>Table</button>
-            <button onClick={() => setBoardFullscreen(true)} style={{
-              padding: `0 ${space[4]}px`, fontSize: typo.bodySm.size, fontWeight: 600,
-              fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
-              background: boardFullscreen ? c.accent : "transparent",
-              color: boardFullscreen ? "#fff" : c.textDim,
-              transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
-              letterSpacing: typo.bodySm.tracking, outline: "none",
-            }}>Board</button>
-            <button onClick={() => setGanttFullscreen(true)} style={{
-              padding: `0 ${space[4]}px`, fontSize: typo.bodySm.size, fontWeight: 600,
-              fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
-              background: ganttFullscreen ? c.accent : "transparent",
-              color: ganttFullscreen ? "#fff" : c.textDim,
-              transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
-              letterSpacing: typo.bodySm.tracking, outline: "none",
-            }}>Gantt</button>
+            {[
+              { key: "registry", label: "Table", active: !boardFullscreen && !ganttFullscreen, onClick: () => { setViewMode("registry"); setBoardFullscreen(false); setGanttFullscreen(false); } },
+              { key: "board", label: "Board", active: boardFullscreen, onClick: () => setBoardFullscreen(true) },
+              { key: "gantt", label: "Gantt", active: ganttFullscreen, onClick: () => setGanttFullscreen(true) },
+            ].map(opt => (
+              <button key={opt.key} onClick={opt.onClick} style={{
+                padding: `0 ${space[4]}px`,
+                fontSize: typo.bodySm.size, fontWeight: 600,
+                fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
+                background: opt.active ? c.surface : "transparent",
+                color: opt.active ? c.text : c.textDim,
+                borderRadius: layout.radiusXs,
+                boxShadow: opt.active ? c.shadowSm : "none",
+                transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
+                letterSpacing: typo.bodySm.tracking, outline: "none",
+              }}>{opt.label}</button>
+            ))}
           </div>
         </div>
       </div>
@@ -550,28 +543,31 @@ export default function ProjectsView({
         <EmptyState icon="📂" title="No projects" message={search ? "No projects match your search." : `No ${activeTab === "all" ? "" : ({ at_risk: "at risk", active: "active", shipped: "shipped", deprioritized: "deprioritized", overdue: "overdue" }[activeTab] || activeTab) + " "}projects found.`}
           action={search ? "Clear search" : (!isHistorical ? "Add project" : null)} onAction={() => { if (search) setSearch(""); else setShowCreate(true); }} />
       ) : (
-        <Surface variant="data" compact style={{ padding: 0 }}>
-          <div style={{ borderRadius: layout.radius }}>
+        <div style={{
+          background: c.surface, border: `1px solid ${c.border}`,
+          borderRadius: layout.radiusLg, boxShadow: c.shadowCard, overflow: "hidden",
+        }}>
+          <div>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
               <thead>
                 <tr>
                   <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
-                  <Th col="project" style={{ minWidth: colWidths.identity.min, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
-                  <Th col="owner" style={{ minWidth: colWidths.owner.min, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
-                  {activeTab === "all" && <Th col="status" style={{ minWidth: colWidths.status.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>}
-                  {activeTab !== "shipped" && <Th col="phase" style={{ minWidth: colWidths.phase.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Phase</Th>}
-                  <Th col="total" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Commits</Th>
-                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="thisWk" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>{isHistorical ? selectedWeekKey : "This Wk"}</Th>}
-                  {activeTab !== "deprioritized" && <Th col="people" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>People</Th>}
+                  <Th col="project" style={{ minWidth: colWidths.identity.min, }}>Project</Th>
+                  <Th col="owner" style={{ minWidth: colWidths.owner.min, }}>Owner</Th>
+                  {activeTab === "all" && <Th col="status" style={{ minWidth: colWidths.status.min, textAlign: "center", }}>Status</Th>}
+                  {activeTab !== "shipped" && <Th col="phase" style={{ minWidth: colWidths.phase.min, textAlign: "center", }}>Phase</Th>}
+                  <Th col="total" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>Commits</Th>
+                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="thisWk" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>{isHistorical ? selectedWeekKey : "This Wk"}</Th>}
+                  {activeTab !== "deprioritized" && <Th col="people" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>People</Th>}
                   {activeTab === "shipped" && <>
-                    <Th col="planStart" style={{ minWidth: colWidths.date.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Plan Start</Th>
-                    <Th col="actualStart" style={{ minWidth: colWidths.date.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Actual Start</Th>
-                    <Th col="planDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Plan Days</Th>
-                    <Th col="actualDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Actual Days</Th>
+                    <Th col="planStart" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Plan Start</Th>
+                    <Th col="actualStart" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Actual Start</Th>
+                    <Th col="planDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>Plan Days</Th>
+                    <Th col="actualDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>Actual Days</Th>
                   </>}
-                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="last" style={{ minWidth: colWidths.date.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Last Active</Th>}
-                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="timeline" style={{ minWidth: colWidths.timeline.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Timeline</Th>}
-                  {activeTab === "deprioritized" && <Th col="reason" style={{ minWidth: 200, borderLeft: `1px dotted ${c.border}` }}>Reason</Th>}
+                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="last" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Last Active</Th>}
+                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="timeline" style={{ minWidth: colWidths.timeline.min, textAlign: "center", }}>Timeline</Th>}
+                  {activeTab === "deprioritized" && <Th col="reason" style={{ minWidth: 200, }}>Reason</Th>}
                 </tr>
               </thead>
               <tbody>
@@ -585,43 +581,44 @@ export default function ProjectsView({
                   const isHovered = hoveredProject === proj.id;
                   const isDimmed = activeTab === "all" && (shipPhases.includes(proj.phase) || proj.status === "deprioritized");
 
+                  const cellBorder = "1px solid rgba(0,0,0,0.03)";
+                  const rowBg = isFocused ? `${c.accent}10` : isHovered ? "rgba(0,0,0,0.012)" : c.surface;
                   return (
                     <tr key={proj.id}
-                      className={`flow-row${isFocused ? " flow-kb-focus" : ""}`}
+                      className={isFocused ? "flow-kb-focus" : undefined}
                       onMouseEnter={() => setHoveredProject(proj.id)}
                       onMouseLeave={() => setHoveredProject(null)}
                       onClick={() => openProject(proj.id)}
                       style={{
                         cursor: "pointer",
-                        background: isFocused ? `${c.accent}08` : isHovered ? c.surfaceAlt : "transparent",
+                        background: rowBg,
                         opacity: isDimmed ? 0.65 : 1,
                         transition: `background ${motion.interaction.duration}`,
-                        animation: `rowSlideIn ${motion.interaction.duration} ${motion.interaction.easing} both`,
-                        animationDelay: `${Math.min(fi * 30, 600)}ms`,
                       }}
                     >
                       {/* Squad — sticky left (Pulse pattern) */}
                       <td style={{
-                        padding: `${space[2]}px ${space[3]}px`,
-                        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                        fontWeight: 600, color: c.textMid,
-                        borderBottom: `1px dotted ${c.border}`,
-                        position: "sticky", left: 0, background: c.bg, zIndex: 1,
+                        padding: `13px ${space[4]}px`,
+                        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                        fontWeight: 500, color: c.textMid,
+                        borderBottom: cellBorder,
+                        position: "sticky", left: 0, background: rowBg, zIndex: 1,
+                        fontVariantNumeric: "tabular-nums",
                       }}>{proj.squad}</td>
 
                       {/* Project — ID + Name compound (Pulse pattern) */}
                       <td style={{
-                        padding: `${space[2]}px ${space[3]}px`,
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
+                        padding: `13px ${space[4]}px`,
+                        borderBottom: cellBorder,
                       }}>
                         <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                           <span style={{
-                            fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                            fontWeight: 700, color: ec.project, flexShrink: 0,
+                            fontFamily: typo.monoMd.font, fontSize: 12,
+                            fontWeight: 700, letterSpacing: "0.02em",
+                            color: c.amber, flexShrink: 0,
                           }}>{proj.id}</span>
                           <span style={{
-                            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                            fontFamily: typo.bodyMd.font, fontSize: 14,
                             fontWeight: 600, color: c.text,
                             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                             transition: `color ${motion.interaction.duration}`,
@@ -633,123 +630,130 @@ export default function ProjectsView({
 
                       {/* Owner */}
                       <td style={{
-                        padding: `${space[2]}px ${space[3]}px`,
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                        padding: `13px ${space[4]}px`,
+                        borderBottom: cellBorder,
+                        fontFamily: typo.bodyMd.font, fontSize: 14,
                         fontWeight: 500, color: proj.owner ? c.textMid : c.red,
                         whiteSpace: "nowrap",
                       }}>{proj.owner || "—"}</td>
 
                       {/* Status — only in "All" tab */}
                       {activeTab === "all" && <td style={{
-                        padding: `${space[2]}px ${space[3]}px`, textAlign: "center",
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
+                        padding: `13px ${space[4]}px`, textAlign: "center",
+                        borderBottom: cellBorder,
                       }}>
-                        <Badge color={sCfg.color} bg={sCfg.bg}>{sCfg.label}</Badge>
+                        <span style={{
+                          display: "inline-block", padding: `3px 10px`,
+                          borderRadius: layout.radiusXs,
+                          background: sCfg.bg, color: sCfg.color,
+                          fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 700,
+                        }}>{sCfg.label}</span>
                       </td>}
 
                       {/* Phase — hidden in Completed tab */}
                       {activeTab !== "shipped" && <td style={{
-                        padding: `${space[2]}px ${space[3]}px`,
+                        padding: `13px ${space[4]}px`,
                         textAlign: "center",
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
+                        borderBottom: cellBorder,
                       }}>
-                        <Badge color={pc[proj.phase] || c.textDim} bg={`${pc[proj.phase] || c.textDim}18`}>{proj.phase}</Badge>
+                        <span style={{
+                          display: "inline-block", padding: `3px 10px`,
+                          borderRadius: layout.radiusXs,
+                          background: `${pc[proj.phase] || c.textDim}18`,
+                          color: pc[proj.phase] || c.textDim,
+                          fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 700,
+                        }}>{proj.phase}</span>
                       </td>}
 
                       {/* Total commits */}
                       <td style={{
-                        padding: `${space[2]}px ${space[3]}px`, textAlign: "center",
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                        color: m.totalCommits > 0 ? c.text : c.textDim, fontWeight: 600,
+                        padding: `13px ${space[4]}px`, textAlign: "center",
+                        borderBottom: cellBorder,
+                        fontFamily: typo.monoMd.font, fontSize: 13,
+                        color: m.totalCommits > 0 ? c.text : c.textDim, fontWeight: 700,
+                        fontVariantNumeric: "tabular-nums",
                       }}>{m.totalCommits || "—"}</td>
 
                       {/* This week — hidden in Completed and Deprioritized tabs */}
                       {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
-                        padding: `${space[2]}px ${space[3]}px`, textAlign: "center",
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                        padding: `13px ${space[4]}px`, textAlign: "center",
+                        borderBottom: cellBorder,
+                        fontFamily: typo.monoMd.font, fontSize: 13, fontWeight: 700,
                         color: m.thisWeekTotal > 0 ? c.cyan : c.textDim,
+                        fontVariantNumeric: "tabular-nums",
                       }}>{m.thisWeekTotal || "—"}</td>}
 
                       {/* People — hidden in Deprioritized tab */}
                       {activeTab !== "deprioritized" && <td style={{
-                        padding: `${space[2]}px ${space[3]}px`, textAlign: "center",
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                        padding: `13px ${space[4]}px`, textAlign: "center",
+                        borderBottom: cellBorder,
+                        fontFamily: typo.monoMd.font, fontSize: 13, fontWeight: 700,
                         color: m.peopleList?.length > 0 ? c.text : c.textDim,
+                        fontVariantNumeric: "tabular-nums",
                       }}>{m.peopleList?.length || "—"}</td>}
 
                       {/* Completed tab — plan/actual columns */}
                       {activeTab === "shipped" && <>
                         <td style={{
-                          padding: `${space[2]}px ${space[3]}px`, textAlign: "center",
-                          borderBottom: `1px dotted ${c.border}`,
-                          borderLeft: `1px dotted ${c.border}`,
-                          fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.textMid,
+                          padding: `13px ${space[4]}px`, textAlign: "center",
+                          borderBottom: cellBorder,
+                          fontFamily: typo.monoMd.font, fontSize: 12, color: c.textMid,
+                          fontVariantNumeric: "tabular-nums",
                         }}>{fmtDate(proj.startDate)}</td>
                         <td style={{
-                          padding: `${space[2]}px ${space[3]}px`, textAlign: "center",
-                          borderBottom: `1px dotted ${c.border}`,
-                          borderLeft: `1px dotted ${c.border}`,
-                          fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.textMid,
+                          padding: `13px ${space[4]}px`, textAlign: "center",
+                          borderBottom: cellBorder,
+                          fontFamily: typo.monoMd.font, fontSize: 12, color: c.textMid,
+                          fontVariantNumeric: "tabular-nums",
                         }}>{fmtDate(proj.actualStartDate)}</td>
                         <td style={{
-                          padding: `${space[2]}px ${space[3]}px`, textAlign: "center",
-                          borderBottom: `1px dotted ${c.border}`,
-                          borderLeft: `1px dotted ${c.border}`,
-                          fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.text, fontWeight: 600,
+                          padding: `13px ${space[4]}px`, textAlign: "center",
+                          borderBottom: cellBorder,
+                          fontFamily: typo.monoMd.font, fontSize: 13, color: c.text, fontWeight: 700,
+                          fontVariantNumeric: "tabular-nums",
                         }}>{allocated}</td>
                         {(() => {
                           const actualDays = proj.actualStartDate && proj.actualEndDate ? daysBetween(proj.actualStartDate, proj.actualEndDate) : 0;
                           const overPlan = actualDays > allocated;
                           return <td style={{
-                            padding: `${space[2]}px ${space[3]}px`, textAlign: "center",
-                            borderBottom: `1px dotted ${c.border}`,
-                            borderLeft: `1px dotted ${c.border}`,
-                            fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 600,
-                            color: overPlan ? c.orange : c.green,
+                            padding: `13px ${space[4]}px`, textAlign: "center",
+                            borderBottom: cellBorder,
+                            fontFamily: typo.monoMd.font, fontSize: 13, fontWeight: 700,
+                            color: overPlan ? c.amber : c.green,
+                            fontVariantNumeric: "tabular-nums",
                           }}>{actualDays}</td>;
                         })()}
                       </>}
 
                       {/* Last activity — hidden in Completed and Deprioritized tabs */}
                       {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
-                        padding: `${space[2]}px ${space[3]}px`, textAlign: "center",
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
+                        padding: `13px ${space[4]}px`, textAlign: "center",
+                        borderBottom: cellBorder,
+                        fontFamily: typo.monoMd.font, fontSize: 12,
                         color: m.lastActivity === "This wk" ? c.cyan : m.lastActivity ? c.textMid : c.textDim,
                         fontWeight: m.lastActivity === "This wk" ? 700 : 500,
+                        fontVariantNumeric: "tabular-nums",
                       }}>{m.lastActivity || "—"}</td>}
 
                       {/* Timeline — hidden in Completed and Deprioritized tabs */}
                       {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
-                        padding: `${space[2]}px ${space[3]}px`,
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
+                        padding: `13px ${space[4]}px`,
+                        borderBottom: cellBorder,
                       }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums" }}>
+                            <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid }}>
                               {fmtDate(proj.startDate)}
                             </span>
-                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>→</span>
-                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
+                            <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, color: c.textDim }}>→</span>
+                            <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid }}>
                               {fmtDate(proj.endDate)}
                             </span>
                           </div>
                           <div style={{ height: 3, borderRadius: 2, background: c.border, overflow: "hidden", width: "100%" }}>
                             <div style={{
                               height: "100%", borderRadius: 2, width: `${Math.min(pct, 100)}%`,
-                              background: m.overdue ? c.red : pct > 85 ? c.orange : c.green,
+                              background: m.overdue ? c.red : pct > 85 ? c.amber : c.green,
                             }} />
                           </div>
                         </div>
@@ -757,10 +761,9 @@ export default function ProjectsView({
 
                       {/* Reason — Deprioritized tab only */}
                       {activeTab === "deprioritized" && <td style={{
-                        padding: `${space[2]}px ${space[3]}px`,
-                        borderBottom: `1px dotted ${c.border}`,
-                        borderLeft: `1px dotted ${c.border}`,
-                        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                        padding: `13px ${space[4]}px`,
+                        borderBottom: cellBorder,
+                        fontFamily: typo.bodySm.font, fontSize: 13,
                         color: proj.depriReason ? c.textMid : c.textDim,
                         maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }} title={proj.depriReason || ""}>{proj.depriReason || "—"}</td>}
@@ -770,7 +773,7 @@ export default function ProjectsView({
               </tbody>
             </table>
           </div>
-        </Surface>
+        </div>
       )}
       <div style={{ flexShrink: 0, height: space[8] }} />
       </div>
@@ -778,14 +781,14 @@ export default function ProjectsView({
       {/* FAB — Add Project (hidden in historical mode) */}
       {!isHistorical && <button onClick={() => setShowCreate(true)} aria-label="Add project" style={{
         position: "fixed", bottom: space[7], right: space[7], zIndex: 50,
-        padding: `${space[3]}px ${space[5]}px`, borderRadius: layout.radiusMd,
+        height: 40, padding: `0 ${space[5]}px`, borderRadius: layout.radiusSm,
         border: "none", cursor: "pointer",
-        background: c.orange, color: c.bg,
-        fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 700,
+        background: c.accent, color: "#FFFFFF",
+        fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600,
         display: "flex", alignItems: "center", justifyContent: "center", gap: space[1],
-        boxShadow: `0 4px 16px ${c.orange}40, 0 2px 4px ${c.shadow}`,
+        boxShadow: c.shadowCard,
         transition: `transform ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration}`,
-      }}>Add</button>}
+      }}>Add project</button>}
 
       {/* Create Project Overlay */}
       {showCreate && <CreateProjectOverlay
@@ -980,14 +983,15 @@ export default function ProjectsView({
                     return (
                       <div key={phase} style={{
                         flex: 1, minWidth: 200, display: "flex", flexDirection: "column",
-                        borderRadius: layout.radiusMd,
-                        background: `${phColor}04`,
-                        border: `1px solid ${phColor}15`,
+                        borderRadius: layout.radiusLg,
+                        background: c.surface,
+                        border: `1px solid ${c.border}`,
+                        boxShadow: c.shadowCard,
                       }}>
                         {/* Column header */}
                         <div style={{
                           padding: `${space[3]}px ${space[4]}px`,
-                          borderBottom: `2px solid ${phColor}25`,
+                          borderBottom: `1px solid ${c.border}`,
                           display: "flex", alignItems: "center", justifyContent: "space-between",
                         }}>
                           <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
@@ -1028,32 +1032,32 @@ export default function ProjectsView({
                               <div
                                 key={proj.id}
                                 onClick={() => { setBoardFullscreen(false); openProject(proj.id); }}
-                                className="flow-row"
                                 style={{
-                                  padding: `${space[4]}px`,
-                                  borderRadius: layout.radiusMd,
+                                  padding: 16,
+                                  borderRadius: layout.radiusLg,
                                   background: c.surface,
                                   border: `1px solid ${c.border}`,
+                                  boxShadow: c.shadowCard,
                                   cursor: "pointer",
                                   display: "flex", flexDirection: "column", gap: space[2],
-                                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}`,
                                 }}
                               >
                                 {/* ID + health bar */}
                                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                   <span style={{
-                                    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                                    fontWeight: 700, letterSpacing: typo.monoMd.tracking,
-                                    color: ec.project,
+                                    fontFamily: typo.monoMd.font, fontSize: 12,
+                                    fontWeight: 700, letterSpacing: "0.02em",
+                                    color: c.amber,
                                   }}>{proj.id}</span>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums" }}>
                                     <div style={{
                                       width: 24, height: 4, borderRadius: 2, background: c.surfaceAlt, overflow: "hidden",
                                     }}>
                                       <div style={{ width: `${health}%`, height: "100%", borderRadius: 2, background: hColor }} />
                                     </div>
                                     <span style={{
-                                      fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                                      fontFamily: typo.monoSm.font, fontSize: 11,
                                       fontWeight: 700, color: hColor,
                                     }}>{health}</span>
                                   </div>
@@ -1145,96 +1149,79 @@ function CreateProjectOverlay({ projects, people, setProjects, onClose }) {
     outline: "none", boxSizing: "border-box",
   };
 
-  const monoLabel = { fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 600, color: c.textDim, marginBottom: space[1] };
+
+  const fieldLabel = { fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 600, color: c.textMid, marginBottom: space[1], letterSpacing: 0 };
 
   return (
-    <Modal open onClose={onClose} blur={8} width={520} style={{
-      padding: 0, border: "none", borderRadius: 0, background: "transparent", boxShadow: "none",
-    }}>
-      <div data-suppress-shortcuts className="flow-terminal-log" style={{
-        width: "100%", opacity: 1,
-        animation: `rowSlideIn 0.3s ${motion.critical.easing} both`,
-      }}>
-        {/* Terminal header bar */}
-        <div className="flow-terminal-header" style={{ padding: `${space[2]}px ${space[4]}px` }}>
-          <div className="flow-terminal-dot" style={{ background: c.red }} />
-          <div className="flow-terminal-dot" style={{ background: c.orange }} />
-          <div className="flow-terminal-dot" style={{ background: c.green }} />
-          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoLg.size, fontWeight: 600, color: c.textMid, marginLeft: space[2] }}>
-            create@flow
-          </span>
-          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.orange, marginLeft: "auto" }}>
-            {previewId}
-          </span>
+    <Modal open onClose={onClose} blur={8} width={520} title="New project">
+      <div data-suppress-shortcuts style={{ width: "100%" }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: space[4] }}>
+          <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.textMid }}>
+            Create a new project for your squad
+          </div>
+          <span style={{
+            fontFamily: typo.monoMd.font, fontSize: 12, fontWeight: 700,
+            color: c.amber, letterSpacing: "0.02em",
+            padding: `3px 8px`, borderRadius: layout.radiusXs,
+            background: c.amberDim,
+          }}>{previewId}</span>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: `${space[5]}px ${space[5]}px ${space[6]}px` }}>
-          {/* Command prompt */}
-          <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginBottom: space[1] }}>
-            $ flow create --project
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+          {/* Name */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <div style={fieldLabel}>Name</div>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, color: name.length > 35 ? c.red : c.textDim, fontVariantNumeric: "tabular-nums" }}>{name.length}/35</span>
+            </div>
+            <Inp value={name} onChange={e => { if (e.target.value.length <= 35) setName(e.target.value); }} placeholder="e.g. Checkout Redesign" style={{ width: "100%" }} autoFocus maxLength={35} />
           </div>
-          <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, color: c.orange, marginBottom: space[5] }}>
-            Initialize new project
+
+          {/* Owner + Squad */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+            <div>
+              <div style={fieldLabel}>Owner</div>
+              <SearchSelect value={owner} onChange={setOwner} options={allOwners} placeholder="Search people..." />
+            </div>
+            <div>
+              <div style={fieldLabel}>Squad</div>
+              <SearchSelect value={squad} onChange={setSquad} options={allSquads} placeholder="Search squads..." />
+            </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-            {/* Name */}
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <div style={monoLabel}>--name</div>
-                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: name.length > 35 ? c.red : c.textDim }}>{name.length}/35</span>
-              </div>
-              <Inp value={name} onChange={e => { if (e.target.value.length <= 35) setName(e.target.value); }} placeholder="e.g. Checkout Redesign" style={{ width: "100%", fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size }} autoFocus maxLength={35} />
-            </div>
+          {/* Phase */}
+          <div>
+            <div style={fieldLabel}>Phase</div>
+            <Sel value={phase} onChange={e => setPhase(e.target.value)} style={{ width: "100%" }}>
+              {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
+            </Sel>
+          </div>
 
-            {/* Owner + Squad */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
-              <div>
-                <div style={monoLabel}>--owner</div>
-                <SearchSelect value={owner} onChange={setOwner} options={allOwners} placeholder="Search people..." />
-              </div>
-              <div>
-                <div style={monoLabel}>--squad</div>
-                <SearchSelect value={squad} onChange={setSquad} options={allSquads} placeholder="Search squads..." />
-              </div>
+          {/* Duration — start → end inline */}
+          <div>
+            <div style={fieldLabel}>Duration</div>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+              <span style={{ fontFamily: typo.bodyMd.font, fontSize: 14, color: c.textDim, flexShrink: 0 }}>→</span>
+              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
             </div>
+            {startDate && endDate && endDate <= startDate && (
+              <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.red, marginTop: space[1] }}>End date must be after start date</div>
+            )}
+          </div>
 
-            {/* Phase */}
-            <div>
-              <div style={monoLabel}>--phase</div>
-              <Sel value={phase} onChange={e => setPhase(e.target.value)} style={{ width: "100%" }}>
-                {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
-              </Sel>
-            </div>
-
-            {/* Duration — start → end inline */}
-            <div>
-              <div style={monoLabel}>--duration</div>
-              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim, flexShrink: 0 }}>→</span>
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
-              </div>
-              {startDate && endDate && endDate <= startDate && (
-                <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.red, marginTop: space[1] }}>End date must be after start date</div>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: space[2], marginTop: space[3] }}>
-              <Btn variant="secondary" size="sm" onClick={onClose}>Abort</Btn>
-              <button onClick={handleCreate} disabled={!canSave || saving} style={{
-                padding: `${space[2]}px ${space[5]}px`, borderRadius: layout.radiusMd,
-                border: "none", cursor: canSave && !saving ? "pointer" : "default",
-                background: canSave && !saving ? c.green : c.surfaceAlt,
-                color: canSave && !saving ? c.bg : c.textDim,
-                fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700,
-                opacity: canSave && !saving ? 1 : 0.5,
-                boxShadow: canSave && !saving ? `0 2px 8px ${c.green}30` : "none",
-                transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
-              }}>{saving ? "Creating..." : "Execute"}</button>
-            </div>
+          {/* Actions */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: space[2], marginTop: space[3] }}>
+            <Btn variant="secondary" size="sm" onClick={onClose}>Cancel</Btn>
+            <button onClick={handleCreate} disabled={!canSave || saving} style={{
+              height: 36, padding: `0 ${space[4]}px`, borderRadius: layout.radiusSm,
+              border: "none", cursor: canSave && !saving ? "pointer" : "default",
+              background: canSave && !saving ? c.accent : c.surfaceAlt,
+              color: canSave && !saving ? "#FFFFFF" : c.textDim,
+              fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: 600,
+              opacity: canSave && !saving ? 1 : 0.6,
+              transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+            }}>{saving ? "Creating..." : "Create project"}</button>
           </div>
         </div>
       </div>
@@ -1458,7 +1445,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
                     { label: "Last Active", value: m.lastActivity || "—", color: m.lastActivity === "This wk" ? c.cyan : c.textMid },
                   ].map((item, i) => (
                     <div key={i} style={{ textAlign: "center" }}>
-                      <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking, color: item.color, lineHeight: 1.2 }}>{item.value}</div>
+                      <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking, color: item.color, lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>{item.value}</div>
                       <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginTop: 3 }}>{item.label}</div>
                     </div>
                   ))}
@@ -1647,12 +1634,12 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
             Delete
           </button>
           <button onClick={() => setEditing(true)} className="flow-btn" style={{
-            padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusMd,
+            height: 40, padding: `0 ${space[4]}px`, borderRadius: layout.radiusSm,
             border: "none", cursor: "pointer",
-            background: c.orange, color: c.bg,
-            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 700,
+            background: c.accent, color: "#FFFFFF",
+            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600,
             display: "flex", alignItems: "center", justifyContent: "center", gap: space[1],
-            boxShadow: `0 4px 16px ${c.orange}40, 0 2px 4px ${c.shadow}`,
+            boxShadow: c.shadowCard,
             transition: `transform ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration}`,
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
