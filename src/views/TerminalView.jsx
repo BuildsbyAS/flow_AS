@@ -219,7 +219,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
         {/* Admin content */}
         <div style={{
           flex: 1, overflow: "auto", padding: `${space[5]}px ${space[6]}px`,
-          fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+          fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
           fontSize: 13, lineHeight: 1.8, color: "#FBBF24",
           scrollbarWidth: "none", position: "relative", zIndex: 5,
         }}>
@@ -251,7 +251,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
         {/* Rant content */}
         <div style={{
           flex: 1, overflow: "auto", padding: `${space[5]}px ${space[6]}px`,
-          fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+          fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
           fontSize: 13, lineHeight: 1.8, color: "#00ff41",
           scrollbarWidth: "none", position: "relative", zIndex: 5,
         }}>
@@ -286,7 +286,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
       {/* Terminal content */}
       <div ref={terminalRef} style={{
         flex: 1, overflow: "auto", padding: `${space[5]}px ${space[6]}px`,
-        fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+        fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
         fontSize: 13, lineHeight: 1.8, color: "#00ff41",
         scrollbarWidth: "none", position: "relative", zIndex: 5,
       }}>

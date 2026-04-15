@@ -563,10 +563,10 @@ export function Header({
    Left pill: Flow logo mark. Right pill: current page label + search.
    ════════════════════════════════════════════════════════════════════ */
 function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPeekEnter, onPeekLeave }) {
-  const pillBg = `linear-gradient(180deg, ${c.surfaceSolid}F2 0%, ${c.surfaceAlt}E6 100%)`;
+  const pillBg = c.surface;
   const pillBorder = `1px solid ${c.border}`;
-  const pillShadow = `0 8px 28px rgba(0,0,0,0.38), 0 1px 0 rgba(255,255,255,0.04) inset`;
-  const radius = 999;
+  const pillShadow = c.shadowCard;
+  const radius = layout.radiusPill;
 
   return (
     <div
@@ -591,8 +591,6 @@ function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPee
           padding: "6px 14px 6px 8px", height: 40,
           borderRadius: radius, border: pillBorder,
           background: pillBg,
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
           boxShadow: pillShadow,
           cursor: "pointer",
           transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
@@ -600,10 +598,10 @@ function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPee
       >
         <FlowLogo size={24} />
         <span style={{
-          fontFamily: "'Space Grotesk', 'Inter', sans-serif",
+          fontFamily: mono,
           fontSize: 14, fontWeight: 700,
-          color: c.text, letterSpacing: "-0.04em",
-        }}>Flow</span>
+          color: c.text, letterSpacing: "0.04em",
+        }}>FLOW</span>
       </button>
 
       {/* ── Right pill: page label + search ── */}
@@ -612,8 +610,6 @@ function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPee
         height: 40, padding: "0 6px 0 16px",
         borderRadius: radius, border: pillBorder,
         background: pillBg,
-        backdropFilter: "blur(18px) saturate(160%)",
-        WebkitBackdropFilter: "blur(18px) saturate(160%)",
         boxShadow: pillShadow,
       }}>
         {label && (
@@ -1547,7 +1543,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
         ) : (
           <div style={{
             width: 28, height: 28, borderRadius: "50%",
-            background: `linear-gradient(135deg, ${c.purple}, ${c.cyan})`,
+            background: c.accent,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 12, fontWeight: 700, color: "#fff",
             border: `2px solid ${c.border}`,

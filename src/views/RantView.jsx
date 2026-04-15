@@ -18,7 +18,7 @@ const STATUS_CONFIG = {
   shipped:  { label: "Shipped", color: "#22D3EE", icon: "🚀" },
 };
 
-const MONO = "'SF Mono', 'Fira Code', 'Cascadia Code', monospace";
+const MONO = "'JetBrains Mono', 'SF Mono', monospace";
 
 export default function RantView({ onBack, auth }) {
   const devRef = useDevLabel('Feature request and bug report submission with list and detail views');

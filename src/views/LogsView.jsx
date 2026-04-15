@@ -115,7 +115,7 @@ export default function LogsView() {
   }, [filtered]);
 
   const selectStyle = {
-    padding: "6px 10px", fontSize: 11, fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+    padding: "6px 10px", fontSize: 11, fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
     background: c.surfaceAlt, border: `1px solid ${c.border}`, borderRadius: 6,
     color: c.text, outline: "none", cursor: "pointer", appearance: "none",
     paddingRight: 24,
@@ -154,7 +154,7 @@ export default function LogsView() {
             <button
               onClick={() => { setFilterEmail(""); setFilterAction(""); }}
               style={{
-                padding: "6px 10px", fontSize: 11, fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+                padding: "6px 10px", fontSize: 11, fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
                 background: "transparent", border: `1px solid ${c.border}`, borderRadius: 6,
                 color: c.textDim, cursor: "pointer",
               }}
@@ -179,7 +179,7 @@ export default function LogsView() {
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#FEBC2E" }} />
           <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#28C840" }} />
           <span style={{
-            fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace", fontSize: 11,
+            fontFamily: "'JetBrains Mono', 'SF Mono', monospace", fontSize: 11,
             color: c.textDim, marginLeft: 8,
           }}>flow@logs ~ tail -f activity.log</span>
         </div>
@@ -188,14 +188,14 @@ export default function LogsView() {
         <div style={{ padding: "8px 0", maxHeight: "calc(100vh - 280px)", minHeight: 200, overflowY: "auto" }}>
           {loading && (
             <div style={{
-              padding: "20px 16px", fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+              padding: "20px 16px", fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
               fontSize: 11, color: c.textDim, textAlign: "center",
             }}>Loading logs...</div>
           )}
 
           {!loading && filtered.length === 0 && (
             <div style={{
-              padding: "40px 16px", fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+              padding: "40px 16px", fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
               fontSize: 12, color: c.textDim, textAlign: "center",
             }}>{logs.length > 0 && (filterEmail || filterAction)
               ? "No logs match your filters. Try clearing them."
@@ -214,7 +214,7 @@ export default function LogsView() {
               }}>
                 <div style={{ height: 1, flex: 1, background: c.border }} />
                 <span style={{
-                  fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace",
+                  fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
                   fontWeight: 700, color: c.textDim, textTransform: "uppercase",
                   letterSpacing: "0.06em", fontSize: 11,
                 }}>{dateLabel}</span>
@@ -227,7 +227,7 @@ export default function LogsView() {
                   <div key={log.id} style={{
                     display: "flex", alignItems: "flex-start", gap: 10,
                     padding: "8px 16px",
-                    fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace", fontSize: 11,
+                    fontFamily: "'JetBrains Mono', 'SF Mono', monospace", fontSize: 11,
                     transition: "background 0.1s",
                   }}
                     onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.02)"}
@@ -288,7 +288,7 @@ export default function LogsView() {
           {/* Terminal cursor */}
           {!loading && filtered.length > 0 && (
             <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', monospace", fontSize: 11, color: c.accent }}>$</span>
+              <span style={{ fontFamily: "'JetBrains Mono', 'SF Mono', monospace", fontSize: 11, color: c.accent }}>$</span>
               <span style={{
                 width: 7, height: 14, background: c.accent,
                 animation: "sync-cursor-blink 1s step-end infinite",

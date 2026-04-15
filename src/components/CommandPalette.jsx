@@ -288,7 +288,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
         {/* ── Gradient divider ── */}
         <div style={{
           height: 1, margin: `0 ${space[5]}px`,
-          background: `linear-gradient(90deg, transparent, ${activeCatColor}40, ${c.border}, ${c.purple}30, transparent)`,
+          background: c.border,
         }} />
 
         {/* ── Category pills ── */}

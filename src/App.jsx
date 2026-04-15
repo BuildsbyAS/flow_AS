@@ -317,9 +317,9 @@ function FlowDashboard({ auth }) {
         }}>
           <div style={{
             width: "100%", height: "100%",
-            background: `linear-gradient(90deg, ${c.purple}, ${c.cyan}, ${c.red}, ${c.purple})`,
+            background: `linear-gradient(90deg, ${c.accent}00, ${c.accent}, ${c.accent}00)`,
             backgroundSize: "200% 100%",
-            animation: "flow-load-bar 1s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+            animation: "flow-load-bar 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite",
           }} />
         </div>
       </div>

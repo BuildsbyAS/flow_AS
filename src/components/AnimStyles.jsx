@@ -1504,14 +1504,11 @@ const AnimStyles = () => (
       position: relative;
     }
 
-    /* ── Gradient top accent bar ── */
+    /* ── Top accent bar (Steel & Orange — flat, not pulsing) ── */
     .flow-cmd-topbar {
-      height: 3px;
-      background: linear-gradient(90deg, ${c.cyan}, ${c.accent}, ${c.purple}, ${c.green});
-      background-size: 200% 100%;
-      animation: cmdBorderGlow 3s ease-in-out infinite;
+      height: 2px;
+      background: ${c.accent};
       flex-shrink: 0;
-      box-shadow: 0 1px 8px ${c.accent}30, 0 0 20px ${c.cyan}15;
     }
 
     /* ── Search input ── */
@@ -1638,6 +1635,42 @@ const AnimStyles = () => (
       background: var(--flow-card) !important;
       border-left: 1px solid var(--flow-border-subtle) !important;
       box-shadow: var(--flow-shadow-elevated) !important;
+    }
+
+    /* Kill infinite decorative loops on functional UI. Each of these was
+       flagged by motion review as attention-grabbing forever with no user
+       trigger — incompatible with the Steel & Orange "shadows not glows"
+       rule, and a perf tax on list-heavy views (Pulse/Projects/People). */
+    .flow-command-card::before,
+    .flow-phase-node-active,
+    .flow-timeline-marker,
+    .flow-timeline-overdue .flow-timeline-fill::after,
+    .flow-overdue-emergency,
+    .flow-escalation-chip,
+    .flow-momentum-up,
+    .flow-momentum-down,
+    .flow-signal-info,
+    .flow-signal-warning,
+    .flow-signal-critical,
+    .flow-cmd-search-glow,
+    .flow-neon-card.flow-neon-active,
+    .flow-energy-bar-glow,
+    .flow-step-indicator-pulse,
+    .flow-severity-dot {
+      animation: none !important;
+    }
+    /* Turn the removed glow states into flat borders / solid fills so the
+       visual intent (highlight) survives without the pulse. */
+    .flow-phase-node-active { box-shadow: 0 0 0 2px currentColor !important; }
+    .flow-overdue-emergency { border-color: var(--flow-accent) !important; }
+
+    /* CRT scanline + blinking block cursor belong only inside TerminalView.
+       Any callers that applied these outside Terminal (PeopleDeepDive /
+       ProjectsView detail panes) are neutered here; TerminalView renders
+       inside its own component tree with these classes intact. */
+    :not(.flow-terminal-root) .flow-terminal-log::before,
+    :not(.flow-terminal-root) .flow-terminal-cursor {
+      animation: none !important;
     }
 
     /* ═══════════════════════════════════════════════════════════════

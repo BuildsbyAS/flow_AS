@@ -118,8 +118,8 @@ export default function SyncToast() {
             }}>
               <div style={{
                 width: "50%", height: "100%",
-                background: `linear-gradient(90deg, transparent, ${c.cyan}, ${c.purple}, transparent)`,
-                animation: "sync-bar-sweep 0.8s ease-in-out infinite",
+                background: `linear-gradient(90deg, transparent, ${c.accent}, transparent)`,
+                animation: "sync-bar-sweep 1s linear infinite",
               }} />
             </div>
           )}
