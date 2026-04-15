@@ -221,6 +221,232 @@ const healthColor = (h) => h >= HEALTH_GOOD ? c.green : h >= HEALTH_WARN ? c.ora
 const healthLabel = (h) => h >= HEALTH_GOOD ? "Good" : h >= HEALTH_WARN ? "Fair" : "Poor";
 
 // ═══════════════════════════════════════════════════════════════
+// KPI PRIMITIVES — mirror design-directions.html §KPI CARDS
+// .kpi-grid: 1.5fr 1fr 1fr 1fr, gap 16
+// .kpi-card: 24px padding, radiusLg, surface bg, borderSubtle, shadowCard
+// .kpi-value: 36px mono 700 -0.03em tabular-nums
+// .kpi-label: 12px Inter 600 uppercase 0.04em textTertiary
+// .kpi-sub:   13px Inter 500 textTertiary
+// ═══════════════════════════════════════════════════════════════
+const KpiGrid = ({ children }) => (
+  <div style={{
+    display: "grid",
+    gridTemplateColumns: "1.5fr 1fr 1fr 1fr",
+    gap: space[4],
+  }}>{children}</div>
+);
+
+const KpiCard = ({ label, value, sub, delta, children, onClick, active, inverted }) => {
+  const bg = inverted ? "#1A1A1E" : c.surface;
+  const labelColor = inverted ? "#6B6B78" : c.textDim;
+  const valueColor = inverted ? "#F0F0F4" : c.text;
+  const subColor = inverted ? "#6B6B78" : c.textDim;
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        padding: space[6], borderRadius: layout.radiusLg,
+        background: bg,
+        border: `1px solid ${inverted ? "#1A1A1E" : (active ? c.accent + "30" : c.border)}`,
+        boxShadow: c.shadowCard,
+        cursor: onClick ? "pointer" : "default",
+        display: "flex", flexDirection: "column",
+        transition: `border-color ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{
+          fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+          color: labelColor, letterSpacing: "0.04em", textTransform: "uppercase",
+        }}>{label}</span>
+        {delta != null && (
+          <span style={{
+            fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+            color: delta > 0 ? c.green : delta < 0 ? c.red : (inverted ? "#6B6B78" : c.textGhost),
+            fontVariantNumeric: "tabular-nums",
+          }}>{delta > 0 ? "+" : ""}{delta}</span>
+        )}
+      </div>
+      <div style={{
+        fontFamily: typo.displayHero.font, fontSize: 36, fontWeight: 700,
+        color: valueColor, letterSpacing: "-0.03em", lineHeight: 1,
+        fontVariantNumeric: "tabular-nums",
+      }}>{value}</div>
+      {sub && (
+        <div style={{
+          fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 500,
+          color: subColor, marginTop: 6,
+        }}>{sub}</div>
+      )}
+      {children}
+    </div>
+  );
+};
+
+// PhasePills — horizontal row of phase-colored chips (mock §phase-pills)
+const PhasePills = ({ phaseCounts, phaseColors: pc, activePhase, onPhaseClick, shipCount, shipActive, onShipClick }) => {
+  const pills = [
+    { key: "PRD",    label: "PRD",    color: pc.PRD },
+    { key: "Design", label: "Design", color: pc.Design },
+    { key: "Dev",    label: "Dev",    color: pc.Dev },
+    { key: "QA",     label: "QA",     color: pc.QA },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 6, marginTop: 16, flexWrap: "wrap" }}>
+      {pills.map(p => {
+        const isActive = activePhase === p.key;
+        const count = phaseCounts[p.key] ?? 0;
+        return (
+          <button key={p.key} onClick={() => onPhaseClick(p.key)} style={{
+            padding: "5px 11px", borderRadius: 6,
+            fontSize: 12, fontWeight: 700,
+            display: "flex", alignItems: "center", gap: 5,
+            background: `${p.color}12`,
+            border: `1px solid ${isActive ? p.color + "60" : "transparent"}`,
+            color: p.color,
+            cursor: "pointer",
+            fontFamily: typo.bodyMd.font,
+            transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
+          }}>
+            <span style={{ fontFamily: typo.monoSm.font, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{count}</span>
+            {p.label}
+          </button>
+        );
+      })}
+      <button onClick={onShipClick} style={{
+        padding: "5px 11px", borderRadius: 6,
+        fontSize: 12, fontWeight: 700,
+        display: "flex", alignItems: "center", gap: 5,
+        background: `${c.green}12`,
+        border: `1px solid ${shipActive ? c.green + "60" : "transparent"}`,
+        color: c.green,
+        cursor: "pointer",
+        fontFamily: typo.bodyMd.font,
+        transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
+      }}>
+        <span style={{ fontFamily: typo.monoSm.font, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{shipCount}</span>
+        Ship
+      </button>
+    </div>
+  );
+};
+
+// OutcomePills — mirror of PhasePills for People mode
+const OutcomePills = ({ completedPct, partialPct, carriedPct, blockedPct, onNavigate }) => {
+  const pills = [
+    { key: "Completed", label: "Done",    pct: completedPct, color: c.green },
+    { key: "Partial",   label: "Partial", pct: partialPct,   color: c.orange },
+    { key: "Carry",     label: "Carry",   pct: carriedPct,   color: c.amber || c.orange },
+    { key: "Blocked",   label: "Blocked", pct: blockedPct,   color: c.red },
+  ];
+  return (
+    <div style={{ display: "flex", gap: 6, marginTop: 16, flexWrap: "wrap" }}>
+      {pills.map(p => (
+        <button key={p.key} onClick={() => onNavigate(p.key)} style={{
+          padding: "5px 11px", borderRadius: 6,
+          fontSize: 12, fontWeight: 700,
+          display: "flex", alignItems: "center", gap: 5,
+          background: `${p.color}12`,
+          border: "1px solid transparent",
+          color: p.color,
+          cursor: "pointer",
+          fontFamily: typo.bodyMd.font,
+        }}>
+          <span style={{ fontFamily: typo.monoSm.font, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{p.pct}%</span>
+          {p.label}
+        </button>
+      ))}
+    </div>
+  );
+};
+
+// HealthGauge — inverted dark KPI card with gradient track + tick marks
+// (mock §.kpi-card.health + .h-track / .h-ticks)
+const HealthGauge = ({ value }) => (
+  <div style={{
+    padding: space[6], borderRadius: layout.radiusLg,
+    background: "#1A1A1E", border: "1px solid #1A1A1E",
+    boxShadow: c.shadowCard,
+    display: "flex", flexDirection: "column",
+  }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+      <span style={{
+        fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+        color: "#6B6B78", letterSpacing: "0.04em", textTransform: "uppercase",
+      }}>Avg Health</span>
+    </div>
+    <div style={{
+      fontFamily: typo.displayHero.font, fontSize: 36, fontWeight: 700,
+      color: "#F0F0F4", letterSpacing: "-0.03em", lineHeight: 1,
+      fontVariantNumeric: "tabular-nums",
+    }}>{value}</div>
+    <div style={{
+      fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 500,
+      color: "#6B6B78", marginTop: 6,
+    }}>portfolio health score</div>
+    {/* Gradient track */}
+    <div style={{
+      height: 4, borderRadius: 2, background: "#2E2E36",
+      marginTop: 16, overflow: "hidden", position: "relative",
+    }}>
+      <div style={{
+        position: "absolute", left: 0, top: 0, bottom: 0,
+        width: `${Math.max(0, Math.min(100, value))}%`,
+        borderRadius: 2,
+        background: "linear-gradient(90deg, #DC2626 0%, #F59E0B 50%, #10B981 100%)",
+        transition: `width ${motion.normal.duration} ${motion.normal.easing}`,
+      }} />
+    </div>
+    {/* Tick marks */}
+    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+      {[0, 25, 50, 75, 100].map(t => (
+        <span key={t} style={{
+          fontFamily: typo.monoSm.font, fontSize: 11, color: "#4A4A52",
+          fontVariantNumeric: "tabular-nums",
+        }}>{t}</span>
+      ))}
+    </div>
+  </div>
+);
+
+// SectionHead — title + right-aligned segmented toggle (mock §sec-head)
+const SectionHead = ({ title, mode, onModeChange }) => (
+  <div style={{
+    display: "flex", alignItems: "center", justifyContent: "space-between",
+    marginTop: space[5], marginBottom: space[3],
+  }}>
+    <span style={{
+      fontFamily: typo.monoMd.font, fontSize: 12, fontWeight: 700,
+      letterSpacing: "0.08em", textTransform: "uppercase", color: c.text,
+    }}>{title}</span>
+    <div style={{
+      display: "flex", gap: 2,
+      background: c.surfaceAlt, borderRadius: layout.radiusMd, padding: 3,
+      border: `1px solid ${c.border}`,
+    }}>
+      {[
+        { key: "matrix", label: "Projects" },
+        { key: "people", label: "People" },
+      ].map(v => {
+        const active = mode === v.key;
+        return (
+          <button key={v.key} onClick={() => onModeChange(v.key)} style={{
+            padding: `6px ${space[4]}px`,
+            borderRadius: layout.radiusSm, border: "none", cursor: "pointer",
+            background: active ? c.surface : "transparent",
+            fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600,
+            color: active ? c.text : c.textDim,
+            boxShadow: active ? c.shadowSm : "none",
+            outline: "none",
+            transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+          }}>{v.label}</button>
+        );
+      })}
+    </div>
+  </div>
+);
+
+// ═══════════════════════════════════════════════════════════════
 // PULSE VIEW — main component
 // ═══════════════════════════════════════════════════════════════
 const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projects, people, onNavigate, searchRef, globalFilters = {}, isHistorical, selectedWeekKey, weekConfig: weekConfigProp, appSettings = {} }) => {
@@ -574,131 +800,90 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
         display: "flex", flexDirection: "column", gap: space[3],
       }}>
 
-      {/* UNIFIED SUMMARY — phase counts + commit metrics + outcomes */}
-      {pulseMode === "matrix" && (
-        <KPIBar>
-          {/* ── Projects KPI bar: Phase tiles + Avg Health ── */}
-          <KPIBar.Section flex={6}>
-              {phaseNames.map(ph => (
-                <SummaryTile
-                  key={ph}
-                  value={phaseCounts[ph]}
-                  label={ph}
-                  color={pc[ph]}
-                  active={filterPhase === ph}
-                  onClick={() => { setFilterPhase(filterPhase === ph ? null : ph); setFilterStatus(""); }}
-                />
-              ))}
-              <SummaryTile
-                value={shippingProjects.length}
-                label="Ship"
-                color={c.green}
-                active={filterStatus === "shipping"}
-                onClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); }}
+      {/* ═══════════════════════════════════════════════════════════
+          KPI GRID — 4 purpose-built cards per design-directions.html §KPI
+          Layout: 1.5fr / 1fr / 1fr / 1fr. Fourth card is the inverted
+          dark health gauge. Projects mode highlights phase distribution;
+          People mode highlights outcome distribution. Both share card
+          typography (kpiLabel, kpiValue per mock §KPI CARDS).
+          ═══════════════════════════════════════════════════════════ */}
+      <KpiGrid>
+        {pulseMode === "matrix" ? (
+          <>
+            <KpiCard
+              label="Active Projects"
+              value={summaryData.length}
+              sub={`across ${new Set(summaryData.map(p => p.squad).filter(Boolean)).size} squads and ${phaseNames.length + 1} phases`}
+            >
+              <PhasePills
+                phaseCounts={phaseCounts}
+                phaseColors={pc}
+                activePhase={filterPhase}
+                onPhaseClick={(ph) => { setFilterPhase(filterPhase === ph ? null : ph); setFilterStatus(""); }}
+                shipCount={shippingProjects.length}
+                shipActive={filterStatus === "shipping"}
+                onShipClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); }}
               />
-              <SummaryTile
-                value={noActionCount}
-                label="No activity"
-                color={c.orange}
-                active={filterStatus === "no_action"}
-                onClick={() => { setFilterStatus(filterStatus === "no_action" ? "" : "no_action"); setFilterPhase(null); }}
+            </KpiCard>
+            <KpiCard
+              label="Shipped This Week"
+              value={shippingProjects.length}
+              sub="reached Alpha / Beta / GA"
+              onClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); }}
+              active={filterStatus === "shipping"}
+            />
+            <KpiCard
+              label={(() => { const d = summaryData.filter(p => p.status === "deprioritized").length; return d === 0 ? "No Activity" : "Deprioritized"; })()}
+              value={(() => { const d = summaryData.filter(p => p.status === "deprioritized").length; return d > 0 ? d : noActionCount; })()}
+              sub={(() => { const d = summaryData.filter(p => p.status === "deprioritized").length; return d > 0 ? "paused projects" : "projects without commitments"; })()}
+              onClick={() => {
+                const d = summaryData.filter(p => p.status === "deprioritized").length;
+                const next = d > 0 ? "deprioritized" : "no_action";
+                setFilterStatus(filterStatus === next ? "" : next); setFilterPhase(null);
+              }}
+              active={filterStatus === "deprioritized" || filterStatus === "no_action"}
+            />
+            <HealthGauge value={avgHealth} />
+          </>
+        ) : (
+          <>
+            <KpiCard
+              label="Commitments"
+              value={totalCommitments}
+              sub={`${lockedCount} locked of ${totalCommitments} total`}
+            >
+              <OutcomePills
+                completedPct={completedPct}
+                partialPct={partialPct}
+                carriedPct={carriedPct}
+                blockedPct={blockedPct}
+                onNavigate={scrollToGroup}
               />
-              {(() => { const depriTotal = summaryData.filter(p => p.status === "deprioritized").length; return depriTotal > 0 ? (
-                <SummaryTile
-                  value={depriTotal}
-                  label="Depri'd"
-                  color={c.textDim}
-                  active={filterStatus === "deprioritized"}
-                  onClick={() => { setFilterStatus(filterStatus === "deprioritized" ? "" : "deprioritized"); setFilterPhase(null); }}
-                />
-              ) : null; })()}
-          </KPIBar.Section>
+            </KpiCard>
+            <KpiCard
+              label="Locked"
+              value={lockedCount}
+              sub={totalCommitments > 0 ? `${Math.round((lockedCount / totalCommitments) * 100)}% of team` : "—"}
+              onClick={() => scrollToGroup("Locked")}
+            />
+            <KpiCard
+              label="Lock Rate"
+              value={`${lockedPct}%`}
+              sub={lockedPct >= 80 ? "on track" : lockedPct >= 50 ? "behind pace" : "at risk"}
+            />
+            <HealthGauge value={avgHealth} />
+          </>
+        )}
+      </KpiGrid>
 
-          {/* Avg Health with progress bar */}
-          <KPIBar.Section flex={2}>
-              <div style={{ textAlign: "center", minWidth: 80 }}>
-                <div style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, letterSpacing: typo.displayHero.tracking, lineHeight: typo.displayHero.lineHeight, color: healthColor(avgHealth), fontVariantNumeric: "tabular-nums" }}>{avgHealth}</div>
-                <div style={{
-                  width: "100%", height: 4, borderRadius: 2, background: c.surfaceAlt, marginTop: space[1], overflow: "hidden",
-                }}>
-                  <div style={{
-                    width: `${avgHealth}%`, height: "100%", borderRadius: 2,
-                    background: healthColor(avgHealth),
-                    transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
-                  }} />
-                </div>
-                <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid, marginTop: space[1], letterSpacing: "0.05em" }}>Avg Health</div>
-              </div>
-          </KPIBar.Section>
-        </KPIBar>
-      )}
-
-      {/* ── People KPI bar: Commitments + Outcomes ── */}
-      {pulseMode === "people" && (
-        <KPIBar>
-          <KPIBar.Section flex={3}>
-              <SummaryTile value={totalCommitments} label="Commitments" color={c.text} />
-              <SummaryTile value={lockedCount} label="Locked" color={lockedCount > 0 ? c.green : c.textDim} />
-              <SummaryTile value={`${lockedPct}%`} label="Lock Rate" color={lockedPct >= 80 ? c.green : lockedPct >= 50 ? c.orange : c.textDim} />
-          </KPIBar.Section>
-
-          <KPIBar.Section flex={4}>
-              <SummaryTile value={`${completedPct}%`} label="Completed" color={completedPct > 0 ? c.green : c.textDim}
-                onClick={() => scrollToGroup("Completed")} />
-              <SummaryTile value={`${partialPct}%`} label="Partial" color={partialPct > 0 ? c.orange : c.textDim}
-                onClick={() => scrollToGroup("Partial")} />
-              <SummaryTile value={`${carriedPct}%`} label="Carried" color={carriedPct > 0 ? c.orange : c.textDim}
-                onClick={() => scrollToGroup("Carry")} />
-              <SummaryTile value={`${blockedPct}%`} label="Blocked" color={blockedPct > 0 ? c.red : c.textDim}
-                onClick={() => scrollToGroup("Blocked")} />
-              <SummaryTile value={`${depriPct}%`} label="Depri'd" color={depriPct > 0 ? c.red : c.textDim}
-                onClick={() => scrollToGroup("Deprioritized")} />
-          </KPIBar.Section>
-
-          <KPIBar.Section flex={2}>
-              <div style={{ textAlign: "center", minWidth: 80 }}>
-                <div style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, letterSpacing: typo.displayHero.tracking, lineHeight: typo.displayHero.lineHeight, color: healthColor(avgHealth), fontVariantNumeric: "tabular-nums" }}>{avgHealth}</div>
-                <div style={{
-                  width: "100%", height: 4, borderRadius: 2, background: c.surfaceAlt, marginTop: space[1], overflow: "hidden",
-                }}>
-                  <div style={{
-                    width: `${avgHealth}%`, height: "100%", borderRadius: 2,
-                    background: healthColor(avgHealth),
-                    transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
-                  }} />
-                </div>
-                <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid, marginTop: space[1], letterSpacing: "0.05em" }}>Avg Health</div>
-              </div>
-          </KPIBar.Section>
-        </KPIBar>
-      )}
-
-      {/* VIEW MODE TOGGLE — Projects / People */}
-      <div style={{
-        display: "flex", gap: space[1],
-        background: c.surfaceAlt, borderRadius: layout.radiusMd, padding: 3,
-        border: `1px solid ${c.border}`,
-      }}>
-        {[
-          { key: "matrix", label: "Projects" },
-          { key: "people", label: "People" },
-        ].map(v => {
-          const active = pulseMode === v.key;
-          return (
-            <button key={v.key} onClick={() => handleModeChange(v.key)} className="flow-btn" style={{
-              flex: 1, padding: `7px ${space[4]}px`,
-              borderRadius: layout.radiusSm, border: "none", cursor: "pointer",
-              background: active ? c.surface : "transparent",
-              fontFamily: typo.bodyMd.font, fontSize: 13,
-              fontWeight: 600,
-              color: active ? c.text : c.textDim,
-              transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
-              boxShadow: active ? c.shadowSm : "none",
-              outline: "none",
-            }}>{v.label}</button>
-          );
-        })}
-      </div>
+      {/* ═══════════════════════════════════════════════════════════
+          SECTION HEADER — title + segmented toggle (sec-head pattern)
+          ═══════════════════════════════════════════════════════════ */}
+      <SectionHead
+        title={pulseMode === "matrix" ? "Project Matrix" : "People"}
+        mode={pulseMode}
+        onModeChange={handleModeChange}
+      />
 
       </div>
       {/* end frozen top */}
