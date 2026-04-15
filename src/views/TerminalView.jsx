@@ -202,7 +202,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
     return (
       <div
         style={{
-          height: "calc(100vh - 116px)", display: "flex", flexDirection: "column",
+          height: "100vh", display: "flex", flexDirection: "column",
           background: themes.dark.bg, color: themes.dark.text, position: "relative", overflow: "hidden",
         }}
       >
@@ -234,7 +234,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
     return (
       <div
         style={{
-          height: "calc(100vh - 116px)", display: "flex", flexDirection: "column",
+          height: "100vh", display: "flex", flexDirection: "column",
           background: themes.dark.bg, color: themes.dark.text, position: "relative", overflow: "hidden",
         }}
       >
@@ -266,7 +266,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
       ref={devRef}
       onClick={() => bootDone && inputRef.current?.focus()}
       style={{
-        height: "calc(100vh - 116px)", display: "flex", flexDirection: "column",
+        height: "100vh", display: "flex", flexDirection: "column",
         background: themes.dark.bg, color: themes.dark.text, position: "relative", overflow: "hidden",
         cursor: "text",
       }}

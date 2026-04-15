@@ -168,29 +168,7 @@ const AnimStyles = () => (
     .flow-stagger > *:nth-child(5) { animation-delay: 0.16s; }
     .flow-stagger > *:nth-child(6) { animation-delay: 0.20s; }
 
-    /* ── Mission Grid ── */
-    .flow-mission-grid {
-      position: relative;
-      border-radius: 14px;
-      border: none;
-      background: ${c.bg};
-      overflow: hidden;
-      animation: neonEdge 3s ${motion.ambient.easing} infinite;
-    }
-    .flow-mission-grid::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: rgba(255, 255, 255, 0.45);
-      pointer-events: none;
-    }
-    .flow-mission-grid::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, ${c.accent}06 0%, transparent 40%, ${c.cyan || c.blue}04 70%, transparent 100%);
-      pointer-events: none;
-    }
+    /* ── Mission Grid — Steel & Orange (styled in global.css; no overlays) ── */
 
     /* ── Glass phase tiles ── */
     .flow-glass-tile {

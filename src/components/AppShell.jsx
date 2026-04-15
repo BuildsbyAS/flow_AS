@@ -794,9 +794,8 @@ function FilterDrawer({
               fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
               color: c.orange,
             }}>
-              <div className="flow-draft-dot" style={{
+              <div className="flow-draft-dot flow-accent-pulse" style={{
                 width: 6, height: 6, borderRadius: "50%", background: c.orange,
-                animation: "breathe 2s ease-in-out infinite",
               }} />
               {draftCount > 0
                 ? `${draftCount} pending change${draftCount !== 1 ? "s" : ""}`
