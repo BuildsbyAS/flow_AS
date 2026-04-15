@@ -309,7 +309,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
                   fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
                   fontWeight: active ? 700 : 500,
                   color: active ? cc.color : c.textMid,
-                  transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                   letterSpacing: typo.bodyXs.tracking,
                   position: "relative",
                 }}>
@@ -391,7 +391,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
                     ? `linear-gradient(135deg, ${iColor}12, ${iColor}06)`
                     : "transparent",
                   borderLeft: isActive ? `2.5px solid ${iColor}` : "2.5px solid transparent",
-                  transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                   position: "relative",
                 }}
               >
@@ -416,7 +416,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
                   fontWeight: 700,
                   color: isActive ? iColor : `${iColor}CC`,
                   flexShrink: 0,
-                  transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                   letterSpacing: "-0.02em",
                   boxShadow: isActive ? `0 0 10px ${iColor}20` : "none",
                 }}>{cmd.icon}</div>
@@ -450,7 +450,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
                     padding: `2px ${space[2] - 2}px`, borderRadius: layout.radiusTag + 1,
                     flexShrink: 0, lineHeight: 1.4,
                     boxShadow: `0 1px 0 ${c.border}`,
-                    transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                    transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                   }}>{cmd.kbd}</span>
                 )}
 

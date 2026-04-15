@@ -46,10 +46,10 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
                 style={{ transition: `opacity ${motion.fast.duration} ${motion.fast.easing}` }} />
               <text x={x + barW / 2} y={y - 8} textAnchor="middle"
                 fill={lit ? color : c.textDim}
-                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `all ${motion.interaction.duration}` }}>{val}</text>
+                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{val}</text>
               <text x={x + barW / 2} y={height - 4} textAnchor="middle"
                 fill={lit ? c.textMid : c.textDim}
-                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: lit ? 600 : 400, transition: `all ${motion.interaction.duration}` }}>{labels[i]}</text>
+                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: lit ? 600 : 400, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{labels[i]}</text>
             </g>
           );
         })}
@@ -123,10 +123,10 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
                 style={{ transition: `r ${motion.fast.duration} ${motion.fast.easing}` }} />
               <text x={p.x} y={p.y - 12} textAnchor="middle"
                 fill={lit ? color : c.textDim}
-                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `all ${motion.interaction.duration}` }}>{p.val}{suffix}</text>
+                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{p.val}{suffix}</text>
               <text x={p.x} y={height - 4} textAnchor="middle"
                 fill={lit ? c.textMid : c.textDim}
-                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: lit ? 600 : 400, transition: `all ${motion.interaction.duration}` }}>{labels[i]}</text>
+                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: lit ? 600 : 400, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{labels[i]}</text>
             </g>
           );
         })}
@@ -197,15 +197,15 @@ const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 220 }) =
                 return segH > 0 ? (
                   <rect key={s.label} x={x} y={yOffset} width={barW} height={segH} rx={layout.radiusTag}
                     fill={s.color} opacity={lit ? 0.95 : 0.22}
-                    style={{ transition: `all ${motion.critical.duration} ${motion.critical.easing}` }} />
+                    style={{ transition: `background ${motion.critical.duration} ${motion.critical.easing}, border-color ${motion.critical.duration} ${motion.critical.easing}, color ${motion.critical.duration} ${motion.critical.easing}, box-shadow ${motion.critical.duration} ${motion.critical.easing}, transform ${motion.critical.duration} ${motion.critical.easing}, opacity ${motion.critical.duration} ${motion.critical.easing}` }} />
                 ) : null;
               })}
               <text x={x + barW / 2} y={padTop + chartH - (weekTotals[wi] / maxTotal) * chartH - 8}
                 textAnchor="middle" fill={lit ? c.text : c.textDim}
-                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `all ${motion.interaction.duration}` }}>{weekTotals[wi]}</text>
+                style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{weekTotals[wi]}</text>
               <text x={x + barW / 2} y={height - 6} textAnchor="middle"
                 fill={lit ? c.textMid : c.textDim}
-                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: lit ? 600 : 400, transition: `all ${motion.interaction.duration}` }}>{label}</text>
+                style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: lit ? 600 : 400, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}` }}>{label}</text>
               {/* Native tooltip with breakdown */}
               <title>{`${label}: ${weekTotals[wi]} total\n${breakdown}`}</title>
             </g>

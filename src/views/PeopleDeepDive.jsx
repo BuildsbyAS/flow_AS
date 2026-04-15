@@ -323,7 +323,7 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
                       padding: space[6], background: isFocused ? c.accentDim : c.surface,
                       borderRadius: layout.radius, cursor: "pointer",
                       border: `1px solid ${isFocused ? c.accent + "40" : c.border}`,
-                      transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                      transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                     }}>
                       <div style={{ display: "flex", alignItems: "center", gap: space[4], minWidth: 0, flex: 1 }}>
                         <div aria-hidden="true" style={{ width: space[8], height: space[8], borderRadius: "50%", background: c.accentDim, border: `1.5px solid ${c.accent}30`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.accent, flexShrink: 0 }}>

@@ -518,7 +518,7 @@ export default function ProjectsView({
               fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
               background: !boardFullscreen && !ganttFullscreen ? c.accent : "transparent",
               color: !boardFullscreen && !ganttFullscreen ? "#fff" : c.textDim,
-              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+              transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
               letterSpacing: typo.bodySm.tracking,
             }}>Table</button>
             <button onClick={() => setBoardFullscreen(true)} style={{
@@ -526,7 +526,7 @@ export default function ProjectsView({
               fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
               background: boardFullscreen ? c.accent : "transparent",
               color: boardFullscreen ? "#fff" : c.textDim,
-              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+              transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
               letterSpacing: typo.bodySm.tracking, outline: "none",
             }}>Board</button>
             <button onClick={() => setGanttFullscreen(true)} style={{
@@ -534,7 +534,7 @@ export default function ProjectsView({
               fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
               background: ganttFullscreen ? c.accent : "transparent",
               color: ganttFullscreen ? "#fff" : c.textDim,
-              transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+              transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
               letterSpacing: typo.bodySm.tracking, outline: "none",
             }}>Gantt</button>
           </div>
@@ -856,7 +856,7 @@ export default function ProjectsView({
                 border: `1px solid ${c.border}`, background: c.surfaceAlt,
                 color: c.textDim, fontSize: 18, cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                transition: `all ${motion.interaction.duration}`,
+                transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}`,
               }}
               onMouseEnter={e => { e.currentTarget.style.background = c.red; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = c.red; }}
               onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.color = c.textDim; e.currentTarget.style.borderColor = c.border; }}
@@ -949,7 +949,7 @@ export default function ProjectsView({
                 border: `1px solid ${c.border}`, background: c.surfaceAlt,
                 color: c.textDim, fontSize: 18, cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                transition: `all ${motion.interaction.duration}`,
+                transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}`,
               }}
               onMouseEnter={e => { e.currentTarget.style.background = c.red; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = c.red; }}
               onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.color = c.textDim; e.currentTarget.style.borderColor = c.border; }}
@@ -1036,7 +1036,7 @@ export default function ProjectsView({
                                   border: `1px solid ${c.border}`,
                                   cursor: "pointer",
                                   display: "flex", flexDirection: "column", gap: space[2],
-                                  transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                                 }}
                               >
                                 {/* ID + health bar */}
@@ -1232,7 +1232,7 @@ function CreateProjectOverlay({ projects, people, setProjects, onClose }) {
                 fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700,
                 opacity: canSave && !saving ? 1 : 0.5,
                 boxShadow: canSave && !saving ? `0 2px 8px ${c.green}30` : "none",
-                transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
               }}>{saving ? "Creating..." : "Execute"}</button>
             </div>
           </div>
@@ -1639,7 +1639,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
             background: `${c.red}10`, color: c.red,
             fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600,
             display: "flex", alignItems: "center", justifyContent: "center", gap: space[1],
-            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+            transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />

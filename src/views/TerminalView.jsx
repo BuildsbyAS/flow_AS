@@ -336,7 +336,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
                     fontFamily: "inherit", fontSize: 13,
                     color: disabled ? `${accent}50` : accent,
                     marginBottom: space[2],
-                    transition: "all 0.15s ease",
+                    transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                     textAlign: "left",
                     animation: `flow-load-fade-in 0.3s ease-out ${i * 100}ms both`,
                   }}

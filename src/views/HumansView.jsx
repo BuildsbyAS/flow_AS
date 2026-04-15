@@ -754,7 +754,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                                       width: 14, height: 5, borderRadius: 2.5,
                                       background: si < row.filledCount ? sColor : `${c.textDim}18`,
                                       border: si < row.filledCount ? "none" : `1px solid ${c.border}`,
-                                      transition: `all ${motion.critical.duration} ${motion.critical.easing}`,
+                                      transition: `background ${motion.critical.duration} ${motion.critical.easing}, border-color ${motion.critical.duration} ${motion.critical.easing}, color ${motion.critical.duration} ${motion.critical.easing}, box-shadow ${motion.critical.duration} ${motion.critical.easing}, transform ${motion.critical.duration} ${motion.critical.easing}, opacity ${motion.critical.duration} ${motion.critical.easing}`,
                                     }} />
                                   ))}
                                 </div>
@@ -945,7 +945,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                     background: overflowOpen ? c.surfaceAlt : "transparent", cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     color: c.textMid, fontSize: typo.displaySm.size, fontWeight: 700, letterSpacing: "0.1em",
-                    transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                    transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                   }}>···</button>
                   {overflowOpen && (
                     <div style={{
@@ -1159,7 +1159,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                       flex: 1, height: 4, borderRadius: 2, cursor: "pointer",
                       background: depri ? c.red : filled ? c.green : active ? c.accent : `${c.border}`,
                       opacity: active && !filled ? 1 : filled ? 0.8 : 0.4,
-                      transition: `all 0.25s ${motion.interaction.easing}`,
+                      transition: `background 0.25s ${motion.interaction.easing}, border-color 0.25s ${motion.interaction.easing}, color 0.25s ${motion.interaction.easing}, box-shadow 0.25s ${motion.interaction.easing}, transform 0.25s ${motion.interaction.easing}, opacity 0.25s ${motion.interaction.easing}`,
                       boxShadow: "none",
                     }} />
                   );
@@ -1219,7 +1219,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                       color: c.accent, cursor: "pointer", background: `${c.accent}08`,
                       border: `1px solid ${c.accent}20`, borderRadius: layout.radiusSm,
                       padding: `${space[1]}px ${space[3]}px`,
-                      transition: "all 0.2s ease",
+                      transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
                     }} onMouseEnter={e => { e.target.style.background = `${c.accent}15`; e.target.style.borderColor = `${c.accent}40`; }}
                        onMouseLeave={e => { e.target.style.background = `${c.accent}08`; e.target.style.borderColor = `${c.accent}20`; }}>Restore</button>
                   </div>
@@ -1254,7 +1254,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                             borderRadius: layout.radiusSm - 1, border: "none", cursor: "pointer",
                             background: active ? `${cfg.color || c.accent}18` : "transparent",
                             color: active ? (cfg.color || c.accent) : c.textDim,
-                            transition: "all 0.15s ease",
+                            transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                           }}>{cfg.label || t}</button>
                         );
                       })}
@@ -1561,7 +1561,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                       color: c.accent, cursor: "pointer", background: `${c.accent}08`,
                       border: `1px solid ${c.accent}20`, borderRadius: layout.radiusSm,
                       padding: `${space[1]}px ${space[3]}px`, flexShrink: 0,
-                      transition: "all 0.2s ease",
+                      transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
                     }} onMouseEnter={e => { e.target.style.background = `${c.accent}15`; e.target.style.borderColor = `${c.accent}40`; }}
                        onMouseLeave={e => { e.target.style.background = `${c.accent}08`; e.target.style.borderColor = `${c.accent}20`; }}>Restore</button>
                   </div>
@@ -1591,7 +1591,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                       padding: `${space[1]}px ${space[3]}px`,
                       fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 600,
                       letterSpacing: typo.monoSm.tracking, color: c.orange, opacity: 0.7,
-                      transition: `all 0.2s ease`,
+                      transition: `background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease`,
                     }} onMouseEnter={e => { e.target.style.opacity = "1"; e.target.style.background = `${c.orange}12`; }}
                        onMouseLeave={e => { e.target.style.opacity = "0.7"; e.target.style.background = `${c.orange}06`; }}
                     >Deprioritize</button>
@@ -1683,7 +1683,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
               <div key={idx} style={{
                 borderRadius: layout.radius, overflow: "hidden",
                 border: `1px solid ${wrapBorder}`, background: wrapBg,
-                transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
               }}>
                 {/* Card inner — info only */}
                 <div style={{ padding: `${space[5]}px ${space[6]}px`, display: "flex", flexDirection: "column", gap: space[2] }}>
@@ -1745,7 +1745,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                           background: active ? `${btn.clr}10` : "transparent",
                           color: active ? btn.clr : c.textDim,
                           cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
-                          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                          transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                         }}>
                           {active && <span>{btn.val === "blocked" ? "!" : "\u2713"}</span>}
                           {btn.label}
@@ -1767,7 +1767,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                             background: sel ? `${carryColor}10` : "transparent",
                             color: sel ? carryColor : c.textDim,
                             cursor: "pointer",
-                            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                            transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                           }}>{wk.label}</button>
                         );
                       })}
@@ -1794,7 +1794,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 borderRadius: layout.radius, overflow: "hidden",
                 border: `1px solid ${bufWrapBorder}`, background: bufWrapBg,
                 borderLeft: `3px solid ${c.purple}`,
-                transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
               }}>
                 <div style={{ padding: `${space[5]}px ${space[6]}px`, display: "flex", flexDirection: "column", gap: space[2] }}>
                   <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
@@ -1854,7 +1854,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                           background: active ? `${btn.clr}10` : "transparent",
                           color: active ? btn.clr : c.textDim,
                           cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
-                          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                          transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                         }}>
                           {active && <span>{btn.val === "blocked" ? "!" : "\u2713"}</span>}
                           {btn.label}
@@ -1875,7 +1875,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                             background: sel ? `${bufCarryColor}10` : "transparent",
                             color: sel ? bufCarryColor : c.textDim,
                             cursor: "pointer",
-                            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+                            transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
                           }}>{wk.label}</button>
                         );
                       })}

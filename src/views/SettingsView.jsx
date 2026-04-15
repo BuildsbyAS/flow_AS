@@ -244,7 +244,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                         background: "transparent", border: `1px solid transparent`, cursor: "pointer",
                         fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
                         padding: "4px 10px", borderRadius: 4,
-                        transition: "all 0.15s ease",
+                        transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                       }}
                         onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
                         onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
@@ -301,7 +301,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                         background: "transparent", border: `1px solid transparent`, cursor: "pointer",
                         fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
                         padding: "4px 10px", borderRadius: 4,
-                        transition: "all 0.15s ease",
+                        transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                       }}
                         onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
                         onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
@@ -373,7 +373,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                             background: "transparent", border: `1px solid transparent`, cursor: "pointer",
                             fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
                             padding: "4px 10px", borderRadius: 4,
-                            transition: "all 0.15s ease",
+                            transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                           }}
                             onMouseEnter={e => { e.currentTarget.style.color = c.accent; e.currentTarget.style.borderColor = c.accent + "30"; e.currentTarget.style.background = c.accent + "08"; }}
                             onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
@@ -382,7 +382,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                             background: "transparent", border: `1px solid transparent`, cursor: "pointer",
                             fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
                             padding: "4px 10px", borderRadius: 4,
-                            transition: "all 0.15s ease",
+                            transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                           }}
                             onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
                             onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
@@ -436,7 +436,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                             background: "transparent", border: `1px solid transparent`, cursor: "pointer",
                             fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
                             padding: "4px 10px", borderRadius: 4,
-                            transition: "all 0.15s ease",
+                            transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                           }}
                             onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
                             onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}

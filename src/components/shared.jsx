@@ -309,7 +309,7 @@ export const ChoiceGroup = ({ options, value, onChange, mono = false }) => {
             fontFamily: font.font, fontSize: font.size, fontWeight: mono ? font.weight : 600,
             letterSpacing: font.tracking || "0",
             cursor: "pointer",
-            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+            transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
           }}>{opt.label}</button>
         );
       })}
@@ -514,7 +514,7 @@ export const FilterChip = ({ label, active = true, onClick, style: s }) => (
     border: active ? `1px solid ${c.accent}25` : `1px solid ${c.border}`,
     whiteSpace: "nowrap",
     cursor: onClick ? "pointer" : "default",
-    transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+    transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
     ...s,
   }}>{label}</span>
 );
@@ -713,7 +713,7 @@ export const SummaryTile = ({ value, label, color, active, onClick, icon, prevVa
         borderRadius: layout.radiusMd, cursor: onClick ? "pointer" : "default",
         background: active ? `${color}12` : "transparent",
         border: `1px solid ${active ? color + "40" : "transparent"}`,
-        transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+        transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
       }}
     >
       <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>

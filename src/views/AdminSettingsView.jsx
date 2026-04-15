@@ -352,7 +352,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                     borderRadius: 4, padding: "4px 12px",
                     fontFamily: MONO, fontSize: 11,
                     color: newStatus === s.key ? s.color() : c.textDim,
-                    cursor: "pointer", transition: "all 0.15s ease",
+                    cursor: "pointer", transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                     fontWeight: newStatus === s.key ? 700 : 400,
                   }}
                 >
@@ -394,7 +394,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                   letterSpacing: "0.05em",
                   cursor: saving ? "wait" : "pointer",
                   opacity: saving ? 0.5 : 1,
-                  transition: "all 0.15s ease",
+                  transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                   boxShadow: "0 2px 12px rgba(251,191,36,0.2)",
                 }}
                 onMouseEnter={e => { if (!saving) e.currentTarget.style.boxShadow = "0 4px 20px rgba(251,191,36,0.35)"; }}
@@ -475,7 +475,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
               fontFamily: MONO, fontSize: 11, fontWeight: 700,
               cursor: gaSaving ? "wait" : "pointer",
               opacity: gaSaving ? 0.5 : 1,
-              transition: "all 0.15s ease",
+              transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
             }}
           >
             {gaSaving ? "..." : "Save"}
@@ -552,7 +552,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                   borderRadius: 6, background: bgBase,
                   cursor: "pointer", fontFamily: MONO, fontSize: 12,
                   color: c.text, textAlign: "left",
-                  transition: "all 0.15s ease",
+                  transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                   ...(hasReply ? { borderLeft: "3px solid #84FF9550" } : {}),
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = hasReply ? "#84FF9512" : "#FBBF2410"; e.currentTarget.style.borderColor = hasReply ? "#84FF9550" : "#FBBF2430"; }}
@@ -587,7 +587,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
             borderRadius: 4, padding: "8px 20px",
             fontFamily: MONO, fontSize: 12, color: c.orange,
             cursor: logLoading ? "wait" : "pointer",
-            transition: "all 0.15s ease",
+            transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
           }}
           onMouseEnter={e => { e.currentTarget.style.background = "#FBBF2410"; e.currentTarget.style.borderColor = c.orange; }}
           onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "#FBBF2430"; }}
@@ -654,7 +654,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
             padding: `${space[1]}px ${space[2]}px`,
             background: logSelected.size > 0 ? "#FBBF2408" : "transparent",
             border: `1px solid ${logSelected.size > 0 ? "#FBBF2425" : "transparent"}`,
-            borderRadius: 4, transition: "all 0.2s ease",
+            borderRadius: 4, transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
           }}>
             <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, fontFamily: MONO, color: "#FBBF2480" }}>
               <input
@@ -678,7 +678,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                       style={{
                         padding: "4px 14px", fontSize: 11, fontFamily: MONO, fontWeight: 700,
                         background: "#FF4D6A15", border: "1px solid #FF4D6A40", borderRadius: 4,
-                        color: c.red, cursor: "pointer", transition: "all 0.15s ease",
+                        color: c.red, cursor: "pointer", transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                       }}
                       onMouseEnter={e => { e.currentTarget.style.background = "#FF4D6A25"; e.currentTarget.style.borderColor = c.red; }}
                       onMouseLeave={e => { e.currentTarget.style.background = "#FF4D6A15"; e.currentTarget.style.borderColor = "#FF4D6A40"; }}

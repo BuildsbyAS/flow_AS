@@ -337,7 +337,7 @@ export function Header({
                   padding: "2px 5px",
                   border: `1px solid ${c.border}`,
                   borderRadius: 3,
-                  transition: `all ${motion.fast.duration}`,
+                  transition: `background ${motion.fast.duration}, border-color ${motion.fast.duration}, color ${motion.fast.duration}, box-shadow ${motion.fast.duration}, transform ${motion.fast.duration}, opacity ${motion.fast.duration}`,
                   position: "relative", top: -1,
                 }}>{tab.num}</span>}
                 {/* Active indicator — 2px accent underline, no glow */}
@@ -369,7 +369,7 @@ export function Header({
             border: `1px solid ${["terminal","settings","logs","rant"].includes(activeTab) ? c.green + "40" : c.border}`,
             background: ["terminal","settings","logs","rant"].includes(activeTab) ? c.greenDim : c.surfaceAlt,
             cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            transition: `all ${motion.fast.duration} ${motion.fast.easing}`,
+            transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}`,
           }}
           title="Terminal"
         >
@@ -492,7 +492,7 @@ export function Header({
           color: globalFilterCount > 0 ? c.accent : c.textMid,
           fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
           fontWeight: 600, cursor: "pointer",
-          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+          transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
           flexShrink: 0,
         }}>
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.7 }}>
@@ -581,7 +581,7 @@ function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPee
           WebkitBackdropFilter: "blur(8px)",
           boxShadow: pillShadow,
           cursor: "pointer",
-          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+          transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
         }}
       >
         <FlowLogo size={24} />
@@ -628,7 +628,7 @@ function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPee
             border: `1px solid ${c.border}`,
             background: c.surfaceAlt,
             cursor: "pointer",
-            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+            transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
           }}
         >
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.6, flexShrink: 0 }}>
@@ -742,7 +742,7 @@ function FilterDrawer({
                 height: 28, borderRadius: layout.radiusSm, padding: `0 ${space[2]}px`,
                 border: `1px solid ${c.border}`, background: c.surfaceAlt,
                 cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
-                color: c.textDim, transition: `all ${motion.interaction.duration}`,
+                color: c.textDim, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}`,
                 fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                 fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
               }}
@@ -754,7 +754,7 @@ function FilterDrawer({
               width: 28, height: 28, borderRadius: layout.radiusSm,
               border: `1px solid ${c.border}`, background: c.surfaceAlt,
               cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              color: c.textMid, transition: `all ${motion.interaction.duration}`,
+              color: c.textMid, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}`,
             }}>
               <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                 <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -881,7 +881,7 @@ function DrawerFilterGroup({ label, options, value = [], onChange }) {
               fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 500,
               color: c.textDim, cursor: "pointer",
               padding: "1px 5px", borderRadius: layout.radiusTag,
-              transition: `all ${motion.interaction.duration}`,
+              transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}`,
             }}
             onMouseEnter={e => { e.currentTarget.style.color = c.accent; }}
             onMouseLeave={e => { e.currentTarget.style.color = c.textDim; }}
@@ -951,7 +951,7 @@ function DrawerFilterGroup({ label, options, value = [], onChange }) {
             border: `1.5px solid ${allSelected ? c.accent : c.textDim}`,
             background: allSelected ? c.accent : "transparent",
             display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, transition: `all ${motion.interaction.duration}`,
+            flexShrink: 0, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}`,
           }}>
             {allSelected && (
               <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
@@ -985,7 +985,7 @@ function DrawerFilterGroup({ label, options, value = [], onChange }) {
                 border: `1.5px solid ${selected ? c.accent : c.textDim}`,
                 background: selected ? c.accent : "transparent",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, transition: `all ${motion.interaction.duration}`,
+                flexShrink: 0, transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}`,
               }}>
                 {selected && (
                   <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
@@ -1024,7 +1024,7 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
         fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
         fontWeight: 500, color: c.textMid, cursor: "pointer", flexShrink: 0,
         display: "flex", alignItems: "center", gap: 5,
-        transition: `all ${motion.interaction.duration}`,
+        transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}`,
         padding: `3px ${space[2]}px 3px ${space[2] - 2}px`,
         borderRadius: layout.radiusSm,
         border: `1px solid transparent`,
@@ -1106,7 +1106,7 @@ function TabHelpText({ activeTab, onNavigate }) {
         border: `1px solid ${c.accent}10`,
         flexShrink: 1, minWidth: 0, overflow: "hidden",
         cursor: help.section ? "pointer" : "default",
-        transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+        transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
       }}
       onMouseEnter={e => { if (help.section) { e.currentTarget.style.background = `${c.accent}14`; e.currentTarget.style.borderColor = `${c.accent}25`; } }}
       onMouseLeave={e => { e.currentTarget.style.background = `${c.accent}06`; e.currentTarget.style.borderColor = `${c.accent}10`; }}
@@ -1165,7 +1165,7 @@ function DayRhythmPill({ onNavigateToGuide }) {
           fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
           color, lineHeight: 1, cursor: "pointer",
           whiteSpace: "nowrap",
-          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+          transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
         }}
         onMouseEnter={(e) => { e.currentTarget.style.background = `${color}20`; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = `${color}12`; }}
@@ -1338,7 +1338,7 @@ function NotificationBell({ userEmail, onNavigate }) {
           background: open ? c.orange + "12" : c.surfaceAlt,
           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
           position: "relative",
-          transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+          transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
         }}
         title="Notifications"
       >
@@ -1669,7 +1669,7 @@ function CompactSearch({ onClick }) {
       padding: `8px ${space[3] + 2}px`, gap: 9,
       borderRadius: layout.radiusMd, border: `1px solid rgba(0,0,0,0.12)`,
       background: `linear-gradient(135deg, ${c.surfaceAlt} 0%, ${c.surfaceAlt}C0 100%)`,
-      transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
+      transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
       boxShadow: `inset 0 1px 0 rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.06)`,
     }}>
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.55, flexShrink: 0 }}>

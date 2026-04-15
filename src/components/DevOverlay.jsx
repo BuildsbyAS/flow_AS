@@ -18,7 +18,7 @@ const S = {
     fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11, fontWeight: 600,
     color: "rgba(255,255,255,0.7)", letterSpacing: "0.04em",
     cursor: "pointer", userSelect: "none",
-    transition: "all 0.15s ease",
+    transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
     display: "flex", alignItems: "center", gap: 6,
   },
   pillActive: {
@@ -214,7 +214,7 @@ function DevOverlayInner() {
         position: "fixed", display: "none", zIndex: 99997,
         border: "1.5px solid rgba(59, 130, 246, 0.5)",
         borderRadius: 4, pointerEvents: "none",
-        transition: "all 0.08s ease",
+        transition: "background 0.08s ease, border-color 0.08s ease, color 0.08s ease, box-shadow 0.08s ease, transform 0.08s ease, opacity 0.08s ease",
       }} />
 
       {/* Hover tooltip */}

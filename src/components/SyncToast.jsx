@@ -130,7 +130,7 @@ export default function SyncToast() {
             background: statusColor,
             boxShadow: `0 0 6px ${statusColor}`,
             flexShrink: 0,
-            transition: "all 0.3s ease",
+            transition: "background 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease, opacity 0.3s ease",
           }} />
 
           {/* Message */}

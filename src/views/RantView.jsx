@@ -298,7 +298,7 @@ export default function RantView({ onBack, auth }) {
                   background: category === cat.key ? cat.color + "15" : "transparent",
                   color: category === cat.key ? cat.color : "#00ff4160",
                   fontFamily: MONO, fontSize: 12, cursor: "pointer",
-                  transition: "all 0.15s ease",
+                  transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                 }}
               >
                 {cat.icon} {cat.label}
@@ -373,7 +373,7 @@ export default function RantView({ onBack, auth }) {
                 borderRadius: 4, background: "transparent",
                 color: "#00ff4160", fontFamily: MONO, fontSize: 12,
                 cursor: "pointer", width: "100%",
-                transition: "all 0.15s ease",
+                transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
               }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = "#00ff4160"; e.currentTarget.style.color = "#00ff41"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = "#00ff4130"; e.currentTarget.style.color = "#00ff4160"; }}
@@ -417,7 +417,7 @@ export default function RantView({ onBack, auth }) {
             color: !title.trim() ? "#00ff4130" : activeCat.color,
             fontFamily: MONO, fontSize: 14, fontWeight: 700,
             letterSpacing: "0.1em", cursor: !title.trim() ? "not-allowed" : "pointer",
-            transition: "all 0.2s ease",
+            transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
             opacity: submitting ? 0.5 : 1,
           }}
           onMouseEnter={e => {
@@ -472,7 +472,7 @@ export default function RantView({ onBack, auth }) {
             background: "linear-gradient(135deg, #FF2D7820, #FF2D7810)",
             color: "#FF2D78", fontFamily: MONO, fontSize: 12,
             fontWeight: 700, letterSpacing: "0.08em",
-            cursor: "pointer", transition: "all 0.2s ease",
+            cursor: "pointer", transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
           }}
           onMouseEnter={e => {
             e.currentTarget.style.background = "linear-gradient(135deg, #FF2D7830, #FF2D7820)";
@@ -502,7 +502,7 @@ export default function RantView({ onBack, auth }) {
                 background: active ? cat.color + "20" : "transparent",
                 color: active ? cat.color : "#ffffffaa",
                 fontFamily: MONO, fontSize: 12, cursor: "pointer",
-                transition: "all 0.15s ease", fontWeight: active ? 700 : 500,
+                transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease", fontWeight: active ? 700 : 500,
               }}
             >
               {cat.icon} {cat.label} <span style={{ opacity: 0.6 }}>({count})</span>
@@ -530,7 +530,7 @@ export default function RantView({ onBack, auth }) {
                 background: active ? st.color + "15" : "transparent",
                 color: active ? st.color : "#ffffff80",
                 fontFamily: MONO, fontSize: 11, cursor: "pointer",
-                transition: "all 0.15s ease", fontWeight: active ? 600 : 400,
+                transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease", fontWeight: active ? 600 : 400,
               }}
             >
               {st.icon || "◈"} {st.label} ({count})
@@ -579,7 +579,7 @@ export default function RantView({ onBack, auth }) {
                   border: `1px solid ${borderColor}`, borderRadius: 6,
                   background: bgBase, cursor: "pointer",
                   fontFamily: MONO, textAlign: "left", width: "100%",
-                  transition: "all 0.15s ease",
+                  transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                   animation: `flow-load-fade-in 0.3s ease-out ${Math.min(i, 10) * 40}ms both`,
                   ...(hasReply ? { borderLeft: "3px solid #84FF9560" } : {}),
                 }}
