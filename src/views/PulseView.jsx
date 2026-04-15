@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { c, typo, space, layout, motion, phaseNames, shipPhases, typeConfig, phaseColors, entityColors } from "../styles/theme";
 import { Badge, Tag, Surface, Btn, EmptyState, TelemetryLabel, Th as SharedTh, EntityLink } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow, Sparkline } from "../components/kpi";
+import { HealthBar } from "../components/chart";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
 
@@ -909,28 +910,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                           borderLeft: `1px dotted ${c.border}`,
                         }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                            <div style={{
-                              width: 48, height: 8, borderRadius: layout.radiusTag + 1,
-                              background: c.surfaceAlt, overflow: "hidden",
-                            }}>
-                              <div style={{
-                                width: `${proj.health}%`, height: "100%",
-                                borderRadius: layout.radiusTag + 1,
-                                background: healthColor(proj.health),
-                              }} />
-                            </div>
-                            <span style={{
-                              fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                              fontWeight: 700, color: healthColor(proj.health),
-                              fontVariantNumeric: "tabular-nums",
-                            }}>{proj.health}</span>
-                            <span style={{
-                              fontFamily: typo.bodyXs.font, fontSize: 11,
-                              fontWeight: 600,
-                              color: c.textGhost || c.textDim,
-                            }}>{healthLabel(proj.health)}</span>
-                          </div>
+                            <HealthBar value={proj.health} />
                           </div>
                         </td>
                         {phaseNames.map((ph, i) => {

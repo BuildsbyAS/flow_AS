@@ -41,33 +41,44 @@ const valueLabelStyle = (lit) => ({
 });
 
 // ═══════════════════════════════════════════════════════════════
-// HealthBar — 48×5 inline progress bar for table cells (Pulse matrix,
-// Projects registry). Semantic color + number + "Good / Fair / Poor" word.
+// HealthBar — inline progress bar with semantic color + number.
+//
+// Default variant (48×5 bar, "Good/Fair/Poor" word) — used in data
+// tables like the Pulse matrix and Projects registry health cell.
+//
+// `compact` variant (24×4 bar, no word) — used on tight card surfaces
+// like the Projects Board view where space is limited.
 // ═══════════════════════════════════════════════════════════════
-export const HealthBar = ({ value, width = 48, height = 5 }) => {
+export const HealthBar = ({ value, compact = false, showWord = !compact, width, height }) => {
   const pct = Math.max(0, Math.min(100, value));
   const color = value >= 70 ? c.green : value >= 40 ? c.orange : c.red;
   const word = value >= 70 ? "Good" : value >= 40 ? "Fair" : "Poor";
+  const barW = width ?? (compact ? 24 : 48);
+  const barH = height ?? (compact ? 4 : 5);
+  const radius = compact ? 2 : layout.radiusXs;
   return (
-    <div style={{ display: "inline-flex", alignItems: "center", gap: space[2] }}>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: compact ? 4 : space[2] }}>
       <div style={{
-        width, height, borderRadius: layout.radiusXs,
+        width: barW, height: barH, borderRadius: radius,
         background: c.surfaceAlt, overflow: "hidden",
       }}>
         <div style={{
-          width: `${pct}%`, height: "100%",
+          width: `${pct}%`, height: "100%", borderRadius: radius,
           background: color,
           transition: `width ${motion.normal.duration} ${motion.normal.easing}`,
         }} />
       </div>
       <span style={{
-        fontFamily: typo.monoLg.font, fontSize: 13, fontWeight: 700,
+        fontFamily: typo.monoLg.font,
+        fontSize: compact ? 11 : 13, fontWeight: 700,
         color, fontVariantNumeric: "tabular-nums",
       }}>{value}</span>
-      <span style={{
-        fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
-        color: c.textDim,
-      }}>{word}</span>
+      {showWord && (
+        <span style={{
+          fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
+          color: c.textDim,
+        }}>{word}</span>
+      )}
     </div>
   );
 };

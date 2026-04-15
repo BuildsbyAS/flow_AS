@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, typeConfig, phaseColors as getPhaseColors, statusColors, entityColors, colWidths, outcomeConfig } from "../styles/theme";
 import { Badge, Tag, Modal, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, Th as SharedTh } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
+import { HealthBar } from "../components/chart";
 import useKeyboard from "../hooks/useKeyboard";
 import GanttChart from "../components/GanttChart";
 import FlowLogo from "../components/FlowLogo";
@@ -1098,17 +1099,7 @@ export default function ProjectsView({
                                     fontWeight: 700, letterSpacing: "0.02em",
                                     color: c.amber,
                                   }}>{proj.id}</span>
-                                  <div style={{ display: "flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums" }}>
-                                    <div style={{
-                                      width: 24, height: 4, borderRadius: 2, background: c.surfaceAlt, overflow: "hidden",
-                                    }}>
-                                      <div style={{ width: `${health}%`, height: "100%", borderRadius: 2, background: hColor }} />
-                                    </div>
-                                    <span style={{
-                                      fontFamily: typo.monoSm.font, fontSize: 11,
-                                      fontWeight: 700, color: hColor,
-                                    }}>{health}</span>
-                                  </div>
+                                  <HealthBar value={health} compact />
                                 </div>
 
                                 {/* Name */}
