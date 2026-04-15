@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom";
 import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, typeConfig, phaseColors as getPhaseColors, statusColors, entityColors, colWidths, outcomeConfig } from "../styles/theme";
 import { Badge, Tag, Surface, Modal, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, SectionDivider, StatCell, MetricCompact, SummaryTile, KPIBar, VDivider, Th as SharedTh } from "../components/shared";
-import { KpiGrid, KpiCard, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
+import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import GanttChart from "../components/GanttChart";
 import FlowLogo from "../components/FlowLogo";
@@ -1383,286 +1383,252 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
     return matrix;
   }, [proj.id, history, commitments]);
 
+  // ── Derived metrics for hero KPI grid ──
+  const remaining = proj.endDate ? Math.ceil((new Date(proj.endDate) - new Date(today)) / 86400000) : null;
+  const pct = allocated > 0 ? Math.min(100, Math.round((elapsed / allocated) * 100)) : 0;
+  const healthVal = m.health != null ? m.health : pct;
+  const fmtShort = (d) => { if (!d) return "—"; const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
-      {/* ═══ HERO — Telemetry Panel ═══ */}
-      <div className="flow-telemetry-panel" style={{ padding: `${space[6]}px ${space[7]}px` }}>
-        {/* ── Row 1: Identity ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1 }}>
-          <div style={{ flex: 1 }}>
-            {!editing ? (
-              <>
-                <div style={{ display: "flex", alignItems: "baseline", gap: space[3], marginBottom: space[1] + 2 }}>
-                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.displaySm.size, fontWeight: 700, letterSpacing: typo.monoLg.tracking, color: ec.project }}>{proj.id}</span>
-                  <span style={{ fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size, fontWeight: typo.displayXl.weight, color: c.text, letterSpacing: typo.displayXl.tracking, lineHeight: 1.15 }}>{proj.name}</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2] }}>
-                  <span style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: typo.bodyLg.weight, color: proj.owner ? c.textMid : c.red }}>{proj.owner || "Unassigned"}</span>
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>·</span>
-                  <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.cyan }}>{proj.squad}</span>
-                </div>
-              </>
-            ) : (
-              <div data-suppress-shortcuts style={{ display: "flex", flexDirection: "column", gap: space[3], position: "relative", zIndex: 60 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: space[3] }}>
-                  <div style={{ position: "relative", zIndex: 4 }}>
-                    <Label style={{ marginBottom: space[1] }}>Owner</Label>
-                    <SearchSelect value={editOwner} onChange={setEditOwner} options={allOwners} placeholder="Search people..." />
-                  </div>
-                  <div style={{ position: "relative", zIndex: 3 }}>
-                    <Label style={{ marginBottom: space[1] }}>Squad</Label>
-                    <SearchSelect value={editSquad} onChange={setEditSquad} options={allSquads} placeholder="Search squads..." />
-                  </div>
-                  <div style={{ position: "relative", zIndex: 2 }}>
-                    <Label style={{ marginBottom: space[1] }}>Phase</Label>
-                    <Sel value={editPhase} onChange={e => setEditPhase(e.target.value)} style={{ width: "100%" }}>
-                      {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
-                    </Sel>
-                  </div>
-                  <div style={{ position: "relative", zIndex: 1 }}>
-                    <Label style={{ marginBottom: space[1] }}>Status</Label>
-                    <Sel value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ width: "100%" }}>
-                      <option value="active">Active</option>
-                      <option value="deprioritized">Deprioritized</option>
-                    </Sel>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: space[2] }}>
-                  <Btn variant="command" size="sm" onClick={saveEdits} style={{ borderColor: c.green + "60", color: c.green }}>Save</Btn>
-                  <Btn variant="secondary" size="sm" onClick={cancelEdits}>Cancel</Btn>
-                </div>
+      {/* ═══ IDENTITY HEADER — project id + name + phase badge ═══ */}
+      <div style={{
+        padding: space[6], borderRadius: layout.radiusLg,
+        background: c.surface, border: `1px solid ${c.border}`, boxShadow: c.shadowCard,
+      }}>
+        {!editing ? (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[4] }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: space[3], flexWrap: "wrap" }}>
+                <span style={{
+                  fontFamily: typo.monoLg.font, fontSize: 20, fontWeight: 700,
+                  letterSpacing: typo.monoLg.tracking, color: ec.project,
+                  fontVariantNumeric: "tabular-nums",
+                }}>{proj.id}</span>
+                <span style={{
+                  fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size,
+                  fontWeight: typo.displayXl.weight, color: c.text,
+                  letterSpacing: typo.displayXl.tracking, lineHeight: 1.15,
+                }}>{proj.name}</span>
               </div>
-            )}
-          </div>
-
-          {!editing && (
+              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2] }}>
+                <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: proj.owner ? c.textMid : c.red }}>{proj.owner || "Unassigned"}</span>
+                <span style={{ color: c.textDim }}>·</span>
+                <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.cyan }}>{proj.squad}</span>
+              </div>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0 }}>
               <Badge color={sCfg.color} bg={`${sCfg.color}15`} style={{ fontSize: 14, fontWeight: 800, padding: `5px ${space[4]}px`, letterSpacing: "0.06em" }}>{proj.phase}</Badge>
-              <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 500, color: c.textDim, letterSpacing: "0.04em", textTransform: "uppercase", marginTop: 4 }}>Phase</div>
+              <div style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4 }}>Phase</div>
             </div>
-          )}
-        </div>
-
-        {/* ── Row 2: Timeline (left) + Activity (right) ── */}
-        {(() => {
-          const remaining = proj.endDate ? Math.ceil((new Date(proj.endDate) - new Date(today)) / 86400000) : null;
-          const pct = allocated > 0 ? Math.min(100, Math.round((elapsed / allocated) * 100)) : 0;
-          const overdue = remaining != null && remaining < 0;
-          const ageColor = elapsed > 60 ? c.red : elapsed > 30 ? c.orange : c.cyan;
-          const remColor = remaining != null ? (remaining < 0 ? c.red : remaining < 7 ? c.orange : c.green) : c.textDim;
-          const barColor = overdue ? c.red : pct > 75 ? c.orange : c.cyan;
-          const fmtShort = (d) => { if (!d) return "—"; const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
-          const healthVal = m.health != null ? m.health : 0;
-          const healthColor = healthVal >= 70 ? c.green : healthVal >= 40 ? c.orange : c.red;
-
-          return (
-            <div style={{ borderTop: `1px solid ${c.border}`, marginTop: space[4], paddingTop: space[4], display: "grid", gridTemplateColumns: "1fr 1px 1fr", gap: space[5], position: "relative", zIndex: 1 }}>
-              {/* Left: Timeline */}
-              <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%" }}>
-                <div style={{ display: "flex", gap: space[2] }}>
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${space[2] + 2}px ${space[3]}px`, background: `${ageColor}10`, borderRadius: layout.radiusMd, border: `1px solid ${ageColor}20` }}>
-                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Age</span>
-                    <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.bodyLg.size, fontWeight: 700, color: ageColor }}>{elapsed}d</span>
-                  </div>
-                  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between", padding: `${space[2] + 2}px ${space[3]}px`, background: `${remColor}10`, borderRadius: layout.radiusMd, border: `1px solid ${remColor}20` }}>
-                    <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Remaining</span>
-                    <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.bodyLg.size, fontWeight: 700, color: remColor }}>{remaining != null ? `${remaining}d` : "—"}</span>
-                  </div>
-                </div>
-                <div>
-                  <div style={{ position: "relative", height: 6, borderRadius: 3, background: c.border, overflow: "hidden" }}>
-                    <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(pct, 100)}%`, borderRadius: 3, background: barColor, transition: "width 0.4s ease" }} />
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: space[2] }}>
-                    <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.text }}>{fmtShort(proj.startDate)}</span>
-                    <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.text }}>{fmtShort(proj.endDate)}</span>
-                  </div>
-                </div>
+          </div>
+        ) : (
+          <div data-suppress-shortcuts style={{ display: "flex", flexDirection: "column", gap: space[3], position: "relative", zIndex: 60 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: space[3] }}>
+              <div style={{ position: "relative", zIndex: 4 }}>
+                <Label style={{ marginBottom: space[1] }}>Owner</Label>
+                <SearchSelect value={editOwner} onChange={setEditOwner} options={allOwners} placeholder="Search people..." />
               </div>
-
-              {/* Divider */}
-              <div style={{ background: c.border }} />
-
-              {/* Right: Activity */}
-              <div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3], alignContent: "center", height: "100%" }}>
-                  {[
-                    { label: "Total Commits", value: m.totalCommits, color: c.text },
-                    { label: "Health", value: healthVal, color: healthColor },
-                    { label: "Contributors", value: m.peopleList?.length || 0, color: c.text },
-                    { label: "Last Active", value: m.lastActivity || "—", color: m.lastActivity === "This wk" ? c.cyan : c.textMid },
-                  ].map((item, i) => (
-                    <div key={i} style={{ textAlign: "center" }}>
-                      <div style={{ fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking, color: item.color, lineHeight: 1.2, fontVariantNumeric: "tabular-nums" }}>{item.value}</div>
-                      <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginTop: 3 }}>{item.label}</div>
-                    </div>
-                  ))}
-                </div>
+              <div style={{ position: "relative", zIndex: 3 }}>
+                <Label style={{ marginBottom: space[1] }}>Squad</Label>
+                <SearchSelect value={editSquad} onChange={setEditSquad} options={allSquads} placeholder="Search squads..." />
+              </div>
+              <div style={{ position: "relative", zIndex: 2 }}>
+                <Label style={{ marginBottom: space[1] }}>Phase</Label>
+                <Sel value={editPhase} onChange={e => setEditPhase(e.target.value)} style={{ width: "100%" }}>
+                  {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
+                </Sel>
+              </div>
+              <div style={{ position: "relative", zIndex: 1 }}>
+                <Label style={{ marginBottom: space[1] }}>Status</Label>
+                <Sel value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ width: "100%" }}>
+                  <option value="active">Active</option>
+                  <option value="deprioritized">Deprioritized</option>
+                </Sel>
               </div>
             </div>
-          );
-        })()}
+            <div style={{ display: "flex", gap: space[2] }}>
+              <Btn variant="command" size="sm" onClick={saveEdits} style={{ borderColor: c.green + "60", color: c.green }}>Save</Btn>
+              <Btn variant="secondary" size="sm" onClick={cancelEdits}>Cancel</Btn>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* ═══ KPI GRID — 4 cards: Commits / Contributors / Remaining / Health ═══ */}
+      <KpiGrid cols="1fr 1fr 1fr 1fr">
+        <KpiCard
+          label="Total Commits"
+          value={m.totalCommits}
+          sub={m.lastActivity ? `last active ${m.lastActivity}` : "no activity logged"}
+        />
+        <KpiCard
+          label="Contributors"
+          value={m.peopleList?.length || 0}
+          sub={m.peopleList?.length ? "people involved" : "nobody assigned"}
+        />
+        <KpiCard
+          label="Remaining"
+          value={remaining != null ? `${remaining}d` : "—"}
+          sub={`${fmtShort(proj.startDate)} → ${fmtShort(proj.endDate)} · ${pct}% elapsed`}
+        />
+        <HealthGauge value={healthVal} label="Health" sub={m.health != null ? "project health score" : "planned vs actual"} />
+      </KpiGrid>
+
       {/* ═══ WEEKLY COMMITS — roadmap lane ═══ */}
-      <Surface compact>
-        <Label>Weekly Commits</Label>
-        <div style={{ overflowX: "auto" }}>
-          {/* Week headers */}
-          <div style={{ display: "grid", gridTemplateColumns: `80px repeat(${WEEK_LABELS.length}, 1fr)`, gap: 2, marginBottom: space[1] }}>
-            <span />
-            {WEEK_LABELS.map(w => (
-              <span key={w} style={{
-                fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                color: w === "This wk" ? c.cyan : c.textDim, textAlign: "center",
-                fontWeight: w === "This wk" ? 700 : 500,
-              }}>{w}</span>
-            ))}
+      <div>
+        <SectionHead title="Weekly Commits" />
+        <div style={{
+          padding: space[6], borderRadius: layout.radiusLg,
+          background: c.surface, border: `1px solid ${c.border}`, boxShadow: c.shadowCard,
+        }}>
+          <div style={{ overflowX: "auto" }}>
+            <div style={{ display: "grid", gridTemplateColumns: `80px repeat(${WEEK_LABELS.length}, 1fr)`, gap: 2, marginBottom: space[1] }}>
+              <span />
+              {WEEK_LABELS.map(w => (
+                <span key={w} style={{
+                  fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                  color: w === "This wk" ? c.accent : c.textDim, textAlign: "center",
+                  fontWeight: w === "This wk" ? 700 : 500,
+                  fontVariantNumeric: "tabular-nums",
+                }}>{w}</span>
+              ))}
+            </div>
+            {[...phaseNames, ...shipPhases].map(phase => {
+              const color = pc[phase] || c.textDim;
+              return (
+                <div key={phase} style={{
+                  display: "grid", gridTemplateColumns: `80px repeat(${WEEK_LABELS.length}, 1fr)`,
+                  gap: 2, marginBottom: 4,
+                }}>
+                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color, display: "flex", alignItems: "center" }}>{phase}</span>
+                  {WEEK_LABELS.map(w => {
+                    const entries = weekPhaseMatrix[w]?.[phase] || [];
+                    const hasActivity = entries.length > 0;
+                    return (
+                      <div key={w} style={{
+                        height: 30, borderRadius: 3,
+                        background: hasActivity ? `${color}25` : `${c.border}20`,
+                        borderLeft: hasActivity ? `3px solid ${color}` : "none",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {hasActivity && (
+                          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{entries.length}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
-          {/* Phase rows (all phases including ship) */}
-          {[...phaseNames, ...shipPhases].map(phase => {
-            const color = pc[phase] || c.textDim;
-            return (
-              <div key={phase} style={{
-                display: "grid", gridTemplateColumns: `80px repeat(${WEEK_LABELS.length}, 1fr)`,
-                gap: 2, marginBottom: 4,
-              }}>
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color, display: "flex", alignItems: "center" }}>{phase}</span>
-                {WEEK_LABELS.map(w => {
-                  const entries = weekPhaseMatrix[w]?.[phase] || [];
-                  const hasActivity = entries.length > 0;
-                  return (
-                    <div key={w} style={{
-                      height: 30, borderRadius: 3,
-                      background: hasActivity ? `${color}25` : `${c.border}20`,
-                      borderLeft: hasActivity ? `3px solid ${color}` : "none",
-                      display: "flex", alignItems: "center", justifyContent: "center",
+        </div>
+      </div>
+
+      {/* ═══ ACTIVITY TIMELINE ═══ */}
+      <div>
+        <SectionHead title="Activity Timeline" />
+        <div style={{
+          borderRadius: layout.radiusLg,
+          background: c.surface, border: `1px solid ${c.border}`, boxShadow: c.shadowCard,
+          overflow: "clip",
+        }}>
+          <div style={{ padding: `${space[2]}px 0`, maxHeight: 500, overflowY: "auto" }}>
+            {m.weeklyData.length === 0 ? (
+              <div style={{ padding: `${space[6]}px ${space[4]}px`, textAlign: "center", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>
+                No activity logged for this project yet.
+              </div>
+            ) : (
+              [...m.weeklyData].reverse().map((wk, wi) => {
+                const validEntries = wk.entries.filter(e => {
+                  const stage = e.stage || "";
+                  return stage && [...phaseNames, ...shipPhases].includes(stage);
+                });
+                if (validEntries.length === 0 && !wk.isCurrent) return null;
+                const entriesToShow = wk.isCurrent ? wk.entries : validEntries;
+                return (
+                <React.Fragment key={wi}>
+                  <div style={{ padding: `${space[2]}px ${space[4]}px ${space[1]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
+                    <span style={{
+                      fontFamily: typo.monoMd.font, fontSize: 11, fontWeight: 700,
+                      letterSpacing: "0.08em", textTransform: "uppercase",
+                      color: wk.isCurrent ? c.accent : c.textDim,
                     }}>
-                      {hasActivity && (
-                        <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color, fontWeight: 700 }}>{entries.length}</span>
+                      {wk.isCurrent ? "This week" : wk.week}
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: wk.isCurrent ? `${c.accent}30` : c.border }} />
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, fontVariantNumeric: "tabular-nums" }}>{entriesToShow.length}</span>
+                  </div>
+                  {entriesToShow.map((entry, ei) => (
+                    <div key={`${wi}-${ei}`} style={{
+                      display: "grid",
+                      gridTemplateColumns: "56px 1fr 100px 60px 72px",
+                      alignItems: "center",
+                      gap: space[2],
+                      padding: `${space[2]}px ${space[4]}px`,
+                      borderBottom: `1px solid ${c.border}`,
+                      opacity: wk.isCurrent ? 1 : 0.85,
+                    }}>
+                      <Tag color={pc[entry.stage] || c.textDim} bg={(pc[entry.stage] || c.textDim) + "12"} style={{ textAlign: "center", justifySelf: "start" }}>{entry.stage || "—"}</Tag>
+                      <span style={{
+                        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                        color: wk.isCurrent ? c.text : c.textMid,
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        {entry.task || entry.title || "—"}
+                      </span>
+                      <span onClick={(e) => { e.stopPropagation(); onNavigate && onNavigate("people", entry.person); }}
+                        style={{
+                          fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                          fontWeight: 600, color: c.cyan, cursor: "pointer",
+                          textAlign: "right",
+                        }}>
+                        {entry.person}
+                      </span>
+                      <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg} style={{ textAlign: "center", justifySelf: "center" }}>{tc[entry.type]?.label || entry.type}</Tag>
+                      {entry.outcome ? (() => { const oc = outcomeConfig(); const cfg = oc[entry.outcome]; return cfg ? (
+                        <span style={{
+                          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
+                          color: cfg.color, background: cfg.bg,
+                          padding: "1px 6px", borderRadius: 4,
+                          letterSpacing: "0.04em", textAlign: "center", justifySelf: "center",
+                        }}>
+                          {cfg.icon} {entry.outcome.toUpperCase()}
+                        </span>
+                      ) : null; })() : (
+                        <span />
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      </Surface>
-
-      {/* ═══ ACTIVITY TIMELINE — Terminal Log ═══ */}
-      <div className="flow-terminal-log">
-        <div className="flow-terminal-header">
-          <div className="flow-terminal-dot" style={{ background: c.red }} />
-          <div className="flow-terminal-dot" style={{ background: c.orange }} />
-          <div className="flow-terminal-dot" style={{ background: c.green }} />
-          <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoLg.size, fontWeight: 600, color: c.textMid, marginLeft: space[2] }}>
-            Activity Timeline
-          </span>
-        </div>
-        <div style={{ padding: `${space[2]}px 0`, maxHeight: 500, overflowY: "auto" }}>
-          {m.weeklyData.length === 0 ? (
-            <div style={{ padding: `${space[5]}px ${space[4]}px`, textAlign: "center", fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.textDim }}>
-              $ no activity logged<span className="flow-terminal-cursor" />
-            </div>
-          ) : (
-            [...m.weeklyData].reverse().map((wk, wi) => {
-              // Only show entries that have a valid stage matching the heatmap phases
-              const validEntries = wk.entries.filter(e => {
-                const stage = e.stage || "";
-                return stage && [...phaseNames, ...shipPhases].includes(stage);
-              });
-              if (validEntries.length === 0 && !wk.isCurrent) return null;
-              const entriesToShow = wk.isCurrent ? wk.entries : validEntries;
-              return (
-              <React.Fragment key={wi}>
-                {/* Week separator */}
-                <div style={{ padding: `${space[2]}px ${space[4]}px ${space[1]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
-                  <span style={{
-                    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                    fontWeight: 700, color: wk.isCurrent ? c.accent : c.textDim,
-                  }}>
-                    {wk.isCurrent ? "▸ THIS WEEK" : `▸ ${wk.week.toUpperCase()}`}
-                  </span>
-                  <div style={{ flex: 1, height: 1, background: wk.isCurrent ? `${c.accent}30` : c.border }} />
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{entriesToShow.length}</span>
-                </div>
-                {entriesToShow.map((entry, ei) => (
-                  <div key={`${wi}-${ei}`} style={{
-                    display: "grid",
-                    gridTemplateColumns: "52px 1fr 90px 52px 64px",
-                    alignItems: "center",
-                    gap: space[2],
-                    padding: `${space[1] + 2}px ${space[4]}px`,
-                    borderBottom: `1px solid ${c.border}`,
-                    opacity: wk.isCurrent ? 1 : 0.8,
-                    animationDelay: `${(wi * 3 + ei) * 0.04}s`,
-                  }}>
-                    {/* Stage */}
-                    <Tag color={pc[entry.stage] || c.textDim} bg={(pc[entry.stage] || c.textDim) + "12"} style={{ textAlign: "center", justifySelf: "start" }}>{entry.stage || "—"}</Tag>
-                    {/* Task */}
-                    <span style={{
-                      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                      color: wk.isCurrent ? c.text : c.textMid,
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }}>
-                      {entry.task || entry.title || "—"}
-                    </span>
-                    {/* Person */}
-                    <span onClick={(e) => { e.stopPropagation(); onNavigate && onNavigate("people", entry.person); }}
-                      style={{
-                        fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-                        fontWeight: typo.monoLg.weight, color: c.cyan, cursor: "pointer",
-                        textAlign: "right",
-                      }}>
-                      {entry.person}
-                    </span>
-                    {/* Type */}
-                    <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg} style={{ textAlign: "center", justifySelf: "center" }}>{tc[entry.type]?.label || entry.type}</Tag>
-                    {/* Outcome */}
-                    {entry.outcome ? (() => { const oc = outcomeConfig(); const cfg = oc[entry.outcome]; return cfg ? (
-                      <span style={{
-                        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
-                        color: cfg.color, background: cfg.bg,
-                        padding: "1px 6px", borderRadius: 4,
-                        letterSpacing: "0.04em", textAlign: "center", justifySelf: "center",
-                      }}>
-                        {cfg.icon} {entry.outcome.toUpperCase()}
-                      </span>
-                    ) : null; })() : (
-                      <span />
-                    )}
-                  </div>
-                ))}
-              </React.Fragment>
-              );
-            })
-          )}
-          {m.weeklyData.length > 0 && (
-            <div style={{ padding: `${space[2]}px ${space[4]}px`, display: "flex", alignItems: "center", gap: space[1] + 2 }}>
-              <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, color: c.accent }}>$</span>
-              <span className="flow-terminal-cursor" />
-            </div>
-          )}
+                  ))}
+                </React.Fragment>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
 
       {/* ═══ PEOPLE INVOLVED ═══ */}
       {m.peopleList?.length > 0 && (
-        <Surface compact>
-          <Label>People Involved</Label>
-          <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
-            {m.peopleList.map(name => (
-              <span key={name} onClick={() => onNavigate && onNavigate("people", name)} style={{
-                fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                fontWeight: 500, color: c.cyan, cursor: "pointer",
-                padding: `3px ${space[2]}px`,
-                background: c.cyanDim, borderRadius: layout.radiusPill,
-              }}>{name}</span>
-            ))}
+        <div>
+          <SectionHead title="People Involved" />
+          <div style={{
+            padding: space[6], borderRadius: layout.radiusLg,
+            background: c.surface, border: `1px solid ${c.border}`, boxShadow: c.shadowCard,
+          }}>
+            <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
+              {m.peopleList.map(name => (
+                <span key={name} onClick={() => onNavigate && onNavigate("people", name)} style={{
+                  fontFamily: typo.bodySm.font, fontSize: 13,
+                  fontWeight: 500, color: c.cyan, cursor: "pointer",
+                  padding: `4px ${space[3]}px`,
+                  background: c.cyanDim, borderRadius: layout.radiusPill,
+                }}>{name}</span>
+              ))}
+            </div>
           </div>
-        </Surface>
+        </div>
       )}
 
 

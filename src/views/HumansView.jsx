@@ -920,26 +920,18 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
         </div>
       )}
 
-      {/* ═══ DETAIL HEADER — two-line layout ═══ */}
+      {/* ═══ DETAIL HEADER — Steel & Orange §8.2 ═══ */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: `${space[3]}px ${space[4]}px`,
-        background: c.surface, border: `1px solid ${phase === "locked" ? c.green + "15" : c.border}`,
-        borderRadius: layout.radius, position: "relative", overflow: "visible",
+        padding: space[5],
+        background: c.surface, border: `1px solid ${c.border}`,
+        borderRadius: layout.radiusLg, position: "relative", overflow: "visible",
+        boxShadow: c.shadowCard,
       }}>
-        {/* Green bottom highlight for locked phase */}
-        {phase === "locked" && (
-          <div style={{
-            position: "absolute", bottom: 0, left: 0, right: 0, height: 2,
-            borderRadius: `0 0 ${layout.radius}px ${layout.radius}px`,
-            background: c.green,
-          }} />
-        )}
-
         {/* Left: Avatar + Name + Role·Squad + Date */}
         <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
           <div style={{
-            width: 36, height: 36, borderRadius: 10,
+            width: 36, height: 36, borderRadius: layout.radiusSm,
             background: c.surfaceAlt, border: `1px solid ${c.border}`,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: typo.monoMd.font, fontWeight: 700, fontSize: 12,
@@ -947,8 +939,9 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
           }}>{person.person.split(" ").map(w => w.charAt(0)).slice(0, 2).join("").toUpperCase()}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{
-              fontFamily: typo.bodyMd.font, fontSize: 14,
-              fontWeight: 700, letterSpacing: "0", color: c.text,
+              fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
+              fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
+              color: c.text, lineHeight: 1.2,
             }}>{person.person}</span>
             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
               {personMeta && (
@@ -961,6 +954,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 fontWeight: 600, color: c.textMid,
                 padding: `1px ${space[2]}px`, borderRadius: layout.radiusTag,
                 background: c.surfaceAlt, border: `1px solid ${c.border}`,
+                fontVariantNumeric: "tabular-nums",
               }}>{weekLabel}</span>
             </div>
           </div>
@@ -1057,6 +1051,22 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             )}
         </div>
       </div>
+
+      {/* ═══ HERO KPI GRID — compact week summary ═══ */}
+      {(() => {
+        const lockedCount = filledSlots;
+        const lockStateLabel = phase === "locked" ? "Locked" : phase === "closing" ? "Closing" : allSlotsFilled ? "Ready" : filledSlots > 0 ? "Partial" : "Empty";
+        const lockStateColor = phase === "locked" ? c.green : phase === "closing" ? c.orange : allSlotsFilled ? c.accent : c.textDim;
+        const weekStateLabel = phase === "closing" ? (totalToResolve > 0 ? `${Math.round((fullyResolved / totalToResolve) * 100)}%` : "—") : phase === "locked" ? "In progress" : "Planning";
+        const weekStateSub = phase === "closing" ? `${fullyResolved} of ${totalToResolve} resolved` : phase === "locked" ? weekLabel : "Not yet locked";
+        return (
+          <KpiGrid cols="1fr 1fr 1fr">
+            <KpiCard label="Commitments" value={<span style={{ fontVariantNumeric: "tabular-nums" }}>{lockedCount}/3</span>} sub="filled this week" />
+            <KpiCard label="Lock State" value={<span style={{ color: lockStateColor }}>{lockStateLabel}</span>} sub={phase === "locked" ? "locked for the week" : "planning phase"} />
+            <KpiCard label="This Week" value={<span style={{ fontVariantNumeric: "tabular-nums" }}>{weekStateLabel}</span>} sub={weekStateSub} />
+          </KpiGrid>
+        );
+      })()}
 
       {/* ═══ PLANNING PHASE — Dot Navigation + Spotlight ═══ */}
       {phase === "planning" && (() => {
@@ -1187,8 +1197,11 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
         return (
           <>
+            <div style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
+              <SectionHead title="Plan This Week" />
+            </div>
             {/* ── Minimal Progress Indicator ── */}
-            <div style={{ maxWidth: 640, margin: `${space[3]}px auto ${space[4]}px`, width: "100%", display: "flex", alignItems: "center", gap: space[3] }}>
+            <div style={{ maxWidth: 640, margin: `0 auto ${space[4]}px`, width: "100%", display: "flex", alignItems: "center", gap: space[3] }}>
               {/* Segmented bar */}
               <div style={{ display: "flex", gap: 3, flex: 1 }}>
                 {[0, 1, 2].map((di) => {
@@ -1558,8 +1571,11 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
         return (
         <>
+          <div style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
+            <SectionHead title="This Week's Commitments" />
+          </div>
           {/* ── All cards stacked ── */}
-          <div style={{ maxWidth: 640, margin: `${space[4]}px auto 0`, width: "100%", display: "flex", flexDirection: "column", gap: space[3] + 2 }}>
+          <div style={{ maxWidth: 640, margin: `0 auto`, width: "100%", display: "flex", flexDirection: "column", gap: space[3] + 2 }}>
           {person.items.slice(0, 3).map((item, idx) => {
             if (!item.project && !(item.title || "").trim()) return null;
             const isDepri = person.deselected === idx;
@@ -1705,7 +1721,11 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
       {/* ═══ CLOSING PHASE — card + extension pattern ═══ */}
       {phase === "closing" && (
-        <div style={{ maxWidth: 640, margin: `${space[4]}px auto 0`, width: "100%", display: "flex", flexDirection: "column", gap: space[2] + 2 }}>
+        <>
+          <div style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
+            <SectionHead title="Close Out The Week" />
+          </div>
+          <div style={{ maxWidth: 640, margin: `0 auto`, width: "100%", display: "flex", flexDirection: "column", gap: space[2] + 2 }}>
           {person.items.slice(0, 3).map((item, idx) => {
             if (person.deselected === idx) return null;
             if (!item.project && !(item.title || "").trim()) return null;
@@ -1925,7 +1945,8 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
               </div>
             );
           })()}
-        </div>
+          </div>
+        </>
       )}
 
       {/* Lock blockers removed — wizard flow prevents incomplete data. Edge cases handled in review mode. */}

@@ -470,180 +470,330 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
 
   const activeWeeks = [...weeklyData].reverse().filter(w => w.total > 0);
 
+  // Last-week commitment total (for KPI card sub-caption)
+  const lastWeekData = weeklyData.filter(w => !w.isCurrent).slice(-1)[0];
+  const lastWeekTotal = lastWeekData ? lastWeekData.total : 0;
+  const lastWeekDone = lastWeekData
+    ? lastWeekData.items.filter(it => it.outcome === "done" || it.outcome === "done_carry").length
+    : 0;
+
+  const thisWeekProjCount = new Set(currentItems.map(it => it.project).filter(Boolean)).size;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
-      {/* ═══ PROFILE HEADER ═══════════════════════════════ */}
-      <div style={{ padding: space[6], background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
-        {/* Person identity — dominant read */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: space[5], gap: space[4] }}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[4], minWidth: 0 }}>
+      {/* ═══ HERO CARD — avatar + identity (Steel & Orange §8.2) ═══ */}
+      <div style={{
+        padding: space[6], background: c.surface,
+        border: `1px solid ${c.border}`, borderRadius: layout.radiusLg,
+        boxShadow: c.shadowCard,
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: space[4], minWidth: 0 }}>
+          <div aria-hidden="true" style={{
+            width: 56, height: 56, borderRadius: "50%",
+            background: c.surfaceAlt,
+            border: `1px solid ${c.border}`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: typo.monoLg.font, fontSize: 18, fontWeight: 700, color: c.textMid,
+            flexShrink: 0,
+          }}>{selectedPerson.charAt(0).toUpperCase()}</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{
-              width: 56, height: 56, borderRadius: "50%",
-              background: c.surfaceAlt,
-              border: `1px solid ${c.border}`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: typo.monoLg.font, fontSize: 18, fontWeight: 700, color: c.textMid,
-              flexShrink: 0,
-            }}>{selectedPerson.charAt(0).toUpperCase()}</div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: typo.displayXl.font, fontSize: typo.displayXl.size, fontWeight: typo.displayXl.weight, color: c.text, letterSpacing: typo.displayXl.tracking, lineHeight: 1.15 }}>{selectedPerson}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2], flexWrap: "wrap" }}>
-                {personObj && personObj.role && <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, color: c.textMid }}>{personObj.role}</span>}
-                {personObj && personObj.squad && (
-                  <span style={{
-                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
-                    color: c.accent, background: c.accentDim,
-                    padding: "3px 8px", borderRadius: layout.radiusXs,
-                    textTransform: "uppercase",
-                  }}>{personObj.squad}</span>
-                )}
-              </div>
+              fontFamily: typo.displayLg.font, fontSize: 24, fontWeight: 700,
+              color: c.text, letterSpacing: "-0.02em", lineHeight: 1.15,
+            }}>{selectedPerson}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2], flexWrap: "wrap" }}>
+              {personObj.role && (
+                <span style={{
+                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                  fontWeight: 500, color: c.textMid,
+                }}>{personObj.role}</span>
+              )}
+              {personObj.squad && (
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  color: c.accent, background: c.accentDim,
+                  padding: "3px 8px", borderRadius: layout.radiusXs,
+                }}>{personObj.squad}</span>
+              )}
             </div>
-          </div>
-
-          {/* Momentum highlight */}
-          <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, letterSpacing: typo.displayHero.tracking, color: momentumPct === null ? c.textDim : momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.accent : c.red, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{momentumPct === null ? "—" : `${momentumPct}%`}</div>
-            <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textDim, marginTop: space[1], textTransform: "uppercase" }}>Momentum</div>
-          </div>
-        </div>
-
-        {/* Last 4 weeks — directly below identity */}
-        <div style={{ borderTop: `1px solid ${c.border}`, paddingTop: space[4] }}>
-          <Label style={{ marginBottom: space[3] }}>Last 4 Weeks</Label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: space[3] }}>
-            <StatCell value={`${last4Active}/${last4.length}`} label="Active weeks" color={c.text} style={{ textAlign: "left", fontVariantNumeric: "tabular-nums" }} />
-            <StatCell value={last4Total} label="Commitments" color={c.accent} style={{ textAlign: "left", fontVariantNumeric: "tabular-nums" }} />
-            <StatCell value={momentumPct === null ? "—" : `${momentumPct}%`} label="Momentum" color={momentumPct === null ? c.textDim : momentumPct >= 80 ? c.green : momentumPct >= 50 ? c.accent : c.red} style={{ textAlign: "left", fontVariantNumeric: "tabular-nums" }} />
-            <StatCell value={last4Projects.size} label="Projects" color={c.text} style={{ textAlign: "left", fontVariantNumeric: "tabular-nums" }} />
           </div>
         </div>
       </div>
 
+      {/* ═══ KPI GRID — 4 cards: Momentum / This Week / Last Week / Gauge ═══ */}
+      <KpiGrid>
+        <KpiCard
+          label="Momentum"
+          value={momentumPct === null ? "—" : `${momentumPct}%`}
+          sub={
+            momentumPct === null
+              ? "No activity logged yet"
+              : momentumPct >= 80
+                ? "Strong — shipping consistently"
+                : momentumPct >= 50
+                  ? "Steady — mixed outcomes recent"
+                  : "At risk — low completion rate"
+          }
+        />
+        <KpiCard
+          label={isHistorical ? (selectedWeekKey || "Selected Week") : "This Week"}
+          value={currentItems.length}
+          sub={
+            currentItems.length === 0
+              ? "No commitments"
+              : `${thisWeekProjCount} project${thisWeekProjCount !== 1 ? "s" : ""}`
+          }
+        />
+        <KpiCard
+          label="Last Week"
+          value={lastWeekTotal}
+          sub={
+            lastWeekTotal === 0
+              ? "No commitments"
+              : `${lastWeekDone} of ${lastWeekTotal} done`
+          }
+        />
+        <HealthGauge
+          value={momentumPct == null ? 0 : momentumPct}
+          label="Momentum"
+          sub={momentumPct == null ? "no history yet" : "rolling completion score"}
+        />
+      </KpiGrid>
 
-      {/* ═══ THIS WEEK SUMMARY (with scope churn if present) ═ */}
-      <Surface variant="panel" style={{ padding: space[6] }}>
-        <Label style={{ marginBottom: space[3] }}>{isHistorical ? (selectedWeekKey || "Past Week") : "This Week"}</Label>
-        {currentItems.length > 0 ? (() => {
-          const projCount = new Set(currentItems.map(it => it.project).filter(Boolean)).size;
-          return (
-          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid }}>
-              {currentItems.length} commitment{currentItems.length !== 1 ? "s" : ""} across {projCount} project{projCount !== 1 ? "s" : ""}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
-              {currentItems.map((it, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[1]}px ${space[3]}px`, background: c.surfaceAlt, borderRadius: layout.radiusSm, border: `1px solid ${c.border}` }}>
-                  <Tag color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Tag>
-                  {it.project && (
-                    <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", it.project); }}
-                      style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, color: entityColors().project, cursor: "pointer" }}>
-                      {it.project}
-                    </span>
-                  )}
-                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: c.text }}>{it.title || "—"}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          );
-        })() : (
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: typo.bodyMd.weight, color: c.textDim }}>No commitments this week</div>
-        )}
-        {scopeChurnEvents.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: space[1], padding: `${space[2]}px ${space[3]}px`, marginTop: space[3], background: c.accentDim, borderRadius: layout.radiusSm, border: `1px solid ${c.border}`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: c.textMid, lineHeight: 1.5 }}>
-            <span style={{ color: c.accent, fontWeight: 700 }}>↩ Scope churn:</span>
-            {scopeChurnEvents.map((ev, i) => (
-              <span key={i} style={{ display: "inline-flex", alignItems: "baseline", gap: space[1] }}>
-                <span>{ev.label}</span>
-                {ev.project && (
-                  <span onClick={() => { if (onNavigate) onNavigate("projects", ev.project); }}
-                    style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: entityColors().project, cursor: "pointer", textDecoration: "underline" }}>
-                    {ev.project}
-                  </span>
-                )}
-                {i < scopeChurnEvents.length - 1 && <span>·</span>}
-              </span>
-            ))}
-          </div>
-        )}
-      </Surface>
-
-
-      {/* ═══ TIMELINE ═══════════════════════════════════════ */}
-      <div style={{ background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard, overflow: "hidden" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[3]}px ${space[4]}px`, borderBottom: `1px solid ${c.border}`, background: c.surfaceAlt }}>
-          <Label style={{ margin: 0 }}>Timeline</Label>
-          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textDim, marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>{weeklyData.length} weeks</span>
-        </div>
-        <div style={{ padding: `${space[2]}px 0`, maxHeight: 540, overflowY: "auto" }}>
-          {activeWeeks.length > 0 ? (
-            activeWeeks.map((w) => (
-              <React.Fragment key={w.week}>
-                {/* Week separator */}
-                <div style={{ padding: `${space[3]}px ${space[4]}px ${space[1]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: w.isCurrent ? c.accent : c.textDim, textTransform: "uppercase" }}>
-                    {w.isCurrent ? (isHistorical ? (selectedWeekKey || "Selected week") : "This week") : w.week}
-                  </span>
-                  <div style={{ flex: 1, height: 1, background: c.border }} />
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textDim, fontVariantNumeric: "tabular-nums" }}>{w.total}</span>
-                </div>
-                {w.items.map((entry, ei) => {
-                  const oc = outcomeConfig();
-                  const ocCfg = entry.outcome ? oc[entry.outcome] : null;
-                  const projObj = projects.find(p => p.id === entry.project);
-                  return (
-                    <div key={`${w.week}-${ei}`} style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 52px 52px 72px",
-                      alignItems: "center",
-                      gap: space[2],
-                      padding: `${space[2]}px ${space[4]}px`,
-                      borderBottom: `1px solid ${c.border}`,
-                    }}>
-                      {/* Project ID + Name : Commitment */}
-                      <span style={{
-                        display: "flex", alignItems: "center", gap: 0,
-                        overflow: "hidden", whiteSpace: "nowrap",
-                      }}>
-                        {entry.project ? (
-                        <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", entry.project); }}
-                          style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, color: entityColors().project, cursor: "pointer", flexShrink: 0 }}>
-                          {entry.project}
+      {/* ═══ THIS WEEK — commitments + scope churn ═══ */}
+      <div>
+        <SectionHead title={isHistorical ? (selectedWeekKey || "Past Week") : "This Week"} />
+        <div style={{
+          padding: space[6], background: c.surface,
+          border: `1px solid ${c.border}`, borderRadius: layout.radiusLg,
+          boxShadow: c.shadowCard,
+        }}>
+          {currentItems.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+              <div style={{
+                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                fontWeight: 500, color: c.textMid,
+                fontVariantNumeric: "tabular-nums",
+              }}>
+                {currentItems.length} commitment{currentItems.length !== 1 ? "s" : ""} across {thisWeekProjCount} project{thisWeekProjCount !== 1 ? "s" : ""}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
+                {currentItems.map((it, i) => (
+                  <div key={i} style={{
+                    display: "flex", alignItems: "center", gap: space[2],
+                    padding: `${space[1]}px ${space[3]}px`,
+                    background: c.surfaceAlt, borderRadius: layout.radiusSm,
+                    border: `1px solid ${c.border}`,
+                  }}>
+                    <Tag color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Tag>
+                    {it.project && (
+                      <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", it.project); }}
+                        style={{
+                          fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                          fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking,
+                          color: entityColors().project, cursor: "pointer",
+                        }}>
+                        {it.project}
+                      </span>
+                    )}
+                    <span style={{
+                      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                      fontWeight: typo.bodySm.weight, color: c.text,
+                    }}>{it.title || "—"}</span>
+                  </div>
+                ))}
+              </div>
+              {scopeChurnEvents.length > 0 && (
+                <div style={{
+                  display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: space[1],
+                  padding: `${space[2]}px ${space[3]}px`,
+                  background: c.accentDim, borderRadius: layout.radiusSm,
+                  border: `1px solid ${c.border}`,
+                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                  fontWeight: typo.bodySm.weight, color: c.textMid, lineHeight: 1.5,
+                }}>
+                  <span style={{ color: c.accent, fontWeight: 700 }}>↩ Scope churn:</span>
+                  {scopeChurnEvents.map((ev, i) => (
+                    <span key={i} style={{ display: "inline-flex", alignItems: "baseline", gap: space[1] }}>
+                      <span>{ev.label}</span>
+                      {ev.project && (
+                        <span onClick={() => { if (onNavigate) onNavigate("projects", ev.project); }}
+                          style={{
+                            fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                            fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
+                            color: entityColors().project, cursor: "pointer", textDecoration: "underline",
+                          }}>
+                          {ev.project}
                         </span>
+                      )}
+                      {i < scopeChurnEvents.length - 1 && <span>·</span>}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            // Empty state per §7.13 — centered, max-w 360, 32px ghost icon
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              textAlign: "center", maxWidth: 360, margin: "0 auto",
+              padding: `${space[5]}px ${space[4]}px`,
+            }}>
+              <div aria-hidden="true" style={{
+                fontSize: 32, lineHeight: 1,
+                color: c.textGhost, marginBottom: space[3],
+              }}>◌</div>
+              <div style={{
+                fontFamily: typo.displaySm.font, fontSize: 16, fontWeight: 700,
+                color: c.text, letterSpacing: "-0.01em", marginBottom: space[1],
+              }}>No commitments this week</div>
+              <div style={{
+                fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 500,
+                color: c.textDim, lineHeight: 1.5,
+              }}>
+                {selectedPerson} hasn't declared any BUILD or JAM commitments yet.
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ═══ ACTIVITY TIMELINE ═══ */}
+      <div>
+        <SectionHead
+          title="Activity Timeline"
+          right={
+            <span style={{
+              fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+              letterSpacing: "0.06em", textTransform: "uppercase", color: c.textDim,
+              fontVariantNumeric: "tabular-nums",
+            }}>{activeWeeks.length} active week{activeWeeks.length !== 1 ? "s" : ""}</span>
+          }
+        />
+        <div style={{
+          background: c.surface, border: `1px solid ${c.border}`,
+          borderRadius: layout.radiusLg, boxShadow: c.shadowCard,
+          overflow: "clip",
+        }}>
+          {activeWeeks.length > 0 ? (
+            <div style={{ maxHeight: 540, overflowY: "auto" }}>
+              {activeWeeks.map((w, wIdx) => (
+                <React.Fragment key={w.week}>
+                  {/* Week separator */}
+                  <div style={{
+                    padding: `${space[3]}px ${space[5]}px`,
+                    display: "flex", alignItems: "center", gap: space[3],
+                    background: c.surfaceAlt,
+                    borderTop: wIdx === 0 ? "none" : `1px solid ${c.border}`,
+                    borderBottom: `1px solid ${c.border}`,
+                  }}>
+                    <span style={{
+                      fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                      letterSpacing: "0.08em", textTransform: "uppercase",
+                      color: w.isCurrent ? c.accent : c.textDim,
+                    }}>
+                      {w.isCurrent ? (isHistorical ? (selectedWeekKey || "Selected week") : "This week") : w.week}
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: c.border }} />
+                    <span style={{
+                      fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                      color: c.textDim, fontVariantNumeric: "tabular-nums",
+                    }}>{w.total}</span>
+                  </div>
+                  {w.items.map((entry, ei) => {
+                    const oc = outcomeConfig();
+                    const ocCfg = entry.outcome ? oc[entry.outcome] : null;
+                    const projObj = projects.find(p => p.id === entry.project);
+                    const isLastInWeek = ei === w.items.length - 1;
+                    return (
+                      <div key={`${w.week}-${ei}`} style={{
+                        display: "flex", alignItems: "center", gap: space[3],
+                        padding: `${space[3]}px ${space[5]}px`,
+                        borderBottom: isLastInWeek ? "none" : `1px solid ${c.border}`,
+                      }}>
+                        {/* Project ID */}
+                        {entry.project ? (
+                          <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", entry.project); }}
+                            style={{
+                              fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                              fontWeight: 700, letterSpacing: typo.monoMd.tracking,
+                              color: entityColors().project, cursor: "pointer",
+                              flexShrink: 0, minWidth: 64,
+                              fontVariantNumeric: "tabular-nums",
+                            }}>
+                            {entry.project}
+                          </span>
                         ) : (
-                        <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.textDim, flexShrink: 0 }}>—</span>
+                          <span style={{
+                            fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                            color: c.textDim, flexShrink: 0, minWidth: 64,
+                          }}>—</span>
                         )}
-                        {projObj && <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: c.textDim, flexShrink: 0, marginLeft: space[1] }}>{projObj.name}</span>}
-                        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, flexShrink: 0, margin: `0 ${space[1]}px` }}>:</span>
-                        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: w.isCurrent ? c.text : c.textMid, overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {/* Action text: project name + commitment title */}
+                        <span style={{
+                          flex: 1, minWidth: 0,
+                          fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 500,
+                          color: w.isCurrent ? c.text : c.textMid,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                          {projObj && (
+                            <span style={{ color: c.textDim, marginRight: space[2] }}>{projObj.name}</span>
+                          )}
                           {entry.title || entry.task || "—"}
                         </span>
-                      </span>
-                      {/* Stage (PRD/Design/Dev/QA) */}
-                      <Tag color={pc[entry.stage] || c.textDim} bg={(pc[entry.stage] || c.textDim) + "12"} style={{ textAlign: "center", justifySelf: "center" }}>{entry.stage || "—"}</Tag>
-                      {/* Type (BUILD/JAM) */}
-                      <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg} style={{ textAlign: "center", justifySelf: "center" }}>{entry.type || "—"}</Tag>
-                      {/* Outcome */}
-                      {ocCfg ? (
-                        <span style={{
-                          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
-                          color: ocCfg.color, background: ocCfg.bg,
-                          padding: "3px 8px", borderRadius: layout.radiusXs,
-                          letterSpacing: typo.monoSm.tracking, textAlign: "center", justifySelf: "center",
-                        }}>
-                          {ocCfg.icon} {entry.outcome.toUpperCase()}
-                        </span>
-                      ) : <span />}
-                    </div>
-                  );
-                })}
-              </React.Fragment>
-            ))
+                        {/* Type */}
+                        <Tag color={tc[entry.type]?.color} bg={tc[entry.type]?.bg} style={{ flexShrink: 0 }}>
+                          {entry.type || "—"}
+                        </Tag>
+                        {/* Stage */}
+                        <Tag
+                          color={pc[entry.stage] || c.textDim}
+                          bg={(pc[entry.stage] || c.textDim) + "12"}
+                          style={{ flexShrink: 0 }}
+                        >{entry.stage || "—"}</Tag>
+                        {/* Outcome pill */}
+                        {ocCfg ? (
+                          <span style={{
+                            fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                            color: ocCfg.color, background: ocCfg.bg,
+                            padding: "3px 8px", borderRadius: layout.radiusXs,
+                            letterSpacing: "0.04em", textTransform: "uppercase",
+                            flexShrink: 0, fontVariantNumeric: "tabular-nums",
+                          }}>
+                            {ocCfg.icon} {entry.outcome}
+                          </span>
+                        ) : (
+                          <span style={{ width: 56, flexShrink: 0 }} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
           ) : (
-            <div style={{ padding: `${space[5]}px ${space[4]}px`, textAlign: "center", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: typo.bodyMd.weight, color: c.textDim }}>
-              No activity logged
+            // Empty state per §7.13
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              textAlign: "center", maxWidth: 360, margin: "0 auto",
+              padding: `${space[6]}px ${space[4]}px`,
+            }}>
+              <div aria-hidden="true" style={{
+                fontSize: 32, lineHeight: 1,
+                color: c.textGhost, marginBottom: space[3],
+              }}>◌</div>
+              <div style={{
+                fontFamily: typo.displaySm.font, fontSize: 16, fontWeight: 700,
+                color: c.text, letterSpacing: "-0.01em", marginBottom: space[1],
+              }}>No activity logged</div>
+              <div style={{
+                fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 500,
+                color: c.textDim, lineHeight: 1.5,
+              }}>
+                Past-week commitments and outcomes will appear here once {selectedPerson} has cycle history.
+              </div>
             </div>
           )}
         </div>

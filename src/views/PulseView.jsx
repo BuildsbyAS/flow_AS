@@ -8,46 +8,57 @@ import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
 
 // ─── SIDE PANEL (project telemetry) ────────────────────────────
+// Steel & Orange spec — DESIGN_SYSTEM.md §7.10 Side Panel + §8.2 Detail View
 const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, weekLabel }) => {
   const devRef = useDevLabel('SidePanel', 'Slide-out project detail panel with metrics, members, and scope changes');
   if (!proj) return null;
   const ec = entityColors();
   const hColor = healthColor(proj.health);
 
-  const formatDate = (d) => {
-    if (!d) return "—";
-    const dt = new Date(d);
-    return dt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  };
+  const planPct = proj.planned > 0 ? Math.min(100, Math.round((proj.age / proj.planned) * 100)) : 0;
+  const remColor = proj.remaining != null ? (proj.remaining < 0 ? c.red : proj.remaining < 7 ? c.orange : c.green) : c.textDim;
 
-  const sectionTitle = {
-    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-    fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking,
-    color: c.textDim, textTransform: "uppercase", marginBottom: space[2],
-    display: "block",
+  // Compact section head (smaller than the default 12px SectionHead uses) — 11px mono uppercase
+  const SubHead = ({ title, right }) => (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      marginBottom: space[3],
+    }}>
+      <span style={{
+        fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+        letterSpacing: "0.08em", textTransform: "uppercase", color: c.textDim,
+      }}>{title}</span>
+      {right}
+    </div>
+  );
+
+  const listCardStyle = {
+    background: c.surface, border: `1px solid ${c.border}`,
+    borderRadius: layout.radiusLg, overflow: "clip",
   };
 
   return (
     <div ref={devRef} role="dialog" aria-modal="true" aria-label="Project details" className={`flow-side-panel${exiting ? " flow-side-panel-exit" : ""}`} style={{
-      padding: 0, background: c.surfaceOverlay, boxShadow: c.shadowElevated,
+      padding: 0, background: c.surface, borderLeft: `1px solid ${c.border}`, boxShadow: c.shadowElevated,
     }}>
       {/* ── Header ── */}
       <div style={{
         padding: `${space[6]}px ${space[6]}px ${space[5]}px`,
         borderBottom: `1px solid ${c.border}`,
       }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: space[3] }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            {/* Project ID — gold */}
+            {/* Project ID — mono amber 13px 700 */}
             <span style={{
-              fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
-              fontWeight: 700, color: ec.project, letterSpacing: typo.monoLg.tracking,
+              fontFamily: typo.monoSm.font, fontSize: 13, fontWeight: 700,
+              color: ec.project, letterSpacing: "0.04em",
+              fontVariantNumeric: "tabular-nums",
             }}>{proj.id}</span>
-            {/* Project name */}
+            {/* Project name — 20px Inter 700 (displayMd) */}
             <div style={{
-              fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
-              fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
-              color: c.text, marginTop: space[1],
+              fontFamily: typo.displayMd.font, fontSize: 20, fontWeight: 700,
+              letterSpacing: typo.displayMd.tracking,
+              color: c.text, marginTop: space[1], lineHeight: 1.25,
             }}>{proj.name}</div>
           </div>
           <Btn variant="ghost" size="sm" onClick={onClose} aria-label="Close panel" style={{ padding: `${space[1]}px ${space[2]}px`, flexShrink: 0 }}>✕</Btn>
@@ -72,136 +83,142 @@ const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, w
       {/* ── Content sections ── */}
       <div style={{ padding: `${space[6]}px`, display: "flex", flexDirection: "column", gap: space[5] }}>
 
-        {/* ── Timeline ── */}
-        {(() => {
-          const hasTimeline = proj.startDate && proj.endDate;
-          const pct = proj.planned > 0 ? Math.min(100, Math.round((proj.age / proj.planned) * 100)) : 0;
-          const overdue = proj.remaining != null && proj.remaining < 0;
-          const ageColor = proj.age > 60 ? c.red : proj.age > 30 ? c.orange : c.cyan;
-          const remColor = proj.remaining != null ? (proj.remaining < 0 ? c.red : proj.remaining < 7 ? c.orange : c.green) : c.textDim;
-          const barColor = overdue ? c.red : pct > 75 ? c.orange : c.cyan;
-          return (
-            <div>
-              <span style={sectionTitle}>Timeline</span>
-              {!hasTimeline ? (
-                <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim, padding: `${space[2]}px 0` }}>{proj.startDate ? "No end date set" : "No timeline set"}</div>
-              ) : (<>
-              {/* Progress bar */}
-              <div style={{
-                position: "relative", height: 6, borderRadius: 3,
-                background: c.border, overflow: "hidden", marginBottom: space[3],
-              }}>
-                <div style={{
-                  position: "absolute", left: 0, top: 0, height: "100%",
-                  width: `${Math.min(pct, 100)}%`, borderRadius: 3,
-                  background: barColor,
-                  transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
-                }} />
-              </div>
-              {/* Date range row */}
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                marginBottom: space[2],
-              }}>
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text, fontVariantNumeric: "tabular-nums" }}>
-                  {formatDate(proj.startDate)}
-                </span>
-                <span style={{
-                  fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                  color: c.textDim,
-                }}>→</span>
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, color: c.text, fontVariantNumeric: "tabular-nums" }}>
-                  {formatDate(proj.endDate)}
-                </span>
-              </div>
-              {/* Age / Remaining pills */}
-              <div style={{ display: "flex", gap: space[2] }}>
-                <div style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: `${space[2]}px ${space[3]}px`,
-                  background: `${ageColor}10`, borderRadius: layout.radiusMd,
-                  border: `1px solid ${ageColor}20`,
-                }}>
-                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Age</span>
-                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: ageColor, fontVariantNumeric: "tabular-nums" }}>{proj.age}d</span>
-                </div>
-                <div style={{
-                  flex: 1, display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: `${space[2]}px ${space[3]}px`,
-                  background: `${remColor}10`, borderRadius: layout.radiusMd,
-                  border: `1px solid ${remColor}20`,
-                }}>
-                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Remaining</span>
-                  <span style={{ fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700, color: remColor, fontVariantNumeric: "tabular-nums" }}>
-                    {proj.remaining != null ? `${proj.remaining}d` : "—"}
-                  </span>
-                </div>
-              </div>
-              </>)}
-            </div>
-          );
-        })()}
-
-        {/* ── Health ── */}
+        {/* ── Telemetry KPI grid (2 cols for narrow panel) ── */}
         <div>
-          <span style={sectionTitle}>Health</span>
-          <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-            <div style={{
-              flex: 1, height: 6, borderRadius: layout.radiusTag,
-              background: c.surfaceAlt, overflow: "hidden",
-            }}>
-              <div style={{
-                width: `${Math.round(proj.health)}%`, height: "100%",
-                borderRadius: layout.radiusTag,
-                background: hColor,
-                transition: `width ${motion.critical.duration} ${motion.critical.easing}`,
-              }} />
-            </div>
-            <span style={{
-              fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
-              fontWeight: 700, color: hColor, minWidth: 28, textAlign: "right",
-              fontVariantNumeric: "tabular-nums",
-            }}>{proj.health}</span>
-          </div>
+          <SubHead title="Telemetry" />
+          <KpiGrid cols="1fr 1fr" gap={space[3]}>
+            <KpiCard
+              label="Health"
+              value={<span style={{ color: hColor, fontVariantNumeric: "tabular-nums" }}>{proj.health}</span>}
+              style={{ padding: space[4] }}
+            />
+            <KpiCard
+              label="Age"
+              value={<span style={{ fontVariantNumeric: "tabular-nums" }}>{proj.age}<span style={{ fontSize: 18, color: c.textDim, marginLeft: 2 }}>d</span></span>}
+              style={{ padding: space[4] }}
+            />
+            <KpiCard
+              label="Remaining"
+              value={
+                <span style={{ color: remColor, fontVariantNumeric: "tabular-nums" }}>
+                  {proj.remaining != null ? <>{proj.remaining}<span style={{ fontSize: 18, color: c.textDim, marginLeft: 2 }}>d</span></> : "—"}
+                </span>
+              }
+              style={{ padding: space[4] }}
+            />
+            <KpiCard
+              label="Plan"
+              value={<span style={{ fontVariantNumeric: "tabular-nums" }}>{planPct}<span style={{ fontSize: 18, color: c.textDim, marginLeft: 2 }}>%</span></span>}
+              style={{ padding: space[4] }}
+            />
+          </KpiGrid>
         </div>
 
-        {/* ── This week's commits ── */}
+        {/* ── People ── */}
         <div>
-          <span style={sectionTitle}>{isHistorical ? `${weekLabel || "Past week"} commitments` : "This week's commitments"} · {proj.items.length}</span>
-          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-            {proj.items.map((it, ii) => (
-              <div key={ii} style={{
-                display: "flex", alignItems: "center", gap: space[2],
-                padding: `${space[2]}px ${space[3]}px`,
-                background: c.surfaceAlt, borderRadius: layout.radiusSm,
-                border: `1px solid ${c.border}`,
-              }}>
-                <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
-                <span style={{
-                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                  color: c.text, flex: 1,
-                }}>{it.title || "—"}</span>
-                <span style={{
-                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                  fontWeight: 500, color: c.cyan, whiteSpace: "nowrap",
-                }}>{it.person}</span>
-              </div>
-            ))}
-            {proj.items.length === 0 && (
-              <div style={{
-                padding: `${space[3]}px ${space[3]}px`,
-                background: c.surfaceAlt, borderRadius: layout.radiusSm,
-                border: `1px solid ${c.border}`,
-                textAlign: "center",
-              }}>
-                <span style={{
-                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                  color: c.textDim,
-                }}>No commitment items this week</span>
-              </div>
-            )}
-          </div>
+          <SubHead
+            title="People"
+            right={
+              <span style={{
+                fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                color: c.textDim, fontVariantNumeric: "tabular-nums",
+              }}>{proj.people.length}</span>
+            }
+          />
+          {proj.people.length > 0 ? (
+            <div style={listCardStyle}>
+              {proj.people.map((name, ii) => (
+                <div key={ii} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: `${space[3]}px ${space[4]}px`,
+                  borderBottom: ii < proj.people.length - 1 ? `1px solid ${c.border}` : "none",
+                }}>
+                  <span style={{
+                    fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: 600, color: c.text,
+                  }}>{name}</span>
+                  {name === proj.owner && (
+                    <span style={{
+                      fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                      color: ec.project, letterSpacing: "0.08em", textTransform: "uppercase",
+                    }}>Owner</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ ...listCardStyle, padding: `${space[4]}px`, textAlign: "center" }}>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.textDim }}>No people assigned</span>
+            </div>
+          )}
         </div>
+
+        {/* ── Commitments ── */}
+        <div>
+          <SubHead
+            title={isHistorical ? `${weekLabel || "Past week"}` : "This week"}
+            right={
+              <span style={{
+                fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                color: c.textDim, fontVariantNumeric: "tabular-nums",
+              }}>{proj.items.length}</span>
+            }
+          />
+          {proj.items.length > 0 ? (
+            <div style={listCardStyle}>
+              {proj.items.map((it, ii) => (
+                <div key={ii} style={{
+                  display: "flex", alignItems: "center", gap: space[3],
+                  padding: `${space[3]}px ${space[4]}px`,
+                  borderBottom: ii < proj.items.length - 1 ? `1px solid ${c.border}` : "none",
+                }}>
+                  <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
+                  <span style={{
+                    fontFamily: typo.bodySm.font, fontSize: 13, color: c.text,
+                    flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>{it.title || "—"}</span>
+                  <span style={{
+                    fontFamily: typo.bodySm.font, fontSize: 12,
+                    fontWeight: 600, color: c.cyan, whiteSpace: "nowrap",
+                  }}>{it.person}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ ...listCardStyle, padding: `${space[4]}px`, textAlign: "center" }}>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.textDim }}>No commitments this week</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Risks (if any) ── */}
+        {proj.risks && proj.risks.length > 0 && (
+          <div>
+            <SubHead
+              title="Risks"
+              right={
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                  color: c.red, fontVariantNumeric: "tabular-nums",
+                }}>{proj.risks.length}</span>
+              }
+            />
+            <div style={listCardStyle}>
+              {proj.risks.map((r, ii) => (
+                <div key={r.key} style={{
+                  display: "flex", alignItems: "center", gap: space[3],
+                  padding: `${space[3]}px ${space[4]}px`,
+                  borderBottom: ii < proj.risks.length - 1 ? `1px solid ${c.border}` : "none",
+                }}>
+                  <span style={{ fontSize: 13 }}>{r.icon}</span>
+                  <span style={{
+                    fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 500,
+                    color: r.color, flex: 1,
+                  }}>{r.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── View full project CTA ── */}
         <Btn variant="command" onClick={() => onNavigate && onNavigate("projects", proj.id)}
