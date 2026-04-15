@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { createPortal } from "react-dom";
 import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, typeConfig, phaseColors as getPhaseColors, statusColors, entityColors, colWidths, outcomeConfig } from "../styles/theme";
 import { Badge, Tag, Surface, Modal, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, SectionDivider, StatCell, MetricCompact, SummaryTile, KPIBar, VDivider, Th as SharedTh } from "../components/shared";
+import { KpiGrid, KpiCard, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import GanttChart from "../components/GanttChart";
 import FlowLogo from "../components/FlowLogo";
@@ -348,7 +349,11 @@ export default function ProjectsView({
       else if (age > 30) h -= 5;
       return s + Math.max(0, h);
     }, 0) / active.length) : 0;
-    return { active: active.length, shipped: shipped.length, depri: depri.length, all: filtered.length, blockedCount, totalCommits, avgHealth, atRiskCount, overdueCount };
+    const phaseCounts = {};
+    ["PRD", "Design", "Dev", "QA"].forEach(ph => {
+      phaseCounts[ph] = active.filter(p => p.phase === ph).length;
+    });
+    return { active: active.length, shipped: shipped.length, depri: depri.length, all: filtered.length, blockedCount, totalCommits, avgHealth, atRiskCount, overdueCount, phaseCounts };
   }, [filtered, metrics, today]);
 
   // ── Gantt-specific filter (separate from registry filters) ──
@@ -443,41 +448,107 @@ export default function ProjectsView({
         display: "flex", flexDirection: "column", gap: space[3],
       }}>
 
-        {/* SUMMARY STRIP — full-width grid */}
-        <KPIBar>
-            <SummaryTile
-              value={summary.active} label="Active" color={c.cyan}
-              active={activeTab === "active"}
-              onClick={() => setActiveTab("active")}
-            />
-            <SummaryTile
-              value={summary.atRiskCount} label="At Risk" color={summary.atRiskCount > 0 ? c.orange : c.textDim}
-              active={activeTab === "at_risk"}
-              onClick={() => setActiveTab(activeTab === "at_risk" ? "active" : "at_risk")}
-            />
-            <SummaryTile
-              value={summary.overdueCount} label="Overdue" color={summary.overdueCount > 0 ? c.red : c.textDim}
-              active={activeTab === "overdue"}
-              onClick={() => setActiveTab(activeTab === "overdue" ? "active" : "overdue")}
-            />
-            <SummaryTile
-              value={summary.shipped} label="Shipped" color={c.green}
-              active={activeTab === "shipped"}
-              onClick={() => setActiveTab("shipped")}
-            />
-            <SummaryTile
-              value={summary.depri} label="Deprioritized" color={c.orange}
-              active={activeTab === "deprioritized"}
-              onClick={() => setActiveTab("deprioritized")}
-            />
-            <SummaryTile
-              value={summary.all} label="All" color={c.text}
-              active={activeTab === "all"}
-              onClick={() => setActiveTab("all")}
-            />
-        </KPIBar>
+        {/* ═══════════════════════════════════════════════════════════
+            KPI GRID — 4 cards (Active / At Risk / Overdue / Shipped)
+            Steel & Orange pattern per design-directions.html §KPI CARDS
+            ═══════════════════════════════════════════════════════════ */}
+        <KpiGrid>
+          <KpiCard
+            label="Active"
+            value={summary.active}
+            sub="across all squads"
+            onClick={() => setActiveTab("active")}
+            active={activeTab === "active"}
+          >
+            <PillRow>
+              {["PRD", "Design", "Dev", "QA"].map(ph => (
+                <Pill
+                  key={ph}
+                  count={summary.phaseCounts[ph] || 0}
+                  label={ph}
+                  color={pc[ph] || c.textDim}
+                />
+              ))}
+            </PillRow>
+          </KpiCard>
+          <KpiCard
+            label="At Risk"
+            value={summary.atRiskCount}
+            sub={summary.atRiskCount > 0 ? "need attention" : "all clear"}
+            onClick={() => setActiveTab(activeTab === "at_risk" ? "active" : "at_risk")}
+            active={activeTab === "at_risk"}
+            style={summary.atRiskCount > 0 ? { } : undefined}
+          />
+          <KpiCard
+            label="Overdue"
+            value={summary.overdueCount}
+            sub={summary.overdueCount > 0 ? "past end date" : "on schedule"}
+            onClick={() => setActiveTab(activeTab === "overdue" ? "active" : "overdue")}
+            active={activeTab === "overdue"}
+          />
+          <KpiCard
+            label="Shipped"
+            value={summary.shipped}
+            sub="in Alpha / Beta / GA"
+            onClick={() => setActiveTab("shipped")}
+            active={activeTab === "shipped"}
+          />
+        </KpiGrid>
 
-        {/* SEARCH + VIEW TOGGLE on same row */}
+        {/* SECONDARY FILTER CHIPS — All / Deprioritized */}
+        <div style={{ display: "flex", gap: space[2], alignItems: "center" }}>
+          {[
+            { key: "all", label: "All", count: summary.all },
+            { key: "deprioritized", label: "Deprioritized", count: summary.depri },
+          ].map(opt => {
+            const isActive = activeTab === opt.key;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => setActiveTab(isActive ? "active" : opt.key)}
+                style={{
+                  padding: `6px ${space[3]}px`,
+                  borderRadius: layout.radiusSm,
+                  border: `1px solid ${isActive ? c.accent + "60" : c.border}`,
+                  background: isActive ? c.accent + "12" : c.surface,
+                  color: isActive ? c.accent : c.textDim,
+                  fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 6,
+                  transition: `all ${motion.fast.duration} ${motion.fast.easing}`,
+                }}
+              >
+                {opt.label}
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                }}>{opt.count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* SECTION HEADER — title + view toggle (sec-head pattern) */}
+        <SectionHead
+          title="Projects"
+          right={
+            <SegmentedToggle
+              options={[
+                { key: "registry", label: "Table" },
+                { key: "board", label: "Board" },
+                { key: "gantt", label: "Gantt" },
+              ]}
+              value={boardFullscreen ? "board" : ganttFullscreen ? "gantt" : "registry"}
+              onChange={(k) => {
+                if (k === "registry") { setViewMode("registry"); setBoardFullscreen(false); setGanttFullscreen(false); }
+                else if (k === "board") { setBoardFullscreen(true); }
+                else if (k === "gantt") { setGanttFullscreen(true); }
+              }}
+            />
+          }
+        />
+
+        {/* SEARCH ROW */}
         <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
           <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
             <input ref={localSearchRef} value={search}
@@ -509,28 +580,6 @@ export default function ProjectsView({
               pointerEvents: "none",
             }}>/</span>}
           </div>
-          <div style={{
-            display: "flex", gap: 2, background: c.surfaceAlt, borderRadius: layout.radiusSm,
-            padding: 3, flexShrink: 0, height: 40, boxSizing: "border-box",
-          }}>
-            {[
-              { key: "registry", label: "Table", active: !boardFullscreen && !ganttFullscreen, onClick: () => { setViewMode("registry"); setBoardFullscreen(false); setGanttFullscreen(false); } },
-              { key: "board", label: "Board", active: boardFullscreen, onClick: () => setBoardFullscreen(true) },
-              { key: "gantt", label: "Gantt", active: ganttFullscreen, onClick: () => setGanttFullscreen(true) },
-            ].map(opt => (
-              <button key={opt.key} onClick={opt.onClick} style={{
-                padding: `0 ${space[4]}px`,
-                fontSize: typo.bodySm.size, fontWeight: 600,
-                fontFamily: typo.bodySm.font, border: "none", cursor: "pointer",
-                background: opt.active ? c.surface : "transparent",
-                color: opt.active ? c.text : c.textDim,
-                borderRadius: layout.radiusXs,
-                boxShadow: opt.active ? c.shadowSm : "none",
-                transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
-                letterSpacing: typo.bodySm.tracking, outline: "none",
-              }}>{opt.label}</button>
-            ))}
-          </div>
         </div>
       </div>
       {/* end frozen top */}
@@ -545,7 +594,7 @@ export default function ProjectsView({
       ) : (
         <div style={{
           background: c.surface, border: `1px solid ${c.border}`,
-          borderRadius: layout.radiusLg, boxShadow: c.shadowCard, overflow: "hidden",
+          borderRadius: layout.radiusLg, boxShadow: c.shadowCard, overflow: "clip",
         }}>
           <div>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>

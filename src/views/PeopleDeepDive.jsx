@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, outcomeConfig, entityColors } from "../styles/theme";
 import { Tag, EmptyState, Surface, Label, Btn, Sel, StatCell } from "../components/shared";
+import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
 
@@ -250,6 +251,32 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
 
   if (!selectedPerson) {
     let flatIdx = 0;
+
+    // ─── KPI aggregates (computed from people + commitments) ────
+    const teamSize = people.length;
+    const squadCounts = people.reduce((acc, p) => {
+      const sq = p.squad || "Unassigned";
+      acc[sq] = (acc[sq] || 0) + 1;
+      return acc;
+    }, {});
+    const squadEntries = Object.entries(squadCounts).sort((a, b) => b[1] - a[1]);
+    const topSquads = squadEntries.slice(0, 4);
+    const moreSquads = squadEntries.length - topSquads.length;
+
+    const activeThisWeek = people.filter(p => {
+      const cm = commitments.find(x => x.person === p.name);
+      if (!cm) return false;
+      return cm.items.some((it, idx) => cm.deselected !== idx && (it.title?.trim() || it.project));
+    }).length;
+
+    const uniqueRoles = new Set(people.map(p => p.role).filter(Boolean)).size;
+
+    // Aggregate team momentum = avg of per-person momentum values (excluding nulls)
+    const momValues = people.map(p => momentumMap[p.name]).filter(v => v != null);
+    const teamHealth = momValues.length
+      ? Math.round(momValues.reduce((a, b) => a + b, 0) / momValues.length)
+      : teamSize > 0 ? Math.round((activeThisWeek / teamSize) * 100) : 0;
+
     return (
       <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
 
@@ -295,7 +322,68 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
         {/* ═══════════════════════════════════════════════════════════
             SCROLLABLE CONTENT — people cards (only this area scrolls)
             ═══════════════════════════════════════════════════════════ */}
-        <div style={{ position: "relative", zIndex: 1, padding: `0 ${space[4]}px` }}>
+        <div style={{ position: "relative", zIndex: 1, padding: `0 ${space[4]}px`, display: "flex", flexDirection: "column", gap: space[3] }}>
+
+        {/* ═══════════════════════════════════════════════════════════
+            KPI GRID — 4 purpose-built cards per design-directions.html §KPI
+            Card 1 (wide): Team roster + squad PillRow
+            Card 2: Active This Week (people with ≥1 committed item)
+            Card 3: Roles (unique roles across team)
+            Card 4: HealthGauge — avg per-person momentum, falls back to
+                    (active/total) * 100 if no momentum data available
+            ═══════════════════════════════════════════════════════════ */}
+        <KpiGrid>
+          <KpiCard
+            label="Team"
+            value={teamSize}
+            sub={`${Object.keys(squadCounts).length} squad${Object.keys(squadCounts).length === 1 ? "" : "s"}`}
+          >
+            <PillRow>
+              {topSquads.map(([squad, count]) => (
+                <Pill
+                  key={squad}
+                  count={count}
+                  label={squad}
+                  color={c.cyan || c.accent}
+                  active={fSquad === squad}
+                  onClick={() => { setFSquad(fSquad === squad ? "" : squad); setFocusIdx(0); }}
+                />
+              ))}
+              {moreSquads > 0 && (
+                <Pill count={`+${moreSquads}`} label="more" color={c.textDim} />
+              )}
+            </PillRow>
+          </KpiCard>
+          <KpiCard
+            label="Active This Week"
+            value={activeThisWeek}
+            sub={teamSize > 0 ? `${Math.round((activeThisWeek / teamSize) * 100)}% of team committed` : "—"}
+          />
+          <KpiCard
+            label="Roles"
+            value={uniqueRoles}
+            sub={uniqueRoles === 1 ? "role represented" : "distinct roles across team"}
+          />
+          <HealthGauge
+            value={teamHealth}
+            label="Team Momentum"
+            sub={momValues.length ? "avg per-person momentum" : "share of team active"}
+          />
+        </KpiGrid>
+
+        {/* ═══════════════════════════════════════════════════════════
+            SECTION HEADER — people by squad (sec-head pattern)
+            ═══════════════════════════════════════════════════════════ */}
+        <SectionHead
+          title="People by Squad"
+          right={
+            <span style={{
+              fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600,
+              letterSpacing: "0.06em", textTransform: "uppercase", color: c.textDim,
+              fontVariantNumeric: "tabular-nums",
+            }}>{filtered.length} of {people.length}</span>
+          }
+        />
 
         {/* People grouped by squad */}
         {Object.entries(squadsWithPeople).map(([squad, members]) => {
@@ -303,10 +391,10 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
           flatIdx += members.length;
           return (
             <div key={squad}>
-              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[3], marginTop: space[4] }}>
-                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textDim, textTransform: "uppercase" }}>{squad}</span>
-                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textDim }}>·</span>
-                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textDim, fontVariantNumeric: "tabular-nums" }}>{members.length}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[3], marginTop: space[3] }}>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", color: c.textDim, textTransform: "uppercase" }}>{squad}</span>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700, color: c.textGhost || c.textDim }}>·</span>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700, color: c.textDim, fontVariantNumeric: "tabular-nums" }}>{members.length}</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: space[4] }}>
                 {members.map((p, gi) => {

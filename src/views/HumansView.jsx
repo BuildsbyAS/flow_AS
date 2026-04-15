@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { c, layout, motion, space, typo, phaseNames, allPhases, commitPhases, shipPhases, typeConfig, phaseColors as getPhaseColors, density, btnVariants, entityColors, colWidths } from "../styles/theme";
 import { Badge, Tag, Surface, Modal, Inp, TextArea, ChoiceGroup, Sel, Btn, TelemetryLabel, SummaryTile, KPIBar, Th as SharedTh, MetricCompact, EntityLink, VDivider, SectionDivider } from "../components/shared";
+import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
 
@@ -565,32 +566,65 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
           display: "flex", flexDirection: "column", gap: space[3] - 2,
         }}>
 
-        {/* UNIFIED SUMMARY — 3 sections, full width */}
-        <KPIBar>
-            {/* Section 1: Team breakdown — clickable filters */}
-            <KPIBar.Section flex={5}>
-              <SummaryTile value={total} label="Team" color={c.text} />
-              <SummaryTile value={filled} label="Ready" color={c.cyan} active={filterStatus === "ready"} onClick={() => { setFilterStatus(filterStatus === "ready" ? null : "ready"); setRowAnimKey(k => k + 1); }} />
-              <SummaryTile value={partial} label="Partial" color={c.orange} active={filterStatus === "partial"} onClick={() => { setFilterStatus(filterStatus === "partial" ? null : "partial"); setRowAnimKey(k => k + 1); }} />
-              <SummaryTile value={empty} label="Empty" color={c.red} active={filterStatus === "empty"} onClick={() => { setFilterStatus(filterStatus === "empty" ? null : "empty"); setRowAnimKey(k => k + 1); }} />
-              <SummaryTile value={locked} label="Locked" color={c.green} active={filterStatus === "locked"} onClick={() => { setFilterStatus(filterStatus === "locked" ? null : "locked"); setRowAnimKey(k => k + 1); }} />
-            </KPIBar.Section>
-
-            {/* Section 2: Commit metrics — mirrors Pulse */}
-            <KPIBar.Section flex={2}>
-              <SummaryTile value={totalCommitments} label="Commits" color={c.text} />
-              <SummaryTile value={`${total > 0 ? Math.round(((locked + closed) / total) * 100) : 0}%`} label="Lock Rate" color={(locked + closed) === total && total > 0 ? c.green : (locked + closed) / total >= 0.5 ? c.orange : c.textDim} />
-            </KPIBar.Section>
-
-            {/* Section 3: Outcome breakdown — mirrors Pulse */}
-            <KPIBar.Section flex={4}>
-              <SummaryTile value={closed} label="Closed" color={c.textMid} active={filterStatus === "closed"} onClick={() => { setFilterStatus(filterStatus === "closed" ? null : "closed"); setRowAnimKey(k => k + 1); }} />
-              <SummaryTile value={`${pctCompleted}%`} label="Complete" color={pctCompleted > 0 ? c.green : c.textDim} />
-              <SummaryTile value={`${pctCarried}%`} label="Carry" color={carried > 0 ? c.orange : c.textDim} />
-              <SummaryTile value={`${pctBlocked}%`} label="Blocked" color={blockedCount > 0 ? c.red : c.textDim} />
-              <SummaryTile value={`${pctDeprioritized}%`} label="Deprioritized" color={deprioritizedCount > 0 ? c.orange : c.textDim} />
-            </KPIBar.Section>
-        </KPIBar>
+        {/* ═══════════════════════════════════════════════════════════
+            KPI GRID — 4 purpose-built cards per design-directions.html §KPI
+            Layout: 1.5fr / 1fr / 1fr / 1fr. Fourth card is the inverted
+            dark health gauge showing % completed from closed weeks.
+            ═══════════════════════════════════════════════════════════ */}
+        <KpiGrid>
+          <KpiCard
+            label="Team"
+            value={total}
+            sub={`${total} ${total === 1 ? "person" : "people"} this week`}
+          >
+            <PillRow>
+              <Pill count={filled} label="Ready" color={c.cyan}
+                active={filterStatus === "ready"}
+                onClick={() => { setFilterStatus(filterStatus === "ready" ? null : "ready"); setRowAnimKey(k => k + 1); }} />
+              <Pill count={partial} label="Partial" color={c.orange}
+                active={filterStatus === "partial"}
+                onClick={() => { setFilterStatus(filterStatus === "partial" ? null : "partial"); setRowAnimKey(k => k + 1); }} />
+              <Pill count={empty} label="Empty" color={c.red}
+                active={filterStatus === "empty"}
+                onClick={() => { setFilterStatus(filterStatus === "empty" ? null : "empty"); setRowAnimKey(k => k + 1); }} />
+              <Pill count={locked} label="Locked" color={c.green}
+                active={filterStatus === "locked"}
+                onClick={() => { setFilterStatus(filterStatus === "locked" ? null : "locked"); setRowAnimKey(k => k + 1); }} />
+            </PillRow>
+          </KpiCard>
+          <KpiCard
+            label="Commitments"
+            value={totalCommitments}
+            sub="this week"
+          >
+            <PillRow>
+              <Pill count={`${pctCompleted}%`} label="Complete" color={c.green} />
+              <Pill count={`${pctCarried}%`} label="Carry" color={c.orange} />
+              <Pill count={`${pctBlocked}%`} label="Blocked" color={c.red} />
+              <Pill count={`${pctDeprioritized}%`} label="Depri" color={c.textMid} />
+            </PillRow>
+          </KpiCard>
+          <KpiCard
+            label="Lock Rate"
+            value={`${total > 0 ? Math.round(((locked + closed) / total) * 100) : 0}%`}
+            sub={
+              total === 0
+                ? "—"
+                : ((locked + closed) / total) >= 0.8
+                  ? "on track"
+                  : ((locked + closed) / total) >= 0.5
+                    ? "behind pace"
+                    : "at risk"
+            }
+            onClick={() => { setFilterStatus(filterStatus === "locked" ? null : "locked"); setRowAnimKey(k => k + 1); }}
+            active={filterStatus === "locked"}
+          />
+          <HealthGauge
+            value={pctCompleted}
+            label="Completion"
+            sub="closed this week"
+          />
+        </KpiGrid>
 
         {/* SEARCH */}
         <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
@@ -627,6 +661,11 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             pointerEvents: "none",
           }}>/</span>}
         </div>
+
+        {/* ═══════════════════════════════════════════════════════════
+            SECTION HEADER — title (sec-head pattern)
+            ═══════════════════════════════════════════════════════════ */}
+        <SectionHead title="Commitments by Person" />
 
         </div>{/* end frozen top */}
 
@@ -685,9 +724,9 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
           const dotBorder = `1px dotted ${c.border}`;
 
           return (
-            <Surface variant="data" compact style={{ padding: 0 }}>
+            <Surface variant="data" compact style={{ padding: 0, boxShadow: c.shadowCard, borderRadius: layout.radiusLg, overflow: "clip" }}>
               <div style={{
-                borderRadius: layout.radius,
+                borderRadius: layout.radiusLg,
               }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                   <thead>

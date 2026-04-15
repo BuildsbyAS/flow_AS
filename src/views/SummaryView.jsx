@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { c, typo, space, layout, motion, typeConfig, colWidths, shipPhases } from "../styles/theme";
 import { Surface, Label, DeltaIndicator, VDivider, TelemetryLabel, MetricCompact, SummaryTile, KPIBar, EmptyState } from "../components/shared";
+import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
 import useDevLabel from "../hooks/useDevLabel";
 
 
@@ -479,16 +480,44 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
     }}>
 
       {/* ═══════════════════════════════════════════════════════════
-          KPI strip — scrolls with the page
+          KPI GRID — 4-card strip per design-directions §KPI CARDS.
+          Card 1 wide (1.5fr) with phase pill breakdown. Card 4 inverted
+          HealthGauge using completionRate as portfolio health proxy.
           ═══════════════════════════════════════════════════════════ */}
-      <KPIBar>
-          <SummaryTile value={metrics.activeProjects} prevValue={prev?.activeProjects} label="Active Projects" color={c.green} />
-          <SummaryTile value={metrics.noActionProjects} prevValue={prev?.noActionProjects} label="Idle Projects" color={metrics.noActionProjects > 0 ? c.orange : c.textDim} />
-          <SummaryTile value={metrics.totalCommits} prevValue={prev?.totalCommits} label="Total Commits" color={c.accent} />
-          <SummaryTile value={metrics.completionRate} prevValue={prev?.completionRate} label="Done Rate" suffix="%" color={metrics.completionRate >= 60 ? c.green : c.orange} />
-          <SummaryTile value={metrics.peopleWithTasks} prevValue={prev?.peopleWithTasks} label="Active People" color={c.cyan} />
-          <SummaryTile value={metrics.shippedCount} prevValue={prev?.shippedCount} label="Shipped" color={metrics.shippedCount > 0 ? c.green : c.textDim} />
-      </KPIBar>
+      <KpiGrid>
+        <KpiCard
+          label="Active Projects"
+          value={metrics.activeProjects}
+          sub={`of ${metrics.totalProjects} tracked · ${metrics.noActionProjects} idle`}
+          delta={prev ? metrics.activeProjects - prev.activeProjects : null}
+          deltaLabel="vs prev"
+        >
+          <PillRow>
+            <Pill count={metrics.activeProjects} label="active" color={c.green} />
+            <Pill count={metrics.noActionProjects} label="idle" color={c.orange} />
+            <Pill count={metrics.shippedCount} label="shipped" color={c.green} />
+          </PillRow>
+        </KpiCard>
+        <KpiCard
+          label="Shipped This Week"
+          value={metrics.shippedCount}
+          sub="reached Alpha / Beta / GA"
+          delta={prev ? metrics.shippedCount - prev.shippedCount : null}
+          deltaLabel="vs prev"
+        />
+        <KpiCard
+          label="Done Rate"
+          value={`${metrics.completionRate}%`}
+          sub={metrics.completionRate >= 60 ? "on track" : metrics.completionRate >= 40 ? "behind pace" : "at risk"}
+          delta={prev ? metrics.completionRate - prev.completionRate : null}
+          deltaLabel="pts"
+        />
+        <HealthGauge
+          value={metrics.completionRate}
+          label="Portfolio Health"
+          sub="done rate as health proxy"
+        />
+      </KpiGrid>
 
       {/* ═══════════════════════════════════════════════════════════
           SCROLLABLE CONTENT — charts + tables (only this area scrolls)
@@ -497,10 +526,11 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
         <div style={{ display: "flex", flexDirection: "column", gap: space[7] }}>
 
         {/* ── Projects — bar charts ── */}
+        <div>
+        <SectionHead title="Projects" />
         <div className="flow-mission-grid" style={{ padding: `${space[6]}px`, background: c.surface, border: "none", borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
           <div style={{ position: "relative", zIndex: 1 }}>
-            <Label style={{ color: c.green }}>Projects</Label>
-            <div style={{ display: "flex", gap: space[6], marginTop: space[4], flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: space[6], flexWrap: "wrap", fontVariantNumeric: "tabular-nums" }}>
               <MiniBarChart title="Active" color={c.green}
                 data={allMetrics.map(m => m.activeProjects)} labels={weekLabels}
                 highlightIndex={selectedIdx} />
@@ -513,12 +543,14 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
             </div>
           </div>
         </div>
+        </div>
 
         {/* ── Commit — sparklines + stacked bar ── */}
+        <div>
+        <SectionHead title="Commit" />
         <div className="flow-mission-grid" style={{ padding: `${space[6]}px`, background: c.surface, border: "none", borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
           <div style={{ position: "relative", zIndex: 1 }}>
-            <Label style={{ color: c.accent }}>Commit</Label>
-            <div style={{ display: "flex", gap: space[6], marginTop: space[4], flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: space[6], flexWrap: "wrap", fontVariantNumeric: "tabular-nums" }}>
               <SparkLine title="Done %" color={c.green} suffix="%"
                 data={pctDone} labels={weekLabels} highlightIndex={selectedIdx} />
               <SparkLine title="Carried %" color={c.cyan} suffix="%"
@@ -526,18 +558,20 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
             </div>
             <div style={{ marginTop: space[6] }}>
               <Label>Commit Breakdown</Label>
-              <div style={{ marginTop: space[3] }}>
+              <div style={{ marginTop: space[3], fontVariantNumeric: "tabular-nums" }}>
                 <StackedBarChart series={commitSeries} weekLabels={weekLabels} highlightIndex={selectedIdx} />
               </div>
             </div>
           </div>
         </div>
+        </div>
 
         {/* ── People — bar + sparkline ── */}
+        <div>
+        <SectionHead title="People" />
         <div className="flow-mission-grid" style={{ padding: `${space[6]}px`, background: c.surface, border: "none", borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
           <div style={{ position: "relative", zIndex: 1 }}>
-            <Label style={{ color: c.cyan }}>People</Label>
-            <div style={{ display: "flex", gap: space[6], marginTop: space[4], flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: space[6], flexWrap: "wrap", fontVariantNumeric: "tabular-nums" }}>
               <MiniBarChart title="Active People" color={c.cyan}
                 data={allMetrics.map(m => m.peopleWithTasks)} labels={weekLabels}
                 highlightIndex={selectedIdx} />
@@ -547,10 +581,13 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
             </div>
           </div>
         </div>
+        </div>
 
         {/* ═══════════════════════════════════════════════════════════
             SQUAD BREAKDOWN — data table
             ═══════════════════════════════════════════════════════════ */}
+        <div>
+        <SectionHead title="Squad Performance" />
         <Surface variant="data" compact style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto", borderRadius: layout.radius }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
@@ -672,6 +709,7 @@ const SummaryView = ({ history, commitments, projects, people, selectedWeekKey, 
             </table>
           </div>
         </Surface>
+        </div>
 
         </div>
       </div>
