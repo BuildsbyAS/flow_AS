@@ -125,7 +125,7 @@ const GuideView = ({ onNavigate }) => {
           fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
           lineHeight: 1.7, color: c.textMid, textAlign: "center", margin: 0,
         }}>
-          Flow is built around two layers. Navigate with <Kbd>1</Kbd>–<Kbd>5</Kbd>, or press <Kbd>F</Kbd> to search anything.
+          Flow is built around two layers. Navigate with <Kbd>1</Kbd>–<Kbd>6</Kbd>, or press <Kbd>F</Kbd> to search anything.
         </p>
 
         {/* Layer cards */}
@@ -796,7 +796,7 @@ const GuideView = ({ onNavigate }) => {
             border: "none", background: c.accent,
             color: "#fff", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
             fontWeight: 700, cursor: "pointer",
-            boxShadow: `0 4px 16px ${c.accent}40`,
+            boxShadow: c.shadowSm,
           }}>Jump to Pulse →</button>
         </div>
       </div>

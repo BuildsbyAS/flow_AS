@@ -689,13 +689,11 @@ function FilterDrawer({
         onClick={onClose}
         style={{
           position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0,0,0,0.55)",
-          backdropFilter: open ? "blur(6px)" : "blur(0px)",
-          WebkitBackdropFilter: open ? "blur(6px)" : "blur(0px)",
+          background: "rgba(0,0,0,0.3)",
           zIndex: 200,
           opacity: open ? 1 : 0,
           pointerEvents: open ? "auto" : "none",
-          transition: `opacity 0.3s ease, backdrop-filter 0.3s ease`,
+          transition: `opacity ${motion.normal.duration} ${motion.normal.easing}`,
         }}
       />
 
@@ -705,13 +703,13 @@ function FilterDrawer({
         style={{
           position: "fixed", top: 0, right: 0, bottom: 0,
           width: 360,
-          background: c.surfaceOverlay,
+          background: c.surface,
           borderLeft: `1px solid ${c.border}`,
           zIndex: 201,
           transform: open ? "translateX(0)" : "translateX(100%)",
-          transition: `transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)`,
+          transition: `transform ${motion.normal.duration} ${motion.normal.easing}`,
           display: "flex", flexDirection: "column",
-          boxShadow: open ? `-8px 0 30px rgba(0,0,0,0.5)` : "none",
+          boxShadow: open ? c.shadowElevated : "none",
         }}
       >
         {/* ── Header ── */}
@@ -1047,14 +1045,13 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
         display: "flex", alignItems: "center", gap: space[2],
         padding: `3px ${space[3]}px`,
         borderRadius: layout.radiusSm,
-        background: `linear-gradient(135deg, ${c.accent}08, ${c.cyan}06)`,
-        border: `1px solid ${c.accent}18`,
+        background: c.accentDim,
+        border: `1px solid ${c.accent}25`,
         minWidth: 0,
       }}>
         <div style={{
           width: 5, height: 5, borderRadius: "50%",
           background: c.accent,
-          boxShadow: `0 0 6px ${c.accent}50`,
           flexShrink: 0,
         }} />
         <span style={{

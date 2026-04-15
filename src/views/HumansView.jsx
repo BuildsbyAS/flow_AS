@@ -577,9 +577,8 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             </KPIBar.Section>
 
             {/* Section 2: Commit metrics — mirrors Pulse */}
-            <KPIBar.Section flex={3}>
+            <KPIBar.Section flex={2}>
               <SummaryTile value={totalCommitments} label="Commits" color={c.text} />
-              <SummaryTile value={locked + closed} label="Locked" color={c.text} />
               <SummaryTile value={`${total > 0 ? Math.round(((locked + closed) / total) * 100) : 0}%`} label="Lock Rate" color={(locked + closed) === total && total > 0 ? c.green : (locked + closed) / total >= 0.5 ? c.orange : c.textDim} />
             </KPIBar.Section>
 
@@ -608,7 +607,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
               background: c.surfaceAlt, color: c.text,
               fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
               outline: "none", boxSizing: "border-box",
-              boxShadow: searchGlow ? `0 0 0 3px ${c.accent}25, 0 0 12px ${c.accent}15` : "none",
+              boxShadow: searchGlow ? `0 0 0 3px ${c.accentDim}` : "none",
               transition: `border-color 0.3s ease, box-shadow 0.3s ease`,
             }}
           />
@@ -1161,7 +1160,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                       background: depri ? c.red : filled ? c.green : active ? c.accent : `${c.border}`,
                       opacity: active && !filled ? 1 : filled ? 0.8 : 0.4,
                       transition: `all 0.25s ${motion.interaction.easing}`,
-                      boxShadow: active ? `0 0 8px ${filled ? c.green : c.accent}40` : "none",
+                      boxShadow: "none",
                     }} />
                   );
                 })}

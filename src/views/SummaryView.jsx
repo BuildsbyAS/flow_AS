@@ -27,11 +27,6 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
     <div style={{ flex: 1, minWidth: 180 }}>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet"
         onMouseLeave={() => setHoverIdx(null)}>
-        <defs>
-          <filter id={filterId}>
-            <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color} floodOpacity="0.35" />
-          </filter>
-        </defs>
         <line x1={padLR} y1={padTop + chartH} x2={width - padLR} y2={padTop + chartH}
           stroke={c.border} strokeWidth={0.5} />
         {data.map((val, i) => {
@@ -46,10 +41,9 @@ const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300,
               {/* Invisible hit area spanning full column height */}
               <rect x={padLR + i * gap} y={padTop} width={gap} height={chartH + padBot}
                 fill="transparent" />
-              <rect x={x} y={y} width={barW} height={barH} rx={layout.radiusTag}
-                fill={color} opacity={lit ? 0.95 : 0.22}
-                filter={active ? `url(#${filterId})` : undefined}
-                style={{ transition: `all ${motion.critical.duration} ${motion.critical.easing}` }} />
+              <rect x={x} y={y} width={barW} height={barH} rx={2}
+                fill={color} opacity={lit ? 0.9 : 0.35}
+                style={{ transition: `opacity ${motion.fast.duration} ${motion.fast.easing}` }} />
               <text x={x + barW / 2} y={y - 8} textAnchor="middle"
                 fill={lit ? color : c.textDim}
                 style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `all ${motion.interaction.duration}` }}>{val}</text>
@@ -107,9 +101,6 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
             <stop offset="0%" stopColor={color} stopOpacity={0.12} />
             <stop offset="100%" stopColor={color} stopOpacity={0.01} />
           </linearGradient>
-          <filter id={`dotglow-${safeTitle}`}>
-            <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor={color} floodOpacity="0.4" />
-          </filter>
         </defs>
         <line x1={padLR} y1={padTop + chartH} x2={width - padLR} y2={padTop + chartH}
           stroke={c.border} strokeWidth={0.5} />
@@ -128,9 +119,8 @@ const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, wi
                 fill="transparent" />
               {lit && <circle cx={p.x} cy={p.y} r={9} fill={color} opacity={0.1} />}
               <circle cx={p.x} cy={p.y} r={lit ? 5 : 3}
-                fill={lit ? color : c.bg} stroke={color} strokeWidth={lit ? 2 : 1.5}
-                filter={lit ? `url(#dotglow-${safeTitle})` : undefined}
-                style={{ transition: `all ${motion.interaction.duration}` }} />
+                fill={lit ? color : c.surface} stroke={color} strokeWidth={lit ? 2 : 1.5}
+                style={{ transition: `r ${motion.fast.duration} ${motion.fast.easing}` }} />
               <text x={p.x} y={p.y - 12} textAnchor="middle"
                 fill={lit ? color : c.textDim}
                 style={{ fontFamily: typo.monoLg.font, fontSize: lit ? typo.monoLg.size : typo.monoMd.size, fontWeight: 700, transition: `all ${motion.interaction.duration}` }}>{p.val}{suffix}</text>

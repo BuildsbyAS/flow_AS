@@ -674,24 +674,28 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
       {/* VIEW MODE TOGGLE — Projects / People */}
       <div style={{
         display: "flex", gap: space[1],
-        background: c.accentDim, borderRadius: layout.radiusMd, padding: space[1],
+        background: c.surfaceAlt, borderRadius: layout.radiusMd, padding: 3,
+        border: `1px solid ${c.border}`,
       }}>
         {[
           { key: "matrix", label: "Projects" },
           { key: "people", label: "People" },
-        ].map(v => (
-          <button key={v.key} onClick={() => handleModeChange(v.key)} className="flow-btn" style={{
-            flex: 1, padding: `${space[2]}px ${space[4]}px`,
-            borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
-            background: pulseMode === v.key ? c.accent : "transparent",
-            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-            fontWeight: pulseMode === v.key ? 700 : 500,
-            color: pulseMode === v.key ? c.textCrit : c.accent,
-            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-            boxShadow: pulseMode === v.key ? `0 1px 3px ${c.shadow}` : "none",
-            outline: "none",
-          }}>{v.label}</button>
-        ))}
+        ].map(v => {
+          const active = pulseMode === v.key;
+          return (
+            <button key={v.key} onClick={() => handleModeChange(v.key)} className="flow-btn" style={{
+              flex: 1, padding: `7px ${space[4]}px`,
+              borderRadius: layout.radiusSm, border: "none", cursor: "pointer",
+              background: active ? c.surface : "transparent",
+              fontFamily: typo.bodyMd.font, fontSize: 13,
+              fontWeight: 600,
+              color: active ? c.text : c.textDim,
+              transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+              boxShadow: active ? c.shadowSm : "none",
+              outline: "none",
+            }}>{v.label}</button>
+          );
+        })}
       </div>
 
       </div>

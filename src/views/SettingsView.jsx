@@ -174,29 +174,33 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
       {/* ── TAB SWITCHER — segmented toggle (matches Projects/Pulse pattern) ── */}
       <div style={{
         display: "flex", gap: 2,
-        background: c.accentDim, borderRadius: layout.radiusMd, padding: 3,
+        background: c.surfaceAlt, borderRadius: layout.radiusMd, padding: 3,
+        border: `1px solid ${c.border}`,
       }}>
-        {subTabs.map(tab => (
-          <button key={tab.key} onClick={() => setSubTab(tab.key)} style={{
-            flex: 1, padding: `${space[2]}px ${space[4]}px`,
-            borderRadius: layout.radiusMd, border: "none", cursor: "pointer",
-            background: subTab === tab.key ? c.accent : "transparent",
-            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-            fontWeight: subTab === tab.key ? 700 : 500,
-            color: subTab === tab.key ? c.textCrit : c.accent,
-            transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
-            boxShadow: subTab === tab.key ? `0 1px 3px ${c.shadow}` : "none",
-            display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
-          }}>
-            {tab.label}
-            <span style={{
-              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
-              padding: "1px 5px", borderRadius: layout.radiusTag + 1,
-              background: subTab === tab.key ? `${c.accent}20` : `${c.accent}08`,
-              color: subTab === tab.key ? c.textCrit : c.accent,
-            }}>{tab.count}</span>
-          </button>
-        ))}
+        {subTabs.map(tab => {
+          const active = subTab === tab.key;
+          return (
+            <button key={tab.key} onClick={() => setSubTab(tab.key)} style={{
+              flex: 1, padding: `7px ${space[4]}px`,
+              borderRadius: layout.radiusSm, border: "none", cursor: "pointer",
+              background: active ? c.surface : "transparent",
+              fontFamily: typo.bodyMd.font, fontSize: 13,
+              fontWeight: 600,
+              color: active ? c.text : c.textDim,
+              transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+              boxShadow: active ? c.shadowSm : "none",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
+            }}>
+              {tab.label}
+              <span style={{
+                fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                padding: "1px 5px", borderRadius: layout.radiusXs,
+                background: c.surfaceAlt,
+                color: c.textDim,
+              }}>{tab.count}</span>
+            </button>
+          );
+        })}
       </div>
 
 

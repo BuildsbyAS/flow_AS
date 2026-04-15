@@ -491,7 +491,7 @@ export default function ProjectsView({
                 background: c.surfaceAlt, color: c.text,
                 fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
                 outline: "none", boxSizing: "border-box",
-                boxShadow: searchGlow ? `0 0 0 3px ${c.accent}25, 0 0 12px ${c.accent}15` : "none",
+                boxShadow: searchGlow ? `0 0 0 3px ${c.accentDim}` : "none",
                 transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
               }} />
             <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", transition: "opacity 0.3s ease" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={searchGlow ? c.accent : c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
