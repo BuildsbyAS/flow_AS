@@ -899,7 +899,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
           ═══════════════════════════════════════════════════════════ */}
       {pulseMode === "matrix" && (
         <Surface variant="data" compact style={{
-          padding: 0, boxShadow: c.shadowCard, overflow: "visible",
+          padding: 0, boxShadow: c.shadowCard, overflow: "clip",
         }}>
           <div style={{
             borderRadius: layout.radius,
@@ -1251,7 +1251,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
         const colCount = 8;
 
         return (
-          <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, background: c.surfaceData, boxShadow: c.shadowCard }}>
+          <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, background: c.surfaceData, boxShadow: c.shadowCard, overflow: "clip" }}>
             <div style={{ borderRadius: layout.radius }}>
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                 <thead>
