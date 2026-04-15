@@ -232,19 +232,19 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                     <span style={{
                       fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                       fontWeight: typo.monoLg.weight, color: c.textMid,
-                      textAlign: "center",
+                      textAlign: "center", fontVariantNumeric: "tabular-nums",
                     }}>{memberCount}</span>
                     <span style={{
                       fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                       fontWeight: typo.monoLg.weight, color: c.textMid,
-                      textAlign: "center",
+                      textAlign: "center", fontVariantNumeric: "tabular-nums",
                     }}>{projCount}</span>
                     <div style={{ display: "flex", justifyContent: "flex-end" }}>
                       <button onClick={() => requestDelete("squad", i, sq)} style={{
                         background: "transparent", border: `1px solid transparent`, cursor: "pointer",
-                        fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
-                        padding: "4px 10px", borderRadius: 4,
-                        transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
+                        fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid,
+                        padding: "4px 10px", borderRadius: layout.radiusXs,
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
                       }}
                         onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
                         onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
@@ -294,14 +294,14 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                     <span style={{
                       fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                       fontWeight: typo.monoLg.weight, color: c.textMid,
-                      textAlign: "center",
+                      textAlign: "center", fontVariantNumeric: "tabular-nums",
                     }}>{holderCount}</span>
                     <div style={{ display: "flex", justifyContent: "flex-end" }}>
                       <button onClick={() => requestDelete("role", i, rl)} style={{
                         background: "transparent", border: `1px solid transparent`, cursor: "pointer",
-                        fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
-                        padding: "4px 10px", borderRadius: 4,
-                        transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
+                        fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid,
+                        padding: "4px 10px", borderRadius: layout.radiusXs,
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
                       }}
                         onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
                         onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
@@ -371,18 +371,18 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                         <div style={{ display: "flex", justifyContent: "flex-end", gap: space[1] }}>
                           <button onClick={() => startEdit(gi, p)} style={{
                             background: "transparent", border: `1px solid transparent`, cursor: "pointer",
-                            fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
-                            padding: "4px 10px", borderRadius: 4,
-                            transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
+                            fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid,
+                            padding: "4px 10px", borderRadius: layout.radiusXs,
+                            transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
                           }}
                             onMouseEnter={e => { e.currentTarget.style.color = c.accent; e.currentTarget.style.borderColor = c.accent + "30"; e.currentTarget.style.background = c.accent + "08"; }}
                             onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
                           >Edit</button>
                           <button onClick={() => requestDelete("person", gi, p.name)} style={{
                             background: "transparent", border: `1px solid transparent`, cursor: "pointer",
-                            fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
-                            padding: "4px 10px", borderRadius: 4,
-                            transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
+                            fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid,
+                            padding: "4px 10px", borderRadius: layout.radiusXs,
+                            transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
                           }}
                             onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
                             onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
@@ -434,9 +434,9 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                         <div style={{ display: "flex", justifyContent: "flex-end" }}>
                           <button onClick={() => requestDelete("person", gi, p.name)} style={{
                             background: "transparent", border: `1px solid transparent`, cursor: "pointer",
-                            fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
-                            padding: "4px 10px", borderRadius: 4,
-                            transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
+                            fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid,
+                            padding: "4px 10px", borderRadius: layout.radiusXs,
+                            transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
                           }}
                             onMouseEnter={e => { e.currentTarget.style.color = c.red; e.currentTarget.style.borderColor = c.red + "30"; e.currentTarget.style.background = c.red + "08"; }}
                             onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}

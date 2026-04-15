@@ -5,26 +5,8 @@ import useDevLabel from "../hooks/useDevLabel";
 
 // ═══════════════════════════════════════════════════════════════
 // UNIVERSAL SEARCH — F / Cmd+K
-// Search projects, people, navigation, settings, and actions
+// Steel & Orange palette. Neutral surfaces + single orange accent.
 // ═══════════════════════════════════════════════════════════════
-
-// ── Category color mapping ──
-const CAT_COLORS = () => ({
-  all:        { color: c.accent, dim: c.accentDim },
-  projects:   { color: c.projectGold, dim: c.projectGoldDim },
-  people:     { color: c.cyan,   dim: c.cyanDim    },
-  navigation: { color: c.orange, dim: c.orangeDim  },
-  settings:   { color: c.purple, dim: c.purpleDim  },
-});
-
-// ── Section color mapping ──
-const SECTION_COLORS = () => ({
-  Navigation: c.accent,
-  Actions:    c.orange,
-  Projects:   c.projectGold,
-  People:     c.cyan,
-  Settings:   c.purple,
-});
 
 const CATEGORIES = [
   { key: "all",        label: "All",        icon: "◎" },
@@ -34,10 +16,8 @@ const CATEGORIES = [
   { key: "settings",   label: "Settings",   icon: "⚙" },
 ];
 
-// Section ordering for "All" mode
 const SECTION_ORDER = ["People", "Projects", "Navigation", "Actions", "Settings"];
 
-// ── Scoring helper ──
 function scoreMatch(query, text) {
   if (!text) return 0;
   const t = text.toLowerCase();
@@ -69,9 +49,6 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
   const inputRef = useRef(null);
   const listRef = useRef(null);
 
-  const catColors = CAT_COLORS();
-  const secColors = SECTION_COLORS();
-
   // Reset on open
   useEffect(() => {
     if (open) {
@@ -95,7 +72,6 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
         section: "Navigation",
         cat: "navigation",
         icon: tab.num != null ? String(tab.num) : tab.key === "settings" ? "⚙" : tab.key === "logs" ? "◉" : tab.key === "rant" ? "🔥" : "·",
-        iconColor: c.accent,
         kbd: tab.num != null ? String(tab.num) : "",
         action: () => { onTabSwitch(tab.key); onClose(); },
       });
@@ -111,7 +87,6 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
           section: "Projects",
           cat: "projects",
           icon: p.id.slice(0, 3),
-          iconColor: c.projectGold,
           action: () => { if (onNavigate) onNavigate("projects", p.id); onClose(); },
         });
       });
@@ -127,7 +102,6 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
           section: "People",
           cat: "people",
           icon: p.name.split(" ").filter(Boolean).map(w => w?.[0] || "").join(""),
-          iconColor: c.cyan,
           action: () => { if (onNavigate) onNavigate("commit", p.name); onClose(); },
         });
       });
@@ -149,7 +123,6 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
         section: "Settings",
         cat: "settings",
         icon: st.icon,
-        iconColor: c.purple,
         action: () => { onTabSwitch("settings"); onClose(); },
       });
     });
@@ -235,30 +208,45 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
     globalIdx++;
   });
 
-  // Active category color
-  const activeCatColor = catColors[category]?.color || c.accent;
+  const trans = `background ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}`;
 
   return (
     <div ref={devRef} className="flow-cmd-overlay" onClick={onClose}>
-      <div className="flow-cmd-box" role="dialog" aria-modal="true" aria-label="Command palette" onClick={e => e.stopPropagation()} style={{ width: 600, maxHeight: 540 }}>
+      <div
+        className="flow-cmd-box"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: 600,
+          maxHeight: 540,
+          background: c.surface,
+          border: `1px solid ${c.border}`,
+          borderRadius: layout.radiusLg,
+          boxShadow: c.shadowElevated,
+        }}
+      >
 
-        {/* ── Gradient top accent bar ── */}
-        <div className="flow-cmd-topbar" />
+        {/* ── Static 2px accent top bar ── */}
+        <div className="flow-cmd-topbar" style={{ height: 2, background: c.accent }} />
 
         {/* ── Search input ── */}
         <div style={{
           display: "flex", alignItems: "center", gap: space[3],
           padding: `${space[4]}px ${space[5]}px ${space[4] - 2}px`,
         }}>
-          {/* Animated search indicator */}
-          <div className="flow-cmd-search-glow" style={{
+          {/* Neutral search glyph */}
+          <div style={{
             width: 20, height: 20, borderRadius: "50%",
-            background: `radial-gradient(circle, ${activeCatColor}30 0%, transparent 70%)`,
-            border: `1.5px solid ${activeCatColor}60`,
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0,
+            color: c.textDim,
           }}>
-            <span style={{ fontSize: typo.monoMd.size, color: activeCatColor, lineHeight: 1 }}>
+            <span style={{
+              fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+              lineHeight: 1, color: query ? c.accent : c.textDim,
+            }}>
               {query ? "◉" : "⊙"}
             </span>
           </div>
@@ -271,7 +259,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
             placeholder="Search projects, people, settings..."
             style={{
               flex: 1, padding: 0, border: "none", background: "transparent",
-              fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: typo.bodyMd.weight,
+              fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: 500,
               color: c.text, outline: "none", lineHeight: 1.4,
             }}
           />
@@ -280,12 +268,12 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
             fontWeight: 700, letterSpacing: typo.monoSm.tracking,
             color: c.textDim, background: c.surfaceAlt,
             border: `1px solid ${c.border}`, padding: "2px 7px",
-            borderRadius: layout.radiusTag + 1,
+            borderRadius: layout.radiusXs,
             flexShrink: 0,
           }}>ESC</span>
         </div>
 
-        {/* ── Gradient divider ── */}
+        {/* ── Divider (neutral) ── */}
         <div style={{
           height: 1, margin: `0 ${space[5]}px`,
           background: c.border,
@@ -297,26 +285,27 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
         }}>
           {CATEGORIES.map(cat => {
             const active = category === cat.key;
-            const cc = catColors[cat.key] || catColors.all;
             return (
               <button key={cat.key} onClick={() => setCategory(cat.key)}
                 className="flow-cmd-category-pill"
                 style={{
-                  padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusMd,
+                  padding: `${space[1]}px ${space[3]}px`,
+                  borderRadius: layout.radiusSm,
                   cursor: "pointer",
-                  border: active ? `1px solid ${cc.color}40` : "1px solid transparent",
-                  background: active ? cc.dim : "transparent",
-                  fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
-                  fontWeight: active ? 700 : 500,
-                  color: active ? cc.color : c.textMid,
-                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
-                  letterSpacing: typo.bodyXs.tracking,
+                  border: active ? `1px solid ${c.accent}30` : `1px solid ${c.border}`,
+                  background: active ? c.accentDim : c.surfaceAlt,
+                  fontFamily: typo.monoSm.font,
+                  fontSize: typo.monoSm.size,
+                  fontWeight: 700,
+                  letterSpacing: typo.monoSm.tracking,
+                  textTransform: "uppercase",
+                  color: active ? c.accent : c.textMid,
+                  transition: trans,
                   position: "relative",
                 }}>
                 <span style={{
-                  marginRight: 5, fontSize: typo.monoSm.size,
-                  opacity: active ? 1 : 0.6,
-                  color: active ? cc.color : c.textMid,
+                  marginRight: 5,
+                  opacity: active ? 1 : 0.7,
                 }}>{cat.icon}</span>
                 {cat.label}
               </button>
@@ -324,15 +313,15 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
           })}
         </div>
 
-        {/* ── Divider ── */}
+        {/* ── Divider (neutral) ── */}
         <div style={{
           height: 1, margin: `0 ${space[5]}px`,
-          background: `linear-gradient(90deg, transparent, ${c.border}, transparent)`,
+          background: c.border,
         }} />
 
         {/* ── Results ── */}
         <div ref={listRef} className="flow-cmd-results" style={{
-          overflowY: "auto", maxHeight: 370, padding: `${space[2] - 2}px 0`,
+          overflowY: "auto", maxHeight: 370, padding: `${space[2]}px 0`,
         }}>
           {sections.length === 0 && (
             <div style={{
@@ -343,29 +332,21 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
               {query.trim() ? <>No results for &ldquo;{query}&rdquo;</> : "No items in this category"}
             </div>
           )}
-          {sections.map((entry, si) => {
+          {sections.map((entry) => {
             if (entry.type === "header") {
-              const sColor = secColors[entry.label] || c.accent;
               return (
                 <div key={`hdr-${entry.label}`} className="flow-cmd-section-header" style={{
-                  padding: `${space[3]}px ${space[5]}px 5px`,
+                  padding: `${space[3]}px ${space[5]}px 4px`,
                   display: "flex", alignItems: "center", gap: space[2],
                 }}>
-                  {/* Colored accent dot */}
-                  <div style={{
-                    width: 5, height: 5, borderRadius: "50%",
-                    background: sColor,
-                    boxShadow: `0 0 6px ${sColor}60`,
-                    flexShrink: 0,
-                  }} />
                   <span style={{
                     fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                     fontWeight: 700, letterSpacing: "0.1em",
-                    color: sColor, textTransform: "uppercase", opacity: 0.85,
+                    color: c.textDim, textTransform: "uppercase",
                   }}>{entry.label}</span>
                   <div style={{
                     flex: 1, height: 1,
-                    background: `linear-gradient(90deg, ${sColor}25, transparent)`,
+                    background: c.border,
                   }} />
                 </div>
               );
@@ -373,7 +354,6 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
 
             const { cmd, idx } = entry;
             const isActive = idx === activeIdx;
-            const iColor = cmd.iconColor || c.accent;
 
             return (
               <div
@@ -384,81 +364,67 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
                 onMouseEnter={() => setActiveIdx(idx)}
                 style={{
                   display: "flex", alignItems: "center", gap: space[3],
-                  padding: `${space[2]}px ${space[5]}px`, cursor: "pointer",
-                  margin: `0 ${space[2] - 2}px`,
-                  borderRadius: isActive ? layout.radiusMd + 2 : layout.radiusMd,
-                  background: isActive
-                    ? `linear-gradient(135deg, ${iColor}12, ${iColor}06)`
-                    : "transparent",
-                  borderLeft: isActive ? `2.5px solid ${iColor}` : "2.5px solid transparent",
-                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                  padding: `12px ${space[4]}px`,
+                  cursor: "pointer",
+                  background: isActive ? "rgba(0,0,0,0.03)" : "transparent",
+                  borderLeft: isActive ? `2px solid ${c.accent}` : "2px solid transparent",
+                  transition: trans,
                   position: "relative",
                 }}
               >
-                {/* Active glow effect */}
-                {isActive && (
-                  <div style={{
-                    position: "absolute", inset: 0, borderRadius: layout.radiusMd + 2,
-                    boxShadow: `inset 0 0 20px ${iColor}08, 0 0 12px ${iColor}06`,
-                    pointerEvents: "none",
-                  }} />
-                )}
-
-                {/* Icon badge — always colored */}
+                {/* Icon badge — neutral inset, mono */}
                 <div style={{
-                  width: 30, height: 30, borderRadius: layout.radiusMd,
-                  background: isActive
-                    ? `linear-gradient(135deg, ${iColor}25, ${iColor}10)`
-                    : `${iColor}10`,
-                  border: `1px solid ${isActive ? iColor + "50" : iColor + "20"}`,
+                  width: 28, height: 28, borderRadius: layout.radiusSm,
+                  background: c.surfaceAlt,
+                  border: `1px solid ${c.border}`,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                   fontWeight: 700,
-                  color: isActive ? iColor : `${iColor}CC`,
+                  letterSpacing: typo.monoSm.tracking,
+                  color: isActive ? c.accent : c.textMid,
                   flexShrink: 0,
-                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
-                  letterSpacing: "-0.02em",
-                  boxShadow: isActive ? `0 0 10px ${iColor}20` : "none",
+                  transition: trans,
                 }}>{cmd.icon}</div>
 
                 {/* Label + hint */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                    fontWeight: isActive ? 600 : typo.bodyMd.weight,
+                    fontWeight: 500,
                     color: isActive ? c.text : c.textMid,
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                     lineHeight: 1.3,
                   }}>{cmd.label}</div>
-                  <div style={{
-                    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                    letterSpacing: typo.monoMd.tracking,
-                    color: isActive ? `${iColor}99` : c.textDim,
-                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    lineHeight: 1.3, marginTop: 1,
-                  }}>{cmd.hint}</div>
+                  {cmd.hint && (
+                    <div style={{
+                      fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                      fontWeight: 500,
+                      color: c.textDim,
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                      lineHeight: 1.3, marginTop: 2,
+                    }}>{cmd.hint}</div>
+                  )}
                 </div>
 
                 {/* Keyboard shortcut badge */}
                 {cmd.kbd && (
                   <span style={{
                     fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                    fontWeight: typo.monoSm.weight,
-                    color: isActive ? iColor : c.textDim,
-                    background: isActive ? `${iColor}12` : c.surfaceAlt,
-                    border: `1px solid ${isActive ? iColor + "30" : c.border}`,
-                    padding: `2px ${space[2] - 2}px`, borderRadius: layout.radiusTag + 1,
+                    fontWeight: 700, letterSpacing: typo.monoSm.tracking,
+                    color: c.textDim,
+                    background: c.surfaceAlt,
+                    border: `1px solid ${c.border}`,
+                    padding: `2px ${space[2] - 2}px`, borderRadius: layout.radiusXs,
                     flexShrink: 0, lineHeight: 1.4,
-                    boxShadow: `0 1px 0 ${c.border}`,
-                    transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                    transition: trans,
                   }}>{cmd.kbd}</span>
                 )}
 
                 {/* Enter indicator */}
                 {isActive && (
                   <span style={{
-                    fontFamily: typo.monoMd.font, fontSize: typo.bodyXs.size,
-                    color: iColor, flexShrink: 0, opacity: 0.8,
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                    color: c.accent, flexShrink: 0,
                   }}>↵</span>
                 )}
               </div>

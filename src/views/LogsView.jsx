@@ -1,31 +1,37 @@
 // Flow — Logs View
 // Terminal-style activity ledger showing who did what and when
+// Dark Terminal exception per DESIGN_SYSTEM.md §7.18
 
 import React, { useState, useEffect, useMemo } from "react";
-import { c, typo, space, layout, motion } from "../styles/theme";
+import { c, typo, space, layout, motion, themes, mono } from "../styles/theme";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
 
+// Terminal dark palette — consistent with TerminalView/Rant/Admin exception.
+// We pin these locally so the Logs card renders correctly even when global `c`
+// is the light theme (Steel & Orange).
+const td = themes.dark;
+
 const ACTION_CONFIG = {
-  login:              { icon: "→", color: () => c.cyan, label: "signed in" },
-  logout:             { icon: "←", color: () => c.textDim, label: "signed out" },
-  lock_commitment:    { icon: "🔒", color: () => c.green, label: "locked commitment" },
-  unlock_commitment:  { icon: "🔓", color: () => c.orange, label: "unlocked commitment" },
-  edit_commitment:    { icon: "✎", color: () => c.purple, label: "edited commitment" },
-  edit_project:       { icon: "✎", color: () => c.accent, label: "edited project" },
-  create_project:     { icon: "+", color: () => c.green, label: "created project" },
-  add_person:         { icon: "+", color: () => c.cyan, label: "added person" },
-  settings_change:    { icon: "⚙", color: () => c.orange, label: "changed settings" },
-  onboard:            { icon: "★", color: () => c.orange, label: "joined Flow" },
-  terminal_unlock:    { icon: "🔓", color: () => c.green, label: "unlocked terminal" },
-  terminal_attempt:   { icon: "⚠", color: () => c.red, label: "failed terminal attempt" },
-  admin_unlock:       { icon: "🔓", color: () => c.orange, label: "unlocked admin" },
-  admin_attempt:      { icon: "⚠", color: () => c.red, label: "failed admin attempt" },
-  edit_person:        { icon: "✎", color: () => c.cyan, label: "edited person" },
-  delete_person:      { icon: "−", color: () => c.red, label: "deleted person" },
+  login:              { icon: "→", color: () => td.cyan,    label: "signed in" },
+  logout:             { icon: "←", color: () => td.textDim, label: "signed out" },
+  lock_commitment:    { icon: "🔒", color: () => td.green,   label: "locked commitment" },
+  unlock_commitment:  { icon: "🔓", color: () => td.orange,  label: "unlocked commitment" },
+  edit_commitment:    { icon: "✎", color: () => td.purple,  label: "edited commitment" },
+  edit_project:       { icon: "✎", color: () => td.accent,  label: "edited project" },
+  create_project:     { icon: "+", color: () => td.green,   label: "created project" },
+  add_person:         { icon: "+", color: () => td.cyan,    label: "added person" },
+  settings_change:    { icon: "⚙", color: () => td.orange,  label: "changed settings" },
+  onboard:            { icon: "★", color: () => td.orange,  label: "joined Flow" },
+  terminal_unlock:    { icon: "🔓", color: () => td.green,   label: "unlocked terminal" },
+  terminal_attempt:   { icon: "⚠", color: () => td.red,     label: "failed terminal attempt" },
+  admin_unlock:       { icon: "🔓", color: () => td.orange,  label: "unlocked admin" },
+  admin_attempt:      { icon: "⚠", color: () => td.red,     label: "failed admin attempt" },
+  edit_person:        { icon: "✎", color: () => td.cyan,    label: "edited person" },
+  delete_person:      { icon: "−", color: () => td.red,     label: "deleted person" },
 };
 
-const DEFAULT_ACTION = { icon: "·", color: () => c.textDim, label: "action" };
+const DEFAULT_ACTION = { icon: "·", color: () => td.textDim, label: "action" };
 
 function formatTime(ts) {
   const d = new Date(ts);
@@ -115,11 +121,11 @@ export default function LogsView() {
   }, [filtered]);
 
   const selectStyle = {
-    padding: "6px 10px", fontSize: 11, fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-    background: c.surfaceAlt, border: `1px solid ${c.border}`, borderRadius: 6,
-    color: c.text, outline: "none", cursor: "pointer", appearance: "none",
-    paddingRight: 24,
-    backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%23666' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E")`,
+    padding: "6px 10px", fontSize: 11, fontFamily: mono, fontWeight: 600,
+    background: td.surfaceAlt, border: `1px solid ${td.border}`, borderRadius: layout.radiusSm,
+    color: td.text, outline: "none", cursor: "pointer", appearance: "none",
+    paddingRight: 24, letterSpacing: "0.04em",
+    backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%236E7894' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E")`,
     backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center",
   };
 
@@ -132,11 +138,12 @@ export default function LogsView() {
           <div style={{
             fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
             fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
-            color: c.text,
+            color: td.text,
           }}>Activity Log</div>
           <div style={{
             fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-            color: c.textDim, marginTop: 4,
+            fontWeight: 600, letterSpacing: typo.monoSm.tracking,
+            color: td.textDim, marginTop: 4, fontVariantNumeric: "tabular-nums",
           }}>{filtered.length} entries · {uniqueEmails.length} users</div>
         </div>
 
@@ -144,43 +151,43 @@ export default function LogsView() {
         <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
           <select value={filterEmail} onChange={e => setFilterEmail(e.target.value)} aria-label="Filter by user" style={selectStyle}>
             <option value="">All users</option>
-            {uniqueEmails.map(e => <option key={e} value={e} style={{ background: c.bg }}>{e}</option>)}
+            {uniqueEmails.map(e => <option key={e} value={e} style={{ background: td.bg }}>{e}</option>)}
           </select>
           <select value={filterAction} onChange={e => setFilterAction(e.target.value)} aria-label="Filter by action" style={selectStyle}>
             <option value="">All actions</option>
-            {uniqueActions.map(a => <option key={a} value={a} style={{ background: c.bg }}>{(ACTION_CONFIG[a] || DEFAULT_ACTION).label}</option>)}
+            {uniqueActions.map(a => <option key={a} value={a} style={{ background: td.bg }}>{(ACTION_CONFIG[a] || DEFAULT_ACTION).label}</option>)}
           </select>
           {(filterEmail || filterAction) && (
             <button
               onClick={() => { setFilterEmail(""); setFilterAction(""); }}
               style={{
-                padding: "6px 10px", fontSize: 11, fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-                background: "transparent", border: `1px solid ${c.border}`, borderRadius: 6,
-                color: c.textDim, cursor: "pointer",
+                padding: "6px 10px", fontSize: 11, fontFamily: mono, fontWeight: 600,
+                letterSpacing: "0.04em",
+                background: "transparent", border: `1px solid ${td.border}`, borderRadius: layout.radiusSm,
+                color: td.textDim, cursor: "pointer",
               }}
             >Clear</button>
           )}
         </div>
       </div>
 
-      {/* Terminal-style log */}
+      {/* Terminal-style log card (dark exception) */}
       <div style={{
-        background: c.bg, border: `1px solid ${c.border}`,
-        borderRadius: layout.radiusMd, overflow: "hidden",
+        background: td.bg, border: `1px solid ${td.border}`,
+        borderRadius: layout.radiusLg, overflow: "hidden",
       }}>
-        {/* Terminal header */}
+        {/* Terminal header — single accent dot + filename (no macOS traffic lights) */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 6,
+          display: "flex", alignItems: "center", gap: space[2],
           padding: "10px 16px",
-          background: "rgba(0,0,0,0.02)",
-          borderBottom: `1px solid ${c.border}`,
+          background: td.surfaceAlt,
+          borderBottom: `1px solid ${td.border}`,
         }}>
-          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#FF5F57" }} />
-          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#FEBC2E" }} />
-          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#28C840" }} />
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: td.accent }} />
           <span style={{
-            fontFamily: "'JetBrains Mono', 'SF Mono', monospace", fontSize: 11,
-            color: c.textDim, marginLeft: 8,
+            fontFamily: mono, fontSize: 11, fontWeight: 600,
+            letterSpacing: "0.04em",
+            color: td.textDim,
           }}>flow@logs ~ tail -f activity.log</span>
         </div>
 
@@ -188,15 +195,15 @@ export default function LogsView() {
         <div style={{ padding: "8px 0", maxHeight: "calc(100vh - 280px)", minHeight: 200, overflowY: "auto" }}>
           {loading && (
             <div style={{
-              padding: "20px 16px", fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-              fontSize: 11, color: c.textDim, textAlign: "center",
+              padding: "20px 16px", fontFamily: mono,
+              fontSize: 12, fontWeight: 600, color: td.textDim, textAlign: "center",
             }}>Loading logs...</div>
           )}
 
           {!loading && filtered.length === 0 && (
             <div style={{
-              padding: "40px 16px", fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-              fontSize: 12, color: c.textDim, textAlign: "center",
+              padding: "40px 16px", fontFamily: mono,
+              fontSize: 12, fontWeight: 600, color: td.textDim, textAlign: "center",
             }}>{logs.length > 0 && (filterEmail || filterAction)
               ? "No logs match your filters. Try clearing them."
               : fetchError
@@ -212,13 +219,13 @@ export default function LogsView() {
                 display: "flex", alignItems: "center", gap: 8,
                 padding: "10px 16px 4px",
               }}>
-                <div style={{ height: 1, flex: 1, background: c.border }} />
+                <div style={{ height: 1, flex: 1, background: td.border }} />
                 <span style={{
-                  fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-                  fontWeight: 700, color: c.textDim, textTransform: "uppercase",
+                  fontFamily: mono,
+                  fontWeight: 700, color: td.textDim, textTransform: "uppercase",
                   letterSpacing: "0.06em", fontSize: 11,
                 }}>{dateLabel}</span>
-                <div style={{ height: 1, flex: 1, background: c.border }} />
+                <div style={{ height: 1, flex: 1, background: td.border }} />
               </div>
 
               {entries.map((log) => {
@@ -227,14 +234,14 @@ export default function LogsView() {
                   <div key={log.id} style={{
                     display: "flex", alignItems: "flex-start", gap: 10,
                     padding: "8px 16px",
-                    fontFamily: "'JetBrains Mono', 'SF Mono', monospace", fontSize: 11,
-                    transition: "background 0.1s",
+                    fontFamily: mono, fontSize: 11, fontWeight: 600,
+                    transition: `background ${motion.instant.duration} ${motion.instant.easing}`,
                   }}
-                    onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.02)"}
+                    onMouseEnter={e => e.currentTarget.style.background = td.surfaceAlt}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   >
                     {/* Timestamp */}
-                    <span style={{ color: c.textDim, flexShrink: 0, width: 72, textAlign: "right" }}
+                    <span style={{ color: td.textDim, flexShrink: 0, width: 72, textAlign: "right", fontVariantNumeric: "tabular-nums" }}
                       title={formatFullTime(log.created_at)}>
                       {formatTime(log.created_at)}
                     </span>
@@ -246,7 +253,7 @@ export default function LogsView() {
                     }}>{cfg.icon}</span>
 
                     {/* User */}
-                    <span style={{ color: c.cyan, flexShrink: 0, minWidth: 120, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    <span style={{ color: td.cyan, flexShrink: 0, minWidth: 120, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                       title={log.user_email}>
                       {log.user_name || log.user_email}
                     </span>
@@ -255,20 +262,20 @@ export default function LogsView() {
                     <span style={{
                       fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
                       textTransform: "uppercase",
-                      color: cfg.color(), background: `${cfg.color()}12`,
-                      padding: "2px 6px", borderRadius: 3, flexShrink: 0,
+                      color: cfg.color(), background: `${cfg.color()}1F`,
+                      padding: "2px 6px", borderRadius: layout.radiusXs, flexShrink: 0,
                     }}>{cfg.label}</span>
 
                     {/* Entity name */}
                     {(log.entity_id || log.entity_name) && (
-                      <span style={{ color: c.text, fontWeight: 500 }}>
+                      <span style={{ color: td.text, fontWeight: 600 }}>
                         {log.entity_name || log.entity_id}
                       </span>
                     )}
 
                     {/* What changed */}
                     {log.details && (
-                      <span style={{ color: c.textDim, opacity: 0.7 }}
+                      <span style={{ color: td.textDim, opacity: 0.75 }}
                         title={JSON.stringify(log.details)}>
                         → {log.details.projects
                           ? log.details.projects
@@ -288,9 +295,9 @@ export default function LogsView() {
           {/* Terminal cursor */}
           {!loading && filtered.length > 0 && (
             <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontFamily: "'JetBrains Mono', 'SF Mono', monospace", fontSize: 11, color: c.accent }}>$</span>
+              <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: td.accent }}>$</span>
               <span style={{
-                width: 7, height: 14, background: c.accent,
+                width: 7, height: 14, background: td.accent,
                 animation: "sync-cursor-blink 1s step-end infinite",
               }} />
             </div>

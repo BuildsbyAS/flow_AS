@@ -1,23 +1,24 @@
 /**
- * SyncToast — Terminal-style sync notification
+ * SyncToast — Steel & Orange sync notification
  *
- * Shows a brief, geeky toast at the bottom-right when data
- * syncs to Supabase. Mimics a terminal output feel.
+ * Brief toast at bottom-right when data syncs to Supabase.
+ * Light card, flat status dot, accent-only sweep. No neon glow.
  */
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { c, body, space } from "../styles/theme";
+import { c, typo, layout, space } from "../styles/theme";
 import useDevLabel from "../hooks/useDevLabel";
 
 const TOAST_DURATION = 2400;
+const EXIT_MS = 200;
 
 const KEYFRAMES = `
   @keyframes sync-toast-in {
-    0% { opacity: 0; transform: translateY(12px) scale(0.96); }
-    100% { opacity: 1; transform: translateY(0) scale(1); }
+    0% { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
   }
   @keyframes sync-toast-out {
-    0% { opacity: 1; transform: translateY(0) scale(1); }
-    100% { opacity: 0; transform: translateY(8px) scale(0.97); }
+    0% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(8px); }
   }
   @keyframes sync-cursor-blink {
     0%, 100% { opacity: 1; }
@@ -30,7 +31,7 @@ const KEYFRAMES = `
 `;
 
 export default function SyncToast() {
-  const devRef = useDevLabel("SyncToast", "Terminal-style sync notification toast at bottom-right");
+  const devRef = useDevLabel("SyncToast", "Steel & Orange sync notification toast at bottom-right");
   const [visible, setVisible] = useState(false);
   const [phase, setPhase] = useState("idle"); // idle | syncing | done | error
   const [personName, setPersonName] = useState("");
@@ -43,7 +44,7 @@ export default function SyncToast() {
       setVisible(false);
       setPhase("idle");
       setExiting(false);
-    }, 300);
+    }, EXIT_MS);
   }, []);
 
   const show = useCallback((name) => {
@@ -51,7 +52,6 @@ export default function SyncToast() {
     setPhase("syncing");
     setExiting(false);
     setVisible(true);
-    // Safety timeout: auto-dismiss after 10s if done/error never fires
     clearTimeout(timer.current);
     timer.current = setTimeout(() => dismiss(), 10000);
   }, [dismiss]);
@@ -70,7 +70,6 @@ export default function SyncToast() {
     timer.current = setTimeout(() => dismiss(), TOAST_DURATION + 1000);
   }, [dismiss]);
 
-  // Expose methods via window for the synced setters to call
   useEffect(() => {
     window.__flowSyncToast = { show, done, error };
     return () => { delete window.__flowSyncToast; };
@@ -80,7 +79,8 @@ export default function SyncToast() {
 
   const isDone = phase === "done";
   const isError = phase === "error";
-  const statusColor = isError ? c.red : isDone ? c.green : c.cyan;
+  // Syncing uses accent (orange), done = green, error = red. No cyan/purple.
+  const statusColor = isError ? c.red : isDone ? c.green : c.accent;
 
   return (
     <>
@@ -91,26 +91,29 @@ export default function SyncToast() {
         right: 20,
         zIndex: 150,
         animation: exiting
-          ? "sync-toast-out 0.3s ease-in forwards"
-          : "sync-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+          ? `sync-toast-out ${EXIT_MS}ms ease-in forwards`
+          : "sync-toast-in 250ms cubic-bezier(0.22, 1, 0.36, 1) forwards",
       }}>
         <div style={{
           background: c.surface,
           border: `1px solid ${c.border}`,
-          borderRadius: 8,
-          padding: `${space[2]}px ${space[4]}px`,
+          borderRadius: layout.radiusSm,
+          padding: `10px ${space[4]}px`,
           display: "flex",
           alignItems: "center",
           gap: space[3],
-          fontFamily: body,
-          fontSize: 12,
+          fontFamily: typo.monoMd.font,
+          fontSize: typo.monoMd.size,
+          fontWeight: 600,
+          letterSpacing: typo.monoMd.tracking,
           color: c.textMid,
           minWidth: 180,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
+          boxShadow: c.shadowFloat,
           overflow: "hidden",
           position: "relative",
+          fontVariantNumeric: "tabular-nums",
         }}>
-          {/* Sweep bar at top */}
+          {/* Accent sweep bar at top — syncing only */}
           {!isDone && !isError && (
             <div style={{
               position: "absolute", top: 0, left: 0, right: 0, height: 1.5,
@@ -124,21 +127,21 @@ export default function SyncToast() {
             </div>
           )}
 
-          {/* Status indicator */}
+          {/* Status indicator — flat solid dot, no glow */}
           <div style={{
-            width: 6, height: 6, borderRadius: "50%",
+            width: 8, height: 8, borderRadius: "50%",
             background: statusColor,
-            boxShadow: `0 0 6px ${statusColor}`,
             flexShrink: 0,
-            transition: "background 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease, opacity 0.3s ease",
+            transition: "background 200ms ease",
           }} />
 
           {/* Message */}
-          <div style={{ display: "flex", alignItems: "center", gap: space[1] }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: space[1],
+            fontVariantNumeric: "tabular-nums",
+          }}>
             <span style={{ color: c.textDim }}>$</span>
-            <span style={{ color: statusColor }}>
-              {isError ? "sync" : "sync"}
-            </span>
+            <span style={{ color: statusColor }}>sync</span>
             <span style={{ color: c.textDim }}>
               {isError ? "err" : isDone ? "ok" : "..."}
             </span>
@@ -150,17 +153,17 @@ export default function SyncToast() {
             {!isDone && !isError && (
               <span style={{
                 animation: "sync-cursor-blink 1s step-end infinite",
-                color: c.cyan,
+                color: c.accent,
                 marginLeft: 1,
               }}>_</span>
             )}
             {isDone && (
-              <span style={{ color: c.green, marginLeft: 2, opacity: 0.6 }}>
+              <span style={{ color: c.green, marginLeft: 2, opacity: 0.75 }}>
                 ✓
               </span>
             )}
             {isError && (
-              <span style={{ color: c.red, marginLeft: 2, opacity: 0.6 }}>
+              <span style={{ color: c.red, marginLeft: 2, opacity: 0.75 }}>
                 ✗
               </span>
             )}

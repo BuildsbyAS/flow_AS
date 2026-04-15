@@ -2,7 +2,7 @@
 // Onboarding page: explains the pillars of Flow with inline visual examples
 import React from "react";
 import { c, typo, space, layout, motion, entityColors, phaseColors, typeConfig } from "../styles/theme";
-import { Surface, Badge } from "../components/shared";
+import { Surface, Badge, Btn } from "../components/shared";
 import FlowLogo from "../components/FlowLogo";
 import useDevLabel from "../hooks/useDevLabel";
 
@@ -23,10 +23,11 @@ const Divider = ({ label }) => (
 
 const Kbd = ({ children }) => (
   <span style={{
-    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 600,
-    color: c.accent, background: c.accentDim,
-    padding: "1px 5px", borderRadius: layout.radiusTag + 1,
-    border: `1px solid ${c.accent}25`, marginLeft: 2, marginRight: 2,
+    fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600,
+    letterSpacing: "0.04em",
+    color: c.textDim, background: c.surfaceAlt,
+    padding: "1px 6px", borderRadius: layout.radiusXs,
+    border: `1px solid ${c.border}`, marginLeft: 2, marginRight: 2,
   }}>{children}</span>
 );
 
@@ -69,7 +70,7 @@ const Dot = ({ filled, label }) => (
       background: filled ? c.accent : "transparent",
       border: `2px solid ${filled ? c.accent : c.textDim}`,
       display: "flex", alignItems: "center", justifyContent: "center",
-      fontSize: 11, fontWeight: 700, color: filled ? "#fff" : c.textDim,
+      fontSize: 11, fontWeight: 700, color: filled ? c.textCrit : c.textDim,
       fontFamily: typo.monoSm.font,
     }}>{label}</div>
   </div>
@@ -544,13 +545,13 @@ const GuideView = ({ onNavigate }) => {
             <div style={{
               width: 32, height: 32, borderRadius: "50%", background: c.accent,
               display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: typo.monoSm.font, fontSize: 13, fontWeight: 700, color: "#fff",
+              fontFamily: typo.monoSm.font, fontSize: 13, fontWeight: 700, color: c.textCrit,
             }}>T</div>
             <div style={{ flex: 1 }}>
               <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text }}>Tariq A.</span>
               <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginLeft: space[2] }}>Head of Product · Ads</span>
             </div>
-            <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: 700, color: c.green }}>100%</span>
+            <span style={{ fontFamily: typo.displayHero.font, fontSize: typo.displaySm.size, fontWeight: 700, color: c.green, fontVariantNumeric: "tabular-nums" }}>100%</span>
           </ExampleCard>
         </Surface>
       </div>
@@ -591,7 +592,7 @@ const GuideView = ({ onNavigate }) => {
               { label: "Delivery", value: "63%", delta: "+5", color: c.cyan },
             ].map((m, i) => (
               <div key={i} style={{ textAlign: "center" }}>
-                <div style={{ fontFamily: typo.displaySm.font, fontSize: 20, fontWeight: 700, color: c.text }}>
+                <div style={{ fontFamily: typo.displayHero.font, fontSize: 20, fontWeight: 700, color: c.text, fontVariantNumeric: "tabular-nums" }}>
                   {m.value}
                   {m.delta && <span style={{ fontSize: 12, fontWeight: 600, color: m.color, marginLeft: 3 }}>{m.delta}</span>}
                 </div>
@@ -785,24 +786,12 @@ const GuideView = ({ onNavigate }) => {
           Search anything with <Kbd>F</Kbd> or <Kbd>⌘K</Kbd> — project IDs, names, squads, people. It works everywhere.
         </p>
         <div style={{ marginTop: space[5], display: "flex", gap: space[3], justifyContent: "center" }}>
-          <button onClick={() => onNavigate("summary")} className="flow-btn" style={{
-            padding: `${space[3]}px ${space[5]}px`, borderRadius: layout.radiusMd,
-            border: `1px solid ${c.green}40`, background: `${c.green}10`,
-            color: c.green, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-            fontWeight: 600, cursor: "pointer",
-          }}>Start with Summary</button>
-          <button onClick={() => onNavigate("pulse")} className="flow-btn" style={{
-            padding: `${space[3]}px ${space[5]}px`, borderRadius: layout.radiusMd,
-            border: "none", background: c.accent,
-            color: "#fff", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-            fontWeight: 700, cursor: "pointer",
-            boxShadow: c.shadowSm,
-          }}>Jump to Pulse →</button>
+          <Btn variant="secondary" onClick={() => onNavigate("summary")}>Start with Summary</Btn>
+          <Btn variant="primary" onClick={() => onNavigate("pulse")}>Jump to Pulse →</Btn>
         </div>
       </div>
 
       {/* ═══ FOOTER — CREDITS ═══ */}
-      <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
       <div style={{
         marginTop: space[8], paddingTop: space[7], paddingBottom: space[4],
         borderTop: `1px solid ${c.border}`,
@@ -810,9 +799,9 @@ const GuideView = ({ onNavigate }) => {
         gap: space[4], textAlign: "center",
       }}>
         <div style={{
-          fontFamily: "'Press Start 2P', monospace", fontSize: 11,
-          lineHeight: 2.2, letterSpacing: "0.04em",
-          color: c.textDim,
+          fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600,
+          lineHeight: 1.8, letterSpacing: "0.06em",
+          color: c.textDim, textTransform: "uppercase",
         }}>
           vibe coded by{" "}
           <span style={{ color: c.accent }}>AJ</span>,{" "}
@@ -821,17 +810,18 @@ const GuideView = ({ onNavigate }) => {
           <span style={{ color: c.purple }}>Wispr</span>,{" "}
           <span style={{ color: c.orange }}>Vosk</span>{" "}
           and{" "}
-          <span style={{ color: c.red }}>Red Bull</span>!
+          <span style={{ color: c.red }}>Red Bull</span>
         </div>
         <div style={{
-          fontFamily: "'Press Start 2P', monospace", fontSize: 11,
-          lineHeight: 2, color: c.textDim, opacity: 0.7,
+          fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 600,
+          letterSpacing: "0.06em", lineHeight: 1.6, color: c.textDim,
+          textTransform: "uppercase",
         }}>
           thoughts? feedback?{" "}
           <span
             onClick={() => onNavigate && onNavigate("rant")}
             style={{ color: c.textMid, cursor: "pointer", textDecoration: "underline dotted", textUnderlineOffset: 3 }}
-          >Rant!</span>
+          >Rant</span>
         </div>
       </div>
     </div>
