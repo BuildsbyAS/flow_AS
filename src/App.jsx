@@ -352,16 +352,9 @@ function FlowDashboard({ auth }) {
   return (
     <div style={{ minHeight: "100vh", background: c.bg, color: c.text, fontFamily: body, position: "relative" }}>
       <AnimStyles />
-      <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-      {/* ═══ TEXTURE LAYERS — ambient background ═══ */}
-      <div className="flow-texture-grid" />
-      <div className="flow-texture-blob flow-blob-1" />
-      <div className="flow-texture-blob flow-blob-2" />
-      <div className="flow-texture-blob flow-blob-3" />
-      <div className="flow-texture-noise" />
-
-      {/* ═══ SINGLE HEADER ═══ */}
+      {/* ═══ SINGLE HEADER ═══ (hidden for dark-themed Terminal view) */}
+      {activeTab !== "terminal" && (
       <Header
         weekLabel={currentWeekLabel}
         weekOffset={weekOffset}
@@ -385,6 +378,7 @@ function FlowDashboard({ auth }) {
         allPeople={allPeople}
         currentUser={auth}
       />
+      )}
 
       {/* ═══ TERMINAL VIEW (full-bleed, outside main) ═══ */}
       {activeTab === "terminal" && <TerminalView onUnlock={handleTerminalUnlock} unlockedSections={terminalUnlocked} auth={auth} appSettings={appSettings} setAppSettings={setAppSettings} resetKey={terminalResetKey} initialModule={navPayload} onConsumePayload={() => setNavPayload(null)} />}

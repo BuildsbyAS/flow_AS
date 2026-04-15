@@ -308,7 +308,7 @@ export function Header({
           onBack={onBack}
         />
       ) : (
-        <nav className="flow-nav-rail" style={{ display: "flex", alignItems: "stretch", gap: 2, flexShrink: 0, height: "100%" }}>
+        <nav className="flow-nav-rail" style={{ display: "flex", alignItems: "stretch", gap: 2, minWidth: 0, overflowX: "auto", overflowY: "hidden", height: "100%", scrollbarWidth: "none" }}>
           {PRIMARY_NAV.map(tab => {
             if (tab.separator) {
               return <div key={tab.key} style={{ width: 1, height: 20, alignSelf: "center", background: c.border, margin: `0 ${space[1]}px`, flexShrink: 0 }} />;
@@ -1337,8 +1337,8 @@ function NotificationBell({ userEmail, onNavigate }) {
         onClick={() => { setOpen(v => !v); }}
         style={{
           width: 34, height: 34, borderRadius: layout.radiusSm,
-          border: `1px solid ${open ? "${c.orange}40" : c.border}`,
-          background: open ? "${c.orange}12" : "transparent",
+          border: `1px solid ${open ? c.orange + "40" : c.border}`,
+          background: open ? c.orange + "12" : c.surfaceAlt,
           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
           position: "relative",
           transition: `all ${motion.interaction.duration} ${motion.interaction.easing}`,
@@ -1356,7 +1356,7 @@ function NotificationBell({ userEmail, onNavigate }) {
             position: "absolute", top: 4, right: 4,
             width: 8, height: 8, borderRadius: "50%",
             background: c.orange,
-            boxShadow: "0 0 6px ${c.orange}80",
+            boxShadow: `0 0 0 2px ${c.surface}`,
           }} />
         )}
       </button>
@@ -1367,7 +1367,7 @@ function NotificationBell({ userEmail, onNavigate }) {
           position: "absolute", top: "100%", right: 0, marginTop: 6,
           width: 320, maxHeight: 400, overflow: "auto",
           background: c.surfaceSolid, border: `1px solid ${c.border}`,
-          borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          borderRadius: layout.radiusMd, boxShadow: c.shadowElevated,
           zIndex: 200,
           animation: "flow-load-fade-in 0.15s ease-out",
           scrollbarWidth: "none",
@@ -1403,14 +1403,14 @@ function NotificationBell({ userEmail, onNavigate }) {
               }}
               style={{
                 width: "100%", padding: "10px 14px",
-                background: n._seen ? "transparent" : "${c.orange}06",
+                background: n._seen ? "transparent" : c.orange + "08",
                 border: "none", borderBottom: `1px solid ${c.border}`,
                 cursor: "pointer", textAlign: "left", fontFamily: "inherit",
                 display: "flex", gap: 10, alignItems: "flex-start",
                 transition: "background 0.1s",
               }}
               onMouseEnter={e => e.currentTarget.style.background = "rgba(0,0,0,0.03)"}
-              onMouseLeave={e => e.currentTarget.style.background = n._seen ? "transparent" : "${c.orange}06"}
+              onMouseLeave={e => e.currentTarget.style.background = n._seen ? "transparent" : c.orange + "08"}
             >
               {/* Unread dot */}
               <div style={{
@@ -1553,7 +1553,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
           position: "absolute", top: "100%", right: 0, marginTop: 6,
           width: editing ? 260 : 220, padding: "8px 0",
           background: c.surfaceSolid, border: `1px solid ${c.border}`,
-          borderRadius: 10, boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+          borderRadius: layout.radiusMd, boxShadow: c.shadowElevated,
           zIndex: 200,
           animation: "flow-load-fade-in 0.15s ease-out",
         }}>

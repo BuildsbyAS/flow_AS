@@ -551,16 +551,19 @@ export const MetricCompact = ({ value, label, color, prevValue, hero }) => (
 // Shared across Summary (prev-week diff) and Pulse (scope churn)
 // ══════════════════════════════════════════════════════════════
 export const DeltaIndicator = ({ value, style: s }) => {
-  if (value === 0 || value === null || value === undefined) return null;
-  const up = value > 0;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n === 0) return null;
+  const up = n > 0;
   const clr = up ? c.green : c.red;
   return (
     <span style={{
       fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
       fontWeight: 700, color: clr, letterSpacing: typo.monoSm.tracking,
-      display: "inline-flex", alignItems: "center", gap: 1, ...s,
+      display: "inline-flex", alignItems: "center", gap: 2,
+      marginLeft: space[1], ...s,
     }}>
-      <span style={{ fontSize: 6 }}>{up ? "▲" : "▼"}</span>{up ? "+" : ""}{value}
+      <span style={{ fontSize: 11, lineHeight: 1 }} aria-hidden>{up ? "↑" : "↓"}</span>
+      <span>{up ? "+" : "−"}{Math.abs(n)}</span>
     </span>
   );
 };

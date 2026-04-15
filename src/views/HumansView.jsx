@@ -632,7 +632,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
         </div>{/* end frozen top */}
 
         {/* ═══ SCROLLABLE CONTENT ═══ */}
-        <div style={{ overflowX: "auto", position: "relative", zIndex: 1 }}>
+        <div style={{ position: "relative", zIndex: 1 }}>
 
         {/* People table — grouped by operational status */}
         {(() => {
@@ -693,7 +693,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                   <thead>
                     <tr>
-                      <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
+                      <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: 70 }}>Squad</Th>
                       <Th col="person" style={{ minWidth: 150, borderLeft: dotBorder }}>Name</Th>
                       <Th col="role" style={{ minWidth: 100, borderLeft: dotBorder }}>Role</Th>
                       <Th col="filled" style={{ minWidth: 120, textAlign: "center", borderLeft: dotBorder }}>Filled</Th>

@@ -700,7 +700,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
       {/* ═══════════════════════════════════════════════════════════
           SCROLLABLE CONTENT (only this area scrolls)
           ═══════════════════════════════════════════════════════════ */}
-      <div data-pulse-scroll style={{ overflowX: "auto", position: "relative", zIndex: 1 }}>
+      <div data-pulse-scroll style={{ position: "relative", zIndex: 1 }}>
       <div key={morphKey} className="flow-view-morph">
 
       {/* ═══════════════════════════════════════════════════════════
@@ -716,14 +716,14 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: dp.minTable }}>
               <thead>
                 <tr>
-                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
+                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: 70 }}>Squad</Th>
                   <Th col="name" style={{ minWidth: 150, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
                   <Th col="owner" style={{ minWidth: 80, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
                   <Th col="phase" style={{ minWidth: 64, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>
                   <Th col="health" style={{ minWidth: 48, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Health</Th>
                   {phaseNames.map(ph => (
                     <th key={ph} style={{
-                      position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 2,
+                      position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 2,
                       padding: dp.headerPad, textAlign: "center",
                       fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                       fontWeight: 600, letterSpacing: "0",
@@ -734,7 +734,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                     }}>{ph}</th>
                   ))}
                   <th style={{
-                    position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 2,
+                    position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 2,
                     padding: dp.headerPad, textAlign: "center",
                     fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                     fontWeight: 600, letterSpacing: "0",
@@ -1065,7 +1065,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
                 <thead>
                   <tr>
-                    <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 3, minWidth: 70 }}>Squad</Th>
+                    <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: 70 }}>Squad</Th>
                     <Th col="person" style={{ minWidth: 120, borderLeft: dotBorder }}>Person</Th>
                     <Th col="project" style={{ minWidth: 140, borderLeft: dotBorder }}>Project</Th>
                     <Th col="title" style={{ minWidth: 160, borderLeft: dotBorder }}>Commitment</Th>

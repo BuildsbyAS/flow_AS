@@ -545,7 +545,7 @@ export default function ProjectsView({
       {/* ═══════════════════════════════════════════════════════════
           SCROLLABLE CONTENT
           ═══════════════════════════════════════════════════════════ */}
-      <div style={{ overflowX: "auto", position: "relative", zIndex: 1 }}>
+      <div style={{ position: "relative", zIndex: 1 }}>
       {tabProjects.length === 0 ? (
         <EmptyState icon="📂" title="No projects" message={search ? "No projects match your search." : `No ${activeTab === "all" ? "" : ({ at_risk: "at risk", active: "active", shipped: "shipped", deprioritized: "deprioritized", overdue: "overdue" }[activeTab] || activeTab) + " "}projects found.`}
           action={search ? "Clear search" : (!isHistorical ? "Add project" : null)} onAction={() => { if (search) setSearch(""); else setShowCreate(true); }} />
@@ -555,7 +555,7 @@ export default function ProjectsView({
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
               <thead>
                 <tr>
-                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.bg, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
+                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
                   <Th col="project" style={{ minWidth: colWidths.identity.min, borderLeft: `1px dotted ${c.border}` }}>Project</Th>
                   <Th col="owner" style={{ minWidth: colWidths.owner.min, borderLeft: `1px dotted ${c.border}` }}>Owner</Th>
                   {activeTab === "all" && <Th col="status" style={{ minWidth: colWidths.status.min, textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>Status</Th>}
