@@ -1,7 +1,7 @@
 // Flow — People Deep Dive (Phase 4: Coaching Console, Signal Cards, Terminal Log, Telemetry Hero)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, outcomeConfig, entityColors } from "../styles/theme";
-import { Tag, EmptyState, Surface, Label, Btn, Sel, StatCell } from "../components/shared";
+import { Tag, EmptyState, Sel } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";

@@ -2,7 +2,7 @@
 // Weekly operating snapshot — polished, cinematic, analytical
 import React, { useState, useMemo } from "react";
 import { c, typo, space, layout, motion, typeConfig, colWidths, shipPhases } from "../styles/theme";
-import { Surface, Label, DeltaIndicator, VDivider, TelemetryLabel, MetricCompact, SummaryTile, KPIBar, EmptyState } from "../components/shared";
+import { Surface, Label, TelemetryLabel, EmptyState } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
 import useDevLabel from "../hooks/useDevLabel";
 

@@ -3,12 +3,11 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, typeConfig, phaseColors as getPhaseColors, statusColors, entityColors, colWidths, outcomeConfig } from "../styles/theme";
-import { Badge, Tag, Surface, Modal, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, SectionDivider, StatCell, MetricCompact, SummaryTile, KPIBar, VDivider, Th as SharedTh } from "../components/shared";
+import { Badge, Tag, Modal, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, Th as SharedTh } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import GanttChart from "../components/GanttChart";
 import FlowLogo from "../components/FlowLogo";
-import { logProjectEdit, logProjectCreate } from "../lib/activityLog";
 import { getProjectDependencies, deleteProjectFromDB } from "../lib/mutations";
 import useDevLabel from "../hooks/useDevLabel";
 

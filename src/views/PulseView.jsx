@@ -2,7 +2,7 @@
 // Leadership command center — highest intensity, futuristic, tactical
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { c, typo, space, layout, motion, phaseNames, shipPhases, typeConfig, phaseColors, entityColors } from "../styles/theme";
-import { Badge, Tag, Surface, Btn, EmptyState, VDivider, TelemetryLabel, MetricCompact, SummaryTile, KPIBar, Th as SharedTh, EntityLink } from "../components/shared";
+import { Badge, Tag, Surface, Btn, EmptyState, TelemetryLabel, Th as SharedTh, EntityLink } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";

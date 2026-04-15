@@ -1,7 +1,7 @@
 // Flow — Commit View (Phase-driven: Planning → Locked → Closing)
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { c, layout, motion, space, typo, phaseNames, allPhases, commitPhases, shipPhases, typeConfig, phaseColors as getPhaseColors, density, btnVariants, entityColors, colWidths } from "../styles/theme";
-import { Badge, Tag, Surface, Modal, Inp, TextArea, ChoiceGroup, Sel, Btn, TelemetryLabel, SummaryTile, KPIBar, Th as SharedTh, MetricCompact, EntityLink, VDivider, SectionDivider } from "../components/shared";
+import { c, layout, motion, space, typo, allPhases, commitPhases, shipPhases, typeConfig, phaseColors as getPhaseColors, entityColors } from "../styles/theme";
+import { Badge, Surface, Modal, Inp, TextArea, ChoiceGroup, Btn, TelemetryLabel, Th as SharedTh } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
