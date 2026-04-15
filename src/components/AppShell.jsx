@@ -53,11 +53,23 @@ const STAGES = {
 };
 
 export function getCycleStage(commitments) {
-  const total = commitments.length;
+  // Only count people who have actually declared something. Backfilled empty
+  // commitment rows (one per person in the roster) would otherwise dominate
+  // the ratios and keep the whole team stuck on "declare" forever.
+  const active = commitments.filter(x => x.items?.some(i => i.title && i.title.trim()));
+  const total = active.length;
   if (total === 0) return "declare";
-  const locked = commitments.filter(x => x.lockedAt).length;
-  const withOutcomes = commitments.filter(x => x.items?.some(i => i.outcome)).length;
-  if (withOutcomes > 0) return "close";
+  const locked = active.filter(x => x.lockedAt).length;
+  const withOutcomes = active.filter(x => x.items?.some(i => i.outcome)).length;
+
+  // "Close" is a Thu/Fri ritual — a single Tuesday outcome shouldn't flip
+  // the whole team into close stage. Gate by day-of-week OR by ≥50% of the
+  // locked commitments having outcomes.
+  const dow = new Date().getDay(); // 0=Sun..6=Sat
+  const isCloseWindow = dow === 4 || dow === 5; // Thu/Fri
+  const enoughOutcomes = locked > 0 && withOutcomes >= Math.ceil(locked * 0.5);
+  if ((isCloseWindow && withOutcomes > 0) || enoughOutcomes) return "close";
+
   if (locked >= Math.ceil(total * 0.8)) return "pulse";
   if (locked > 0) return "lock";
   return "declare";
@@ -70,10 +82,12 @@ export function getStageConfig(stage) { return STAGES[stage]; }
    ════════════════════════════════════════════════════════════════════ */
 export function getAttentionItems(commitments, projects) {
   const items = [];
-  const total = commitments.length;
+  // Match getCycleStage: only count declared commitments, not backfilled empties.
+  const active = commitments.filter(x => x.items?.some(i => i.title && i.title.trim()));
+  const total = active.length;
   if (total === 0) return items;
-  const unlocked = commitments.filter(x => !x.lockedAt).length;
-  const blocked = commitments.filter(x => x.items?.some(i => i.outcome === "blocked")).length;
+  const unlocked = active.filter(x => !x.lockedAt).length;
+  const blocked = active.filter(x => x.items?.some(i => i.outcome === "blocked")).length;
   const soon = 14 * 86400000;
   const atRisk = projects.filter(p =>
     !["Alpha","Beta","GA"].includes(p.phase) && p.endDate &&

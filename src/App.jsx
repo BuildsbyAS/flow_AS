@@ -386,18 +386,20 @@ function FlowDashboard({ auth }) {
       {/* ═══ MAIN CANVAS ═══ */}
       {activeTab !== "terminal" && (
       <main key={activeTab} className="flow-page" style={{ maxWidth: 1440, margin: "0 auto", padding: `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
-        {activeTab === "summary" && <SummaryView history={history} commitments={effectiveCommitments} projects={projects} people={people} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} />}
-        {activeTab === "pulse" && <PulseView loading={loading} error={error} commitments={effectiveCommitments} projects={projects} people={people} onNavigate={handleNavigate} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} appSettings={appSettings} />}
-        {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} onSave={flushDirtyToDB} />}
-        {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} history={history} weekConfig={weekConfig} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
-        {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} people={people} commitments={effectiveCommitments} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} />}
-        {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} commitments={commitments} />}
-        {activeTab === "guide" && (
-          <React.Suspense fallback={<div style={{ padding: 40, color: c.textDim, fontFamily: body, fontSize: 16, textAlign: "center" }}>Loading...</div>}>
-            <ErrorCatcher><GuideView onNavigate={handleTabSwitch} /></ErrorCatcher>
-          </React.Suspense>
-        )}
-        {activeTab === "logs" && <LogsView />}
+        <ErrorCatcher key={activeTab}>
+          {activeTab === "summary" && <SummaryView history={history} commitments={effectiveCommitments} projects={projects} people={people} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} />}
+          {activeTab === "pulse" && <PulseView loading={loading} error={error} commitments={effectiveCommitments} projects={projects} people={people} onNavigate={handleNavigate} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} appSettings={appSettings} />}
+          {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} onSave={flushDirtyToDB} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} history={history} weekConfig={weekConfig} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
+          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} people={people} commitments={effectiveCommitments} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} />}
+          {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} commitments={commitments} />}
+          {activeTab === "guide" && (
+            <React.Suspense fallback={<div style={{ padding: 40, color: c.textDim, fontFamily: body, fontSize: 16, textAlign: "center" }}>Loading...</div>}>
+              <GuideView onNavigate={handleTabSwitch} />
+            </React.Suspense>
+          )}
+          {activeTab === "logs" && <LogsView />}
+        </ErrorCatcher>
       </main>
       )}
 

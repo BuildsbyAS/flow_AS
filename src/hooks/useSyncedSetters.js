@@ -324,50 +324,55 @@ export function useSyncedSetters({
     setTimeout(() => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
 
-      for (let i = 0; i < next.length; i++) {
-        if (i >= prev.length || next[i] !== prev[i]) {
-          const changed = next[i];
-          const wasLocked = prev[i]?.lockedAt;
-          const nowLocked = changed.lockedAt;
+      // Diff by person key, not array index. Sorting or filtering
+      // commitments shifts indices and would otherwise flag every row as
+      // "changed" and fire DB writes for the wrong person.
+      const prevByPerson = new Map(prev.map(cm => [cm.person, cm]));
 
-          // TIER 2: Immediate DB sync on lock/unlock
-          if (!wasLocked && nowLocked) {
-            syncPersonToDB(changed);
-            dirtySet.current.delete(changed.person);
-            logCommitmentLock(changed.person, changed.items);
-          } else if (wasLocked && !nowLocked) {
-            syncPersonToDB(changed);
-            dirtySet.current.delete(changed.person);
-            logCommitmentUnlock(changed.person);
-          } else {
-            // TIER 1: Save draft to localStorage (debounced per-person)
-            dirtySet.current.add(changed.person);
-            clearTimeout(draftTimers.current[changed.person]);
-            draftTimers.current[changed.person] = setTimeout(() => {
-              saveDraftToLocal(changed.person, changed);
-              // Build a summary of what changed
-              const oldItems = prev[i]?.items || [];
-              const newItems = changed.items || [];
-              const changes = [];
-              for (let s = 0; s < Math.max(oldItems.length, newItems.length); s++) {
-                const o = oldItems[s], n = newItems[s];
-                const pid = n?.projectId || n?.project_id || o?.projectId || o?.project_id;
-                if (!o && n && pid) { changes.push(`+${pid}`); }
-                else if (o && !n) { changes.push(`-${o.projectId || o.project_id || '?'}`); }
-                else if (o && n) {
-                  const oPid = o.projectId || o.project_id;
-                  const nPid = n.projectId || n.project_id;
-                  if (oPid !== nPid || o.title !== n.title || o.type !== n.type || o.stage !== n.stage) {
-                    changes.push(nPid || '?');
-                  }
+      for (const changed of next) {
+        const before = prevByPerson.get(changed.person);
+        if (before === changed) continue; // same reference, no work
+
+        const wasLocked = before?.lockedAt;
+        const nowLocked = changed.lockedAt;
+
+        // TIER 2: Immediate DB sync on lock/unlock
+        if (!wasLocked && nowLocked) {
+          syncPersonToDB(changed);
+          dirtySet.current.delete(changed.person);
+          logCommitmentLock(changed.person, changed.items);
+        } else if (wasLocked && !nowLocked) {
+          syncPersonToDB(changed);
+          dirtySet.current.delete(changed.person);
+          logCommitmentUnlock(changed.person);
+        } else if (!before || JSON.stringify(before.items) !== JSON.stringify(changed.items) || before.lockedAtTime !== changed.lockedAtTime) {
+          // TIER 1: Save draft to localStorage (debounced per-person)
+          dirtySet.current.add(changed.person);
+          clearTimeout(draftTimers.current[changed.person]);
+          draftTimers.current[changed.person] = setTimeout(() => {
+            saveDraftToLocal(changed.person, changed);
+            // Build a summary of what changed — commitment items carry `project`
+            // (set from ci.project_id in useSupabaseData.js:217).
+            const oldItems = before?.items || [];
+            const newItems = changed.items || [];
+            const changes = [];
+            for (let s = 0; s < Math.max(oldItems.length, newItems.length); s++) {
+              const o = oldItems[s], n = newItems[s];
+              const oPid = o?.project;
+              const nPid = n?.project;
+              if (!o && n && nPid) { changes.push(`+${nPid}`); }
+              else if (o && !n) { changes.push(`-${oPid || '?'}`); }
+              else if (o && n) {
+                if (oPid !== nPid || o.title !== n.title || o.type !== n.type || o.stage !== n.stage) {
+                  changes.push(nPid || '?');
                 }
               }
-              const detail = changes.length > 0
-                ? { projects: changes.join(", ") }
-                : { field: 'items' };
-              logCommitmentEdit(changed.person, 'items', detail);
-            }, 600);
-          }
+            }
+            const detail = changes.length > 0
+              ? { projects: changes.join(", ") }
+              : { field: 'items' };
+            logCommitmentEdit(changed.person, 'items', detail);
+          }, 600);
         }
       }
     }, 0);
