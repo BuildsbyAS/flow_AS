@@ -67,6 +67,12 @@ export default function FlowApp() {
   // To preview login screen on localhost, set this to false temporarily
   const isDev = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || import.meta.env.VITE_SKIP_AUTH === "true";
 
+  // Preview gate — ?login=1 shows the login screen even on localhost
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("login")) {
+    return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={signInError} />;
+  }
+
   if (!isDev && !auth.isAuthenticated) {
     return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={signInError} />;
   }
