@@ -15,8 +15,8 @@
  */
 import { useCallback, useRef, useEffect } from 'react';
 import {
-  addSquadToDB, deleteSquadFromDB,
-  addRoleToDB, deleteRoleFromDB,
+  addSquadToDB, deleteSquadFromDB, renameSquadInDB,
+  addRoleToDB, deleteRoleFromDB, renameRoleInDB,
   addPersonToDB, deletePersonFromDB, updatePersonInDB,
   createProjectInDB, updateProjectInDB,
   syncCommitmentToDB,
@@ -171,70 +171,105 @@ export function useSyncedSetters({
     const prev = squadsRef.current;
     rawSetSquads(updater);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       if (next.length > prev.length) {
         const added = next.find(s => !prev.includes(s));
-        if (added) { addSquadToDB(added); logSettingsChange('add_squad', { name: added }); }
+        if (added) {
+          window.__flowSyncToast?.show?.();
+          addSquadToDB(added); logSettingsChange('add_squad', { name: added });
+          window.__flowSyncToast?.done?.();
+        }
       } else if (next.length < prev.length) {
         const removed = prev.find(s => !next.includes(s));
-        if (removed) { deleteSquadFromDB(removed); logSettingsChange('delete_squad', { name: removed }); }
+        if (removed) {
+          window.__flowSyncToast?.show?.();
+          deleteSquadFromDB(removed); logSettingsChange('delete_squad', { name: removed });
+          window.__flowSyncToast?.done?.();
+        }
       } else {
-        // Same length — check for renames
+        // Same length — detect rename by positional diff. CRITICAL: use
+        // renameSquadInDB (UPDATE) not delete+add — squad has CASCADE FKs
+        // from people and projects, delete+add would destroy their rows.
         for (let i = 0; i < next.length; i++) {
           if (next[i] !== prev[i]) {
-            deleteSquadFromDB(prev[i]);
-            addSquadToDB(next[i]);
+            window.__flowSyncToast?.show?.(next[i]);
+            const ok = await renameSquadInDB(prev[i], next[i]);
             logSettingsChange('rename_squad', { from: prev[i], to: next[i] });
+            // Keep in-memory people/projects in sync so UI reflects the new
+            // squad name immediately. Uses rawSetPeople/rawSetProjects —
+            // bypasses per-row DB-write loops since squad_id FK is unchanged.
+            rawSetPeople(list => list.map(p => p.squad === prev[i] ? { ...p, squad: next[i] } : p));
+            rawSetProjects(list => list.map(pr => pr.squad === prev[i] ? { ...pr, squad: next[i] } : pr));
+            if (ok) window.__flowSyncToast?.done?.(next[i]);
+            else window.__flowSyncToast?.error?.(next[i]);
           }
         }
       }
     }, 0);
-  }, [rawSetSquads]);
+  }, [rawSetSquads, rawSetPeople, rawSetProjects]);
 
   // ─── ROLES ───────────────────────────────────────────────
   const setRoles = useCallback((updater) => {
     const prev = rolesRef.current;
     rawSetRoles(updater);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       if (next.length > prev.length) {
         const added = next.find(r => !prev.includes(r));
-        if (added) { addRoleToDB(added); logSettingsChange('add_role', { name: added }); }
+        if (added) {
+          window.__flowSyncToast?.show?.();
+          addRoleToDB(added); logSettingsChange('add_role', { name: added });
+          window.__flowSyncToast?.done?.();
+        }
       } else if (next.length < prev.length) {
         const removed = prev.find(r => !next.includes(r));
-        if (removed) { deleteRoleFromDB(removed); logSettingsChange('delete_role', { name: removed }); }
+        if (removed) {
+          window.__flowSyncToast?.show?.();
+          deleteRoleFromDB(removed); logSettingsChange('delete_role', { name: removed });
+          window.__flowSyncToast?.done?.();
+        }
       } else {
-        // Same length — check for renames
+        // Same length — detect rename by positional diff. CRITICAL: use
+        // renameRoleInDB (UPDATE) not delete+add — people.role_id has
+        // ON DELETE CASCADE, delete+add would wipe every holder.
         for (let i = 0; i < next.length; i++) {
           if (next[i] !== prev[i]) {
-            deleteRoleFromDB(prev[i]);
-            addRoleToDB(next[i]);
+            window.__flowSyncToast?.show?.(next[i]);
+            const ok = await renameRoleInDB(prev[i], next[i]);
             logSettingsChange('rename_role', { from: prev[i], to: next[i] });
+            // Refresh in-memory role field on affected people without
+            // triggering per-person DB writes (their role_id is unchanged).
+            rawSetPeople(list => list.map(p => p.role === prev[i] ? { ...p, role: next[i] } : p));
+            if (ok) window.__flowSyncToast?.done?.(next[i]);
+            else window.__flowSyncToast?.error?.(next[i]);
           }
         }
       }
     }, 0);
-  }, [rawSetRoles]);
+  }, [rawSetRoles, rawSetPeople]);
 
   // ─── PEOPLE ──────────────────────────────────────────────
   const setPeople = useCallback((updater) => {
     const prev = peopleRef.current;
     rawSetPeople(updater);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       if (next.length > prev.length) {
         const added = next.find(p => !prev.some(pp => pp.name === p.name));
         if (added) {
-          addPersonToDB(added.name, added.squad, added.role).then(newId => {
-            // Update lookup map so commitment sync works for this person
-            if (newId) {
-              const lk = lookupsRef.current;
-              if (lk) lk.personMap = { ...lk.personMap, [added.name]: newId };
-            }
-          });
+          window.__flowSyncToast?.show?.(added.name);
+          const newId = await addPersonToDB(added.name, added.squad, added.role);
+          // Update lookup map so commitment sync works for this person
+          if (newId) {
+            const lk = lookupsRef.current;
+            if (lk) lk.personMap = { ...lk.personMap, [added.name]: newId };
+            window.__flowSyncToast?.done?.(added.name);
+          } else {
+            window.__flowSyncToast?.error?.(added.name);
+          }
           logPersonAdd(added.name);
           // Create an empty commitment so they appear in Commit immediately
           rawSetCommitments(prev => [
@@ -245,31 +280,40 @@ export function useSyncedSetters({
       } else if (next.length < prev.length) {
         const removed = prev.find(p => !next.some(pp => pp.name === p.name));
         if (removed) {
-          deletePersonFromDB(removed.name);
+          window.__flowSyncToast?.show?.(removed.name);
+          await deletePersonFromDB(removed.name);
+          window.__flowSyncToast?.done?.(removed.name);
           logSettingsChange('delete_person', { name: removed.name });
           // Remove their commitment from state
           rawSetCommitments(prev => prev.filter(cm => cm.person !== removed.name));
         }
       } else if (next.length === prev.length) {
-        // Detect edits (same length, changed properties)
+        // Detect edits (same length, changed properties). Walk the whole
+        // list so bulk renames (e.g. role-rename cascade) all persist.
+        const edits = [];
         for (let i = 0; i < next.length; i++) {
           const p = prev[i], n = next[i];
           if (p && n && (p.name !== n.name || p.squad !== n.squad || p.role !== n.role)) {
-            updatePersonInDB(p.name, n.name, n.squad, n.role);
-            logSettingsChange('edit_person', { old: p.name, name: n.name, squad: n.squad, role: n.role });
-            // If name changed, update commitments and localStorage drafts
-            if (p.name !== n.name) {
-              rawSetCommitments(cms => cms.map(cm =>
-                cm.person === p.name ? { ...cm, person: n.name } : cm
-              ));
-              // Update lookup map
-              const lk = lookupsRef.current;
-              if (lk?.personMap?.[p.name]) {
-                lk.personMap[n.name] = lk.personMap[p.name];
-                delete lk.personMap[p.name];
-              }
+            edits.push({ p, n });
+          }
+        }
+        for (const { p, n } of edits) {
+          window.__flowSyncToast?.show?.(n.name);
+          const ok = await updatePersonInDB(p.name, n.name, n.squad, n.role);
+          if (ok) window.__flowSyncToast?.done?.(n.name);
+          else window.__flowSyncToast?.error?.(n.name);
+          logSettingsChange('edit_person', { old: p.name, name: n.name, squad: n.squad, role: n.role });
+          // If name changed, update commitments and localStorage drafts
+          if (p.name !== n.name) {
+            rawSetCommitments(cms => cms.map(cm =>
+              cm.person === p.name ? { ...cm, person: n.name } : cm
+            ));
+            // Update lookup map
+            const lk = lookupsRef.current;
+            if (lk?.personMap?.[p.name]) {
+              lk.personMap[n.name] = lk.personMap[p.name];
+              delete lk.personMap[p.name];
             }
-            break; // Only one edit at a time
           }
         }
       }
@@ -291,6 +335,22 @@ export function useSyncedSetters({
             if (serverId && serverId !== added.id) {
               // Replace the temp/optimistic ID with the server-generated one
               rawSetProjects(cur => cur.map(p => p.id === added.id ? { ...p, id: serverId } : p));
+            } else if (!serverId) {
+              // Create failed on the server — roll back the optimistic row
+              // and notify the app so the UI can surface an error toast.
+              rawSetProjects(cur => cur.filter(p => p.id !== added.id));
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('flow:project-create-failed', {
+                  detail: { name: added.name },
+                }));
+              }
+            }
+          }).catch(err => {
+            rawSetProjects(cur => cur.filter(p => p.id !== added.id));
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('flow:project-create-failed', {
+                detail: { name: added.name, error: err?.message },
+              }));
             }
           });
           logProjectCreate(added.id, added.name);
@@ -300,13 +360,25 @@ export function useSyncedSetters({
           const op = prev.find(p => p.id === np.id);
           if (!op) continue;
           const changes = {};
+          if (op.name !== np.name) changes.name = np.name;
           if (op.owner !== np.owner) changes.owner = np.owner;
           if (op.squad !== np.squad) changes.squad = np.squad;
           if (op.phase !== np.phase) changes.phase = np.phase;
           if (op.status !== np.status) changes.status = np.status;
           if (op.depriReason !== np.depriReason) changes.depriReason = np.depriReason;
+          if (op.startDate !== np.startDate) changes.startDate = np.startDate;
+          if (op.endDate !== np.endDate) changes.endDate = np.endDate;
+          if (op.actualStartDate !== np.actualStartDate) changes.actualStartDate = np.actualStartDate;
+          if (op.actualEndDate !== np.actualEndDate) changes.actualEndDate = np.actualEndDate;
           if (Object.keys(changes).length > 0) {
-            updateProjectInDB(np.id, changes);
+            Promise.resolve(updateProjectInDB(np.id, changes)).catch(err => {
+              rawSetProjects(cur => cur.map(p => p.id === np.id ? op : p));
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('flow:project-update-failed', {
+                  detail: { id: np.id, name: np.name, error: err?.message },
+                }));
+              }
+            });
             logProjectEdit(np.id, np.name, changes);
           }
         }

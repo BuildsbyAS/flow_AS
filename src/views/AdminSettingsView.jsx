@@ -1,7 +1,7 @@
 // Flow — Admin Settings View (Real Settings)
 // Admin-only panel inside TerminalView for replying to rants, changing status, etc.
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { c, space, body } from "../styles/theme";
+import { c, space, body, terminal, terminalRadius } from "../styles/theme";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
 
@@ -253,7 +253,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
           padding: `${space[2]}px 0`,
         }}>
           <span style={{
-            width: 32, height: 32, borderRadius: 6,
+            width: 32, height: 32, borderRadius: terminalRadius.md,
             background: cat.color() + "18", border: `1px solid ${cat.color()}30`,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 16, flexShrink: 0,
@@ -262,7 +262,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
           </span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: c.text, lineHeight: 1.2 }}>{selected.title}</div>
-            <div style={{ fontSize: 11, color: "#FBBF2490", marginTop: 3, display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ fontSize: 11, color: `${terminal.gold}90`, marginTop: 3, display: "flex", gap: 8, alignItems: "center" }}>
               <span>{selected.user_name}</span>
               <span style={{ opacity: 0.3 }}>·</span>
               <span>{timeAgo(selected.created_at)}</span>
@@ -274,7 +274,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
             fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
             color: st.color(), padding: "4px 12px",
             background: st.color() + "15", border: `1px solid ${st.color()}35`,
-            borderRadius: 4,
+            borderRadius: terminalRadius.sm,
           }}>
             {st.icon} {st.label.toUpperCase()}
           </span>
@@ -282,7 +282,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
             fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
             color: cat.color(), padding: "4px 12px",
             background: cat.color() + "15", border: `1px solid ${cat.color()}35`,
-            borderRadius: 4,
+            borderRadius: terminalRadius.sm,
           }}>
             {cat.label}
           </span>
@@ -291,7 +291,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
         {/* ── Rant body ── */}
         {(selected.body || selected.image_url) && (
           <div style={{
-            border: "1px solid rgba(0,0,0,0.04)", borderRadius: 6, padding: space[4],
+            border: "1px solid rgba(0,0,0,0.04)", borderRadius: terminalRadius.md, padding: space[4],
             background: c.surfaceAlt, marginBottom: space[4],
           }}>
             {selected.body && (
@@ -301,13 +301,13 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
             )}
             {selected.image_url && (
               <div style={{ marginTop: selected.body ? space[3] : 0 }}>
-                <div style={{ fontSize: 11, color: "#FBBF2480", letterSpacing: "0.08em", marginBottom: space[1], fontWeight: 600 }}>ATTACHMENT</div>
+                <div style={{ fontSize: 11, color: `${terminal.gold}80`, letterSpacing: "0.08em", marginBottom: space[1], fontWeight: 600 }}>ATTACHMENT</div>
                 <img
                   src={selected.image_url}
                   alt="attachment"
                   style={{
-                    maxWidth: "100%", maxHeight: 400, borderRadius: 6,
-                    border: "1px solid #FBBF2420",
+                    maxWidth: "100%", maxHeight: 400, borderRadius: terminalRadius.md,
+                    border: `1px solid ${terminal.gold}20`,
                   }}
                 />
               </div>
@@ -318,7 +318,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
         {/* ── No body/image placeholder ── */}
         {!selected.body && !selected.image_url && (
           <div style={{
-            border: "1px dashed rgba(0,0,0,0.06)", borderRadius: 6, padding: space[4],
+            border: "1px dashed rgba(0,0,0,0.06)", borderRadius: terminalRadius.md, padding: space[4],
             background: "transparent", marginBottom: space[4],
             textAlign: "center", color: c.textDim, fontSize: 12, fontFamily: MONO,
           }}>
@@ -328,14 +328,14 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
 
         {/* ── Admin reply section ── */}
         <div style={{
-          borderRadius: 6, overflow: "hidden",
-          border: "1px solid #FBBF2420",
+          borderRadius: terminalRadius.md, overflow: "hidden",
+          border: `1px solid ${terminal.gold}20`,
         }}>
           {/* Status bar */}
           <div style={{
             padding: `${space[2]}px ${space[4]}px`,
-            background: "#FBBF2408",
-            borderBottom: "1px solid #FBBF2415",
+            background: `${terminal.gold}08`,
+            borderBottom: `1px solid ${terminal.gold}15`,
             display: "flex", alignItems: "center", gap: 10,
           }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: c.orange, letterSpacing: "0.08em" }}>
@@ -349,7 +349,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                   style={{
                     background: newStatus === s.key ? `${s.color()}25` : "transparent",
                     border: `1px solid ${newStatus === s.key ? s.color() + "80" : c.border}`,
-                    borderRadius: 4, padding: "4px 12px",
+                    borderRadius: terminalRadius.sm, padding: "4px 12px",
                     fontFamily: MONO, fontSize: 11,
                     color: newStatus === s.key ? s.color() : c.textDim,
                     cursor: "pointer", transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
@@ -371,14 +371,14 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
               placeholder="Write a response visible to the submitter..."
               rows={3}
               style={{
-                width: "100%", background: "transparent", border: "1px solid #FBBF2418",
-                borderRadius: 4, padding: `${space[2]}px ${space[3]}px`,
+                width: "100%", background: "transparent", border: `1px solid ${terminal.gold}18`,
+                borderRadius: terminalRadius.sm, padding: `${space[2]}px ${space[3]}px`,
                 fontFamily: MONO, fontSize: 12, color: c.text,
                 resize: "vertical", outline: "none",
                 lineHeight: 1.7, boxSizing: "border-box",
               }}
-              onFocus={e => e.target.style.borderColor = "#FBBF2440"}
-              onBlur={e => e.target.style.borderColor = "#FBBF2418"}
+              onFocus={e => e.target.style.borderColor = `${terminal.gold}40`}
+              onBlur={e => e.target.style.borderColor = `${terminal.gold}18`}
             />
 
             {/* Action row */}
@@ -387,9 +387,9 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                 onClick={handleSave}
                 disabled={saving}
                 style={{
-                  background: "linear-gradient(135deg, #FBBF24, #F59E0B)",
+                  background: `linear-gradient(135deg, ${terminal.gold}, ${terminal.goldDeep})`,
                   color: c.bg, border: "none",
-                  borderRadius: 6, padding: "10px 28px",
+                  borderRadius: terminalRadius.md, padding: "10px 28px",
                   fontFamily: MONO, fontSize: 12, fontWeight: 700,
                   letterSpacing: "0.05em",
                   cursor: saving ? "wait" : "pointer",
@@ -438,8 +438,8 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
 
       {/* GA Visibility Control */}
       <div style={{
-        border: "1px solid #FBBF2420", borderRadius: 6, padding: space[4],
-        background: "#FBBF2405", marginBottom: space[5],
+        border: `1px solid ${terminal.gold}20`, borderRadius: terminalRadius.md, padding: space[4],
+        background: `${terminal.gold}05`, marginBottom: space[5],
       }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: c.orange, letterSpacing: "0.08em", marginBottom: space[3] }}>
           GA VISIBILITY IN PULSE
@@ -457,13 +457,13 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
             aria-label="GA visibility weeks"
             onChange={e => setGaWeeks(e.target.value)}
             style={{
-              width: 64, background: c.bg, border: "1px solid #FBBF2430",
-              borderRadius: 4, padding: "6px 10px",
+              width: 64, background: c.bg, border: `1px solid ${terminal.gold}30`,
+              borderRadius: terminalRadius.sm, padding: "6px 10px",
               fontFamily: MONO, fontSize: 13, color: c.text,
               textAlign: "center", outline: "none",
             }}
             onFocus={e => e.target.style.borderColor = c.orange}
-            onBlur={e => e.target.style.borderColor = "#FBBF2430"}
+            onBlur={e => e.target.style.borderColor = `${terminal.gold}30`}
           />
           <span style={{ fontSize: 12, color: "rgba(0,0,0,0.38)", fontFamily: MONO }}>weeks</span>
           <button
@@ -471,7 +471,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
             disabled={gaSaving}
             style={{
               background: c.orange, color: c.bg, border: "none",
-              borderRadius: 4, padding: "6px 16px", marginLeft: 8,
+              borderRadius: terminalRadius.sm, padding: "6px 16px", marginLeft: 8,
               fontFamily: MONO, fontSize: 11, fontWeight: 700,
               cursor: gaSaving ? "wait" : "pointer",
               opacity: gaSaving ? 0.5 : 1,
@@ -497,9 +497,9 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
         <button
           onClick={() => setFilterStatus("all")}
           style={{
-            background: filterStatus === "all" ? "#FBBF2420" : "transparent",
+            background: filterStatus === "all" ? `${terminal.gold}20` : "transparent",
             border: `1px solid ${filterStatus === "all" ? c.orange : c.border}`,
-            borderRadius: 4, padding: "3px 10px",
+            borderRadius: terminalRadius.sm, padding: "3px 10px",
             fontFamily: MONO, fontSize: 11,
             color: filterStatus === "all" ? c.orange : c.textDim,
             cursor: "pointer",
@@ -516,7 +516,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
               style={{
                 background: filterStatus === s.key ? `${s.color()}20` : "transparent",
                 border: `1px solid ${filterStatus === s.key ? s.color() : c.border}`,
-                borderRadius: 4, padding: "3px 10px",
+                borderRadius: terminalRadius.sm, padding: "3px 10px",
                 fontFamily: MONO, fontSize: 11,
                 color: filterStatus === s.key ? s.color() : c.textDim,
                 cursor: "pointer",
@@ -530,17 +530,17 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
 
       {/* Rant list */}
       {loading ? (
-        <div style={{ color: "#FBBF2460", fontSize: 12 }}>Loading rants...</div>
+        <div style={{ color: `${terminal.gold}60`, fontSize: 12 }}>Loading rants...</div>
       ) : filteredRants.length === 0 ? (
-        <div style={{ color: "#FBBF2480", fontSize: 12 }}>No rants found.</div>
+        <div style={{ color: `${terminal.gold}80`, fontSize: 12 }}>No rants found.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {filteredRants.map(r => {
             const cat = CATEGORIES.find(cc => cc.key === r.category) || CATEGORIES[0];
             const st = STATUSES.find(s => s.key === (r.status || "pending")) || STATUSES[0];
             const hasReply = !!r.admin_note;
-            const borderCol = hasReply ? "#84FF9530" : "#FBBF2412";
-            const bgBase = hasReply ? "#84FF9506" : "transparent";
+            const borderCol = hasReply ? `${terminal.success}30` : `${terminal.gold}12`;
+            const bgBase = hasReply ? `${terminal.success}06` : "transparent";
             return (
               <button
                 key={r.id}
@@ -549,13 +549,13 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                   display: "flex", alignItems: "center", gap: 10,
                   padding: `${space[2]}px ${space[3]}px`,
                   width: "100%", border: `1px solid ${borderCol}`,
-                  borderRadius: 6, background: bgBase,
+                  borderRadius: terminalRadius.md, background: bgBase,
                   cursor: "pointer", fontFamily: MONO, fontSize: 12,
                   color: c.text, textAlign: "left",
                   transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
-                  ...(hasReply ? { borderLeft: "3px solid #84FF9550" } : {}),
+                  ...(hasReply ? { borderLeft: `3px solid ${terminal.success}50` } : {}),
                 }}
-                onMouseEnter={e => { e.currentTarget.style.background = hasReply ? "#84FF9512" : "#FBBF2410"; e.currentTarget.style.borderColor = hasReply ? "#84FF9550" : "#FBBF2430"; }}
+                onMouseEnter={e => { e.currentTarget.style.background = hasReply ? `${terminal.success}12` : `${terminal.gold}10`; e.currentTarget.style.borderColor = hasReply ? `${terminal.success}50` : `${terminal.gold}30`; }}
                 onMouseLeave={e => { e.currentTarget.style.background = bgBase; e.currentTarget.style.borderColor = borderCol; }}
               >
                 <span style={{ fontSize: 11, color: st.color(), minWidth: 20, textAlign: "center" }}>{st.icon}</span>
@@ -564,7 +564,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                   {r.title}
                 </span>
                 {hasReply && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: c.green, padding: "2px 6px", background: "#84FF9515", border: "1px solid #84FF9530", borderRadius: 3 }}>✓ REPLIED</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: c.green, padding: "2px 6px", background: `${terminal.success}15`, border: `1px solid ${terminal.success}30`, borderRadius: terminalRadius.xs }}>✓ REPLIED</span>
                 )}
                 <span style={{ fontSize: 11, color: "rgba(0,0,0,0.38)", minWidth: 50, textAlign: "right" }}>{timeAgo(r.created_at)}</span>
               </button>
@@ -583,14 +583,14 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
           onClick={fetchLogs}
           disabled={logLoading}
           style={{
-            background: "transparent", border: "1px solid #FBBF2430",
-            borderRadius: 4, padding: "8px 20px",
+            background: "transparent", border: `1px solid ${terminal.gold}30`,
+            borderRadius: terminalRadius.sm, padding: "8px 20px",
             fontFamily: MONO, fontSize: 12, color: c.orange,
             cursor: logLoading ? "wait" : "pointer",
             transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = "#FBBF2410"; e.currentTarget.style.borderColor = c.orange; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "#FBBF2430"; }}
+          onMouseEnter={e => { e.currentTarget.style.background = `${terminal.gold}10`; e.currentTarget.style.borderColor = c.orange; }}
+          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = `${terminal.gold}30`; }}
         >
           {logLoading ? "Loading..." : "Load Activity Logs"}
         </button>
@@ -604,7 +604,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
               onChange={e => { setLogFilterUser(e.target.value); setLogSelected(new Set()); }}
               style={{
                 padding: "5px 24px 5px 8px", fontSize: 11, fontFamily: MONO,
-                background: c.bg, border: "1px solid #FBBF2425", borderRadius: 4,
+                background: c.bg, border: `1px solid ${terminal.gold}25`, borderRadius: terminalRadius.sm,
                 color: c.text, outline: "none", cursor: "pointer",
                 appearance: "none",
                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%23FBBF24' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E")`,
@@ -621,7 +621,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
               onChange={e => { setLogFilterAction(e.target.value); setLogSelected(new Set()); }}
               style={{
                 padding: "5px 24px 5px 8px", fontSize: 11, fontFamily: MONO,
-                background: c.bg, border: "1px solid #FBBF2425", borderRadius: 4,
+                background: c.bg, border: `1px solid ${terminal.gold}25`, borderRadius: terminalRadius.sm,
                 color: c.text, outline: "none", cursor: "pointer",
                 appearance: "none",
                 backgroundImage: `url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%23FBBF24' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E")`,
@@ -637,13 +637,13 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                 onClick={() => { setLogFilterUser(""); setLogFilterAction(""); setLogSelected(new Set()); }}
                 style={{
                   padding: "5px 10px", fontSize: 11, fontFamily: MONO,
-                  background: "transparent", border: "1px solid #FBBF2420", borderRadius: 4,
-                  color: "#FBBF2480", cursor: "pointer",
+                  background: "transparent", border: `1px solid ${terminal.gold}20`, borderRadius: terminalRadius.sm,
+                  color: `${terminal.gold}80`, cursor: "pointer",
                 }}
               >Clear</button>
             )}
 
-            <span style={{ fontSize: 11, color: "#FBBF2450", fontFamily: MONO, marginLeft: "auto" }}>
+            <span style={{ fontSize: 11, color: `${terminal.gold}50`, fontFamily: MONO, marginLeft: "auto" }}>
               {filteredLogs.length} entries
             </span>
           </div>
@@ -652,11 +652,11 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
           <div style={{
             display: "flex", alignItems: "center", gap: 10, marginBottom: space[2],
             padding: `${space[1]}px ${space[2]}px`,
-            background: logSelected.size > 0 ? "#FBBF2408" : "transparent",
-            border: `1px solid ${logSelected.size > 0 ? "#FBBF2425" : "transparent"}`,
-            borderRadius: 4, transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
+            background: logSelected.size > 0 ? `${terminal.gold}08` : "transparent",
+            border: `1px solid ${logSelected.size > 0 ? `${terminal.gold}25` : "transparent"}`,
+            borderRadius: terminalRadius.sm, transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
           }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, fontFamily: MONO, color: "#FBBF2480" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, fontFamily: MONO, color: `${terminal.gold}80` }}>
               <input
                 type="checkbox"
                 checked={filteredLogs.length > 0 && logSelected.size === filteredLogs.length}
@@ -677,11 +677,11 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                       onClick={() => setLogConfirm(true)}
                       style={{
                         padding: "4px 14px", fontSize: 11, fontFamily: MONO, fontWeight: 700,
-                        background: "#FF4D6A15", border: "1px solid #FF4D6A40", borderRadius: 4,
+                        background: `${terminal.red}15`, border: `1px solid ${terminal.red}40`, borderRadius: terminalRadius.sm,
                         color: c.red, cursor: "pointer", transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.background = "#FF4D6A25"; e.currentTarget.style.borderColor = c.red; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "#FF4D6A15"; e.currentTarget.style.borderColor = "#FF4D6A40"; }}
+                      onMouseEnter={e => { e.currentTarget.style.background = `${terminal.red}25`; e.currentTarget.style.borderColor = c.red; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = `${terminal.red}15`; e.currentTarget.style.borderColor = `${terminal.red}40`; }}
                     >
                       Delete selected
                     </button>
@@ -693,7 +693,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                         disabled={logDeleting}
                         style={{
                           padding: "4px 14px", fontSize: 11, fontFamily: MONO, fontWeight: 700,
-                          background: c.red, border: "none", borderRadius: 4,
+                          background: c.red, border: "none", borderRadius: terminalRadius.sm,
                           color: c.text, cursor: logDeleting ? "wait" : "pointer",
                           opacity: logDeleting ? 0.5 : 1,
                         }}
@@ -704,7 +704,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                         onClick={() => setLogConfirm(false)}
                         style={{
                           padding: "4px 10px", fontSize: 11, fontFamily: MONO,
-                          background: "transparent", border: "1px solid rgba(0,0,0,0.12)", borderRadius: 4,
+                          background: "transparent", border: "1px solid rgba(0,0,0,0.12)", borderRadius: terminalRadius.sm,
                           color: "rgba(0,0,0,0.38)", cursor: "pointer",
                         }}
                       >
@@ -719,12 +719,12 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
 
           {/* Log entries */}
           <div style={{
-            border: "1px solid #FBBF2418", borderRadius: 6,
-            background: "#060A12", maxHeight: 400, overflowY: "auto",
-            scrollbarWidth: "thin", scrollbarColor: "#FBBF2430 transparent",
+            border: `1px solid ${terminal.gold}18`, borderRadius: terminalRadius.md,
+            background: terminal.surfaceDeep, maxHeight: 400, overflowY: "auto",
+            scrollbarWidth: "thin", scrollbarColor: `${terminal.gold}30 transparent`,
           }}>
             {filteredLogs.length === 0 ? (
-              <div style={{ padding: space[4], fontSize: 12, color: "#FBBF2440", fontFamily: MONO, textAlign: "center" }}>
+              <div style={{ padding: space[4], fontSize: 12, color: `${terminal.gold}40`, fontFamily: MONO, textAlign: "center" }}>
                 No log entries match filters.
               </div>
             ) : filteredLogs.map(log => {
@@ -738,7 +738,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                     display: "flex", alignItems: "center", gap: 8,
                     padding: "4px 12px", cursor: "pointer",
                     fontFamily: MONO, fontSize: 11,
-                    background: isChecked ? "#FBBF2410" : "transparent",
+                    background: isChecked ? `${terminal.gold}10` : "transparent",
                     borderBottom: "1px solid rgba(0,0,0,0.025)",
                     transition: "background 0.1s",
                   }}
@@ -757,14 +757,14 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                   <span style={{ color: cfg.color(), width: 16, textAlign: "center", flexShrink: 0 }}>
                     {cfg.icon}
                   </span>
-                  <span style={{ color: "#22D3EE", minWidth: 100, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0 }}
+                  <span style={{ color: terminal.cyan, minWidth: 100, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0 }}
                     title={log.user_email}>
                     {log.user_name || log.user_email}
                   </span>
                   <span style={{
                     fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase",
                     color: cfg.color(), background: `${cfg.color()}12`,
-                    padding: "1px 5px", borderRadius: 3, flexShrink: 0,
+                    padding: "1px 5px", borderRadius: terminalRadius.xs, flexShrink: 0,
                   }}>
                     {cfg.label}
                   </span>

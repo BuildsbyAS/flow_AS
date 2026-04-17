@@ -2,7 +2,7 @@
 // Leadership command center — highest intensity, futuristic, tactical
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { c, typo, space, layout, motion, phaseNames, shipPhases, typeConfig, phaseColors, entityColors } from "../styles/theme";
-import { Badge, Tag, Surface, Btn, EmptyState, TelemetryLabel, Th as SharedTh, EntityLink } from "../components/shared";
+import { Badge, Tag, Surface, Btn, EmptyState, TelemetryLabel, Th as SharedTh, EntityLink, TableShell } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow, Sparkline } from "../components/kpi";
 import { HealthBar } from "../components/chart";
 import useKeyboard from "../hooks/useKeyboard";
@@ -76,7 +76,7 @@ const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, w
           <span style={{ width: 1, height: 12, background: c.border, flexShrink: 0 }} />
           <span style={{
             fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-            fontWeight: 600, color: c.cyan,
+            fontWeight: 600, color: proj.owner ? c.cyan : c.textDim,
           }}>{proj.owner || "Unassigned"}</span>
         </div>
       </div>
@@ -139,8 +139,8 @@ const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, w
                   }}>{name}</span>
                   {name === proj.owner && (
                     <span style={{
-                      fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
-                      color: ec.project, letterSpacing: "0.08em", textTransform: "uppercase",
+                      fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
+                      color: ec.project, letterSpacing: typo.monoSm.tracking, textTransform: "uppercase",
                     }}>Owner</span>
                   )}
                 </div>
@@ -178,7 +178,7 @@ const SidePanel = ({ proj, tc, pc, onNavigate, onClose, exiting, isHistorical, w
                     flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>{it.title || "—"}</span>
                   <span style={{
-                    fontFamily: typo.bodySm.font, fontSize: 12,
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                     fontWeight: 600, color: c.cyan, whiteSpace: "nowrap",
                   }}>{it.person}</span>
                 </div>
@@ -261,12 +261,15 @@ const PhasePills = ({ phaseCounts, phaseColors: pc, activePhase, onPhaseClick, s
   </PillRow>
 );
 
+// Outcome pills live inside the Closed bucket now that grouping is cycle-stage
+// based — clicking any outcome takes the user to the Closed section where
+// per-row outcome pills surface the detail.
 const OutcomePills = ({ completedPct, partialPct, carriedPct, blockedPct, onNavigate }) => (
   <PillRow>
-    <Pill count={`${completedPct}%`} label="Done"    color={c.green}                   onClick={() => onNavigate("Completed")} />
-    <Pill count={`${partialPct}%`}   label="Partial" color={c.orange}                  onClick={() => onNavigate("Partial")} />
-    <Pill count={`${carriedPct}%`}   label="Carry"   color={c.amber || c.orange}       onClick={() => onNavigate("Carry")} />
-    <Pill count={`${blockedPct}%`}   label="Blocked" color={c.red}                     onClick={() => onNavigate("Blocked")} />
+    <Pill count={`${completedPct}%`} label="Done"    color={c.green}                   onClick={() => onNavigate("Closed")} />
+    <Pill count={`${partialPct}%`}   label="Partial" color={c.orange}                  onClick={() => onNavigate("Closed")} />
+    <Pill count={`${carriedPct}%`}   label="Carry"   color={c.amber || c.orange}       onClick={() => onNavigate("Closed")} />
+    <Pill count={`${blockedPct}%`}   label="Blocked" color={c.red}                     onClick={() => onNavigate("Closed")} />
   </PillRow>
 );
 
@@ -299,16 +302,23 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
       _setSidePanelId(id);
     } else {
       setSidePanelExiting(true);
-      sidePanelTimerRef.current = setTimeout(() => { _setSidePanelId(null); setSidePanelExiting(false); }, 180);
+      const reduced = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const exitMs = reduced ? 0 : parseInt(motion.fast.duration, 10);
+      sidePanelTimerRef.current = setTimeout(() => { _setSidePanelId(null); setSidePanelExiting(false); }, exitMs);
     }
   }, []);
+  useEffect(() => () => clearTimeout(sidePanelTimerRef.current), []);
   const [morphKey, setMorphKey] = useState(0);
-  const [rowAnimKey, setRowAnimKey] = useState(0);
+  const [rowAnimKey, setRowAnimKey] = useState(1);
   const calcAge = (d) => { if (!d) return 0; const ms = new Date(todayStr) - new Date(d); return isNaN(ms) ? 0 : Math.max(0, Math.ceil(ms / 86400000)); };
   const tc = typeConfig();
   const pc = phaseColors();
 
-  const calcPlanned = (s, e) => (s && e) ? Math.max(1, Math.ceil((new Date(e) - new Date(s)) / 86400000)) : 0;
+  const calcPlanned = (s, e) => {
+    if (!s || !e) return 0;
+    const days = Math.ceil((new Date(e) - new Date(s)) / 86400000);
+    return days > 0 ? days : 0;
+  };
 
   const projectData = React.useMemo(() => {
   const allItems = commitments.flatMap(cm =>
@@ -379,12 +389,14 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
 
   // ── GA auto-hide: hide GA projects older than threshold ──
   const gaVisibilityWeeks = parseInt(appSettings.ga_visibility_weeks, 10);
-  const gaThresholdMs = !isNaN(gaVisibilityWeeks) ? gaVisibilityWeeks * 7 * 24 * 60 * 60 * 1000 : null;
+  // 0 / NaN / negative → never hide (feature disabled). Positive → hide GA projects older than N weeks.
+  const gaThresholdMs = Number.isFinite(gaVisibilityWeeks) && gaVisibilityWeeks > 0 ? gaVisibilityWeeks * 7 * 24 * 60 * 60 * 1000 : null;
   const isGaHidden = (proj) => gaThresholdMs !== null && proj.phase === "GA" && proj.gaEnteredAt && (new Date(todayStr).getTime() - new Date(proj.gaEnteredAt).getTime()) > gaThresholdMs;
 
   // ── Apply global filters to summary data ──
   const summaryData = projectData.filter(proj => {
     if (isGaHidden(proj)) return false;
+    if (proj.status === "deprioritized") return false;
     if (globalFilters.owner?.length > 0 && !globalFilters.owner.includes(proj.owner)) return false;
     if (globalFilters.squad?.length > 0 && !globalFilters.squad.includes(proj.squad)) return false;
     if (globalFilters.person?.length > 0) {
@@ -400,6 +412,18 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   const summaryItems = summaryData.flatMap(p => p.items);
   const totalCommitments = summaryItems.length;
   const noActionCount = summaryData.filter(p => p.items.length === 0).length;
+  // Deprioritized projects are excluded from summaryData; compute separately for the KPI tile.
+  const deprioritizedCount = projectData.filter(proj => {
+    if (proj.status !== "deprioritized") return false;
+    if (isGaHidden(proj)) return false;
+    if (globalFilters.owner?.length > 0 && !globalFilters.owner.includes(proj.owner)) return false;
+    if (globalFilters.squad?.length > 0 && !globalFilters.squad.includes(proj.squad)) return false;
+    if (globalFilters.person?.length > 0) {
+      const hasPersonCommitment = proj.items.some(it => globalFilters.person.includes(it.person));
+      if (!hasPersonCommitment) return false;
+    }
+    return true;
+  }).length;
 
   // ── 6-week trends for KPI sparklines (driven by `history`) ──
   // history shape: { [projectId]: [{ week, entries: [{ stage, person, type, outcome, ... }] }, ...] }
@@ -448,12 +472,18 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
     }
     return true;
   });
-  // Scope all item-level metrics to the same item pool for consistent percentages
-  const allOutcomeItems = filteredCommitments.flatMap(cm => cm.items.filter((_, idx) => cm.deselected !== idx));
+  // Scope all item-level metrics to the same item pool for consistent percentages.
+  // Strip padded empty slots — a slot without a title or project is not a real commitment.
+  const isRealItem = (it) => !!it && (!!(it.title && it.title.trim()) || !!it.project);
+  const allOutcomeItems = filteredCommitments.flatMap(cm => cm.items.filter((it, idx) => cm.deselected !== idx && isRealItem(it)));
   const outcomeTotal = allOutcomeItems.length;
-  const lockedItems = filteredCommitments.filter(cm => !!cm.lockedAt).flatMap(cm => cm.items.filter((_, idx) => cm.deselected !== idx));
+  const lockedItems = filteredCommitments.filter(cm => !!cm.lockedAt).flatMap(cm => cm.items.filter((it, idx) => cm.deselected !== idx && isRealItem(it)));
   const lockedCount = lockedItems.length;
   const lockedPct = outcomeTotal > 0 ? Math.round((lockedCount / outcomeTotal) * 100) : 0;
+  // "% of team" uses person-level denominators so it cannot exceed 100.
+  const lockedPeopleCount = filteredCommitments.filter(cm => !!cm.lockedAt).length;
+  const teamSize = filteredCommitments.length;
+  const lockedTeamPct = teamSize > 0 ? Math.round((lockedPeopleCount / teamSize) * 100) : 0;
   const completedCount = allOutcomeItems.filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
   const partialCount = allOutcomeItems.filter(it => it.outcome === "partial").length;
   const carriedCount = allOutcomeItems.filter(it => it.outcome === "carry").length;
@@ -472,6 +502,8 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   const phaseCounts = {};
   phaseNames.forEach(ph => { phaseCounts[ph] = 0; });
   summaryData.forEach(proj => { if (phaseCounts[proj.phase] !== undefined) phaseCounts[proj.phase]++; });
+  phaseCounts.Ship = summaryData.filter(p => p.phase === "Alpha" || p.phase === "Beta").length;
+  const inFlightCount = summaryData.filter(p => p.phase !== "GA").length;
 
   // ── Delta map (scoped to filtered commitments) ──
   const deltaMap = {};
@@ -520,7 +552,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
 
   const toggleSort = (col) => { if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortCol(col); setSortDir("asc"); } };
   // Matrix table density per design-directions.html: rows 13px/16px, headers 12px/16px
-  const dp = { cellPad: `13px ${space[4]}px`, headerPad: `12px ${space[4]}px`, minTable: 600 };
+  const dp = { cellPad: `12px ${space[4]}px`, headerPad: `12px ${space[4]}px`, minTable: 600 };
   // Total column count: Squad + Project + Owner + Status + Health + phase columns + Ship
   const matrixColCount = phaseNames.length + 6;
 
@@ -529,6 +561,12 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
 
   // Scroll to a status group after switching to people mode — polls until element renders
   const [scrollFeedback, setScrollFeedback] = useState(null);
+  const [scrollFeedbackExiting, setScrollFeedbackExiting] = useState(false);
+  const scrollFeedbackTimers = useRef({ exit: null, clear: null });
+  useEffect(() => () => { clearTimeout(scrollFeedbackTimers.current.exit); clearTimeout(scrollFeedbackTimers.current.clear); }, []);
+  const groupLabelFor = (key) => ({
+    Closed: "closed", Locked: "locked", Open: "open",
+  }[key] || key.toLowerCase());
   const scrollToGroup = useCallback((groupKey) => {
     handleModeChange("people");
     let attempts = 0;
@@ -538,13 +576,18 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
         const rect = el.getBoundingClientRect();
         const headerH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--flow-header-h')) || 104;
         const y = rect.top + window.scrollY - headerH - 12;
-        window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
-      } else if (attempts < 10) {
+        const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        window.scrollTo({ top: Math.max(0, y), behavior: reduced ? "auto" : "smooth" });
+      } else if (attempts < 30) {
         attempts++;
         requestAnimationFrame(tryScroll);
       } else {
-        setScrollFeedback(`No ${groupKey.toLowerCase()} items`);
-        setTimeout(() => setScrollFeedback(null), 2000);
+        clearTimeout(scrollFeedbackTimers.current.exit);
+        clearTimeout(scrollFeedbackTimers.current.clear);
+        setScrollFeedbackExiting(false);
+        setScrollFeedback(`No ${groupLabelFor(groupKey)} items`);
+        scrollFeedbackTimers.current.exit = setTimeout(() => setScrollFeedbackExiting(true), 1800);
+        scrollFeedbackTimers.current.clear = setTimeout(() => { setScrollFeedback(null); setScrollFeedbackExiting(false); }, 2000);
       }
     };
     requestAnimationFrame(tryScroll);
@@ -576,14 +619,28 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   }, [filterPhase, sortCol, sortDir, showRisksOnly, pulseMode, filterStatus]);
 
   // ── Keyboard shortcuts ──
+  // Scroll focused row into view after arrow-key navigation
+  useEffect(() => {
+    if (!kbActive) return;
+    const rows = document.querySelectorAll("tbody .flow-row");
+    const el = rows[focusIdx];
+    if (el && el.scrollIntoView) {
+      const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      el.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
+    }
+  }, [focusIdx, kbActive]);
+
   useKeyboard([
-    { key: "ArrowUp", fn: () => { setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); } },
-    { key: "ArrowDown", fn: () => { setKbActive(true); setFocusIdx(i => Math.min(filtered.length - 1, i + 1)); } },
-    { key: "Enter", fn: () => { if (filtered[focusIdx]) { const p = filtered[focusIdx]; setSidePanelProj(sidePanelId === p.id ? null : p.id); } } },
-    { key: "s", fn: () => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); } },
+    // First arrow press activates kb-focus mode WITHOUT moving, so the highlight
+    // lands on row 0 (already the default focusIdx). Only subsequent presses
+    // step through rows. Prevents the "arrow skips the first row" confusion.
+    { key: "ArrowUp", fn: () => { if (pulseMode !== "matrix") return; if (!kbActive) { setKbActive(true); return; } setFocusIdx(i => Math.max(0, i - 1)); } },
+    { key: "ArrowDown", fn: () => { if (pulseMode !== "matrix") return; if (!kbActive) { setKbActive(true); return; } setFocusIdx(i => Math.min(filtered.length - 1, i + 1)); } },
+    { key: "Enter", fn: () => { if (pulseMode !== "matrix" || !kbActive) return; if (filtered[focusIdx]) { const p = filtered[focusIdx]; setSidePanelProj(sidePanelId === p.id ? null : p.id); } } },
+    { key: "s", fn: () => { if (pulseMode !== "matrix") return; setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); } },
     { key: "c", fn: () => { clearLocalFilters(); } },
-    { key: "Escape", fn: () => { if (sidePanelId) { setSidePanelProj(null); } else { clearLocalFilters(); } } },
-  ], [filtered.length, focusIdx, filterStatus, showRisksOnly, sidePanelId]);
+    { key: "Escape", fn: () => { if (sidePanelId) { setSidePanelProj(null); } else { clearLocalFilters(); setKbActive(false); } } },
+  ], [filtered.length, focusIdx, filterStatus, showRisksOnly, sidePanelId, pulseMode, kbActive]);
 
   // Re-trigger row animation only on mode change
   useEffect(() => {
@@ -603,9 +660,9 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   // Loading state
   if (loadingProp) {
     return (
-      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 240px)", flexDirection: "column", gap: space[3] }}>
+      <div ref={devRef} className="flow-loading-delayed" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 240px)", flexDirection: "column", gap: space[3] }}>
         <div style={{ width: 32, height: 32, border: `3px solid ${c.border}`, borderTopColor: c.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Loading pulse data...</span>
+        <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>Loading pulse...</span>
       </div>
     );
   }
@@ -633,7 +690,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
 
       {/* Scroll feedback toast */}
       {scrollFeedback && (
-        <div style={{
+        <div className={scrollFeedbackExiting ? "flow-fade-exit" : "flow-banner-enter"} style={{
           position: "fixed", bottom: space[5], left: "50%", transform: "translateX(-50%)",
           background: c.surfaceOverlay, border: `1px solid ${c.border}`, borderRadius: layout.radiusMd,
           padding: `${space[2]}px ${space[4]}px`, zIndex: 100,
@@ -644,9 +701,9 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
 
       {/* Historical week banner */}
       {isHistorical && (
-        <div style={{
+        <div className="flow-banner-enter" style={{
           background: `${c.orange}12`, border: `1px solid ${c.orange}30`, borderRadius: layout.radiusMd,
-          padding: `${space[2]}px ${space[4]}px`, marginBottom: space[2],
+          padding: `${space[3]}px ${space[4]}px`, marginBottom: space[2],
           display: "flex", alignItems: "center", gap: space[2],
           fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.orange,
         }}>
@@ -673,38 +730,51 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
         {pulseMode === "matrix" ? (
           <>
             <KpiCard
-              label="Active Projects"
-              value={summaryData.length}
-              sub={`across ${new Set(summaryData.map(p => p.squad).filter(Boolean)).size} squads and ${phaseNames.length + 1} phases`}
+              index={0}
+              label="In Flight"
+              value={inFlightCount}
+              sub="across all squads"
             >
-              <PhasePills
-                phaseCounts={phaseCounts}
-                phaseColors={pc}
-                activePhase={filterPhase}
-                onPhaseClick={(ph) => { setFilterPhase(filterPhase === ph ? null : ph); setFilterStatus(""); }}
-                shipCount={shippingProjects.length}
-                shipActive={filterStatus === "shipping"}
-                onShipClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); setShowRisksOnly(false); }}
-              />
+              <PillRow>
+                {["PRD", "Design", "Dev", "QA", "Ship"].map(ph => (
+                  <Pill
+                    key={ph}
+                    count={phaseCounts[ph] || 0}
+                    label={ph}
+                    color={ph === "Ship" ? c.green : (pc[ph] || c.textDim)}
+                  />
+                ))}
+              </PillRow>
             </KpiCard>
             <KpiCard
-              label="Shipped This Week"
+              label="In Ship Phase"
               value={shippingProjects.length}
-              sub="reached Alpha / Beta / GA"
-              onClick={() => { setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null); }}
+              sub="currently in Alpha / Beta / GA"
+              onClick={() => {
+                if (shippingProjects.length === 0) return;
+                setFilterStatus(filterStatus === "shipping" ? "" : "shipping"); setFilterPhase(null);
+              }}
               active={filterStatus === "shipping"}
             >
-              {trends.shipped.length > 1 && (
-                <Sparkline values={trends.shipped} color={c.green} />
-              )}
+              <PillRow>
+                {["Alpha", "Beta", "GA"].map(ph => (
+                  <Pill
+                    key={ph}
+                    count={summaryData.filter(p => p.phase === ph).length}
+                    label={ph}
+                    color={pc[ph] || c.green}
+                  />
+                ))}
+              </PillRow>
             </KpiCard>
             <KpiCard
-              label={(() => { const d = summaryData.filter(p => p.status === "deprioritized").length; return d === 0 ? "No Activity" : "Deprioritized"; })()}
-              value={(() => { const d = summaryData.filter(p => p.status === "deprioritized").length; return d > 0 ? d : noActionCount; })()}
-              sub={(() => { const d = summaryData.filter(p => p.status === "deprioritized").length; return d > 0 ? "paused projects" : "projects without commitments"; })()}
+              label={deprioritizedCount > 0 ? "Deprioritized" : "No Activity"}
+              value={deprioritizedCount > 0 ? deprioritizedCount : noActionCount}
+              sub={deprioritizedCount > 0 ? "paused projects" : "projects without commitments"}
               onClick={() => {
-                const d = summaryData.filter(p => p.status === "deprioritized").length;
-                const next = d > 0 ? "deprioritized" : "no_action";
+                const next = deprioritizedCount > 0 ? "deprioritized" : "no_action";
+                const nextValue = deprioritizedCount > 0 ? deprioritizedCount : noActionCount;
+                if (nextValue === 0) return;
                 setFilterStatus(filterStatus === next ? "" : next); setFilterPhase(null);
               }}
               active={filterStatus === "deprioritized" || filterStatus === "no_action"}
@@ -718,9 +788,9 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
         ) : (
           <>
             <KpiCard
-              label="Commitments"
-              value={totalCommitments}
-              sub={`${lockedCount} locked of ${totalCommitments} total`}
+              label="Commitments Locked"
+              value={lockedCount}
+              sub={outcomeTotal > 0 ? `out of ${outcomeTotal} total` : "awaiting declare"}
             >
               <OutcomePills
                 completedPct={completedPct}
@@ -731,15 +801,14 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
               />
             </KpiCard>
             <KpiCard
-              label="Locked"
-              value={lockedCount}
-              sub={totalCommitments > 0 ? `${Math.round((lockedCount / totalCommitments) * 100)}% of team` : "—"}
-              onClick={() => scrollToGroup("Locked")}
+              label="People"
+              value={teamSize}
+              sub={teamSize > 0 ? `${lockedPeopleCount} locked · ${Math.max(0, teamSize - lockedPeopleCount)} open` : "—"}
             />
             <KpiCard
               label="Lock Rate"
-              value={`${lockedPct}%`}
-              sub={lockedPct >= 80 ? "on track" : lockedPct >= 50 ? "behind pace" : "at risk"}
+              value={teamSize > 0 ? `${lockedTeamPct}%` : "—"}
+              sub={teamSize === 0 ? "no one this week" : lockedTeamPct >= 80 ? "on track" : lockedTeamPct >= 50 ? "behind pace" : "at risk"}
             />
             <HealthGauge value={avgHealth} />
           </>
@@ -776,13 +845,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
           PROJECT MATRIX — table with hover panel + delta tokens
           ═══════════════════════════════════════════════════════════ */}
       {pulseMode === "matrix" && (
-        <Surface variant="data" compact style={{
-          padding: 0, boxShadow: c.shadowCard, overflow: "clip",
-        }}>
-          <div style={{
-            borderRadius: layout.radius,
-          }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: dp.minTable }}>
+        <TableShell minWidth={dp.minTable}>
               <thead>
                 <tr>
                   <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: 70 }}>Squad</Th>
@@ -794,8 +857,8 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                     <th key={ph} style={{
                       position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 2,
                       padding: dp.headerPad, textAlign: "center",
-                      fontFamily: typo.bodyXs.font, fontSize: 12,
-                      fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase",
+                      fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                      fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, textTransform: "uppercase",
                       color: pc[ph],
                       borderBottom: `1px solid ${pc[ph]}40`,
                       borderLeft: `1px dotted ${c.border}`, minWidth: 76,
@@ -805,8 +868,8 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                   <th style={{
                     position: "sticky", top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 2,
                     padding: dp.headerPad, textAlign: "center",
-                    fontFamily: typo.bodyXs.font, fontSize: 12,
-                    fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase",
+                    fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                    fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, textTransform: "uppercase",
                     color: c.green,
                     borderBottom: `1px solid ${c.green}40`,
                     borderLeft: `1px dotted ${c.border}`, minWidth: 76,
@@ -827,6 +890,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                   const byPhase = {};
                   phaseNames.forEach(ph => { byPhase[ph] = []; });
                   proj.items.forEach(it => { const ph = it.stage || proj.phase; if (byPhase[ph]) byPhase[ph].push(it); });
+                  const rowBg = sidePanelId === proj.id ? c.surfaceAlt : isFocused ? `${c.accent}18` : c.surface;
                   return (
                     <React.Fragment key={proj.id}>
                       <tr
@@ -834,19 +898,21 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                         onClick={() => { setSidePanelProj(sidePanelId === proj.id ? null : proj.id); }}
                         style={{
                           cursor: "pointer",
-                          background: sidePanelId === proj.id ? c.surfaceAlt : isFocused ? `${c.accent}08` : "transparent",
-                          transition: `background ${motion.interaction.duration}`,
-                          animation: `rowSlideIn 0.3s ${motion.critical.easing} both`,
-                          animationDelay: `${Math.min(fi * 20, 400)}ms`,
+                          background: rowBg,
+                          "--row-bg": rowBg,
+                          opacity: proj.status === "deprioritized" ? 0.55 : 1,
+                          animation: rowAnimKey > 0 ? `rowSlideIn ${motion.normal.duration} ${motion.normal.easing} both` : "none",
+                          animationDelay: rowAnimKey > 0 ? `${Math.min(fi * 15, 240)}ms` : "0ms",
                         }}
                       >
                         {/* Squad */}
                         <td style={{
                           padding: dp.cellPad,
-                          fontFamily: typo.bodySm.font, fontSize: 13,
-                          fontWeight: 500, color: c.textDim,
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                          fontWeight: 600, color: c.textMid,
                           borderBottom: `1px dotted ${c.border}`,
-                          position: "sticky", left: 0, background: c.bg, zIndex: 1,
+                          position: "sticky", left: 0, background: "var(--row-bg)", zIndex: 1,
+                          transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
                         }}>{proj.squad}</td>
                         {/* Project */}
                         <td style={{
@@ -858,7 +924,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                             <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("projects", proj.id); }} style={{
                               fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                               fontWeight: 700, color: entityColors().project, cursor: "pointer",
-                              textDecoration: "underline", textDecorationColor: entityColors().project + "40",
+                              textDecoration: "underline", textDecorationColor: entityColors().project + "80",
                               textUnderlineOffset: 2,
                             }}>{proj.id}</span>
                             <span style={{
@@ -866,19 +932,20 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                               fontWeight: 600, color: c.text,
                               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 180,
                             }} title={proj.name}>{proj.name}</span>
-                            {proj.items.length === 0 && (
+                            {!isHistorical && proj.items.length === 0 && (
                               <span style={{
                                 marginLeft: "auto", flexShrink: 0,
                                 border: `1px solid ${c.orange}20`,
                                 background: `${c.orange}10`,
-                                padding: `3px 8px`,
-                                fontSize: 11,
+                                padding: `${space[1]}px ${space[2]}px`,
                                 fontFamily: typo.monoSm.font,
-                                fontWeight: 700,
-                                letterSpacing: "0.04em",
-                                lineHeight: 1.3,
+                                fontSize: typo.monoSm.size,
+                                fontWeight: typo.monoSm.weight,
+                                letterSpacing: typo.monoSm.tracking,
+                                lineHeight: typo.monoSm.lineHeight,
                                 borderRadius: layout.radiusXs,
                                 color: c.orange,
+                                textTransform: "uppercase",
                                 whiteSpace: "nowrap",
                               }}>No commitments</span>
                             )}
@@ -893,7 +960,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                           fontWeight: 500, color: proj.owner ? c.textMid : c.red,
                           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 120,
                         }}>
-                          {proj.owner || "—"}
+                          {proj.owner || "No owner"}
                         </td>
                         {/* Status (phase) */}
                         <td style={{
@@ -901,7 +968,12 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                           borderBottom: `1px dotted ${c.border}`,
                           borderLeft: `1px dotted ${c.border}`,
                         }}>
-                          <Badge color={pc[proj.phase] || c.textMid} bg={`${pc[proj.phase] || c.textMid}15`}>{proj.phase}</Badge>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: space[1], flexWrap: "wrap" }}>
+                            <Badge color={pc[proj.phase] || c.textMid} bg={`${pc[proj.phase] || c.textMid}15`}>{proj.phase}</Badge>
+                            {proj.status === "deprioritized" && (
+                              <Badge color={c.textMid} bg={c.surfaceAlt}>Paused</Badge>
+                            )}
+                          </div>
                         </td>
                         {/* Health */}
                         <td title={`Health ${proj.health}/100 — ${proj.risks.map(r => r.label).join(", ") || "No risks"}`} style={{
@@ -974,7 +1046,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                                     <span onClick={(e) => { e.stopPropagation(); if (onNavigate) onNavigate("people", it.person); }} style={{
                                       fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                                       fontWeight: 600, color: c.text, cursor: "pointer",
-                                      textDecoration: "underline", textDecorationColor: c.textMid + "40",
+                                      textDecoration: "underline", textDecorationColor: c.textMid + "80",
                                       textUnderlineOffset: 2, minWidth: 100,
                                     }}>{it.person}</span>
                                     <Badge color={tc[it.type]?.color} bg={tc[it.type]?.bg}>{it.type}</Badge>
@@ -993,9 +1065,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                   );
                 })}
               </tbody>
-            </table>
-          </div>
-        </Surface>
+        </TableShell>
       )}
 
       {/* ═══════════════════════════════════════════════════════════
@@ -1011,15 +1081,22 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
           if (globalFilters.squad?.length > 0 && !globalFilters.squad.includes(pObj.squad)) return;
           const isLocked = !!cm.lockedAt;
           const isClosed = !!cm.closedAt;
+          // Grouping is commitment-level — a person sits in Closed, Locked, or
+          // Open depending on where they are in the weekly cycle. Item-level
+          // outcome (done/partial/carry/blocked) lives in `_status` and renders
+          // as the row's Status pill, not the group header.
+          const group = isClosed ? "Closed" : isLocked ? "Locked" : "Open";
 
-          const items = cm.items.slice(0, 3).filter(it => (it.title && it.title.trim()) || it.project);
+          const items = cm.items.slice(0, 3).filter(it => it && ((it.title && it.title.trim()) || it.project));
           if (items.length === 0) {
-            // Person with no commits — show empty row
+            // Person with no real items — bucket under Open regardless of the
+            // locked/closed flag, because there's nothing actionable to track.
+            // Honors "three buckets = actionable cycle state" over raw flags.
             if (!globalFilters.owner || globalFilters.owner.length === 0) {
               allCommitRows.push({
                 person: cm.person, squad: pObj.squad, role: pObj.role,
                 project: null, projectName: null, title: null,
-                type: null, stage: null, _status: "Empty",
+                type: null, stage: null, _status: "Empty", _group: "Open",
                 isDeselected: false, commitIdx: null,
               });
             }
@@ -1039,12 +1116,12 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                 title: it.title, type: it.type || null,
                 stage: it.stage || (proj?.phase || null),
                 duration: it.duration || null,
-                _status: status, isDeselected: isDepri, commitIdx: idx,
+                _status: status, _group: group, isDeselected: isDepri, commitIdx: idx,
               });
             });
           }
-          // Buffer item
-          if (cm.deselected >= 0 && cm.buffer && cm.buffer.trim() && cm.bufferProject) {
+          // Buffer item (optional slot 4 — surface whenever present, independent of deselection)
+          if (cm.buffer && cm.buffer.trim() && cm.bufferProject) {
             const proj = projects.find(pr => pr.id === cm.bufferProject);
             if (!globalFilters.owner || globalFilters.owner.length === 0 || (proj && globalFilters.owner.includes(proj.owner))) {
               const bufStatus = isClosed
@@ -1057,7 +1134,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                 project: cm.bufferProject, projectName: proj?.name || null,
                 title: cm.buffer, type: cm.bufferType || null,
                 stage: cm.bufferStage || (proj?.phase || null),
-                _status: bufStatus, isDeselected: false, isBuffer: true, commitIdx: null,
+                _status: bufStatus, _group: group, isDeselected: false, isBuffer: true, commitIdx: null,
               });
             }
           }
@@ -1065,22 +1142,17 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
         const outcomeColors = {
           Completed: c.green, WIP: c.cyan, Ready: c.cyan, Carry: c.orange,
           Partial: c.orange, Open: c.textMid, Buffer: c.purple, Blocked: c.red,
-          Deprioritized: c.textDim, Closed: c.textMid, Empty: c.red,
+          Deprioritized: c.textDim, Closed: c.textMid, Empty: c.orange,
         };
 
-        // Group order — mirrors Commit People table pattern
+        // Three cycle-stage buckets — Closed first (week complete, archived),
+        // Locked next (committed, in-progress), Open last (still drafting or
+        // nothing yet). Palette canonical across Flow: Closed=gray, Locked=green,
+        // Open=orange. Same tokens used in the Commit tab people table.
         const groupOrder = [
-          { key: "Completed", label: "Completed", color: c.green },
-          { key: "Partial", label: "Partial", color: c.orange },
-          { key: "WIP", label: "Work in Progress", color: c.cyan },
-          { key: "Ready", label: "Ready", color: c.cyan },
-          { key: "Open", label: "Open", color: c.textMid },
-          { key: "Buffer", label: "Buffer", color: c.purple },
-          { key: "Blocked", label: "Blocked", color: c.red },
-          { key: "Carry", label: "Carry", color: c.orange },
           { key: "Closed", label: "Closed", color: c.textMid },
-          { key: "Deprioritized", label: "Deprioritized", color: c.textDim },
-          { key: "Empty", label: "Empty", color: c.red },
+          { key: "Locked", label: "Locked", color: c.green },
+          { key: "Open",   label: "Open",   color: c.orange },
         ];
 
         // Sort within each group
@@ -1100,7 +1172,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
 
         const groupedData = groupOrder.map(g => ({
           ...g,
-          rows: sortGroupRows(allCommitRows.filter(r => r._status === g.key)),
+          rows: sortGroupRows(allCommitRows.filter(r => r._group === g.key)),
         })).filter(g => g.rows.length > 0);
 
         let globalRowIdx = 0;
@@ -1108,9 +1180,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
         const colCount = 8;
 
         return (
-          <div style={{ borderRadius: layout.radius, border: `1px solid ${c.border}`, background: c.surfaceData, boxShadow: c.shadowCard, overflow: "clip" }}>
-            <div style={{ borderRadius: layout.radius }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+          <TableShell minWidth={700}>
                 <thead>
                   <tr>
                     <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: 70 }}>Squad</Th>
@@ -1125,21 +1195,24 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                 </thead>
                 <tbody key={rowAnimKey}>
                   {groupedData.length === 0 && (
-                    <tr><td colSpan={colCount} style={{ textAlign: "center", padding: `${space[7]}px 0`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No commitments yet</td></tr>
+                    <tr><td colSpan={colCount} style={{ padding: `${space[5]}px ${space[4]}px` }}>
+                      <EmptyState icon="🗒" title="No commitments" message={localActiveFilters > 0 || (globalFilters.owner?.length || globalFilters.squad?.length || globalFilters.person?.length) ? "No rows match the current filters." : "Nobody has committed to anything this week."}
+                        action={localActiveFilters > 0 ? "Clear filters" : null} onAction={clearLocalFilters} />
+                    </td></tr>
                   )}
                   {groupedData.map((group) => {
                     const sectionRows = group.rows.map((it) => {
                       const ri = globalRowIdx++;
                       const sClr = outcomeColors[it._status] || c.textDim;
                       const isDepri = it._status === "Deprioritized";
-                      const rowBg = it._status === "Blocked" ? `${c.red}08`
-                        : "transparent";
+                      const rowBg = it._status === "Blocked" ? `${c.red}12` : c.surface;
                       return (
                         <tr key={`${it.person}-${it.project || "none"}-${ri}`} className="flow-row" style={{
-                          animation: `rowSlideIn 0.3s ${motion.interaction.easing} both`,
-                          animationDelay: `${Math.min(ri * 20, 600)}ms`,
-                          opacity: isDepri ? 0.45 : 1,
+                          animation: `rowSlideIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                          animationDelay: `${Math.min(ri * 15, 240)}ms`,
+                          opacity: isDepri ? 0.55 : 1,
                           background: rowBg,
+                          "--row-bg": rowBg,
                           pointerEvents: "auto",
                         }}>
                           {/* Squad */}
@@ -1147,7 +1220,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                             padding: dp.cellPad,
                             fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                             fontWeight: 600, color: c.textMid, borderBottom: dotBorder,
-                            position: "sticky", left: 0, background: c.bg, zIndex: 1,
+                            position: "sticky", left: 0, background: "var(--row-bg)", zIndex: 1,
                           }}>{it.squad}</td>
                           {/* Person */}
                           <td style={{ padding: dp.cellPad, borderBottom: dotBorder, borderLeft: dotBorder }}>
@@ -1173,7 +1246,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                                   cursor: "pointer",
                                   textDecoration: isDepri ? "line-through" : "underline",
                                   textDecorationStyle: isDepri ? "dotted" : undefined,
-                                  textDecorationColor: isDepri ? c.textMid : c.textMid + "30",
+                                  textDecorationColor: isDepri ? c.textMid : c.textMid + "80",
                                   textUnderlineOffset: isDepri ? undefined : 2,
                                 }}
                               >{it.title}</span>
@@ -1217,7 +1290,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                       /* Section header row */
                       <tr key={`section-${group.key}`} data-status-group={group.key}>
                         <td colSpan={colCount} style={{
-                          padding: `${space[2]}px ${space[2]}px`,
+                          padding: `${space[2]}px ${space[4]}px`,
                           background: `${group.color}06`,
                           borderBottom: dotBorder,
                           borderTop: dotBorder,
@@ -1228,13 +1301,14 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                               background: group.color,
                             }} />
                             <span style={{
-                              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                              fontWeight: 700, color: group.color, letterSpacing: "0",
+                              fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
+                              fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking,
+                              textTransform: "uppercase", color: group.color,
                             }}>{group.label}</span>
                             <span style={{
                               fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
                               fontWeight: typo.monoMd.weight, color: group.color,
-                              opacity: 0.7, fontVariantNumeric: "tabular-nums",
+                              fontVariantNumeric: "tabular-nums",
                             }}>{group.rows.length}</span>
                           </div>
                         </td>
@@ -1243,9 +1317,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
                     ];
                   })}
                 </tbody>
-              </table>
-            </div>
-          </div>
+          </TableShell>
         );
       })()}
 
@@ -1259,7 +1331,7 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
           ═══════════════════════════════════════════════════════════ */}
       {sidePanelProj && (
         <>
-          <div className="flow-side-panel-backdrop" onClick={() => setSidePanelProj(null)} />
+          <div className={`flow-side-panel-backdrop${sidePanelExiting ? " flow-side-panel-backdrop-exit" : ""}`} onClick={() => setSidePanelProj(null)} />
           <SidePanel
             proj={sidePanelProj}
             tc={tc}

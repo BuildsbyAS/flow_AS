@@ -32,7 +32,7 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
           100% { opacity: 1; transform: translateY(0); }
         }
         .flow-login-primary:hover:not(:disabled) {
-          background: #D24E0A !important;
+          background: ${c.accentHover} !important;
         }
         .flow-login-primary:active:not(:disabled) {
           transform: translateY(1px);
@@ -116,7 +116,7 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
             cursor: signingIn ? "wait" : "pointer",
             background: c.accent,
             border: "none",
-            color: "#FFFFFF",
+            color: c.textOnAccent,
             opacity: signingIn ? 0.6 : 1,
             transition,
           }}

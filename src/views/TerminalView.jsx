@@ -1,7 +1,7 @@
 // Flow — Terminal View
 // Locked terminal gate for Settings & Logs, Rant always open
 import React, { useState, useRef, useEffect } from "react";
-import { c, typo, space, layout, motion, themes } from "../styles/theme";
+import { c, typo, space, layout, motion, themes, terminal, terminalRadius } from "../styles/theme";
 import RantView from "./RantView";
 import AdminSettingsView from "./AdminSettingsView";
 import { logTerminalAttempt, logAdminAttempt } from "../lib/activityLog";
@@ -220,7 +220,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
         <div style={{
           flex: 1, overflow: "auto", padding: `${space[5]}px ${space[6]}px`,
           fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-          fontSize: 13, lineHeight: 1.8, color: "#FBBF24",
+          fontSize: 13, lineHeight: 1.8, color: terminal.gold,
           scrollbarWidth: "none", position: "relative", zIndex: 5,
         }}>
           <AdminSettingsView onBack={() => setActiveModule(null)} appSettings={appSettings} setAppSettings={setAppSettings} />
@@ -252,7 +252,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
         <div style={{
           flex: 1, overflow: "auto", padding: `${space[5]}px ${space[6]}px`,
           fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-          fontSize: 13, lineHeight: 1.8, color: "#00ff41",
+          fontSize: 13, lineHeight: 1.8, color: terminal.green,
           scrollbarWidth: "none", position: "relative", zIndex: 5,
         }}>
           <RantView onBack={() => setActiveModule(null)} auth={auth} />
@@ -287,18 +287,18 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
       <div ref={terminalRef} style={{
         flex: 1, overflow: "auto", padding: `${space[5]}px ${space[6]}px`,
         fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
-        fontSize: 13, lineHeight: 1.8, color: "#00ff41",
+        fontSize: 13, lineHeight: 1.8, color: terminal.green,
         scrollbarWidth: "none", position: "relative", zIndex: 5,
       }}>
 
         {/* Boot sequence */}
         {bootLines.map((line, i) => (
           <div key={i} style={{
-            color: line.color || "#00ff41",
+            color: line.color || terminal.green,
             opacity: line.text ? 1 : 0,
             animation: "flow-load-fade-in 0.2s ease-out",
           }}>
-            <span style={{ color: "#00ff4190", marginRight: 8 }}>$</span>
+            <span style={{ color: `${terminal.green}90`, marginRight: 8 }}>$</span>
             {line.text}
           </div>
         ))}
@@ -308,14 +308,14 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
           <div style={{
             marginTop: space[4], animation: "flow-load-fade-in 0.4s ease-out",
           }}>
-            <div style={{ color: "#00ff41B0", marginBottom: space[2], fontSize: 11, letterSpacing: "0.1em" }}>
+            <div style={{ color: `${terminal.green}B0`, marginBottom: space[2], fontSize: 11, letterSpacing: "0.1em" }}>
               ---- DETECTED MODULES ----
             </div>
             {modules.map((mod, i) => {
               const disabled = mod.locked;
               const isAdmin = mod.adminOnly;
-              const accent = isAdmin ? "#FBBF24" : "#00ff41";
-              const lockedBorder = isAdmin ? "#FBBF2415" : "#ff4d6a15";
+              const accent = isAdmin ? terminal.gold : terminal.green;
+              const lockedBorder = isAdmin ? `${terminal.gold}15` : `${terminal.red}15`;
               return (
                 <button
                   key={mod.key}
@@ -331,7 +331,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
                     display: "flex", alignItems: "center", gap: 12,
                     padding: `${space[2]}px ${space[3]}px`,
                     width: "100%", border: `1px solid ${disabled ? lockedBorder : `${accent}20`}`,
-                    borderRadius: 4, background: "transparent",
+                    borderRadius: terminalRadius.sm, background: "transparent",
                     cursor: (disabled && !isAdmin) ? "not-allowed" : "pointer",
                     fontFamily: "inherit", fontSize: 13,
                     color: disabled ? `${accent}50` : accent,
@@ -353,12 +353,12 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
                 >
                   <span style={{
                     fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
-                    color: disabled ? (isAdmin ? "#FBBF24" : c.red) : accent,
+                    color: disabled ? (isAdmin ? terminal.gold : c.red) : accent,
                     minWidth: 70,
                   }}>
                     [{disabled ? "LOCKED" : " OPEN "}]
                   </span>
-                  <span style={{ fontWeight: 600, minWidth: 120, color: disabled ? `${accent}60` : "#fff" }}>{mod.label}</span>
+                  <span style={{ fontWeight: 600, minWidth: 120, color: disabled ? `${accent}60` : terminal.text }}>{mod.label}</span>
                   <span style={{ color: `${accent}80`, fontSize: 12 }}>{mod.desc}</span>
                   {!disabled && (
                     <span style={{ marginLeft: "auto", fontSize: 11, opacity: 0.3 }}>→</span>
@@ -371,14 +371,14 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
             {!isUnlocked && (
               <div style={{
                 marginTop: space[5], padding: `${space[3]}px ${space[4]}px`,
-                border: "1px solid #ff6b3530",
-                borderRadius: 4, background: "#ff6b3508",
+                border: `1px solid ${terminal.coral}30`,
+                borderRadius: terminalRadius.sm, background: `${terminal.coral}08`,
                 animation: "flow-load-fade-in 0.5s ease-out 0.3s both",
               }}>
                 <div style={{ color: c.orange, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", marginBottom: 4 }}>
                   WARNING
                 </div>
-                <div style={{ color: "#ff6b3590", fontSize: 12 }}>
+                <div style={{ color: `${terminal.coral}90`, fontSize: 12 }}>
                   {WARNING_MESSAGES[Math.min(attempts.filter(a => !a.success).length, WARNING_MESSAGES.length - 1)]}
                 </div>
               </div>
@@ -388,20 +388,20 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
             {adminPrompt && !adminUnlocked && (
               <div style={{
                 marginTop: space[4], padding: `${space[3]}px ${space[4]}px`,
-                border: "1px solid #FBBF2430",
-                borderRadius: 4, background: "#FBBF2408",
+                border: `1px solid ${terminal.gold}30`,
+                borderRadius: terminalRadius.sm, background: `${terminal.gold}08`,
                 animation: "flow-load-fade-in 0.3s ease-out",
               }}>
-                <div style={{ color: "#FBBF24", fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", marginBottom: space[2] }}>
+                <div style={{ color: terminal.gold, fontSize: 12, fontWeight: 700, letterSpacing: "0.08em", marginBottom: space[2] }}>
                   ADMIN AUTH REQUIRED
                 </div>
-                <div style={{ color: "#FBBF2470", fontSize: 11, marginBottom: space[2] }}>
+                <div style={{ color: `${terminal.gold}70`, fontSize: 11, marginBottom: space[2] }}>
                   This section requires a separate admin password.
                 </div>
                 {adminAttempts.map((a, i) => (
                   <div key={i} style={{ marginBottom: 2 }}>
-                    <span style={{ color: "#FBBF2490" }}>$ admin --pass </span>
-                    <span style={{ color: "#fff" }}>{"*".repeat(a.length)}</span>
+                    <span style={{ color: `${terminal.gold}90` }}>$ admin --pass </span>
+                    <span style={{ color: terminal.text }}>{"*".repeat(a.length)}</span>
                     <div style={{ color: c.red, fontSize: 11 }}>ACCESS DENIED.</div>
                   </div>
                 ))}
@@ -410,7 +410,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
                   animation: adminShake ? "shake 0.4s ease-in-out" : undefined,
                   marginTop: space[1],
                 }}>
-                  <span style={{ color: "#FBBF2460", marginRight: 8 }}>$ admin --pass</span>
+                  <span style={{ color: `${terminal.gold}60`, marginRight: 8 }}>$ admin --pass</span>
                   <div style={{ position: "relative", flex: 1 }}>
                     <input
                       type="password"
@@ -421,13 +421,13 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
                       onClick={e => e.stopPropagation()}
                       style={{
                         background: "transparent", border: "none", outline: "none",
-                        color: "#fff", fontFamily: "inherit", fontSize: 13,
+                        color: terminal.text, fontFamily: "inherit", fontSize: 13,
                         width: "100%", caretColor: "transparent",
                       }}
                     />
                     <span style={{
                       position: "absolute", left: `${adminInput.length}ch`, top: 0,
-                      width: 8, height: 16, background: cursorBlink ? "#FBBF24" : "transparent",
+                      width: 8, height: 16, background: cursorBlink ? terminal.gold : "transparent",
                       transition: "background 0.05s",
                     }} />
                   </div>
@@ -441,10 +441,10 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
                 marginTop: i === 0 ? space[4] : space[1],
                 animation: "flow-load-fade-in 0.2s ease-out",
               }}>
-                <span style={{ color: "#00ff4190" }}>$ auth --pass </span>
-                <span style={{ color: "#fff" }}>{"*".repeat(attempt.input.length)}</span>
+                <span style={{ color: `${terminal.green}90` }}>$ auth --pass </span>
+                <span style={{ color: terminal.text }}>{"*".repeat(attempt.input.length)}</span>
                 {attempt.success ? (
-                  <div style={{ color: "#00ff41", fontWeight: 700, marginTop: 2 }}>
+                  <div style={{ color: terminal.green, fontWeight: 700, marginTop: 2 }}>
                     ACCESS GRANTED. Welcome, operator.
                   </div>
                 ) : (
@@ -462,7 +462,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
                 display: "flex", alignItems: "center",
                 animation: shake ? "shake 0.4s ease-in-out" : undefined,
               }}>
-                <span style={{ color: "#00ff4190", marginRight: 8 }}>$ auth --pass</span>
+                <span style={{ color: `${terminal.green}90`, marginRight: 8 }}>$ auth --pass</span>
                 <div style={{ position: "relative", flex: 1 }}>
                   <input
                     ref={inputRef}
@@ -473,14 +473,14 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
                     aria-label="Terminal password"
                     style={{
                       background: "transparent", border: "none", outline: "none",
-                      color: "#fff", fontFamily: "inherit", fontSize: 13,
+                      color: terminal.text, fontFamily: "inherit", fontSize: 13,
                       width: "100%", caretColor: "transparent",
                     }}
                   />
                   {/* Custom cursor */}
                   <span style={{
                     position: "absolute", left: `${input.length}ch`, top: 0,
-                    width: 8, height: 16, background: cursorBlink ? "#00ff41" : "transparent",
+                    width: 8, height: 16, background: cursorBlink ? terminal.green : "transparent",
                     transition: "background 0.05s",
                   }} />
                 </div>
@@ -496,9 +496,9 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
         <div style={{
           position: "fixed", bottom: 40, left: "50%", transform: "translateX(-50%)",
           zIndex: 9999,
-          background: "linear-gradient(135deg, #0a0e14 0%, #111820 100%)",
-          border: "1px solid #00ff4140",
-          borderRadius: 12, padding: `${space[3]}px ${space[5]}px`,
+          background: `linear-gradient(135deg, ${terminal.gradientStart} 0%, ${terminal.gradientEnd} 100%)`,
+          border: `1px solid ${terminal.green}40`,
+          borderRadius: terminalRadius.lg, padding: `${space[3]}px ${space[5]}px`,
           display: "flex", alignItems: "center", gap: 12,
           boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 20px rgba(0,255,65,0.1)",
           animation: "flow-load-fade-in 0.4s ease-out",
@@ -506,7 +506,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
         }}>
           <span style={{
             width: 28, height: 28, borderRadius: "50%",
-            background: "linear-gradient(135deg, #00ff41, #00cc33)",
+            background: `linear-gradient(135deg, ${terminal.green}, ${terminal.greenDeep})`,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 14, flexShrink: 0,
           }}>
@@ -515,10 +515,10 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
             </svg>
           </span>
           <div>
-            <div style={{ color: "#00ff41", fontSize: 13, fontWeight: 700 }}>
+            <div style={{ color: terminal.green, fontSize: 13, fontWeight: 700 }}>
               {toast}
             </div>
-            <div style={{ color: "#00ff4190", fontSize: 11, marginTop: 4 }}>
+            <div style={{ color: `${terminal.green}90`, fontSize: 11, marginTop: 4 }}>
               You absolute legend.
             </div>
           </div>

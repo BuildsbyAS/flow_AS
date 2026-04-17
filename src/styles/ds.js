@@ -27,26 +27,86 @@ export const color = {
 
   // Accent — orange
   accent:        "#E8590C",
+  accentHover:   "#D24E0A",   // slightly darker — primary CTA hover
   accentSoft:    "rgba(232,89,12,0.08)",
   accentMid:     "rgba(232,89,12,0.18)",
   accentGlow:    "rgba(232,89,12,0.25)",
+
+  // Text on colored surfaces
+  textOnAccent:  "#FFFFFF",   // text on accent bg (primary buttons, etc.)
+
+  // Inverted surface family (HealthGauge — the only inverted card)
+  // Text tokens bumped 2026-04 for readability: previous #6B6B78/#4A4A52
+  // had ~3.5:1 / ~1.7:1 contrast against #1A1A1E bg, failing WCAG AA.
+  // New values land at ~6:1 / ~4:1 and keep the three-tier hierarchy.
+  surfaceInverse:       "#1A1A1E",
+  insetInverse:         "#2E2E36",
+  textOnInverse:        "#F0F0F4",
+  textMidOnInverse:     "#A5A5B2",
+  textGhostOnInverse:   "#8F8F9A",
 
   // Borders
   borderSubtle: "rgba(0,0,0,0.07)",
   borderMedium: "rgba(0,0,0,0.12)",
 
   // Semantic — data-only
-  green:  "#059669", greenBg:  "#ECFDF5", greenDim:  "rgba(5,150,105,0.08)",
-  red:    "#DC2626", redBg:    "#FEF2F2", redDim:    "rgba(220,38,38,0.08)",
-  amber:  "#B45309", amberBg:  "#FFFBEB", amberDim:  "rgba(180,83,9,0.08)",
-  purple: "#6D28D9", purpleBg: "#F5F3FF", purpleDim: "rgba(109,40,217,0.08)",
-  blue:   "#1D4ED8", blueBg:   "#EFF6FF", blueDim:   "rgba(29,78,216,0.08)",
-  cyan:   "#0E7490", cyanBg:   "#ECFEFF", cyanDim:   "rgba(14,116,144,0.08)",
+  // Family: <color> (full), <color>Bg (full light bg), <color>Dim (8% alpha tint),
+  // <color>Mid (18% alpha — phase-tinted cell bg), <color>Border (25% alpha — card border).
+  green:  "#059669", greenBg:  "#ECFDF5", greenDim:  "rgba(5,150,105,0.08)",   greenMid:  "rgba(5,150,105,0.18)",   greenBorder:  "rgba(5,150,105,0.25)",
+  red:    "#DC2626", redBg:    "#FEF2F2", redDim:    "rgba(220,38,38,0.08)",   redMid:    "rgba(220,38,38,0.18)",   redBorder:    "rgba(220,38,38,0.25)",
+  amber:  "#B45309", amberBg:  "#FFFBEB", amberDim:  "rgba(180,83,9,0.08)",    amberMid:  "rgba(180,83,9,0.18)",    amberBorder:  "rgba(180,83,9,0.25)",
+  purple: "#6D28D9", purpleBg: "#F5F3FF", purpleDim: "rgba(109,40,217,0.08)",  purpleMid: "rgba(109,40,217,0.18)",  purpleBorder: "rgba(109,40,217,0.25)",
+  blue:   "#1D4ED8", blueBg:   "#EFF6FF", blueDim:   "rgba(29,78,216,0.08)",   blueMid:   "rgba(29,78,216,0.18)",   blueBorder:   "rgba(29,78,216,0.25)",
+  cyan:   "#0E7490", cyanBg:   "#ECFEFF", cyanDim:   "rgba(14,116,144,0.08)",  cyanMid:   "rgba(14,116,144,0.18)",  cyanBorder:   "rgba(14,116,144,0.25)",
 
   // Health thresholds — slightly brighter than token semantic
   healthGood: "#059669", // 75-100
   healthFair: "#D97706", // 40-74 (brighter amber for bars/numbers)
   healthLow:  "#DC2626", // 0-39
+};
+
+// ── Terminal Dark palette ────────────────────────────────────────
+// The Terminal / Rant / Admin views run a dedicated dark theme
+// (DESIGN_SYSTEM.md §12). Retro phosphor aesthetic: pure-black canvas,
+// glowing monochrome accents per view. Tints use hex-alpha suffix,
+// e.g. `${terminal.green}20` = 12% opacity.
+export const terminal = {
+  // Surfaces
+  bg:            "#0D0F0D",   // pure near-black canvas
+  surfaceDeep:   "#060A12",   // recessed panels (log viewer, auth box)
+  gradientStart: "#0a0e14",   // hero gradient start
+  gradientEnd:   "#111820",   // hero gradient end
+
+  // Primary accents — each view elects one as its "phosphor" color
+  green:     "#00ff41",   // Terminal shell, Rant form
+  greenDeep: "#00cc33",   // gradient stop for green hero
+  gold:      "#FBBF24",   // Admin settings, Terminal admin path
+  goldDeep:  "#F59E0B",   // gradient stop for gold hero
+
+  // Semantic accents — chips, category tags, status pills on dark
+  pink:    "#FF2D78",   // rant category
+  coral:   "#FF6B35",   // bug category
+  red:     "#FF4D6A",   // errors, destructive
+  redDeep: "#cc3355",   // gradient stop for red toast
+  success: "#84FF95",   // approved, replied
+  cyan:    "#22D3EE",   // shipped, info
+  purple:  "#A78BFA",   // feature request
+
+  // Text on dark
+  text:      "#FFFFFF",
+  textMid:   "#FFFFFFCC",
+  textDim:   "#FFFFFFBB",
+  textGhost: "#FFFFFFAA",
+  textFaint: "#FFFFFF80",
+};
+
+// Terminal Dark uses a tighter radius scale than the main app — the retro
+// phosphor aesthetic reads "sharper" at smaller radii.
+export const terminalRadius = {
+  xs: 3,    // tightest — inline ID/status chips
+  sm: 4,    // chips, inputs, secondary buttons (the default)
+  md: 6,    // cards, primary CTAs, image thumbs
+  lg: 12,   // floating toasts, notification pills
 };
 
 // Phase → color map
@@ -58,6 +118,28 @@ export const phaseColorMap = {
   Alpha:  color.green,
   Beta:   color.green,
   GA:     color.green,
+};
+
+// Phase → tinted background (18% alpha) — for phase-colored cell backgrounds
+export const phaseMidMap = {
+  PRD:    color.purpleMid,
+  Design: color.blueMid,
+  Dev:    color.amberMid,
+  QA:     color.cyanMid,
+  Alpha:  color.greenMid,
+  Beta:   color.greenMid,
+  GA:     color.greenMid,
+};
+
+// Phase → soft background (8% alpha) — for phase-colored pills and tags
+export const phaseDimMap = {
+  PRD:    color.purpleDim,
+  Design: color.blueDim,
+  Dev:    color.amberDim,
+  QA:     color.cyanDim,
+  Alpha:  color.greenDim,
+  Beta:   color.greenDim,
+  GA:     color.greenDim,
 };
 
 // ── Spacing (4px base) ───────────────────────────────────────────
@@ -113,5 +195,5 @@ export const motionTier = {
 };
 
 // Convenience bundle
-export const ds = { color, space, radius, shadow, typography, fonts, motionTier, phaseColorMap };
+export const ds = { color, space, radius, shadow, typography, fonts, motionTier, phaseColorMap, phaseMidMap, phaseDimMap };
 export default ds;

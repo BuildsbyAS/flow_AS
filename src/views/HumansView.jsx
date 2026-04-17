@@ -1,36 +1,11 @@
 // Flow — Commit View (Phase-driven: Planning → Locked → Closing)
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { c, layout, motion, space, typo, allPhases, commitPhases, shipPhases, typeConfig, phaseColors as getPhaseColors, entityColors } from "../styles/theme";
-import { Badge, Surface, Modal, Inp, TextArea, ChoiceGroup, Btn, TelemetryLabel, Th as SharedTh } from "../components/shared";
+import { Badge, Surface, Modal, Inp, TextArea, ChoiceGroup, Btn, TelemetryLabel, Th as SharedTh, TableShell } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
-
-// ─── ANIMATED KPI COUNTER ─────────────────────────────────────
-const CommitKpi = ({ value, label, color, delay = 0 }) => {
-  const devRef = useDevLabel('CommitKpi', 'src/views/HumansView.jsx', 'Animated KPI counter showing commitment statistics');
-  const [displayVal, setDisplayVal] = useState(0);
-  useEffect(() => {
-    let frame;
-    const start = performance.now();
-    const dur = 600;
-    const animate = (now) => {
-      const t = Math.min((now - start) / dur, 1);
-      const ease = 1 - Math.pow(1 - t, 3);
-      setDisplayVal(Math.round(ease * value));
-      if (t < 1) frame = requestAnimationFrame(animate);
-    };
-    const timeout = setTimeout(() => { frame = requestAnimationFrame(animate); }, delay);
-    return () => { clearTimeout(timeout); cancelAnimationFrame(frame); };
-  }, [value, delay]);
-  return (
-    <div ref={devRef} className="flow-commit-kpi" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: space[1], animationDelay: `${delay}ms` }}>
-      <span style={{ fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight, color, letterSpacing: typo.displayHero.tracking, lineHeight: typo.displayHero.lineHeight, fontVariantNumeric: "tabular-nums" }}>{displayVal}</span>
-      <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textMid, textTransform: "uppercase" }}>{label}</span>
-    </div>
-  );
-};
-
+import useExitAnimation from "../hooks/useExitAnimation";
 
 // ─── PROJECT SEARCH/SELECT — supports typing project ID ──────────
 const ProjectSearchSelect = ({ projects, value, onChange, placeholder }) => {
@@ -56,7 +31,7 @@ const ProjectSearchSelect = ({ projects, value, onChange, placeholder }) => {
         display: "flex", alignItems: "center", gap: space[2],
         padding: `${space[2]}px ${space[3]}px`, borderRadius: layout.radiusSm,
         background: c.surfaceAlt, border: `1px solid ${c.border}`,
-        cursor: "pointer", transition: `border-color 0.2s ease`,
+        cursor: "pointer", transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
       }} onMouseEnter={e => e.currentTarget.style.borderColor = c.accent + "50"}
          onMouseLeave={e => e.currentTarget.style.borderColor = c.border}>
         <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: entityColors().project }}>{selected.id}</span>
@@ -82,13 +57,15 @@ const ProjectSearchSelect = ({ projects, value, onChange, placeholder }) => {
           background: c.surfaceOverlay, border: `1px solid ${c.border}`,
           borderRadius: layout.radiusSm, marginTop: 2,
           boxShadow: c.shadowOverlay,
+          animation: `fadeScaleIn ${motion.fast.duration} ${motion.fast.easing} both`,
+          transformOrigin: "top center",
         }}>
           {filtered.map(p => (
             <div key={p.id} onClick={() => { onChange(p.id); setQuery(""); setOpen(false); }}
               className="flow-row" style={{
                 padding: `${space[2]}px ${space[3]}px`, cursor: "pointer",
                 display: "flex", alignItems: "center", gap: space[2],
-                transition: `background ${motion.interaction.duration}`,
+                transition: `background ${motion.interaction.duration} ${motion.interaction.easing}`,
               }}>
               <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: entityColors().project, minWidth: 36 }}>{p.id}</span>
               <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.text, flex: 1 }}>{p.name}</span>
@@ -119,11 +96,42 @@ const ensureItems = (cm) => {
   return { ...cm, items: [...items, ...Array.from({ length: 3 - items.length }, () => ({ ...EMPTY_ITEM }))] };
 };
 
-const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitments, projects, people, initialPerson, initialCommitIdx, setDetailLabel, setGoBack, setIsLocked, searchRef, globalFilters = {}, suppressBackRef, isHistorical, selectedWeekKey, weekConfig, onSave }) => {
+// Local YYYY-MM-DD formatter — avoids UTC-shift bugs from toISOString()
+// for users east of UTC when computing carry-to dates.
+const toLocalISODate = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+// Full carry-forward row template — matches the shape the rest of the app expects.
+const makeEmptySlot = () => ({ title: "", type: "", project: "", stage: "", duration: 1 });
+const makeCarriedWeekRow = (person, weekStart, firstItem) => ({
+  person,
+  weekStart,
+  items: [firstItem, makeEmptySlot(), makeEmptySlot()],
+  buffer: "",
+  bufferProject: "",
+  bufferStage: "",
+  bufferType: "",
+  bufferDuration: 1,
+  bufferOutcome: null,
+  bufferCarryTo: null,
+  bufferBlockedReason: "",
+  deselected: -1,
+  depriReason: "",
+  lockedAt: null,
+  lockedAtTime: null,
+  wasLockedAtTime: null,
+  closedAt: null,
+});
+
+const HumansView = ({ loading, error, commitments: rawCommitments, setCommitments: rawSetCommitments, projects, people, initialPerson, initialCommitIdx, setDetailLabel, setGoBack, setIsLocked, searchRef, globalFilters = {}, suppressBackRef, isHistorical, selectedWeekKey, weekConfig, onSave }) => {
   const devRef = useDevLabel('HumansView', 'src/views/HumansView.jsx', 'Commit tab — weekly 3-commitment cards per person');
   // Derive current week start from weekConfig
   const currentWeekStart = React.useMemo(() => {
-    if (weekConfig?.weekStart) return new Date(weekConfig.weekStart + "T00:00:00");
+    if (weekConfig?.weekStart) return new Date(String(weekConfig.weekStart).slice(0, 10) + "T00:00:00");
     // Fallback: compute Monday of current week
     const now = new Date(); const day = now.getDay();
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -150,9 +158,30 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
   const [focusIdx, setFocusIdx] = useState(0);
   const [kbActive, setKbActive] = useState(false);
   const [detailFocus, setDetailFocus] = useState(initialCommitIdx != null ? initialCommitIdx : 0);
+  const prevDetailFocusRef = useRef(detailFocus);
+  const slotDir = detailFocus >= prevDetailFocusRef.current ? "right" : "left";
+  useEffect(() => { prevDetailFocusRef.current = detailFocus; }, [detailFocus]);
   const [closingMode, _setClosingMode] = useState(false);
   const closingModeRef = useRef(false);
-  const setClosingMode = (val) => { closingModeRef.current = val; _setClosingMode(val); };
+  const setClosingMode = (val) => {
+    // When leaving closing mode, clear any partial outcome writes that may have
+    // landed during the transition — they'd otherwise display under Locked phase.
+    if (closingModeRef.current && !val && rawSetCommitments) {
+      rawSetCommitments(prev => {
+        if (!prev || activePerson < 0 || activePerson >= prev.length) return prev;
+        const next = [...prev]; const p = { ...next[activePerson] };
+        if (!p.closedAt) {
+          p.items = (p.items || []).map(it => ({ ...it, outcome: null, carryTo: null, blockedReason: "" }));
+          p.bufferOutcome = null; p.bufferCarryTo = null; p.bufferBlockedReason = "";
+          next[activePerson] = p;
+          return next;
+        }
+        return prev;
+      });
+    }
+    closingModeRef.current = val;
+    _setClosingMode(val);
+  };
   const [confirmAction, setConfirmAction] = useState(null); // "lock" | "unlock" | null
   const [confirmReset, setConfirmReset] = useState(false);
   const [blockedModal, setBlockedModal] = useState(null); // { idx: number } | null
@@ -167,6 +196,12 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
   const autoSaveStatusTimer = useRef(null);
   const overflowRef = useRef(null);
   const triggerAutoSave = useCallback(() => {
+    // Do NOT auto-save while the user is in closing mode. Outcome edits
+    // (Done / Partial / Carry / Blocked) are pending selections until the
+    // user presses "Close Week" — only then should they hit the DB.
+    // Pressing Escape during closing reverts these edits, so persisting
+    // them mid-flow would write state the user never confirmed.
+    if (closingModeRef.current) return;
     clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(async () => {
       if (onSave) {
@@ -181,8 +216,17 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
   // Signal App-level Escape handler to skip goBack when a sub-state is active
   useEffect(() => {
-    if (suppressBackRef) suppressBackRef.current = !!(closingMode || confirmAction || depriModal || blockedModal);
-  }, [closingMode, confirmAction, depriModal, blockedModal, suppressBackRef]);
+    if (suppressBackRef) suppressBackRef.current = !!(closingMode || confirmAction || depriModal || blockedModal || reviewMode || lockSuccess);
+  }, [closingMode, confirmAction, depriModal, blockedModal, reviewMode, lockSuccess, suppressBackRef]);
+
+  // Reset transient modals when switching person so a prior open modal
+  // doesn't re-surface when re-entering a detail view.
+  useEffect(() => {
+    setBlockedModal(null); setBlockedText("");
+    setDepriModal(null); setDepriText("");
+    setConfirmAction(null); setConfirmReset(false);
+    setReviewMode(false); setLockSuccess(false);
+  }, [activePerson]);
   // Close overflow menu on outside click
   useEffect(() => {
     if (!overflowOpen) return;
@@ -193,12 +237,16 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
   const [sortCol, setSortCol] = useState("squad");
   const [sortDir, setSortDir] = useState("asc");
-  const [filterStatus, setFilterStatus] = useState(null); // "locked" | "ready" | "partial" | "empty" | null
+  const [filterStatus, setFilterStatus] = useState(null); // "closed" | "locked" | "open" | null
   const [rowAnimKey, setRowAnimKey] = useState(0);
   const [searchGlow, setSearchGlow] = useState(false);
   const localSearchRef = useRef(null);
+  // Ordered realIdx values in VISUAL render order (grouped + sorted). Populated
+  // during render so keyboard Enter opens the person the user actually sees
+  // highlighted, not whoever sits at filtered[focusIdx] in the raw list.
+  const visibleOrderRef = useRef([]);
 
-  const person = activePerson >= 0 ? commitments[activePerson] : null;
+  const person = (activePerson >= 0 && activePerson < commitments.length) ? commitments[activePerson] : null;
   const filtered = commitments.filter(cm => {
     const pObj = people.find(p => p.name === cm.person);
     if (search.trim()) {
@@ -234,9 +282,32 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
     }
   }, []);
 
+  // Resolve initialPerson once commitments finish loading (deeplink race).
+  // Guarded with a ref so realtime updates to `commitments` don't re-open the
+  // person and clobber in-progress detailFocus/closingMode/reviewMode state.
+  const resolvedDeeplinkRef = useRef(null);
+  useEffect(() => {
+    if (!initialPerson) return;
+    if (resolvedDeeplinkRef.current === initialPerson) return;
+    if (activePerson >= 0) return;
+    const idx = commitments.findIndex(cm => cm.person === initialPerson);
+    if (idx >= 0) {
+      resolvedDeeplinkRef.current = initialPerson;
+      openPerson(idx);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitments.length, initialPerson]);
+
   // ── Derived phase ──
-  const isLocked = person ? !!person.lockedAt : false;
+  // Use lockedAtTime (numeric) as the source of truth; fall back to lockedAt
+  // display string for older rows that pre-date lockedAtTime.
+  const isLocked = person ? !!(person.lockedAtTime || person.lockedAt) : false;
   const phase = !isLocked ? "planning" : closingMode ? "closing" : "locked";
+
+  // Exit animations for gated sections
+  const lockSuccessAnim = useExitAnimation(phase === "locked" && lockSuccess, 250);
+  const reviewModeAnim = useExitAnimation(phase === "planning" && reviewMode, 250);
+  const overflowAnim = useExitAnimation(overflowOpen, 150);
 
   // ── Mutations ──
   const updateItem = (idx, field, val) => {
@@ -260,6 +331,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
   };
   const updateOutcome = (idx, val) => {
     if (isHistorical) return;
+    if (!person || !person.lockedAt || !closingModeRef.current) return;
     // Blocked: toggle off if already blocked, otherwise open modal
     if (val === "blocked") {
       if (person?.items[idx]?.outcome === "blocked") {
@@ -288,7 +360,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       if (newOutcome === "carry" || newOutcome === "done_carry") {
         const base = new Date(currentWeekStart);
         base.setDate(base.getDate() + 7);
-        items[idx].carryTo = base.toISOString().split("T")[0];
+        items[idx].carryTo = toLocalISODate(base);
         if (newOutcome === "done_carry") {
           items[idx].weeksRemaining = Math.max(1, (item.weeksRemaining || item.duration || 1) - 1);
         }
@@ -320,16 +392,21 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
     triggerAutoSave();
   };
   const updateCarryTo = (idx, week) => {
+    if (isHistorical) return;
     setCommitments(prev => {
       const next = [...prev]; const p = { ...next[activePerson] };
       const items = [...p.items];
-      items[idx] = { ...items[idx], carryTo: items[idx].carryTo === week ? null : week };
+      // Only allow switching — clicking the same week is a no-op so users
+      // don't accidentally un-resolve a carry commit.
+      if (items[idx].carryTo === week) return prev;
+      items[idx] = { ...items[idx], carryTo: week };
       p.items = items; next[activePerson] = p; return next;
     });
     triggerAutoSave();
   };
   // Buffer outcome helpers
   const updateBufferOutcome = (val) => {
+    if (isHistorical) return;
     if (val === "blocked") {
       if (person?.bufferOutcome === "blocked") {
         setCommitments(prev => {
@@ -352,7 +429,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       if (p.bufferOutcome === "carry" || p.bufferOutcome === "done_carry") {
         const base = new Date(currentWeekStart);
         base.setDate(base.getDate() + 7);
-        p.bufferCarryTo = base.toISOString().split("T")[0];
+        p.bufferCarryTo = toLocalISODate(base);
       }
       if (p.bufferOutcome !== "blocked") p.bufferBlockedReason = "";
       next[activePerson] = p; return next;
@@ -360,9 +437,11 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
     triggerAutoSave();
   };
   const updateBufferCarryTo = (week) => {
+    if (isHistorical) return;
     setCommitments(prev => {
       const next = [...prev]; const p = { ...next[activePerson] };
-      p.bufferCarryTo = p.bufferCarryTo === week ? null : week;
+      if (p.bufferCarryTo === week) return prev;
+      p.bufferCarryTo = week;
       next[activePerson] = p; return next;
     });
     triggerAutoSave();
@@ -371,6 +450,8 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
   // Deprioritize — unlocks the week so buffer can be filled and re-locked
   // Preserves lockedAtTime so restoreSlot can re-lock
   const deprioritizeSlot = (idx, reason) => {
+    if (isHistorical) return;
+    if (idx < 0 || idx > 2) return;
     setCommitments(prev => {
       const next = [...prev]; const p = { ...next[activePerson] };
       p.deselected = idx;
@@ -384,6 +465,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
     triggerAutoSave();
   };
   const restoreSlot = () => {
+    if (isHistorical) return;
     setCommitments(prev => {
       const next = [...prev]; const p = { ...next[activePerson] };
       // Re-lock if person was locked before deprioritize
@@ -396,6 +478,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       p.wasLockedAtTime = null;
       p.deselected = -1; p.depriReason = ""; p.buffer = ""; p.bufferProject = "";
       p.bufferStage = ""; p.bufferType = ""; p.bufferDuration = 1;
+      p.bufferOutcome = null; p.bufferCarryTo = null; p.bufferBlockedReason = "";
       next[activePerson] = p; return next;
     });
     triggerAutoSave();
@@ -419,9 +502,12 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
   // ── Keyboard: list view ──
   useKeyboard(!person ? [
-    { key: "ArrowUp", fn: () => { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.max(0, i - 1)); }, force: true },
-    { key: "ArrowDown", fn: () => { localSearchRef.current?.blur(); setKbActive(true); setFocusIdx(i => Math.min(filtered.length - 1, i + 1)); }, force: true },
-    { key: "Enter", fn: () => { if (kbActive && filtered[focusIdx]) openPerson(commitments.indexOf(filtered[focusIdx])); }, force: true },
+    // First arrow press activates kb-focus mode WITHOUT moving, so the highlight
+    // lands on the current focusIdx (row 0 on fresh load). Subsequent presses
+    // step through rows.
+    { key: "ArrowUp", fn: () => { if (document.activeElement !== localSearchRef.current) { if (!kbActive) { setKbActive(true); return; } setFocusIdx(i => Math.max(0, i - 1)); } } },
+    { key: "ArrowDown", fn: () => { if (document.activeElement !== localSearchRef.current) { if (!kbActive) { setKbActive(true); return; } setFocusIdx(i => Math.min(filtered.length - 1, i + 1)); } } },
+    { key: "Enter", fn: () => { if (!kbActive) return; const realIdx = visibleOrderRef.current[focusIdx]; if (realIdx != null && commitments[realIdx]) openPerson(realIdx); }, force: true },
     { key: "Escape", fn: () => { if (search) { setSearch(""); setFocusIdx(0); setRowAnimKey(k => k + 1); localSearchRef.current?.blur(); setKbActive(true); } else if (document.activeElement === localSearchRef.current) { localSearchRef.current.blur(); setKbActive(true); } else if (kbActive) { setKbActive(false); } }, force: true },
     { key: "/", fn: (e) => { e.preventDefault(); localSearchRef.current?.focus(); setSearchGlow(true); setKbActive(false); setTimeout(() => setSearchGlow(false), 1200); }, force: true },
   ] : [], [filtered.length, focusIdx, activePerson, kbActive]);
@@ -441,7 +527,8 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
   const lockBlockers = [];
   if (person && !isLocked) {
     const validStages = [...commitPhases, ...shipPhases];
-    const isComplete = (it) => (it.title || "").trim() && it.project && it.stage && validStages.includes(it.stage) && it.type;
+    const projectExists = (id) => !!projects.find(pr => pr.id === id);
+    const isComplete = (it) => (it.title || "").trim() && it.project && projectExists(it.project) && it.stage && validStages.includes(it.stage) && it.type;
     if (bufferActive) {
       // After deprioritize: need 2 active slots complete + buffer filled
       const activeCompleteCount = person.items.slice(0, 3).filter((it, idx) => person.deselected !== idx && isComplete(it)).length;
@@ -480,9 +567,13 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
     if (!canLock || isLocked) return;
     const ts = new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
     setCommitments(prev => {
+      if (activePerson < 0 || activePerson >= prev.length) return prev;
       const next = [...prev]; const p = { ...next[activePerson] };
-      // Initialize weeksRemaining from duration on lock
-      p.items = p.items.map(it => ({ ...it, weeksRemaining: it.duration || 1 }));
+      // Initialize weeksRemaining from duration on lock, preserving any decremented value carried forward.
+      p.items = p.items.map(it => ({
+        ...it,
+        weeksRemaining: (typeof it.weeksRemaining === "number" && it.weeksRemaining > 0) ? it.weeksRemaining : (it.duration || 1),
+      }));
       next[activePerson] = { ...p, lockedAt: ts, lockedAtTime: Date.now() };
       return next;
     });
@@ -491,7 +582,19 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
   };
   const handleUnlock = () => {
     if (!canUnlock) return;
-    setCommitments(prev => { const next = [...prev]; next[activePerson] = { ...next[activePerson], lockedAt: null, lockedAtTime: null }; return next; });
+    setCommitments(prev => {
+      const next = [...prev];
+      const p = { ...next[activePerson] };
+      p.lockedAt = null;
+      p.lockedAtTime = null;
+      // Clear any closing-phase state so the reopened plan is a clean slate.
+      p.items = (p.items || []).map(it => ({ ...it, outcome: null, carryTo: null, blockedReason: "" }));
+      p.bufferOutcome = null;
+      p.bufferCarryTo = null;
+      p.bufferBlockedReason = "";
+      next[activePerson] = p;
+      return next;
+    });
     if (setIsLocked) setIsLocked(false);
     setClosingMode(false);
   };
@@ -501,7 +604,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
     { key: "Escape", fn: () => { if (depriModal) { setDepriModal(null); setDepriText(""); } else if (blockedModal) { setBlockedModal(null); setBlockedText(""); } else if (confirmAction) { setConfirmAction(null); } else if (closingModeRef.current) { setClosingMode(false); } else if (reviewMode) { setReviewMode(false); } else goBackToList(); }, force: true },
     { key: "l", fn: () => { if (phase === "planning" && canLock) setConfirmAction("lock"); } },
     { key: "u", fn: () => { if (isLocked && !closingMode && canUnlock) setConfirmAction("unlock"); } },
-    { key: "f", fn: () => { if (phase === "locked") setClosingMode(true); } },
+    { key: "c", fn: () => { if (phase === "locked") setClosingMode(true); } },
     { key: "ArrowUp", fn: () => setDetailFocus(i => Math.max(0, i - 1)) },
     { key: "ArrowDown", fn: () => setDetailFocus(i => Math.min(person.items.length - 1, i + 1)) },
   ] : [], [activePerson, isLocked, filledSlots, person?.items?.length, closingMode, phase, reviewMode, allSlotsFilled]);
@@ -522,14 +625,43 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       style={s}>{children}</SharedTh>
   );
 
+  // ═══ LOADING / ERROR STATES ═══
+  if (loading && commitments.length === 0) {
+    return (
+      <div ref={devRef} style={{ padding: space[8], textAlign: "center", background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>Loading commitments…</div>
+    );
+  }
+  if (error) {
+    return (
+      <div ref={devRef} style={{ padding: space[6], background: c.surface, border: `1px solid ${c.red}40`, borderLeft: `3px solid ${c.red}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.text }}>
+        <div style={{ fontWeight: 600, color: c.red, marginBottom: space[2] }}>Couldn't load commitments</div>
+        <div style={{ color: c.textMid, fontSize: typo.bodySm.size }}>{String(error?.message || error)}</div>
+      </div>
+    );
+  }
+
   // ═══ PEOPLE QUEUE (list view) ═══
   if (!person) {
     const total = filtered.length;
     const closed = filtered.filter(cm => !!cm.closedAt).length;
     const locked = filtered.filter(cm => !!cm.lockedAt && !cm.closedAt).length;
     const isSlotComplete = (it) => (it.title || "").trim() && it.project && it.stage && it.type;
-    const filled = filtered.filter(cm => !cm.lockedAt && !cm.closedAt && cm.items.slice(0, 3).filter(isSlotComplete).length >= 3).length;
-    const partial = filtered.filter(cm => { const f = cm.items.slice(0, 3).filter(it => (it.title || "").trim()).length; return !cm.lockedAt && !cm.closedAt && f > 0 && (f < 3 || cm.items.slice(0, 3).filter(isSlotComplete).length < 3); }).length;
+    const isBufferComplete = (cm) => cm.deselected >= 0 && (cm.buffer || "").trim() && cm.bufferProject && cm.bufferStage && cm.bufferType;
+    // A person counts as Ready if either all 3 slots are complete, or they
+    // deprioritized one slot and have filled the replacement buffer + the other 2 slots.
+    const isReady = (cm) => {
+      if (cm.lockedAt || cm.closedAt) return false;
+      const completeSlots = cm.items.slice(0, 3).filter((it, i) => cm.deselected !== i && isSlotComplete(it)).length;
+      if (cm.deselected >= 0) return completeSlots >= 2 && isBufferComplete(cm);
+      return completeSlots >= 3;
+    };
+    const filled = filtered.filter(isReady).length;
+    const partial = filtered.filter(cm => {
+      if (cm.lockedAt || cm.closedAt) return false;
+      if (isReady(cm)) return false;
+      const anyTitle = cm.items.slice(0, 3).some(it => (it.title || "").trim());
+      return anyTitle || (cm.deselected >= 0 && (cm.buffer || "").trim());
+    }).length;
     const empty = Math.max(0, total - closed - locked - filled - partial);
     const pctLocked = total > 0 ? Math.round((locked / total) * 100) : 0;
 
@@ -537,6 +669,11 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
     const totalCommitments = filtered.reduce((sum, cm) =>
       sum + cm.items.slice(0, 3).filter(it => (it.title || "").trim()).length, 0
     );
+    // Commitments from locked or closed people — used by the "Commitments Locked"
+    // card (mirrors Pulse's `lockedCount`).
+    const lockedCommitments = filtered
+      .filter(cm => !!cm.lockedAt || !!cm.closedAt)
+      .reduce((sum, cm) => sum + cm.items.slice(0, 3).filter((it, idx) => (it.title || "").trim() && cm.deselected !== idx).length, 0);
 
     // Outcome metrics — from closed people's commits only (first 3 slots + buffer)
     const closedPeople = filtered.filter(cm => !!cm.closedAt);
@@ -563,7 +700,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
         {/* ── Top strip — scrolls with the page ── */}
         <div style={{
-          display: "flex", flexDirection: "column", gap: space[3] - 2,
+          display: "flex", flexDirection: "column", gap: space[2],
         }}>
 
         {/* ═══════════════════════════════════════════════════════════
@@ -575,54 +712,55 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
           <KpiCard
             label="Team"
             value={total}
-            sub={`${total} ${total === 1 ? "person" : "people"} this week`}
+            sub={`${total} of ${people.length} ${people.length === 1 ? "person" : "people"} this week`}
           >
             <PillRow>
-              <Pill count={filled} label="Ready" color={c.cyan}
-                active={filterStatus === "ready"}
-                onClick={() => { setFilterStatus(filterStatus === "ready" ? null : "ready"); setRowAnimKey(k => k + 1); }} />
-              <Pill count={partial} label="Partial" color={c.orange}
-                active={filterStatus === "partial"}
-                onClick={() => { setFilterStatus(filterStatus === "partial" ? null : "partial"); setRowAnimKey(k => k + 1); }} />
-              <Pill count={empty} label="Empty" color={c.red}
-                active={filterStatus === "empty"}
-                onClick={() => { setFilterStatus(filterStatus === "empty" ? null : "empty"); setRowAnimKey(k => k + 1); }} />
+              <Pill count={closed} label="Closed" color={c.textMid}
+                active={filterStatus === "closed"}
+                onClick={() => { setFilterStatus(filterStatus === "closed" ? null : "closed"); setRowAnimKey(k => k + 1); }} />
               <Pill count={locked} label="Locked" color={c.green}
                 active={filterStatus === "locked"}
                 onClick={() => { setFilterStatus(filterStatus === "locked" ? null : "locked"); setRowAnimKey(k => k + 1); }} />
+              <Pill count={filled + partial + empty} label="Open" color={c.orange}
+                active={filterStatus === "open"}
+                onClick={() => { setFilterStatus(filterStatus === "open" ? null : "open"); setRowAnimKey(k => k + 1); }} />
             </PillRow>
           </KpiCard>
           <KpiCard
-            label="Commitments"
-            value={totalCommitments}
-            sub="this week"
-          >
-            <PillRow>
-              <Pill count={`${pctCompleted}%`} label="Complete" color={c.green} />
-              <Pill count={`${pctCarried}%`} label="Carry" color={c.orange} />
-              <Pill count={`${pctBlocked}%`} label="Blocked" color={c.red} />
-              <Pill count={`${pctDeprioritized}%`} label="Depri" color={c.textMid} />
-            </PillRow>
-          </KpiCard>
+            label="Commitments Locked"
+            value={lockedCommitments}
+            sub={totalCommitments > 0 ? `out of ${totalCommitments} total` : "awaiting declare"}
+          />
           <KpiCard
             label="Lock Rate"
             value={`${total > 0 ? Math.round(((locked + closed) / total) * 100) : 0}%`}
             sub={
               total === 0
                 ? "—"
-                : ((locked + closed) / total) >= 0.8
-                  ? "on track"
-                  : ((locked + closed) / total) >= 0.5
-                    ? "behind pace"
-                    : "at risk"
+                : (locked + closed) === 0
+                  ? (isHistorical ? "no locks" : "declaring")
+                  : ((locked + closed) / total) >= 0.8
+                    ? "on track"
+                    : ((locked + closed) / total) >= 0.5
+                      ? "behind pace"
+                      : "at risk"
             }
             onClick={() => { setFilterStatus(filterStatus === "locked" ? null : "locked"); setRowAnimKey(k => k + 1); }}
             active={filterStatus === "locked"}
           />
           <HealthGauge
-            value={pctCompleted}
+            value={(() => {
+              // Person-level close progress: fraction of lockable people who
+              // have actually closed. Matches the narrative of the sub copy.
+              const denom = locked + closed;
+              return denom > 0 ? Math.round((closedPeople.length / denom) * 100) : 0;
+            })()}
             label="Completion"
-            sub="closed this week"
+            sub={(() => {
+              const denom = locked + closed;
+              if (denom === 0) return "no one lockable yet";
+              return `${closedPeople.length} of ${denom} closed`;
+            })()}
           />
         </KpiGrid>
 
@@ -631,22 +769,23 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
           <input
             ref={localSearchRef}
             value={search}
-            onChange={e => { setSearch(e.target.value); setFocusIdx(0); setRowAnimKey(k => k + 1); }}
+            onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
             onBlur={() => setSearchGlow(false)}
+            maxLength={100}
             placeholder="Search people by name, role, or squad..."
             style={{
               width: "100%", height: 40, padding: `0 ${space[4]}px 0 38px`,
               borderRadius: layout.radiusSm,
               border: `1px solid ${searchGlow ? c.accent : c.border}`,
               background: c.surfaceAlt, color: c.text,
-              fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: 500,
+              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: typo.bodyMd.weight,
               outline: "none", boxSizing: "border-box",
               boxShadow: searchGlow ? `0 0 0 3px ${c.accentDim}` : "none",
               transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
             }}
           />
           {/* Search icon — minimal line SVG */}
-          <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", transition: "opacity 0.3s ease" }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={searchGlow ? c.accent : c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", transition: `opacity ${motion.fast.duration} ${motion.fast.easing}, stroke ${motion.fast.duration} ${motion.fast.easing}` }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={searchGlow ? c.accent : c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
           </svg>
           {/* Keycap hint */}
@@ -654,10 +793,10 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
             fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 600,
             color: c.textDim, lineHeight: 1,
-            padding: `3px 7px 4px`, borderRadius: 4,
-            background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.bg} 100%)`,
-            border: `1px solid ${c.border}`,
-            boxShadow: `0 2px 0 ${c.border}, 0 2px 3px ${c.shadow}`,
+            padding: `4px 8px`, borderRadius: layout.radiusXs,
+            background: `linear-gradient(180deg, ${c.surface} 0%, ${c.surfaceAlt} 100%)`,
+            border: `1px solid ${c.borderMedium || c.border}`,
+            boxShadow: c.shadowSm,
             pointerEvents: "none",
           }}>/</span>}
         </div>
@@ -674,33 +813,42 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
         {/* People table — grouped by operational status */}
         {(() => {
-          const commitStatusColors = { Closed: c.textMid, Locked: c.green, Ready: c.cyan, Partial: c.orange, Empty: c.red };
+          // Canonical 3-state palette — matches Pulse tab. Closed=gray (archived),
+          // Locked=green (committed), Open=orange (still drafting).
+          const commitStatusColors = { Closed: c.textMid, Locked: c.green, Open: c.orange };
           const groupOrder = [
             { key: "Closed", label: "Closed", color: c.textMid, icon: "✓" },
             { key: "Locked", label: "Locked", color: c.green, icon: "●" },
-            { key: "Ready", label: "Ready to Lock", color: c.cyan, icon: "◉" },
-            { key: "Partial", label: "Partial", color: c.orange, icon: "◐" },
-            { key: "Empty", label: "Empty", color: c.red, icon: "○" },
+            { key: "Open", label: "Open", color: c.orange, icon: "○" },
           ];
-          // Build rows with status info
+          // Build rows with status info. Ready / Partial / Empty all collapse
+          // into "Open" — we still track the finer-grained state for sorting
+          // (ready rows first inside the Open bucket), but don't show it as a
+          // separate group.
           const rows = filtered.map(cm => {
             const pObj = people.find(p => p.name === cm.person);
             const filledCount = cm.items.slice(0, 3).filter((it) => (it.title || "").trim()).length;
             const completeCount = cm.items.slice(0, 3).filter((it) => (it.title || "").trim() && it.project && it.stage && it.type).length;
             const isClosed = !!cm.closedAt;
             const isLkd = !!cm.lockedAt && !cm.closedAt;
-            const status = isClosed ? "Closed" : isLkd ? "Locked" : completeCount >= 3 ? "Ready" : filledCount > 0 ? "Partial" : "Empty";
-            return { cm, pObj, filledCount, status, realIdx: commitments.indexOf(cm) };
+            const status = isClosed ? "Closed" : isLkd ? "Locked" : "Open";
+            // Sub-state used only to order rows within the Open group.
+            const openSub = completeCount >= 3 ? 0 : filledCount > 0 ? 1 : 2;
+            return { cm, pObj, filledCount, status, openSub, realIdx: commitments.indexOf(cm) };
           });
 
-          // Sort within each group
-          const statusOrder = { Closed: 0, Locked: 1, Ready: 2, Partial: 3, Empty: 4 };
+          // Sort within each group (Closed → Locked → Open; within Open: ready → partial → empty)
+          const statusOrder = { Closed: 0, Locked: 1, Open: 2 };
           const sortRows = (arr) => [...arr].sort((a, b) => {
             let va, vb;
             if (sortCol === "person") { va = a.cm.person; vb = b.cm.person; }
             else if (sortCol === "role") { va = a.pObj?.role || ""; vb = b.pObj?.role || ""; }
             else if (sortCol === "filled") { va = a.filledCount; vb = b.filledCount; }
-            else if (sortCol === "status") { va = statusOrder[a.status] ?? 5; vb = statusOrder[b.status] ?? 5; }
+            else if (sortCol === "status") {
+              // Primary: group order. Secondary: open-sub-state (ready → partial → empty).
+              va = (statusOrder[a.status] ?? 5) * 10 + (a.status === "Open" ? a.openSub : 0);
+              vb = (statusOrder[b.status] ?? 5) * 10 + (b.status === "Open" ? b.openSub : 0);
+            }
             else { va = a.pObj?.squad || ""; vb = b.pObj?.squad || ""; }
             if (typeof va === "number") return sortDir === "asc" ? va - vb : vb - va;
             return sortDir === "asc" ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
@@ -718,17 +866,19 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             rows: sortRows(rows.filter(r => r.status === g.key)),
           })).filter(g => g.rows.length > 0);
 
+          // Mirror the visual render order into the ref so the keyboard Enter
+          // handler maps focusIdx → the correct person. Without this, Enter
+          // would open filtered[focusIdx] (raw commitments order) instead of
+          // the visually highlighted row.
+          visibleOrderRef.current = groupedData.flatMap(g => g.rows.map(r => r.realIdx));
+
           let globalRowIdx = 0;
 
           const cellPad = `${space[2]}px ${space[3]}px`;
           const dotBorder = `1px dotted ${c.border}`;
 
           return (
-            <Surface variant="data" compact style={{ padding: 0, boxShadow: c.shadowCard, borderRadius: layout.radiusLg, overflow: "clip" }}>
-              <div style={{
-                borderRadius: layout.radiusLg,
-              }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}>
+            <TableShell minWidth={700} separate>
                   <thead>
                     <tr>
                       <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: 70 }}>Squad</Th>
@@ -740,7 +890,18 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                   </thead>
                   <tbody key={rowAnimKey}>
                     {groupedData.length === 0 && (
-                      <tr><td colSpan={5} style={{ textAlign: "center", padding: `${space[7]}px 0`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>No one found</td></tr>
+                      <tr><td colSpan={5} style={{ textAlign: "center", padding: `${space[7]}px ${space[4]}px`, color: c.textMid }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: space[3] }}>
+                          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, color: c.textMid }}>No one matches those filters.</div>
+                          {(search || filterStatus) && (
+                            <button onClick={() => { setSearch(""); setFilterStatus(null); setRowAnimKey(k => k + 1); }} style={{
+                              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+                              color: c.accent, background: `${c.accent}10`, border: `1px solid ${c.accent}25`,
+                              borderRadius: layout.radiusSm, padding: `${space[1]}px ${space[3]}px`, cursor: "pointer",
+                            }}>Clear filters</button>
+                          )}
+                        </div>
+                      </td></tr>
                     )}
                     {groupedData.map((group) => {
                       const sectionRows = group.rows.map((row) => {
@@ -751,27 +912,31 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                           <tr
                             key={row.cm.person}
                             className="flow-row"
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Open ${row.cm.person}'s commits`}
                             onClick={() => openPerson(row.realIdx)}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPerson(row.realIdx); } }}
                             style={{
                               cursor: "pointer",
                               background: isFocused ? `${c.accent}10` : "transparent",
                               boxShadow: isFocused ? `inset 3px 0 0 ${c.accent}` : "none",
-                              transition: `background ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}`,
-                              animation: `rowSlideIn 0.3s ${motion.critical.easing} both`,
-                              animationDelay: `${Math.min(ri * 30, 600)}ms`,
+                              transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
+                              animation: `rowSlideIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                              animationDelay: `${Math.min(ri * 12, 120)}ms`,
                             }}
                           >
                             {/* Squad */}
                             <td style={{
                               padding: cellPad,
-                              fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                               fontWeight: 600, color: c.textMid,
                               borderBottom: dotBorder,
-                              position: "sticky", left: 0, background: isFocused ? c.surfaceAlt : c.bg, zIndex: 1,
+                              position: "sticky", left: 0, background: isFocused ? `${c.accent}10` : c.surface, zIndex: 1,
                             }}>{row.pObj?.squad || "\u2014"}</td>
                             {/* Name */}
                             <td style={{ padding: cellPad, borderBottom: dotBorder, borderLeft: dotBorder }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                                 <span style={{
                                   fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
                                   fontWeight: 600, color: c.text,
@@ -781,19 +946,19 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                             {/* Role */}
                             <td style={{
                               padding: cellPad, borderBottom: dotBorder, borderLeft: dotBorder,
-                              fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size,
+                              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                               fontWeight: 500, color: c.textMid, whiteSpace: "nowrap",
                             }}>{row.pObj?.role || "\u2014"}</td>
                             {/* Filled — 3-slot bars */}
                             <td style={{ padding: cellPad, textAlign: "center", borderBottom: dotBorder, borderLeft: dotBorder }}>
                               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: space[2] }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: space[1] }}>
                                   {[0, 1, 2].map(si => (
                                     <div key={si} style={{
-                                      width: 14, height: 5, borderRadius: 2.5,
-                                      background: si < row.filledCount ? sColor : `${c.textDim}18`,
-                                      border: si < row.filledCount ? "none" : `1px solid ${c.border}`,
-                                      transition: `background ${motion.critical.duration} ${motion.critical.easing}, border-color ${motion.critical.duration} ${motion.critical.easing}, color ${motion.critical.duration} ${motion.critical.easing}, box-shadow ${motion.critical.duration} ${motion.critical.easing}, transform ${motion.critical.duration} ${motion.critical.easing}, opacity ${motion.critical.duration} ${motion.critical.easing}`,
+                                      width: 14, height: 6, borderRadius: 3,
+                                      background: si < row.filledCount ? sColor : (c.borderMedium || c.border),
+                                      border: "none",
+                                      transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
                                     }} />
                                   ))}
                                 </div>
@@ -817,7 +982,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                         !activeFilter && (
                           <tr key={`section-${group.key}`}>
                             <td colSpan={5} style={{
-                              padding: `${space[2]}px ${space[2] - 2}px`,
+                              padding: `${space[2]}px ${space[2]}px`,
                               background: `${group.color}06`,
                               borderBottom: `1px dotted ${c.border}`,
                               borderTop: `1px dotted ${c.border}`,
@@ -834,7 +999,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                                 <span style={{
                                   fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
                                   fontWeight: typo.monoMd.weight, color: group.color,
-                                  opacity: 0.7, fontVariantNumeric: "tabular-nums",
+                                  fontVariantNumeric: "tabular-nums",
                                 }}>{group.rows.length}</span>
                               </div>
                             </td>
@@ -844,9 +1009,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                       ];
                     })}
                   </tbody>
-                </table>
-              </div>
-            </Surface>
+            </TableShell>
           );
         })()}
         <div style={{ flexShrink: 0, height: space[8] }} />
@@ -863,7 +1026,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
   for (let w = 1; w <= 4; w++) {
     const d = new Date(currentWeekStart);
     d.setDate(d.getDate() + w * 7);
-    weeks.push({ value: d.toISOString().split("T")[0], label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) });
+    weeks.push({ value: toLocalISODate(d), label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) });
   }
 
   // Current week frame label
@@ -888,15 +1051,8 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
     if (bo === "blocked" && !(person.bufferBlockedReason || "").trim()) return false;
     return true;
   })() ? 1 : 0);
-  const allDeclared = fullyResolved === totalToResolve && totalToResolve > 0;
+  const allDeclared = totalToResolve === 0 ? true : (fullyResolved === totalToResolve);
   const weekComplete = allDeclared;
-
-  // Phase badge config
-  const phaseBadge = {
-    planning: { label: "Planning", color: c.accent, bg: c.accentDim },
-    locked: { label: "Locked", color: c.green, bg: c.greenDim },
-    closing: { label: "Closing", color: c.orange, bg: c.orangeDim },
-  }[phase];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
@@ -905,16 +1061,16 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       {isHistorical && (
         <div style={{
           padding: `${space[2]}px ${space[4]}px`,
-          background: `${c.orange}08`, border: `1px solid ${c.orange}20`,
+          background: c.amberDim, border: `1px solid ${c.amberBorder}`,
           borderRadius: layout.radiusSm,
           display: "flex", alignItems: "center", gap: space[2],
         }}>
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-            <circle cx="8" cy="8" r="7" stroke={c.orange} strokeWidth="1.3" fill="none" />
-            <line x1="8" y1="4" x2="8" y2="9" stroke={c.orange} strokeWidth="1.5" strokeLinecap="round" />
-            <circle cx="8" cy="11.5" r="0.8" fill={c.orange} />
+            <circle cx="8" cy="8" r="7" stroke={c.amber} strokeWidth="2" fill="none" />
+            <line x1="8" y1="4" x2="8" y2="9" stroke={c.amber} strokeWidth="2" strokeLinecap="round" />
+            <circle cx="8" cy="11.5" r="0.8" fill={c.amber} />
           </svg>
-          <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: c.orange }}>
+          <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: c.amber }}>
             Viewing a past week — this data is read-only.
           </span>
         </div>
@@ -923,7 +1079,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       {/* ═══ DETAIL HEADER — Steel & Orange §8.2 ═══ */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        padding: space[5],
+        padding: space[6],
         background: c.surface, border: `1px solid ${c.border}`,
         borderRadius: layout.radiusLg, position: "relative", overflow: "visible",
         boxShadow: c.shadowCard,
@@ -934,7 +1090,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             width: 36, height: 36, borderRadius: layout.radiusSm,
             background: c.surfaceAlt, border: `1px solid ${c.border}`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: typo.monoMd.font, fontWeight: 700, fontSize: 12,
+            fontFamily: typo.monoMd.font, fontWeight: 700, fontSize: typo.displaySm.size,
             letterSpacing: typo.monoMd.tracking, color: c.text, flexShrink: 0,
           }}>{person.person.split(" ").map(w => w.charAt(0)).slice(0, 2).join("").toUpperCase()}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -945,14 +1101,14 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             }}>{person.person}</span>
             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
               {personMeta && (
-                <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 400, color: c.textDim }}>
+                <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: c.textMid }}>
                   {personMeta.role} · {personMeta.squad}
                 </span>
               )}
               <span style={{
                 fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                 fontWeight: 600, color: c.textMid,
-                padding: `1px ${space[2]}px`, borderRadius: layout.radiusTag,
+                padding: `1px ${space[2]}px`, borderRadius: layout.radiusXs,
                 background: c.surfaceAlt, border: `1px solid ${c.border}`,
                 fontVariantNumeric: "tabular-nums",
               }}>{weekLabel}</span>
@@ -964,36 +1120,45 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
         <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
             {/* Planning: auto-save indicator + overflow menu */}
             {phase === "planning" && (
-              <>
+              <div key="planning-cluster" style={{ display: "flex", alignItems: "center", gap: space[2], animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>
                 {/* Auto-save status */}
-                {autoSaveStatus === "saved" && (
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.green, letterSpacing: typo.monoSm.tracking, opacity: 0.7, transition: "opacity 0.3s ease" }}>{"\u2713"} Saved</span>
-                )}
-                {autoSaveStatus === "saving" && (
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textDim, letterSpacing: typo.monoSm.tracking }}>Saving...</span>
-                )}
+                <span role="status" aria-live="polite" aria-atomic="true" style={{ display: "inline-flex", alignItems: "center" }}>
+                  {autoSaveStatus === "saved" && (
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.green, letterSpacing: typo.monoSm.tracking, animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>{"\u2713"} Saved</span>
+                  )}
+                  {autoSaveStatus === "saving" && (
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textMid, letterSpacing: typo.monoSm.tracking, animation: `savingPulse 1400ms ${motion.normal.easing} infinite` }}>Saving...</span>
+                  )}
+                  {autoSaveStatus === "error" && (
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.red, letterSpacing: typo.monoSm.tracking, animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>{"\u2715"} Save failed — retry</span>
+                  )}
+                </span>
                 {/* Overflow menu */}
                 <div ref={overflowRef} style={{ position: "relative" }}>
-                  <button onClick={() => setOverflowOpen(o => !o)} style={{
-                    width: 32, height: 32, borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                  <button onClick={() => setOverflowOpen(o => !o)} aria-label="More actions" title="More actions" style={{
+                    width: 40, height: 40, borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
                     background: overflowOpen ? c.surfaceAlt : "transparent", cursor: "pointer",
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    color: c.textMid, fontSize: typo.displaySm.size, fontWeight: 700, letterSpacing: "0.1em",
-                    transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                    fontFamily: typo.monoMd.font, color: c.textMid, fontSize: typo.displaySm.size, fontWeight: 700, letterSpacing: "0.1em",
+                    transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
                   }}>···</button>
-                  {overflowOpen && (
+                  {overflowAnim.mounted && (
                     <div style={{
                       position: "absolute", top: "100%", right: 0, marginTop: 4, zIndex: 50,
                       background: c.surfaceOverlay, border: `1px solid ${c.border}`,
                       borderRadius: layout.radiusSm, boxShadow: c.shadowOverlay,
                       minWidth: 200, padding: `${space[1]}px 0`, whiteSpace: "nowrap",
+                      animation: overflowAnim.visible
+                        ? `fadeScaleIn ${motion.fast.duration} ${motion.fast.easing} both`
+                        : `fadeScaleOut ${motion.fast.duration} ${motion.fast.easing} both`,
+                      transformOrigin: "top center",
                     }}>
                       <button onClick={() => { setOverflowOpen(false); setConfirmReset(true); }} style={{
                         width: "100%", padding: `${space[2]}px ${space[3]}px`, border: "none",
                         background: "transparent", cursor: "pointer", textAlign: "left",
                         fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500,
                         color: c.red, display: "flex", alignItems: "center", gap: space[2],
-                        transition: `background ${motion.interaction.duration}`,
+                        transition: `background ${motion.interaction.duration} ${motion.interaction.easing}`,
                       }} onMouseEnter={e => e.currentTarget.style.background = `${c.red}08`}
                          onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                         Reset all commits
@@ -1001,35 +1166,36 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                     </div>
                   )}
                 </div>
-              </>
+              </div>
             )}
-            {/* Locked: Locked pill with timer + Finish button */}
+            {/* Locked: Locked pill with timer + Close button */}
             {phase === "locked" && (
-              <>
+              <div key="locked-cluster" style={{ display: "flex", alignItems: "center", gap: space[2], animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>
                 <div style={{
-                  display: "flex", alignItems: "center", gap: space[1] + 2,
+                  display: "flex", alignItems: "center", gap: space[2],
                   padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
-                  background: `${c.green}08`, border: `1px solid ${c.green}25`,
+                  background: c.greenDim, border: `1px solid ${c.greenBorder}`,
                 }}>
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.green }} />
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.green, textTransform: "uppercase" }}>Locked</span>
+                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, color: c.green, textTransform: "uppercase" }}>Locked</span>
                 </div>
                 {!isHistorical && (
                   <Btn variant="primary" size="sm" onClick={() => setClosingMode(true)}>
-                    Finish <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, opacity: 0.6 }}>F</kbd>
+                    Close <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, marginLeft: space[1], padding: `2px ${space[1]}px`, borderRadius: layout.radiusXs, background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.28)" }}>C</kbd>
                   </Btn>
                 )}
-              </>
+              </div>
             )}
             {/* Closing: progress bars + resolved text + Closing pill + Back button */}
             {phase === "closing" && (
-              <>
-                <div style={{ display: "flex", gap: 3 }}>
+              <div key="closing-cluster" style={{ display: "flex", alignItems: "center", gap: space[2], animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>
+                <div role="progressbar" aria-valuemin={0} aria-valuemax={totalToResolve} aria-valuenow={fullyResolved} aria-label="Commitments resolved" style={{ display: "flex", gap: space[1] }}>
                   {Array.from({ length: totalToResolve }, (_, i) => (
                     <div key={i} style={{
-                      width: 18, height: 4, borderRadius: 2,
+                      width: 20, height: 4, borderRadius: layout.radiusXs,
                       background: i < fullyResolved ? c.green : c.surfaceAlt,
-                      border: i < fullyResolved ? "none" : `1px solid ${c.border}`,
+                      border: `1px solid ${i < fullyResolved ? "transparent" : c.border}`,
+                      transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
                     }} />
                   ))}
                 </div>
@@ -1039,30 +1205,31 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                   fontVariantNumeric: "tabular-nums",
                 }}>{weekComplete ? "ALL RESOLVED" : `${fullyResolved}/${totalToResolve} RESOLVED`}</span>
                 <div style={{
-                  padding: `3px ${space[2] + 2}px`, borderRadius: layout.radiusSm,
-                  background: `${c.orange}08`, border: `1px solid ${c.orange}25`,
+                  padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
+                  background: c.accentDim, border: `1px solid ${c.accent}30`,
                   display: "flex", alignItems: "center", gap: space[1],
                 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.orange }} />
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.orange, textTransform: "uppercase" }}>Closing</span>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.accent, animation: `savingPulse 1600ms ${motion.normal.easing} infinite` }} />
+                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, color: c.accent, textTransform: "uppercase" }}>Closing</span>
                 </div>
                 <Btn variant="ghost" size="sm" onClick={() => setClosingMode(false)}>Back to Locked</Btn>
-              </>
+              </div>
             )}
         </div>
       </div>
 
       {/* ═══ HERO KPI GRID — compact week summary ═══ */}
       {(() => {
-        const lockedCount = filledSlots;
-        const lockStateLabel = phase === "locked" ? "Locked" : phase === "closing" ? "Closing" : allSlotsFilled ? "Ready" : filledSlots > 0 ? "Partial" : "Empty";
-        const lockStateColor = phase === "locked" ? c.green : phase === "closing" ? c.orange : allSlotsFilled ? c.accent : c.textDim;
-        const weekStateLabel = phase === "closing" ? (totalToResolve > 0 ? `${Math.round((fullyResolved / totalToResolve) * 100)}%` : "—") : phase === "locked" ? "In progress" : "Planning";
-        const weekStateSub = phase === "closing" ? `${fullyResolved} of ${totalToResolve} resolved` : phase === "locked" ? weekLabel : "Not yet locked";
+        const lockedCount = readyCount;
+        const lockStateLabel = isHistorical ? "Past" : phase === "locked" ? "Locked" : phase === "closing" ? "Closing" : allSlotsFilled ? "Ready" : filledSlots > 0 ? "Partial" : "Empty";
+        const lockStateColor = phase === "locked" ? c.green : phase === "closing" ? c.accent : allSlotsFilled ? c.accent : c.textMid;
+        const lockStateSub = isHistorical ? "read-only" : phase === "locked" ? "locked for the week" : phase === "closing" ? "closing phase" : "planning phase";
+        const weekStateLabel = isHistorical ? (person?.closedAt ? "Closed" : "Past") : phase === "closing" ? (totalToResolve > 0 ? `${Math.round((fullyResolved / totalToResolve) * 100)}%` : "—") : phase === "locked" ? "In progress" : "Planning";
+        const weekStateSub = isHistorical ? weekLabel : phase === "closing" ? `${fullyResolved} of ${totalToResolve} resolved` : phase === "locked" ? weekLabel : "Not yet locked";
         return (
           <KpiGrid cols="1fr 1fr 1fr">
             <KpiCard label="Commitments" value={<span style={{ fontVariantNumeric: "tabular-nums" }}>{lockedCount}/3</span>} sub="filled this week" />
-            <KpiCard label="Lock State" value={<span style={{ color: lockStateColor }}>{lockStateLabel}</span>} sub={phase === "locked" ? "locked for the week" : "planning phase"} />
+            <KpiCard label="Lock State" value={<span style={{ color: lockStateColor }}>{lockStateLabel}</span>} sub={lockStateSub} />
             <KpiCard label="This Week" value={<span style={{ fontVariantNumeric: "tabular-nums" }}>{weekStateLabel}</span>} sub={weekStateSub} />
           </KpiGrid>
         );
@@ -1079,13 +1246,18 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
           !!it.project && !!(it.title || "").trim() && !!it.stage && allPhases.includes(it.stage) && !!it.type
         );
         const bufProj = bufferActive ? projects.find(p => p.id === person.bufferProject) : null;
-        const bufferHasContent = bufferActive && (person.buffer || "").trim() && person.bufferProject;
+        const bufferHasContent = bufferActive && (person.buffer || "").trim() && person.bufferProject && person.bufferStage && person.bufferType;
         const activeItems = person.items.slice(0, 3).filter((_, idx) => person.deselected !== idx);
 
         // ── Review Mode: stacked cards + Lock Week CTA ──
-        if (reviewMode) {
+        if (reviewModeAnim.mounted) {
           return (
-            <div style={{ maxWidth: 640, margin: `${space[4]}px auto 0`, width: "100%", animation: "fadeIn 0.35s ease" }}>
+            <div style={{
+              maxWidth: 640, margin: `${space[4]}px auto 0`, width: "100%",
+              animation: reviewModeAnim.visible
+                ? `fadeIn ${motion.normal.duration} ${motion.normal.easing} both`
+                : `fadeOut ${motion.normal.duration} ${motion.normal.easing} both`,
+            }}>
               {/* Review header */}
               <div style={{ textAlign: "center", marginBottom: space[4] }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: space[2], marginBottom: space[1] }}>
@@ -1100,7 +1272,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
               {/* Incomplete warning */}
               {!canLock && (
                 <div style={{
-                  padding: `${space[2] + 2}px ${space[3] + 2}px`, borderRadius: layout.radiusSm,
+                  padding: `${space[3]}px ${space[3]}px`, borderRadius: layout.radiusSm,
                   background: `${c.orange}06`, border: `1px solid ${c.orange}18`, borderLeft: `3px solid ${c.orange}`,
                   marginBottom: space[3],
                 }}>
@@ -1108,21 +1280,70 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 </div>
               )}
               {/* Stacked review cards */}
-              <div style={{ display: "flex", flexDirection: "column", gap: space[3] + 2 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
                 {person.items.slice(0, 3).map((item, idx) => {
-                  if (person.deselected === idx) return null;
                   const projObj = projects.find(p => p.id === item.project);
                   const stageColor = pc[item.stage] || c.textDim;
                   const tCfg = tc[item.type] || {};
+                  if (person.deselected === idx) {
+                    return (
+                      <div key={idx} style={{
+                        background: c.surface, border: `1px solid ${c.border}`,
+                        borderRadius: layout.radiusLg, padding: space[6],
+                        display: "flex", flexDirection: "column", gap: space[3],
+                        opacity: 0.78,
+                        animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                        animationDelay: `${idx * 50}ms`,
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+                          <div style={{
+                            width: 24, height: 24, borderRadius: layout.radiusSm,
+                            background: `${c.red}08`, border: `1px solid ${c.red}18`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800, color: c.textMid,
+                          }}>{idx + 1}</div>
+                          {projObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: c.textMid }}>{projObj.id}</span>}
+                          {projObj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.textMid }}>{projObj.name}</span>}
+                        </div>
+                        <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
+                        {item.title && <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.textMid, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>}
+                        <div style={{ display: "flex", alignItems: "center", gap: space[2], paddingLeft: space[7], marginTop: space[1] }}>
+                          <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.red, flex: 1 }}>
+                            {person.depriReason ? `Reason: ${person.depriReason}` : ""}
+                          </span>
+                          <Badge color={c.red} bg={`${c.red}08`} style={{ border: `1px solid ${c.red}20`, flexShrink: 0 }}>Deprioritized</Badge>
+                          {!isHistorical && (
+                            <button className="flow-press" onClick={restoreSlot} style={{
+                              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+                              color: c.accent, cursor: "pointer", background: `${c.accent}08`,
+                              border: `1px solid ${c.accent}20`, borderRadius: layout.radiusSm,
+                              padding: `${space[1]}px ${space[3]}px`, flexShrink: 0,
+                              transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = `${c.accent}15`; e.currentTarget.style.borderColor = `${c.accent}40`; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `${c.accent}08`; e.currentTarget.style.borderColor = `${c.accent}20`; }}>Restore</button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
-                    <div key={idx} onClick={() => { setReviewMode(false); setDetailFocus(idx); }} style={{
+                    <div key={idx} role="button" tabIndex={0} className="flow-focus-ring flow-press"
+                      aria-label={`Edit commit ${idx + 1}${projObj ? ` — ${projObj.name}` : ""}`}
+                      onClick={() => { setReviewMode(false); setDetailFocus(idx); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setReviewMode(false); setDetailFocus(idx); } }}
+                      style={{
                       background: c.surface, border: `1px solid ${c.border}`,
-                      borderRadius: layout.radius, padding: `${space[5]}px ${space[6]}px`,
-                      display: "flex", flexDirection: "column", gap: space[2] + 2,
-                      cursor: "pointer", transition: `border-color 0.2s ease`,
-                    }} onMouseEnter={e => e.currentTarget.style.borderColor = `${c.accent}40`}
-                       onMouseLeave={e => e.currentTarget.style.borderColor = c.border}>
-                      <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                      borderRadius: layout.radiusLg, padding: space[6],
+                      display: "flex", flexDirection: "column", gap: space[3],
+                      cursor: "pointer",
+                      boxShadow: c.shadowCard,
+                      animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                      animationDelay: `${idx * 50}ms`,
+                      transition: `border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
+                    }} onMouseEnter={e => { e.currentTarget.style.borderColor = `${c.accent}40`; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = c.shadowElevated; }}
+                       onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = c.shadowCard; }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                         <div style={{
                           width: 24, height: 24, borderRadius: layout.radiusSm,
                           background: `${c.green}10`, border: `1px solid ${c.green}20`,
@@ -1131,13 +1352,30 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                         }}>{idx + 1}</div>
                         {projObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: entityColors().project }}>{projObj.id}</span>}
                         {projObj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{projObj.name}</span>}
+                        {!bufferActive && !isHistorical && (item.title || "").trim() && (
+                          <button className="flow-press"
+                            onClick={(e) => { e.stopPropagation(); setDepriModal({ idx }); setDepriText(""); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}
+                            title="Deprioritize this slot and open a buffer replacement"
+                            style={{
+                              marginLeft: "auto", cursor: "pointer", border: `1px solid ${c.orange}35`,
+                              background: `${c.orange}0C`, borderRadius: layout.radiusSm,
+                              padding: `${space[1]}px ${space[3]}px`,
+                              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
+                              letterSpacing: typo.monoSm.tracking, color: c.orange,
+                              transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+                            }}
+                            onMouseEnter={e => { e.currentTarget.style.background = `${c.orange}1A`; e.currentTarget.style.borderColor = `${c.orange}60`; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = `${c.orange}0C`; e.currentTarget.style.borderColor = `${c.orange}35`; }}
+                          >Deprioritize</button>
+                        )}
                       </div>
-                      <div style={{ marginLeft: 34, marginRight: 12, height: 1, background: c.border }} />
-                      <div style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: 500, color: c.text, lineHeight: 1.5, paddingLeft: 34 }}>{item.title}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, flexWrap: "wrap", paddingLeft: 34 }}>
+                      <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
+                      <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.text, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap", paddingLeft: space[7] }}>
                         {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(tCfg.color || c.textDim)}15` }}>{tCfg.label || item.type}</Badge>}
                         {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
-                        <span style={{ marginLeft: "auto", fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, padding: `3px ${space[2] + 2}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{item.duration || 1}w</span>
+                        <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textMid, padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{item.duration || 1}w</span>
                       </div>
                     </div>
                   );
@@ -1148,14 +1386,18 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                   const bStageColor = pc[person.bufferStage] || c.textDim;
                   const bTCfg = tc[person.bufferType] || {};
                   return (
-                    <div onClick={() => { setReviewMode(false); setDetailFocus(3); }} style={{
+                    <div role="button" tabIndex={0}
+                      aria-label={`Edit buffer commit${bProj ? ` — ${bProj.name}` : ""}`}
+                      onClick={() => { setReviewMode(false); setDetailFocus(3); }}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setReviewMode(false); setDetailFocus(3); } }}
+                      style={{
                       background: c.surface, border: `1px solid ${c.cyan}20`,
-                      borderRadius: layout.radius, padding: `${space[5]}px ${space[6]}px`,
-                      display: "flex", flexDirection: "column", gap: space[2] + 2,
-                      cursor: "pointer", transition: `border-color 0.2s ease`,
+                      borderRadius: layout.radiusLg, padding: space[6],
+                      display: "flex", flexDirection: "column", gap: space[3],
+                      cursor: "pointer", transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
                     }} onMouseEnter={e => e.currentTarget.style.borderColor = `${c.cyan}40`}
                        onMouseLeave={e => e.currentTarget.style.borderColor = `${c.cyan}20`}>
-                      <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                         <div style={{
                           width: 24, height: 24, borderRadius: layout.radiusSm,
                           background: `${c.cyan}10`, border: `1px solid ${c.cyan}20`,
@@ -1165,13 +1407,13 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                         {bProj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: entityColors().project }}>{bProj.id}</span>}
                         {bProj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{bProj.name}</span>}
                       </div>
-                      <div style={{ marginLeft: 34, marginRight: 12, height: 1, background: c.border }} />
-                      <div style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: 500, color: c.text, lineHeight: 1.5, paddingLeft: 34 }}>{person.buffer}</div>
-                      <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, flexWrap: "wrap", paddingLeft: 34 }}>
+                      <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
+                      <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.text, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{person.buffer}</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap", paddingLeft: space[7] }}>
                         {person.bufferType && <Badge color={bTCfg.color || c.textDim} bg={bTCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(bTCfg.color || c.textDim)}15` }}>{bTCfg.label || person.bufferType}</Badge>}
                         {person.bufferStage && <Badge color={bStageColor} bg={bStageColor + "10"} style={{ border: `1px solid ${bStageColor}15` }}>{person.bufferStage}</Badge>}
                         <Badge color={c.cyan} bg={`${c.cyan}10`} style={{ border: `1px solid ${c.cyan}15` }}>Buffer</Badge>
-                        <span style={{ marginLeft: "auto", fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, padding: `3px ${space[2] + 2}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{person.bufferDuration || 1}w</span>
+                        <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textMid, padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{person.bufferDuration || 1}w</span>
                       </div>
                     </div>
                   );
@@ -1179,17 +1421,25 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
               </div>
               {/* Save + Lock Week CTAs */}
               <div style={{ display: "flex", justifyContent: "center", gap: space[3], marginTop: space[5] }}>
-                <Btn variant="secondary" onClick={() => { if (onSave) onSave(); setAutoSaveStatus("saved"); clearTimeout(autoSaveStatusTimer.current); autoSaveStatusTimer.current = setTimeout(() => setAutoSaveStatus(null), 2000); }}>
+                <Btn variant="secondary" size="md" onClick={async () => {
+                  setAutoSaveStatus("saving");
+                  try {
+                    if (onSave) await onSave();
+                    setAutoSaveStatus("saved");
+                  } catch (_) {
+                    setAutoSaveStatus("error");
+                  }
+                  clearTimeout(autoSaveStatusTimer.current);
+                  autoSaveStatusTimer.current = setTimeout(() => setAutoSaveStatus(null), 2000);
+                }}>
                   Save
                 </Btn>
-                <Btn variant="success" disabled={!canLock} onClick={() => { if (canLock) setConfirmAction("lock"); }} style={{
-                  padding: `${space[2] + 4}px ${space[7]}px`,
-                }}>
+                <Btn variant="success" size="md" disabled={!canLock} onClick={() => { if (canLock) setConfirmAction("lock"); }}>
                   Lock Week
                 </Btn>
               </div>
               <div style={{ textAlign: "center", marginTop: space[2] }}>
-                <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textDim }}>Click any commit above to edit</span>
+                <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textMid }}>Click any commit above to edit</span>
               </div>
             </div>
           );
@@ -1203,19 +1453,30 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             {/* ── Minimal Progress Indicator ── */}
             <div style={{ maxWidth: 640, margin: `0 auto ${space[4]}px`, width: "100%", display: "flex", alignItems: "center", gap: space[3] }}>
               {/* Segmented bar */}
-              <div style={{ display: "flex", gap: 3, flex: 1 }}>
+              <div role="progressbar" aria-label="Commit slots filled" aria-valuemin={0} aria-valuemax={3} aria-valuenow={slotFilled.filter(Boolean).length} style={{ display: "flex", gap: space[1], flex: 1 }}>
                 {[0, 1, 2].map((di) => {
                   const filled = slotFilled[di];
                   const active = di === detailFocus;
                   const depri = person.deselected === di;
                   return (
-                    <div key={di} onClick={() => setDetailFocus(di)} style={{
-                      flex: 1, height: 4, borderRadius: 2, cursor: "pointer",
-                      background: depri ? c.red : filled ? c.green : active ? c.accent : `${c.border}`,
-                      opacity: active && !filled ? 1 : filled ? 0.8 : 0.4,
-                      transition: `background 0.25s ${motion.interaction.easing}, border-color 0.25s ${motion.interaction.easing}, color 0.25s ${motion.interaction.easing}, box-shadow 0.25s ${motion.interaction.easing}, transform 0.25s ${motion.interaction.easing}, opacity 0.25s ${motion.interaction.easing}`,
-                      boxShadow: "none",
-                    }} />
+                    <div
+                      key={di}
+                      role="button"
+                      tabIndex={0}
+                      className="flow-focus-ring"
+                      aria-label={`Go to commit ${di + 1}${filled ? " (filled)" : ""}${active ? " (current)" : ""}`}
+                      aria-current={active ? "step" : undefined}
+                      onClick={() => setDetailFocus(di)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailFocus(di); } }}
+                      onMouseEnter={e => { if (!depri && !active) e.currentTarget.style.transform = "scaleY(1.5)"; }}
+                      onMouseLeave={e => { if (!active) e.currentTarget.style.transform = "scaleY(1)"; }}
+                      style={{
+                        flex: 1, height: 4, borderRadius: layout.radiusXs, cursor: "pointer",
+                        background: depri ? c.red : filled ? c.green : active ? c.accent : (c.borderMedium || c.border),
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                        transformOrigin: "center",
+                      }}
+                    />
                   );
                 })}
               </div>
@@ -1227,12 +1488,23 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
               }}>{slotFilled.filter(Boolean).length} / 3</span>
               {/* Buffer indicator */}
               {bufferActive && (
-                <div onClick={() => setDetailFocus(3)} style={{
-                  width: 18, height: 18, borderRadius: 4, cursor: "pointer",
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className="flow-focus-ring"
+                  aria-label="Go to buffer slot"
+                  aria-current={detailFocus === 3 ? "step" : undefined}
+                  onClick={() => setDetailFocus(3)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailFocus(3); } }}
+                  onMouseEnter={e => { if (detailFocus !== 3) { e.currentTarget.style.background = `${c.purple}10`; e.currentTarget.style.borderColor = c.purple + "60"; } }}
+                  onMouseLeave={e => { if (detailFocus !== 3) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = c.purple + "30"; } }}
+                  style={{
+                  width: 18, height: 18, borderRadius: layout.radiusXs, cursor: "pointer",
                   background: detailFocus === 3 ? `${c.purple}20` : "transparent",
                   border: `1.5px solid ${detailFocus === 3 ? c.purple : c.purple + "30"}`,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800, color: c.purple,
+                  transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
                 }}>B</div>
               )}
             </div>
@@ -1245,11 +1517,12 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 <div style={{
                   maxWidth: 640, margin: "0 auto", width: "100%",
                   background: c.surface, border: `1px solid ${c.border}`,
-                  borderRadius: layout.radius, padding: `${space[5]}px ${space[6]}px`,
-                  display: "flex", flexDirection: "column", gap: space[2] + 2,
-                  opacity: 0.6,
+                  borderRadius: layout.radiusLg, padding: space[6],
+                  display: "flex", flexDirection: "column", gap: space[3],
+                  opacity: 0.78,
+                  animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                     <div style={{
                       width: 24, height: 24, borderRadius: layout.radiusSm,
                       background: `${c.red}08`, border: `1px solid ${c.red}18`,
@@ -1259,23 +1532,24 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                     {depriProj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: c.textMid }}>{depriProj.id}</span>}
                     {depriProj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.textMid }}>{depriProj.name}</span>}
                   </div>
-                  <div style={{ marginLeft: 34, marginRight: 12, height: 1, background: c.border }} />
-                  <div style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: 500, color: c.textMid, lineHeight: 1.5, paddingLeft: 34 }}>{depriItem?.title}</div>
+                  <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
+                  <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.textMid, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{depriItem?.title}</div>
                   {person.depriReason && (
-                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.red, paddingLeft: 34 }}>
-                      Reason: {person.depriReason}
+                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, paddingLeft: space[7] }}>
+                      <span style={{ color: c.red, fontWeight: 600 }}>Reason:</span> {person.depriReason}
                     </div>
                   )}
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingLeft: 34, marginTop: space[1] }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingLeft: space[7], marginTop: space[1] }}>
                     <Badge color={c.red} bg={`${c.red}08`} style={{ border: `1px solid ${c.red}20` }}>Deprioritized</Badge>
-                    <button onClick={restoreSlot} style={{
+                    <button className="flow-press" onClick={restoreSlot} style={{
                       fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
                       color: c.accent, cursor: "pointer", background: `${c.accent}08`,
                       border: `1px solid ${c.accent}20`, borderRadius: layout.radiusSm,
                       padding: `${space[1]}px ${space[3]}px`,
-                      transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
-                    }} onMouseEnter={e => { e.target.style.background = `${c.accent}15`; e.target.style.borderColor = `${c.accent}40`; }}
-                       onMouseLeave={e => { e.target.style.background = `${c.accent}08`; e.target.style.borderColor = `${c.accent}20`; }}>Restore</button>
+                      transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = `${c.accent}15`; e.currentTarget.style.borderColor = `${c.accent}40`; }}
+                       onMouseLeave={e => { e.currentTarget.style.background = `${c.accent}08`; e.currentTarget.style.borderColor = `${c.accent}20`; }}>Restore</button>
                   </div>
                 </div>
               );
@@ -1285,30 +1559,32 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             {detailFocus === 3 && bufferActive && (
               <div style={{
                 maxWidth: 640, margin: "0 auto", width: "100%",
-                background: !bufferHasContent ? `${c.purple}02` : c.surface,
+                background: !bufferHasContent ? `${c.purple}08` : c.surface,
                 border: !bufferHasContent ? `1.5px dashed ${c.purple}20` : `1px solid ${c.border}`,
-                borderRadius: layout.radius + 2, padding: `${space[6]}px`,
+                borderRadius: layout.radiusLg, padding: space[6],
                 display: "flex", flexDirection: "column", gap: space[4],
+                animation: `fadeScaleIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                transformOrigin: "top center",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-                  <div style={{ width: 32, height: 32, borderRadius: layout.radiusMd, background: `${c.purple}10`, border: `1px solid ${c.purple}25`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: typo.bodyMd.size, fontWeight: 800, color: c.purple, flexShrink: 0 }}>B</div>
+                  <div aria-label="Buffer" title="Buffer commit" style={{ width: 32, height: 32, borderRadius: layout.radiusMd, background: `${c.purple}10`, border: `1px solid ${c.purple}25`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: c.purple, flexShrink: 0 }}>B</div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking, color: bufProj ? c.text : c.textMid }}>{bufProj ? bufProj.name : "Buffer Task"}</div>
-                    <div style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textDim, marginTop: 2 }}>{bufProj ? `${bufProj.id} · Replacing #${person.deselected + 1}` : `Replacing task #${person.deselected + 1} — pick a project to start`}</div>
+                    <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking, color: bufProj ? c.text : c.textMid }}>{bufProj ? bufProj.name : "Buffer Commit"}</div>
+                    <div style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textMid, marginTop: space[1] }}>{bufProj ? `${bufProj.id} · Replacing #${person.deselected + 1}` : `Replacing commit #${person.deselected + 1} — pick a project to start`}</div>
                   </div>
                   {!!person.bufferProject && (
-                    <div style={{ display: "flex", gap: 2, background: c.surfaceAlt, borderRadius: layout.radiusSm, padding: 2, border: `1px solid ${c.border}`, flexShrink: 0 }}>
+                    <div style={{ display: "flex", gap: space[1], background: c.surfaceAlt, borderRadius: layout.radiusSm, padding: space[1], border: `1px solid ${c.border}`, flexShrink: 0 }}>
                       {["BUILD", "JAM"].map(t => {
                         const cfg = tc[t] || {};
                         const active = person.bufferType === t;
                         return (
                           <button key={t} onClick={() => updatePerson("bufferType", t)} style={{
-                            fontFamily: typo.monoSm.font, fontSize: typo.monoMd.size, fontWeight: 700,
-                            letterSpacing: "0.05em", padding: `5px 14px`,
-                            borderRadius: layout.radiusSm - 1, border: "none", cursor: "pointer",
+                            fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight,
+                            letterSpacing: "0.05em", padding: `${space[1]}px ${space[3]}px`,
+                            borderRadius: layout.radiusXs, border: "none", cursor: "pointer",
                             background: active ? `${cfg.color || c.accent}18` : "transparent",
                             color: active ? (cfg.color || c.accent) : c.textDim,
-                            transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
+                            transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
                           }}>{cfg.label || t}</button>
                         );
                       })}
@@ -1320,13 +1596,13 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                   <ProjectSearchSelect projects={projects} value={person.bufferProject || ""} onChange={val => updatePerson("bufferProject", val)} placeholder="Search by name or ID (e.g. X21)..." />
                 </div>
                 {!!person.bufferProject && (
-                  <div>
+                  <div style={{ animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>
                     <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>What are you delivering this week?</div>
                     <TextArea value={person.buffer || ""} onChange={e => updatePerson("buffer", e.target.value)} placeholder="Describe what you'll deliver" rows={3} maxLength={280} />
                   </div>
                 )}
                 {!!person.bufferProject && !!(person.buffer || "").trim() && (
-                  <div style={{ display: "flex", gap: space[4] }}>
+                  <div style={{ display: "flex", gap: space[4], animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Stage</div>
                       <ChoiceGroup options={commitPhases.map(s => ({ value: s, label: s, color: pc[s] || c.textDim }))} value={person.bufferStage} onChange={val => updatePerson("bufferStage", val)} />
@@ -1345,13 +1621,13 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
               <div key={detailFocus} style={{
                 maxWidth: 640, margin: "0 auto", width: "100%",
                 display: "flex", flexDirection: "column", gap: space[5],
-                animation: "fadeInUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both",
+                animation: `${slotDir === "right" ? "slotSlideInRight" : "slotSlideInLeft"} ${motion.normal.duration} ${motion.normal.easing} both`,
               }}>
                 {/* ── Top line: large number + project name ── */}
                 <div style={{ display: "flex", alignItems: "baseline", gap: space[3] }}>
                   <span style={{
-                    fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: 800,
-                    letterSpacing: "-0.04em", color: `${c.accent}30`, lineHeight: 1,
+                    fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight,
+                    letterSpacing: typo.displayHero.tracking, color: c.textGhost, lineHeight: 1,
                   }}>{detailFocus + 1}</span>
                   <div style={{
                     fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size,
@@ -1361,7 +1637,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 </div>
 
                 {/* ── Divider ── */}
-                <div style={{ height: 1, background: c.border, opacity: 0.5 }} />
+                <div style={{ height: 1, background: c.border }} />
 
                 {/* ── Project search ── */}
                 <div>
@@ -1380,7 +1656,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
                 {/* ── Deliverable ── */}
                 {spotHasProject && (
-                  <div>
+                  <div style={{ animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both`, animationDelay: "0ms" }}>
                     <div style={{
                       fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
                       letterSpacing: typo.monoSm.tracking, textTransform: "uppercase",
@@ -1399,37 +1675,39 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 {/* ── Type · Stage · Timeline — unified row ── */}
                 {spotHasProject && spotHasTitle && (
                   <div style={{
-                    display: "flex", alignItems: "flex-end", gap: space[2],
+                    display: "flex", alignItems: "flex-end", gap: space[2], flexWrap: "wrap", rowGap: space[3],
                     padding: `${space[3]}px ${space[4]}px`,
                     background: c.surfaceAlt, borderRadius: layout.radiusMd,
                     border: `1px solid ${c.border}`,
+                    animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both`,
+                    animationDelay: "60ms",
                   }}>
                     <div style={{ minWidth: 0 }}>
                       <div style={{
                         fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
                         letterSpacing: "0.08em", textTransform: "uppercase",
-                        color: c.textDim, marginBottom: space[1] + 1,
+                        color: c.textMid, marginBottom: space[1],
                       }}>Type</div>
                       <ChoiceGroup options={["BUILD", "JAM"].map(t => {
                         const cfg = tc[t] || {};
                         return { value: t, label: cfg.label || t, color: cfg.color || c.accent };
                       })} value={spotItem.type} onChange={val => updateItem(detailFocus, "type", val)} />
                     </div>
-                    <div style={{ width: 1, height: 28, background: c.border, opacity: 0.4, flexShrink: 0 }} />
+                    <div style={{ width: 1, height: 28, background: c.border, flexShrink: 0 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
                         fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
                         letterSpacing: "0.08em", textTransform: "uppercase",
-                        color: c.textDim, marginBottom: space[1] + 1,
+                        color: c.textMid, marginBottom: space[1],
                       }}>Stage</div>
                       <ChoiceGroup options={commitPhases.map(s => ({ value: s, label: s, color: pc[s] || c.textDim }))} value={spotItem.stage} onChange={val => updateItem(detailFocus, "stage", val)} />
                     </div>
-                    <div style={{ width: 1, height: 28, background: c.border, opacity: 0.4, flexShrink: 0 }} />
+                    <div style={{ width: 1, height: 28, background: c.border, flexShrink: 0 }} />
                     <div style={{ minWidth: 0 }}>
                       <div style={{
                         fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
                         letterSpacing: "0.08em", textTransform: "uppercase",
-                        color: c.textDim, marginBottom: space[1] + 1,
+                        color: c.textMid, marginBottom: space[1],
                       }}>Timeline</div>
                       <ChoiceGroup mono options={[1, 2, 3, 4].map(w => ({ value: w, label: `${w}w` }))} value={spotItem.duration || 1} onChange={val => updateItem(detailFocus, "duration", val)} />
                     </div>
@@ -1438,7 +1716,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
                 {/* ── Forward action ── */}
                 {slotFilled[detailFocus] && detailFocus <= 2 && (
-                  <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: space[2], borderTop: `1px solid ${c.border}30` }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: space[2], borderTop: `1px solid ${c.border}`, animation: `fadeScaleIn ${motion.fast.duration} ${motion.fast.easing} both`, animationDelay: "120ms" }}>
                     {detailFocus < 2 ? (
                       <Btn variant="primary" size="sm" onClick={() => setDetailFocus(detailFocus + 1)}>
                         Next {"\u2192"}
@@ -1459,13 +1737,15 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       })()}
 
       {/* ═══ LOCK SUCCESS INTERSTITIAL ═══ */}
-      {phase === "locked" && lockSuccess && (() => {
+      {lockSuccessAnim.mounted && (() => {
         const activeItems = person.items.slice(0, 3).filter((_, idx) => person.deselected !== idx);
         return (
           <div style={{
             maxWidth: 640, margin: `${space[6]}px auto`, width: "100%",
             display: "flex", flexDirection: "column", alignItems: "center", gap: space[5],
-            animation: "fadeIn 0.4s ease",
+            animation: lockSuccessAnim.visible
+              ? `fadeIn ${motion.normal.duration} ${motion.normal.easing} both`
+              : `fadeOut ${motion.normal.duration} ${motion.normal.easing} both`,
           }}>
             {/* Lock icon */}
             <div style={{
@@ -1500,12 +1780,14 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 const tCfg = tc[item.type] || {};
                 return (
                   <div key={i} style={{
-                    padding: `${space[3] + 2}px ${space[4]}px`,
-                    background: `${c.green}04`, border: `1px solid ${c.green}12`,
+                    padding: `${space[3]}px ${space[4]}px`,
+                    background: `${c.green}0C`, border: `1px solid ${c.green}12`,
                     borderRadius: layout.radiusSm,
                     display: "flex", flexDirection: "column", gap: space[2],
+                    animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                    animationDelay: `${150 + i * 60}ms`,
                   }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                       <div style={{
                         width: 22, height: 22, borderRadius: layout.radiusSm - 2,
                         background: `${c.green}15`, display: "flex", alignItems: "center", justifyContent: "center",
@@ -1514,8 +1796,8 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                       {projObj && <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: entityColors().project }}>{projObj.id}</span>}
                       <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, flex: 1 }}>{projObj?.name || item.project}</span>
                     </div>
-                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, paddingLeft: 32, lineHeight: 1.5 }}>{item.title}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, paddingLeft: 32 }}>
+                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, paddingLeft: space[7], lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: space[1], paddingLeft: space[7] }}>
                       {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(tCfg.color || c.textDim)}15` }}>{tCfg.label || item.type}</Badge>}
                       {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
                       <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{item.duration || 1}w</span>
@@ -1530,12 +1812,12 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 const bTCfg = tc[person.bufferType] || {};
                 return (
                   <div style={{
-                    padding: `${space[3] + 2}px ${space[4]}px`,
-                    background: `${c.cyan}04`, border: `1px solid ${c.cyan}12`,
+                    padding: `${space[3]}px ${space[4]}px`,
+                    background: `${c.cyan}0C`, border: `1px solid ${c.cyan}12`,
                     borderRadius: layout.radiusSm,
                     display: "flex", flexDirection: "column", gap: space[2],
                   }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                       <div style={{
                         width: 22, height: 22, borderRadius: layout.radiusSm - 2,
                         background: `${c.cyan}15`, display: "flex", alignItems: "center", justifyContent: "center",
@@ -1545,8 +1827,8 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                       <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, flex: 1 }}>{bProj?.name || person.bufferProject}</span>
                       <Badge color={c.cyan} bg={`${c.cyan}10`} style={{ border: `1px solid ${c.cyan}15` }}>Buffer</Badge>
                     </div>
-                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, paddingLeft: 32, lineHeight: 1.5 }}>{person.buffer}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, paddingLeft: 32 }}>
+                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, paddingLeft: space[7], lineHeight: 1.5 }}>{person.buffer}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: space[1], paddingLeft: space[7] }}>
                       {person.bufferType && <Badge color={bTCfg.color || c.textDim} bg={bTCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(bTCfg.color || c.textDim)}15` }}>{bTCfg.label || person.bufferType}</Badge>}
                       {person.bufferStage && <Badge color={bStageColor} bg={bStageColor + "10"} style={{ border: `1px solid ${bStageColor}15` }}>{person.bufferStage}</Badge>}
                       <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{person.bufferDuration || 1}w</span>
@@ -1565,7 +1847,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
 
       {/* ═══ LOCKED PHASE — all 3 cards stacked + buffer ═══ */}
       {phase === "locked" && !lockSuccess && (() => {
-        const bufferHasContent = bufferActive && (person.buffer || "").trim() && person.bufferProject;
+        const bufferHasContent = bufferActive && (person.buffer || "").trim() && person.bufferProject && person.bufferStage && person.bufferType;
         const showBufferForm = bufferActive;
         const bufProj = projects.find(p => p.id === person.bufferProject);
 
@@ -1575,7 +1857,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             <SectionHead title="This Week's Commitments" />
           </div>
           {/* ── All cards stacked ── */}
-          <div style={{ maxWidth: 640, margin: `0 auto`, width: "100%", display: "flex", flexDirection: "column", gap: space[3] + 2 }}>
+          <div style={{ maxWidth: 640, margin: `0 auto`, width: "100%", display: "flex", flexDirection: "column", gap: space[3] }}>
           {person.items.slice(0, 3).map((item, idx) => {
             if (!item.project && !(item.title || "").trim()) return null;
             const isDepri = person.deselected === idx;
@@ -1587,12 +1869,14 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
               return (
                 <div key={idx} style={{
                   background: c.surface, border: `1px solid ${c.border}`,
-                  borderRadius: layout.radius, padding: `${space[5]}px ${space[6]}px`,
-                  display: "flex", flexDirection: "column", gap: space[2] + 2,
-                  opacity: 0.6,
+                  borderRadius: layout.radiusLg, padding: space[6],
+                  display: "flex", flexDirection: "column", gap: space[3],
+                  opacity: 0.78,
+                  animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                  animationDelay: `${idx * 50}ms`,
                 }}>
                   {/* Header — badge + ID + name */}
-                  <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                     <div style={{
                       width: 24, height: 24, borderRadius: layout.radiusSm,
                       background: `${c.red}08`, border: `1px solid ${c.red}18`,
@@ -1602,24 +1886,25 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                     {projObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: c.textMid }}>{projObj.id}</span>}
                     {projObj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.textMid }}>{projObj.name}</span>}
                   </div>
-                  <div style={{ marginLeft: 34, marginRight: 12, height: 1, background: c.border }} />
+                  <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
                   {/* Deliverable */}
-                  <div style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: 500, color: c.textMid, lineHeight: 1.5, paddingLeft: 34 }}>{item.title}</div>
+                  <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.textMid, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
                   {/* Reason */}
                   {/* Reason + Deprioritized + Restore — all one line */}
-                  <div style={{ display: "flex", alignItems: "center", gap: space[2], paddingLeft: 34, marginTop: space[1] }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[2], paddingLeft: space[7], marginTop: space[1] }}>
                     <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.red, flex: 1 }}>
                       {person.depriReason ? `Reason: ${person.depriReason}` : ""}
                     </span>
                     <Badge color={c.red} bg={`${c.red}08`} style={{ border: `1px solid ${c.red}20`, flexShrink: 0 }}>Deprioritized</Badge>
-                    <button onClick={restoreSlot} style={{
+                    <button className="flow-press" onClick={restoreSlot} style={{
                       fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
                       color: c.accent, cursor: "pointer", background: `${c.accent}08`,
                       border: `1px solid ${c.accent}20`, borderRadius: layout.radiusSm,
                       padding: `${space[1]}px ${space[3]}px`, flexShrink: 0,
-                      transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
-                    }} onMouseEnter={e => { e.target.style.background = `${c.accent}15`; e.target.style.borderColor = `${c.accent}40`; }}
-                       onMouseLeave={e => { e.target.style.background = `${c.accent}08`; e.target.style.borderColor = `${c.accent}20`; }}>Restore</button>
+                      transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = `${c.accent}15`; e.currentTarget.style.borderColor = `${c.accent}40`; }}
+                       onMouseLeave={e => { e.currentTarget.style.background = `${c.accent}08`; e.currentTarget.style.borderColor = `${c.accent}20`; }}>Restore</button>
                   </div>
                 </div>
               );
@@ -1628,10 +1913,12 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             return (
               <div key={idx} style={{
                 background: c.surface, border: `1px solid ${c.border}`,
-                borderRadius: layout.radius, padding: `${space[5]}px ${space[6]}px`,
-                display: "flex", flexDirection: "column", gap: space[2] + 2,
+                borderRadius: layout.radiusLg, padding: space[6],
+                display: "flex", flexDirection: "column", gap: space[3],
+                animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                animationDelay: `${idx * 50}ms`,
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                   <div style={{
                     width: 24, height: 24, borderRadius: layout.radiusSm,
                     background: `${entityColors().project}10`, border: `1px solid ${entityColors().project}20`,
@@ -1641,24 +1928,25 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                   {projObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: entityColors().project }}>{projObj.id}</span>}
                   {projObj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{projObj.name}</span>}
                   {!bufferActive && !isHistorical && (
-                    <button onClick={() => { setDepriModal({ idx }); setDepriText(""); }} style={{
-                      marginLeft: "auto", cursor: "pointer", border: `1px solid ${c.orange}20`,
-                      background: `${c.orange}06`, borderRadius: layout.radiusSm,
+                    <button className="flow-press" onClick={() => { setDepriModal({ idx }); setDepriText(""); }} style={{
+                      marginLeft: "auto", cursor: "pointer", border: `1px solid ${c.orange}35`,
+                      background: `${c.orange}0C`, borderRadius: layout.radiusSm,
                       padding: `${space[1]}px ${space[3]}px`,
-                      fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 600,
-                      letterSpacing: typo.monoSm.tracking, color: c.orange, opacity: 0.7,
-                      transition: `background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease`,
-                    }} onMouseEnter={e => { e.target.style.opacity = "1"; e.target.style.background = `${c.orange}12`; }}
-                       onMouseLeave={e => { e.target.style.opacity = "0.7"; e.target.style.background = `${c.orange}06`; }}
+                      fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
+                      letterSpacing: typo.monoSm.tracking, color: c.orange,
+                      transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = `${c.orange}1A`; e.currentTarget.style.borderColor = `${c.orange}60`; }}
+                       onMouseLeave={e => { e.currentTarget.style.background = `${c.orange}0C`; e.currentTarget.style.borderColor = `${c.orange}35`; }}
                     >Deprioritize</button>
                   )}
                 </div>
-                <div style={{ marginLeft: 34, marginRight: 12, height: 1, background: c.border }} />
-                <div style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: 500, color: c.text, lineHeight: 1.5, paddingLeft: 34 }}>{item.title}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, flexWrap: "wrap", paddingLeft: 34 }}>
+                <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
+                <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.text, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap", paddingLeft: space[7] }}>
                   {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(tCfg.color || c.textDim)}15` }}>{tCfg.label || item.type}</Badge>}
                   {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
-                  <span style={{ marginLeft: "auto", fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, padding: `3px ${space[2] + 2}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{item.duration || 1}w</span>
+                  <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textMid, padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{item.duration || 1}w</span>
                 </div>
               </div>
             );
@@ -1668,10 +1956,12 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
           {bufferActive && bufferHasContent && (
             <div style={{
               background: c.surface, border: `1px solid ${c.border}`,
-              borderRadius: layout.radius, padding: `${space[5]}px ${space[6]}px`,
-              display: "flex", flexDirection: "column", gap: space[2] + 2,
+              borderRadius: layout.radiusLg, padding: space[6],
+              display: "flex", flexDirection: "column", gap: space[3],
+              animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+              animationDelay: "150ms",
             }}>
-              <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                 <div style={{
                   width: 24, height: 24, borderRadius: layout.radiusSm,
                   background: `${c.purple}10`, border: `1px solid ${c.purple}20`,
@@ -1681,12 +1971,12 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 {bufProj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: entityColors().project }}>{bufProj.id}</span>}
                 {bufProj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{bufProj.name}</span>}
               </div>
-              <div style={{ marginLeft: 34, marginRight: 12, height: 1, background: c.border }} />
-              <div style={{ fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: 500, color: c.text, lineHeight: 1.5, paddingLeft: 34 }}>{person.buffer}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, flexWrap: "wrap", paddingLeft: 34 }}>
+              <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
+              <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.text, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{person.buffer}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap", paddingLeft: space[7] }}>
                 {person.bufferType && (() => { const btc = tc[person.bufferType] || {}; return <Badge color={btc.color || c.textDim} bg={btc.bg || c.surfaceAlt} style={{ border: `1px solid ${(btc.color || c.textDim)}15` }}>{btc.label || person.bufferType}</Badge>; })()}
                 {person.bufferStage && (() => { const sc = pc[person.bufferStage] || c.textDim; return <Badge color={sc} bg={sc + "10"} style={{ border: `1px solid ${sc}15` }}>{person.bufferStage}</Badge>; })()}
-                <span style={{ marginLeft: "auto", fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.textMid, padding: `3px ${space[2] + 2}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{person.bufferDuration || 1}w</span>
+                <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textMid, padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{person.bufferDuration || 1}w</span>
               </div>
             </div>
           )}
@@ -1706,7 +1996,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       {/* ── Deprioritize Reason Modal ── */}
       <Modal open={!!depriModal} onClose={() => { setDepriModal(null); setDepriText(""); }} title="Deprioritize this commit" width={480}>
         <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginBottom: space[3] }}>
-          Add a reason for deprioritization
+          Add a reason for deprioritization. This temporarily unlocks the week so you can fill a buffer replacement — re-lock when ready.
         </div>
         <TextArea value={depriText} onChange={e => setDepriText(e.target.value)} placeholder="E.g., priorities shifted, blocked by dependency, scope changed..." rows={3} data-autofocus />
         <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end", marginTop: space[4] }}>
@@ -1725,7 +2015,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
           <div style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
             <SectionHead title="Close Out The Week" />
           </div>
-          <div style={{ maxWidth: 640, margin: `0 auto`, width: "100%", display: "flex", flexDirection: "column", gap: space[2] + 2 }}>
+          <div style={{ maxWidth: 640, margin: `0 auto`, width: "100%", display: "flex", flexDirection: "column", gap: space[3] }}>
           {person.items.slice(0, 3).map((item, idx) => {
             if (person.deselected === idx) return null;
             if (!item.project && !(item.title || "").trim()) return null;
@@ -1736,18 +2026,20 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             const outcomeColor = outcome === "done" ? c.green : outcome === "carry" ? c.cyan : outcome === "blocked" ? c.red : outcome === "done_carry" ? c.orange : null;
             const showDoneCarry = (item.weeksRemaining || item.duration || 1) > 1;
             const carryColor = outcome === "done_carry" ? c.orange : c.cyan;
-            const wrapBg = outcome === "done" || outcome === "done_carry" ? `${c.green}02` : outcome === "carry" ? `${c.cyan}02` : outcome === "blocked" ? `${c.red}02` : c.surface;
+            const wrapBg = outcome === "done" || outcome === "done_carry" ? `${c.green}0A` : outcome === "carry" ? `${c.cyan}0A` : outcome === "blocked" ? `${c.red}0A` : c.surface;
             const wrapBorder = outcome === "done" || outcome === "done_carry" ? `${c.green}12` : outcome === "carry" ? `${c.cyan}12` : outcome === "blocked" ? `${c.red}12` : c.border;
 
             return (
               <div key={idx} style={{
-                borderRadius: layout.radius, overflow: "hidden",
+                borderRadius: layout.radiusLg, overflow: "hidden",
                 border: `1px solid ${wrapBorder}`, background: wrapBg,
-                transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+                animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                animationDelay: `${idx * 50}ms`,
               }}>
                 {/* Card inner — info only */}
-                <div style={{ padding: `${space[5]}px ${space[6]}px`, display: "flex", flexDirection: "column", gap: space[2] }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                <div style={{ padding: space[6], display: "flex", flexDirection: "column", gap: space[2] }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                     <div style={{
                       width: 24, height: 24, borderRadius: layout.radiusSm,
                       background: outcomeColor ? `${outcomeColor}12` : `${c.accent}08`,
@@ -1760,23 +2052,25 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                     <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{projObj?.name}</span>
                     <span style={{
                       marginLeft: "auto", fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                      fontWeight: 600, color: c.textMid, padding: `3px ${space[2] + 2}px`,
+                      fontWeight: 600, color: c.textMid, padding: `${space[1]}px ${space[3]}px`,
                       borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}`,
                     }}>{item.weeksRemaining || item.duration || 1}w</span>
                   </div>
                   <div style={{
-                    fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: 500,
+                    fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight,
                     color: (outcome === "done" || outcome === "done_carry") ? c.textMid : c.text,
-                    lineHeight: 1.5, paddingLeft: 34,
+                    lineHeight: 1.5, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0,
                     textDecoration: (outcome === "done" || outcome === "done_carry") ? "line-through" : "none",
+                    textDecorationColor: (outcome === "done" || outcome === "done_carry") ? c.textMid : "transparent",
+                    transition: `color ${motion.fast.duration} ${motion.fast.easing}, text-decoration-color ${motion.fast.duration} ${motion.fast.easing}`,
                   }}>{item.title}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, paddingLeft: 34 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[1], paddingLeft: space[7] }}>
                     {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt}>{tCfg.label || item.type}</Badge>}
                     {item.stage && <Badge color={stageColor} bg={stageColor + "10"}>{item.stage}</Badge>}
                   </div>
                   {/* Blocked reason */}
                   {outcome === "blocked" && item.blockedReason && (
-                    <Surface compact variant="data" style={{ borderLeft: `3px solid ${c.red}`, marginLeft: 34 }}>
+                    <Surface compact variant="data" style={{ borderLeft: `3px solid ${c.red}`, marginLeft: space[7], animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>
                       <TelemetryLabel color={c.red} style={{ marginBottom: 2 }}>Blocker</TelemetryLabel>
                       <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, lineHeight: typo.bodySm.lineHeight }}>{item.blockedReason}</div>
                     </Surface>
@@ -1784,30 +2078,31 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                 </div>
                 {/* Extension layer — outcome buttons */}
                 <div style={{
-                  padding: `${space[3]}px ${space[5] + 2}px ${space[3] + 2}px`,
+                  padding: `${space[3]}px ${space[6]}px ${space[3]}px`,
                   background: c.surfaceAlt,
                   borderTop: `1px solid ${c.border}`,
                   display: "flex", flexDirection: "column", gap: space[2],
                 }}>
                   <div style={{ display: "flex", gap: space[1], flexWrap: "wrap" }}>
                     {[
-                      { val: "done", label: "Completed", clr: c.green },
+                      { val: "done", label: "Done", clr: c.green },
+                      { val: "partial", label: "Partial", clr: c.orange },
                       { val: "carry", label: "Carry", clr: c.cyan },
                       ...(showDoneCarry ? [{ val: "done_carry", label: "Done + Carry", clr: c.orange }] : []),
                       { val: "blocked", label: "Blocked", clr: c.red },
                     ].map(btn => {
                       const active = outcome === btn.val;
                       return (
-                        <button key={btn.val} onClick={() => updateOutcome(idx, btn.val)} style={{
-                          padding: `5px 10px`, borderRadius: layout.radiusSm,
-                          fontSize: typo.monoSm.size, fontWeight: 600, fontFamily: typo.monoSm.font,
+                        <button key={btn.val} className="flow-press" onClick={() => updateOutcome(idx, btn.val)} style={{
+                          padding: `${space[1]}px ${space[2] + 2}px`, borderRadius: layout.radiusSm,
+                          fontSize: typo.bodySm.size, fontWeight: 600, fontFamily: typo.bodySm.font,
                           border: `1px solid ${active ? btn.clr + "30" : c.border}`,
                           background: active ? `${btn.clr}10` : "transparent",
-                          color: active ? btn.clr : c.textDim,
+                          color: active ? btn.clr : c.textMid,
                           cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
-                          transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                          transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
                         }}>
-                          {active && <span>{btn.val === "blocked" ? "!" : "\u2713"}</span>}
+                          {active && <span style={{ animation: `fadeScaleIn ${motion.fast.duration} ${motion.fast.easing} both` }}>{btn.val === "blocked" ? "!" : "\u2713"}</span>}
                           {btn.label}
                         </button>
                       );
@@ -1815,19 +2110,19 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                   </div>
                   {/* Carry-to row */}
                   {(outcome === "carry" || outcome === "done_carry") && (
-                    <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap", animation: `fadeScaleIn ${motion.fast.duration} ${motion.fast.easing} both`, transformOrigin: "top left" }}>
                       <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: carryColor, textTransform: "uppercase" }}>Carry to</span>
                       {weeks.map(wk => {
                         const sel = item.carryTo === wk.value;
                         return (
-                          <button key={wk.value} onClick={() => updateCarryTo(idx, wk.value)} style={{
-                            padding: `4px ${space[2] + 2}px`, borderRadius: layout.radiusTag + 1,
-                            fontSize: typo.monoSm.size, fontWeight: 600, fontFamily: typo.monoSm.font,
+                          <button key={wk.value} className="flow-press" onClick={() => updateCarryTo(idx, wk.value)} style={{
+                            padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
+                            fontSize: typo.bodySm.size, fontWeight: 600, fontFamily: typo.bodySm.font,
                             border: `1px solid ${sel ? carryColor + "30" : c.border}`,
                             background: sel ? `${carryColor}10` : "transparent",
-                            color: sel ? carryColor : c.textDim,
+                            color: sel ? carryColor : c.textMid,
                             cursor: "pointer",
-                            transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                            transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
                           }}>{wk.label}</button>
                         );
                       })}
@@ -1845,19 +2140,21 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             const bufTCfg = tc[person.bufferType] || {};
             const bufOutcome = person.bufferOutcome;
             const bufOutcomeColor = bufOutcome === "done" ? c.green : bufOutcome === "carry" ? c.cyan : bufOutcome === "blocked" ? c.red : bufOutcome === "done_carry" ? c.orange : null;
-            const bufWrapBg = bufOutcome === "done" || bufOutcome === "done_carry" ? `${c.green}02` : bufOutcome === "carry" ? `${c.cyan}02` : bufOutcome === "blocked" ? `${c.red}02` : c.surface;
+            const bufWrapBg = bufOutcome === "done" || bufOutcome === "done_carry" ? `${c.green}0A` : bufOutcome === "carry" ? `${c.cyan}0A` : bufOutcome === "blocked" ? `${c.red}0A` : c.surface;
             const bufWrapBorder = bufOutcome === "done" || bufOutcome === "done_carry" ? `${c.green}12` : bufOutcome === "carry" ? `${c.cyan}12` : bufOutcome === "blocked" ? `${c.red}12` : c.border;
             const bufCarryColor = bufOutcome === "done_carry" ? c.orange : c.cyan;
 
             return (
               <div style={{
-                borderRadius: layout.radius, overflow: "hidden",
+                borderRadius: layout.radiusLg, overflow: "hidden",
                 border: `1px solid ${bufWrapBorder}`, background: bufWrapBg,
                 borderLeft: `3px solid ${c.purple}`,
-                transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+                animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+                animationDelay: "150ms",
               }}>
-                <div style={{ padding: `${space[5]}px ${space[6]}px`, display: "flex", flexDirection: "column", gap: space[2] }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: space[2] + 2 }}>
+                <div style={{ padding: space[6], display: "flex", flexDirection: "column", gap: space[2] }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                     <div style={{
                       width: 24, height: 24, borderRadius: layout.radiusSm,
                       background: bufOutcomeColor ? `${bufOutcomeColor}12` : `${c.purple}08`,
@@ -1871,71 +2168,72 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                     <Badge color={c.purple} bg={c.purple + "10"} style={{ marginLeft: 4 }}>Buffer</Badge>
                     <span style={{
                       marginLeft: "auto", fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                      fontWeight: 600, color: c.textMid, padding: `3px ${space[2] + 2}px`,
+                      fontWeight: 600, color: c.textMid, padding: `${space[1]}px ${space[3]}px`,
                       borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}`,
                     }}>{person.bufferDuration || 1}w</span>
                   </div>
                   <div style={{
-                    fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size, fontWeight: 500,
+                    fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight,
                     color: (bufOutcome === "done" || bufOutcome === "done_carry") ? c.textMid : c.text,
-                    lineHeight: 1.5, paddingLeft: 34,
+                    lineHeight: 1.5, paddingLeft: space[7],
                     textDecoration: (bufOutcome === "done" || bufOutcome === "done_carry") ? "line-through" : "none",
                   }}>{person.buffer}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: space[1] + 1, paddingLeft: 34 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: space[1], paddingLeft: space[7] }}>
                     {person.bufferType && <Badge color={bufTCfg.color || c.textDim} bg={bufTCfg.bg || c.surfaceAlt}>{bufTCfg.label || person.bufferType}</Badge>}
                     {person.bufferStage && <Badge color={bufStageColor} bg={bufStageColor + "10"}>{person.bufferStage}</Badge>}
                   </div>
                   {bufOutcome === "blocked" && person.bufferBlockedReason && (
-                    <Surface compact variant="data" style={{ borderLeft: `3px solid ${c.red}`, marginLeft: 34 }}>
+                    <Surface compact variant="data" style={{ borderLeft: `3px solid ${c.red}`, marginLeft: space[7] }}>
                       <TelemetryLabel color={c.red} style={{ marginBottom: 2 }}>Blocker</TelemetryLabel>
                       <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, lineHeight: typo.bodySm.lineHeight }}>{person.bufferBlockedReason}</div>
                     </Surface>
                   )}
                 </div>
                 <div style={{
-                  padding: `${space[3]}px ${space[5] + 2}px ${space[3] + 2}px`,
+                  padding: `${space[3]}px ${space[6]}px ${space[3]}px`,
                   background: c.surfaceAlt,
                   borderTop: `1px solid ${c.border}`,
                   display: "flex", flexDirection: "column", gap: space[2],
                 }}>
                   <div style={{ display: "flex", gap: space[1], flexWrap: "wrap" }}>
                     {[
-                      { val: "done", label: "Completed", clr: c.green },
+                      { val: "done", label: "Done", clr: c.green },
+                      { val: "partial", label: "Partial", clr: c.orange },
                       { val: "done_carry", label: "Done + Carry", clr: c.orange },
                       { val: "carry", label: "Carry", clr: c.cyan },
                       { val: "blocked", label: "Blocked", clr: c.red },
                     ].map(btn => {
                       const active = bufOutcome === btn.val;
                       return (
-                        <button key={btn.val} onClick={() => updateBufferOutcome(btn.val)} style={{
-                          padding: `5px 10px`, borderRadius: layout.radiusSm,
-                          fontSize: typo.monoSm.size, fontWeight: 600, fontFamily: typo.monoSm.font,
+                        <button key={btn.val} className="flow-press" onClick={() => updateBufferOutcome(btn.val)} style={{
+                          padding: `${space[1]}px ${space[2] + 2}px`, borderRadius: layout.radiusSm,
+                          fontSize: typo.bodySm.size, fontWeight: 600, fontFamily: typo.bodySm.font,
                           border: `1px solid ${active ? btn.clr + "30" : c.border}`,
                           background: active ? `${btn.clr}10` : "transparent",
-                          color: active ? btn.clr : c.textDim,
+                          color: active ? btn.clr : c.textMid,
                           cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
-                          transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                          transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
                         }}>
-                          {active && <span>{btn.val === "blocked" ? "!" : "\u2713"}</span>}
+                          {active && <span style={{ animation: `fadeScaleIn ${motion.fast.duration} ${motion.fast.easing} both` }}>{btn.val === "blocked" ? "!" : "\u2713"}</span>}
                           {btn.label}
                         </button>
                       );
                     })}
                   </div>
                   {(bufOutcome === "carry" || bufOutcome === "done_carry") && (
-                    <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap", animation: `fadeScaleIn ${motion.fast.duration} ${motion.fast.easing} both`, transformOrigin: "top left" }}>
                       <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: bufCarryColor, textTransform: "uppercase" }}>Carry to</span>
                       {weeks.map(wk => {
                         const sel = person.bufferCarryTo === wk.value;
                         return (
-                          <button key={wk.value} onClick={() => updateBufferCarryTo(wk.value)} style={{
-                            padding: `4px ${space[2] + 2}px`, borderRadius: layout.radiusTag + 1,
-                            fontSize: typo.monoSm.size, fontWeight: 600, fontFamily: typo.monoSm.font,
+                          <button key={wk.value} className="flow-press" onClick={() => updateBufferCarryTo(wk.value)} style={{
+                            padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
+                            fontSize: typo.bodySm.size, fontWeight: 600, fontFamily: typo.bodySm.font,
                             border: `1px solid ${sel ? bufCarryColor + "30" : c.border}`,
                             background: sel ? `${bufCarryColor}10` : "transparent",
                             color: sel ? bufCarryColor : c.textDim,
                             cursor: "pointer",
-                            transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
+                            transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
                           }}>{wk.label}</button>
                         );
                       })}
@@ -1972,49 +2270,88 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             disabled={!weekComplete}
             onClick={() => {
               setCommitments(prev => {
+                if (activePerson < 0 || activePerson >= prev.length) return prev;
                 const next = [...prev];
                 const p = { ...next[activePerson] };
+                // Normalize weekStart across rows — some rows may carry full ISO timestamps.
+                const normalizeWeek = (ws) => {
+                  if (!ws) return "";
+                  const s = String(ws).slice(0, 10);
+                  return s;
+                };
+                const myWeekStart = normalizeWeek(p.weekStart);
+                // Idempotency: a target row can already have a carry from this week (re-close case).
+                const alreadyCarried = (targetRow, sourceTitle) =>
+                  (targetRow.items || []).some(t => t && t.carriedFrom === weekLabel && (t.title || "") === sourceTitle);
+                const placeIntoTarget = (existingIdx, newItem) => {
+                  const target = { ...next[existingIdx] };
+                  const targetItems = [...(target.items || [])];
+                  if (alreadyCarried(target, newItem.title)) return; // already carried — skip dup
+                  const emptyIdx = targetItems.findIndex(t => !(t && (t.title || "").trim()));
+                  if (emptyIdx !== -1 && emptyIdx < 3) {
+                    targetItems[emptyIdx] = newItem;
+                  } else {
+                    // Target week is full: stash as buffer if free, otherwise drop with a console warning.
+                    if (!(target.buffer || "").trim()) {
+                      target.buffer = newItem.title;
+                      target.bufferProject = newItem.project;
+                      target.bufferStage = newItem.stage;
+                      target.bufferType = newItem.type;
+                      target.bufferDuration = newItem.duration;
+                    } else {
+                      console.warn("[Flow] Carry target week is full; dropping carried item", newItem);
+                      return;
+                    }
+                  }
+                  target.items = targetItems; next[existingIdx] = target;
+                };
                 const carriedItems = p.items.slice(0, 3).filter((it, idx) =>
                   (it.title || "").trim() && p.deselected !== idx &&
                   (it.outcome === "carry" || it.outcome === "done_carry") && it.carryTo
                 );
                 carriedItems.forEach(item => {
+                  const targetWeek = normalizeWeek(item.carryTo);
+                  if (!targetWeek || targetWeek === myWeekStart) return; // never target self
                   const newItem = {
                     title: item.title, type: item.type, project: item.project, stage: item.stage,
                     duration: item.outcome === "done_carry" ? Math.max(1, (item.weeksRemaining || 1)) : (item.duration || 1),
                     outcome: null, carryTo: null, blockedReason: "", carriedFrom: weekLabel,
                   };
-                  const existingIdx = next.findIndex((entry, ei) => entry.person === p.person && ei !== activePerson && entry.weekStart === item.carryTo);
+                  const existingIdx = next.findIndex((entry, ei) => entry.person === p.person && ei !== activePerson && normalizeWeek(entry.weekStart) === targetWeek);
                   if (existingIdx === -1) {
-                    next.push({ person: p.person, items: [newItem, { title: "", type: "", project: "", stage: "", duration: 1 }, { title: "", type: "", project: "", stage: "", duration: 1 }], buffer: "", deselected: -1, weekStart: item.carryTo });
+                    next.push(makeCarriedWeekRow(p.person, targetWeek, newItem));
                   } else {
-                    const target = { ...next[existingIdx] }; const targetItems = [...target.items];
-                    const emptyIdx = targetItems.findIndex(t => !(t.title || "").trim());
-                    if (emptyIdx !== -1) targetItems[emptyIdx] = newItem; else targetItems.push(newItem);
-                    target.items = targetItems; next[existingIdx] = target;
+                    placeIntoTarget(existingIdx, newItem);
                   }
                 });
                 // Carry buffer task if applicable
-                if ((p.bufferOutcome === "carry" || p.bufferOutcome === "done_carry") && p.bufferCarryTo && (p.buffer || "").trim()) {
+                const bufferTarget = normalizeWeek(p.bufferCarryTo);
+                if ((p.bufferOutcome === "carry" || p.bufferOutcome === "done_carry") && bufferTarget && (p.buffer || "").trim() && bufferTarget !== myWeekStart) {
                   const bufItem = {
                     title: p.buffer, type: p.bufferType || "", project: p.bufferProject || "", stage: p.bufferStage || "",
                     duration: p.bufferDuration || 1,
                     outcome: null, carryTo: null, blockedReason: "", carriedFrom: weekLabel,
                   };
-                  const existingIdx = next.findIndex((entry, ei) => entry.person === p.person && ei !== activePerson && entry.weekStart === p.bufferCarryTo);
+                  const existingIdx = next.findIndex((entry, ei) => entry.person === p.person && ei !== activePerson && normalizeWeek(entry.weekStart) === bufferTarget);
                   if (existingIdx === -1) {
-                    next.push({ person: p.person, items: [bufItem, { title: "", type: "", project: "", stage: "", duration: 1 }, { title: "", type: "", project: "", stage: "", duration: 1 }], buffer: "", deselected: -1, weekStart: p.bufferCarryTo });
+                    next.push(makeCarriedWeekRow(p.person, bufferTarget, bufItem));
                   } else {
-                    const target = { ...next[existingIdx] }; const targetItems = [...target.items];
-                    const emptyIdx = targetItems.findIndex(t => !(t.title || "").trim());
-                    if (emptyIdx !== -1) targetItems[emptyIdx] = bufItem; else targetItems.push(bufItem);
-                    target.items = targetItems; next[existingIdx] = target;
+                    placeIntoTarget(existingIdx, bufItem);
                   }
                 }
-                p.closedAt = new Date().toISOString(); next[activePerson] = p; return next;
+                p.closedAt = new Date().toISOString();
+                p.closedAtDate = toLocalISODate(new Date());
+                next[activePerson] = p; return next;
               });
-              setClosingMode(false);
-              goBackToList();
+              // Defer navigation + save so React commits the close mutation first;
+              // otherwise flushDirtyToDB can persist a stale pre-close snapshot.
+              // Explicit flush here because triggerAutoSave is suppressed during
+              // closing mode — this is the user-confirmed moment outcomes hit the DB.
+              setTimeout(async () => {
+                setClosingMode(false);
+                if (onSave) { try { await onSave(); } catch (_) {} }
+                goBackToList();
+              }, 0);
             }}
           >Close Week</Btn>
         </Surface>
@@ -2030,7 +2367,12 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
         <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: space[3] }}>
           {confirmAction === "lock"
             ? `You're locking ${activeItems.length + (bufferFilled ? 1 : 0)} commits for the week of ${weekLabel}. Once locked, your plan is set and visible to your team.`
-            : "Tasks will become editable again. Any changes made will be updated in the system."}
+            : (() => {
+              const outcomeCount = (person?.items || []).slice(0, 3).filter(it => it.outcome).length + (person?.bufferOutcome ? 1 : 0);
+              return outcomeCount > 0
+                ? `Tasks will become editable again. This will also discard ${outcomeCount} outcome choice${outcomeCount === 1 ? "" : "s"} (done / carry / blocked) and any carry-forward plans you've recorded.`
+                : "Tasks will become editable again. Any changes made will be updated in the system.";
+            })()}
         </div>
         {confirmAction === "lock" && (
           <Surface compact variant="data" style={{
@@ -2038,20 +2380,20 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
             borderLeft: `3px solid ${c.red}`, marginBottom: space[4],
           }}>
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
-              <circle cx="8" cy="8" r="7" stroke={c.red} strokeWidth="1.3" fill="none" />
-              <line x1="8" y1="4" x2="8" y2="9" stroke={c.red} strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="8" cy="8" r="7" stroke={c.red} strokeWidth="2" fill="none" />
+              <line x1="8" y1="4" x2="8" y2="9" stroke={c.red} strokeWidth="2" strokeLinecap="round" />
               <circle cx="8" cy="11.5" r="0.8" fill={c.red} />
             </svg>
             <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500, color: c.red, lineHeight: 1.5 }}>
-              Once locked, your plan is visible to your team. You can deprioritize one task and add a buffer, or unlock to make changes.
+              Once locked, your plan is visible to your team. You can deprioritize one task and add a buffer, but the 3 commits themselves are final for the week.
             </span>
           </Surface>
         )}
         {confirmAction === "lock" && (
           <div style={{
-            padding: `${space[3]}px ${space[3] + 2}px`, borderRadius: layout.radiusMd,
+            padding: `${space[3]}px ${space[3]}px`, borderRadius: layout.radiusMd,
             background: c.surfaceAlt, border: `1px solid ${c.border}`, marginBottom: space[5],
-            display: "flex", flexDirection: "column", gap: space[1] + 2,
+            display: "flex", flexDirection: "column", gap: space[2],
           }}>
             <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: "0.04em", color: c.textDim, textTransform: "uppercase", marginBottom: 2 }}>Your commits</div>
             {person.items.slice(0, 3).map((it, ci) => {
@@ -2064,7 +2406,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                   <div style={{
                     width: 20, height: 20, borderRadius: layout.radiusSm,
                     background: `${c.accent}08`, display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: typo.monoSm.size, fontWeight: 800, color: c.accent,
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800, color: c.accent,
                   }}>{ci + 1}</div>
                   <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.text, flex: 1 }}>{proj?.name || it.project}</span>
                   {it.type && <Badge color={tC.color || c.textDim} bg={tC.bg || c.surfaceAlt} style={{ marginLeft: "auto" }}>{tC.label || it.type}</Badge>}
@@ -2079,7 +2421,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
                   <div style={{
                     width: 20, height: 20, borderRadius: layout.radiusSm,
                     background: `${c.purple}08`, display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: typo.monoSm.size, fontWeight: 800, color: c.purple,
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800, color: c.purple,
                   }}>B</div>
                   <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.text, flex: 1 }}>{bProj?.name || person.bufferProject}</span>
                   {person.bufferType && <Badge color={bTC.color || c.textDim} bg={bTC.bg || c.surfaceAlt} style={{ marginLeft: "auto" }}>{bTC.label || person.bufferType}</Badge>}
@@ -2106,7 +2448,7 @@ const HumansView = ({ commitments: rawCommitments, setCommitments: rawSetCommitm
       {/* ═══ RESET CONFIRMATION MODAL ═══════════════════════════════ */}
       <Modal open={confirmReset} onClose={() => setConfirmReset(false)} title="Reset all commits?" accent={c.red}>
         <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
-          Are you sure you want to reset? All progress for this week will be lost.
+          Are you sure you want to reset? All commits, buffer, and outcomes for this week will be cleared.
         </div>
         <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
           <Btn variant="ghost" onClick={() => setConfirmReset(false)}>Cancel</Btn>

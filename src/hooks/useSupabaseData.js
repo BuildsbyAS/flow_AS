@@ -116,12 +116,22 @@ async function fetchSettings() {
 }
 
 async function fetchHistory() {
-  const { data, error } = await supabase
-    .from('project_history')
-    .select('*, weeks(label)')
-    .order('created_at');
-  if (error) throw error;
-  return data;
+  // Paginate — Supabase caps list responses at 1000 rows by default, which
+  // silently truncates recent weeks as project_history grows.
+  const pageSize = 1000;
+  const all = [];
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from('project_history')
+      .select('*, weeks(label)')
+      .order('created_at')
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+  }
+  return all;
 }
 
 // ─── Transform Supabase rows → seed.js shape ────────────────
@@ -189,11 +199,11 @@ function toWeekConfig(weeks, historyRows = []) {
   // so the dashboard auto-advances when a new week begins (every Sunday/Monday).
   const sorted = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
   const current = [...sorted].reverse().find(w => w.start_date <= today) || sorted[sorted.length - 1];
-  // Only include history weeks that actually have project_history entries
-  const weeksWithData = new Set(historyRows.map(r => r.week_id));
-  const historyWeeks = weeks
-    .filter(w => w.id !== current.id && weeksWithData.has(w.id))
-    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+  // Every past week is navigable, even if it has no project_history yet — otherwise
+  // the week stepper's calendar math (weekStart + offset*7 days) drifts out of sync
+  // with the historyWeeks index.
+  const historyWeeks = sorted
+    .filter(w => w.id !== current.id && w.start_date < current.start_date)
     .map(w => w.label);
 
   return {
@@ -301,7 +311,16 @@ export default function useSupabaseData() {
 
   const [appSettings, setAppSettings] = useState({});
 
-  const load = useCallback(async () => {
+  // Dedupe concurrent load() calls (StrictMode double-invoke + auth-gate remounts
+  // were causing each Supabase query to fire 4× on initial render).
+  const loadPromiseRef = useRef(null);
+  const initialLoadStartedRef = useRef(false);
+
+  const load = useCallback(async (force = false) => {
+    if (loadPromiseRef.current && !force) return loadPromiseRef.current;
+    if (initialLoadStartedRef.current && !force) return;
+    initialLoadStartedRef.current = true;
+    const run = (async () => {
     try {
       // Only show loading screen on first load, not refreshes
       if (!hasLoadedOnce.current) setLoading(true);
@@ -358,6 +377,9 @@ export default function useSupabaseData() {
       setLoading(false);
       hasLoadedOnce.current = true;
     }
+    })();
+    loadPromiseRef.current = run;
+    try { await run; } finally { loadPromiseRef.current = null; }
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -374,6 +396,6 @@ export default function useSupabaseData() {
     weekConfig: weekConfigData,
     appSettings, setAppSettings,
     lookups,
-    reload: load,
+    reload: useCallback(() => load(true), [load]),
   };
 }

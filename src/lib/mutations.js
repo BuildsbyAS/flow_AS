@@ -23,6 +23,15 @@ export async function deleteSquadFromDB(name) {
   if (error) logError('deleteSquad', error);
 }
 
+// Rename a squad by UPDATEing the name on the existing row. Same rationale
+// as renameRoleInDB — people.squad_id and projects.squad_id both CASCADE
+// on squad delete, so delete+insert would destroy their data.
+export async function renameSquadInDB(oldName, newName) {
+  const { error } = await supabase.from('squads').update({ name: newName }).eq('name', oldName);
+  if (error) { logError('renameSquad', error); return false; }
+  return true;
+}
+
 // ─── ROLES ───────────────────────────────────────────────────
 
 export async function addRoleToDB(name) {
@@ -33,6 +42,16 @@ export async function addRoleToDB(name) {
 export async function deleteRoleFromDB(name) {
   const { error } = await supabase.from('roles').delete().eq('name', name);
   if (error) logError('deleteRole', error);
+}
+
+// Rename a role by UPDATEing the name on the existing row. CRITICAL: never
+// implement rename as delete+insert — people.role_id REFERENCES roles(id)
+// ON DELETE CASCADE, so deleting a role would nuke every person holding it.
+// UPDATE preserves the UUID and the FK integrity.
+export async function renameRoleInDB(oldName, newName) {
+  const { error } = await supabase.from('roles').update({ name: newName }).eq('name', oldName);
+  if (error) { logError('renameRole', error); return false; }
+  return true;
 }
 
 // ─── PEOPLE ──────────────────────────────────────────────────
@@ -108,9 +127,10 @@ export async function createProjectInDB(project) {
 }
 
 export async function updateProjectInDB(projectId, changes) {
-  // changes = { owner, squad, phase, status }
+  // changes = { name, owner, squad, phase, status, startDate, endDate, actualStartDate, actualEndDate, depriReason }
   const updates = {};
 
+  if (changes.name !== undefined) updates.name = changes.name;
   if (changes.phase !== undefined) {
     updates.phase = changes.phase;
     // Track when a project enters GA
@@ -119,8 +139,14 @@ export async function updateProjectInDB(projectId, changes) {
   }
   if (changes.status !== undefined) updates.status = changes.status;
   if (changes.depriReason !== undefined) updates.depri_reason = changes.depriReason;
+  if (changes.startDate !== undefined) updates.start_date = changes.startDate || null;
+  if (changes.endDate !== undefined) updates.end_date = changes.endDate || null;
+  if (changes.actualStartDate !== undefined) updates.actual_start_date = changes.actualStartDate || null;
+  if (changes.actualEndDate !== undefined) updates.actual_end_date = changes.actualEndDate || null;
   if (changes.owner !== undefined) {
-    const { data: ownerRow } = await supabase.from('people').select('id').eq('name', changes.owner).single();
+    const { data: ownerRow } = changes.owner
+      ? await supabase.from('people').select('id').eq('name', changes.owner).single()
+      : { data: null };
     updates.owner_id = ownerRow?.id || null;
   }
   if (changes.squad !== undefined) {
@@ -128,9 +154,10 @@ export async function updateProjectInDB(projectId, changes) {
     updates.squad_id = squadRow?.id || null;
   }
 
-  if (Object.keys(updates).length === 0) return;
+  if (Object.keys(updates).length === 0) return { ok: true };
   const { error } = await supabase.from('projects').update(updates).eq('id', projectId);
-  if (error) logError('updateProject', error);
+  if (error) { logError('updateProject', error); return { ok: false, error }; }
+  return { ok: true };
 }
 
 /**
@@ -258,5 +285,6 @@ export async function syncCommitmentToDB(commitment, lookups) {
     }
   } catch (err) {
     logError('syncCommitment', err);
+    throw err;
   }
 }

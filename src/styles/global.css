@@ -51,7 +51,9 @@ body {
   background: var(--flow-page);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: clip;
 }
+html { overflow-x: clip; }
 
 /* Aluminum noise texture on the page canvas — 1.8% opacity SVG noise so
    cards float on a micro-grained surface instead of digital flat. Cards
@@ -107,8 +109,27 @@ body::before {
 .flow-header-tab:focus,
 .flow-header-tab:focus-visible { outline: none; }
 
+/* Baseline focus ring for any unstyled interactive element on main page */
+.flow-page button:focus-visible,
+.flow-page [role="button"]:focus-visible,
+.flow-page input[type="text"]:focus-visible,
+.flow-page input[type="search"]:focus-visible,
+.flow-page textarea:focus-visible {
+  outline: 2px solid var(--flow-accent);
+  outline-offset: 2px;
+}
+
 /* ── Hover states ── */
 .flow-dropdown-item:hover { background: rgba(0, 0, 0, 0.04); }
+
+/* ── Sticky table header: subtle depth when the page is scrolled and the
+      main chrome is collapsed. body.flow-chrome-collapsed is toggled by
+      AppShell when the user has scrolled past the header-collapse threshold.
+      Giving the pinned Th a soft downward shadow creates a clean "floating
+      shelf" effect consistent across Projects / Pulse / Commit tables. ── */
+body.flow-chrome-collapsed .flow-th-sticky {
+  box-shadow: 0 8px 8px -8px rgba(0, 0, 0, 0.10);
+}
 
 .flow-header-tab:hover {
   background: var(--flow-accent-soft) !important;
@@ -133,10 +154,41 @@ body::before {
 /* ── Table row hover — subtle beam, no translate ── */
 .flow-row:hover { background: rgba(0, 0, 0, 0.025); }
 
+/* ── KPI grid responsive collapse (≤1024 → 2×2, ≤640 → single col) ── */
+@media (max-width: 1024px) {
+  .flow-kpi-grid { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 640px) {
+  .flow-kpi-grid { grid-template-columns: 1fr !important; }
+}
+
 /* ── Keyboard focus row ── */
 .flow-kb-focus {
   outline: 2px solid var(--flow-accent);
   outline-offset: -2px;
+}
+
+/* Override for table rows: position:relative + pseudo-brackets (from
+   AnimStyles.flow-kb-focus) break table layout under border-collapse:collapse,
+   shifting the sticky SQUAD cell one column right. Keep the box-shadow ring,
+   drop the bits that require the tr to become a positioning context. */
+tr.flow-kb-focus {
+  position: static !important;
+}
+tr.flow-kb-focus::before,
+tr.flow-kb-focus::after {
+  display: none !important;
+}
+
+/* ── Commit editor: interactive elements focus rings ── */
+.flow-commit-interactive:focus-visible {
+  outline: 2px solid var(--flow-accent);
+  outline-offset: 2px;
+}
+.flow-commit-slot:focus-visible {
+  outline: 2px solid var(--flow-accent);
+  outline-offset: 4px;
+  border-radius: 5px;
 }
 
 /* ── Mission grid — recessed inset surface for grouped content ── */
@@ -177,9 +229,9 @@ body::before {
   50%      { opacity: 1;    transform: scale(1); }
 }
 
-.flow-view-morph { animation: fadeScaleIn 0.2s ease-out; }
-.flow-expand     { animation: expandIn 0.2s ease-out; }
-.flow-kpi-num    { animation: fadeScaleIn 0.4s ease-out both; }
+/* .flow-view-morph is defined in AnimStyles.jsx with token-based timing */
+.flow-expand      { animation: expandIn 0.2s cubic-bezier(0.22, 1, 0.36, 1); }
+.flow-kpi-num     { animation: fadeScaleIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .flow-commit-card { animation: cardFadeIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
 /* ── Live / accent pulse (logo dot, live indicator) ── */
@@ -254,12 +306,70 @@ body::before {
   main.flow-page {
     padding-left: 12px !important;
     padding-right: 12px !important;
+    /* Reserve space for floating FAB and the mobile bottom nav (56 + 96) */
+    padding-bottom: 152px !important;
   }
-  /* Nav tabs scroll horizontally at narrow widths — hide scrollbar */
+  .flow-mobile-bottom-nav { display: block !important; }
+  /* Lift DEV pill above mobile bottom nav so it doesn't overlap nav tap targets */
+  .flow-dev-pill { bottom: 72px !important; }
+  /* Nav tabs scroll horizontally at narrow widths — hide scrollbar but hint
+     at overflow via an inset right-edge shadow so users know to swipe. */
   .flow-nav-rail::-webkit-scrollbar { display: none; }
+  .flow-nav-rail {
+    box-shadow: inset -24px 0 18px -16px rgba(0, 0, 0, 0.18);
+  }
+  /* Header must clip horizontally so children can't push the viewport wider
+     than the screen; the nav-rail inside has its own horizontal scroll. */
+  .flow-header {
+    min-width: 0;
+    overflow: hidden;
+  }
+  /* Context bar allows horizontal scroll so the Filters button stays reachable
+     even if inline chips overflow. */
+  .flow-context-bar {
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+  .flow-context-bar::-webkit-scrollbar { display: none; }
+  /* Drop notification bell on tight mobile widths to keep nav reachable */
+  .flow-header .flow-bell-sm-hide { display: none !important; }
+  /* Hide hotkey pills on mobile — keyboard shortcuts don't apply */
+  .flow-tab-hotkey { display: none !important; }
   /* Hide the utility cluster on very narrow screens (terminal/bell/user) */
   .flow-header .flow-utility-sm-hide { display: none; }
+  /* Breadcrumb: truncate parent label to ~14 chars with ellipsis on mobile */
+  .flow-breadcrumb-label {
+    display: inline-block !important;
+    max-width: 14ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+  }
+  /* Activity timeline: at narrow widths, drop the stage tag and let the
+     title wrap. Keep the BUILD/JAM type tag — it's the primary signal. */
+  .flow-timeline-stage { display: none !important; }
+  .flow-timeline-title { white-space: normal !important; }
+  /* Horizontal-scroll fade hint for mobile-overflowing tables */
+  .flow-hscroll {
+    box-shadow: inset -24px 0 18px -16px rgba(0, 0, 0, 0.18);
+  }
 }
+
+/* ── Focus-visible ring for inline-styled interactive elements ── */
+.flow-focus-ring:focus { outline: none; }
+.flow-focus-ring:focus-visible {
+  outline: 2px solid #E8590C;
+  outline-offset: 2px;
+  border-radius: 5px;
+}
+
+/* ── Press feedback — mouse, touch, and keyboard (Space/Enter).
+   The element must include `transform` in its transition list for the
+   release to animate smoothly. ── */
+.flow-press:active { transform: scale(0.97); }
 
 /* ── Reduced motion ── */
 @media (prefers-reduced-motion: reduce) {

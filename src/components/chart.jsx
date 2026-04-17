@@ -34,10 +34,13 @@ const axisLabelStyle = {
 
 const valueLabelStyle = (lit) => ({
   fontFamily: typo.monoLg.font,
-  fontSize: lit ? typo.monoLg.size : typo.monoMd.size,
+  fontSize: typo.monoLg.size,
   fontWeight: 700,
   fontVariantNumeric: "tabular-nums",
-  transition: `font-size ${motion.fast.duration} ${motion.fast.easing}`,
+  transform: lit ? "scale(1)" : `scale(${typo.monoMd.size / typo.monoLg.size})`,
+  transformBox: "fill-box",
+  transformOrigin: "center",
+  transition: `transform ${motion.fast.duration} ${motion.fast.easing}, fill ${motion.fast.duration} ${motion.fast.easing}`,
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -63,9 +66,11 @@ export const HealthBar = ({ value, compact = false, showWord = !compact, width, 
         background: c.surfaceAlt, overflow: "hidden",
       }}>
         <div style={{
-          width: `${pct}%`, height: "100%", borderRadius: radius,
+          width: "100%", height: "100%", borderRadius: radius,
           background: color,
-          transition: `width ${motion.normal.duration} ${motion.normal.easing}`,
+          transformOrigin: "left center",
+          transform: `scaleX(${pct / 100})`,
+          transition: `transform ${motion.normal.duration} ${motion.normal.easing}, background ${motion.fast.duration} ${motion.fast.easing}`,
         }} />
       </div>
       <span style={{
@@ -163,7 +168,7 @@ const ChartEmpty = ({ height }) => (
 //   highlightIndex: which bar is the "current/selected" week
 //   width / height: SVG viewBox dimensions (scales responsive)
 // ═══════════════════════════════════════════════════════════════
-export const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300, height = 170 }) => {
+export const MiniBarChart = ({ data, labels, color, highlightIndex, title, width = 300, height = 187 }) => {
   const [hoverIdx, setHoverIdx] = useState(null);
   if (!data || data.length === 0) return <ChartEmpty height={height} />;
 
@@ -175,7 +180,7 @@ export const MiniBarChart = ({ data, labels, color, highlightIndex, title, width
   const barW = gap * 0.6;
 
   return (
-    <div style={{ flex: 1, minWidth: 180 }}>
+    <div className="flow-chart-enter" style={{ flex: 1, minWidth: 180 }}>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet"
         onMouseLeave={() => setHoverIdx(null)}>
         {/* Baseline */}
@@ -192,9 +197,15 @@ export const MiniBarChart = ({ data, labels, color, highlightIndex, title, width
             <g key={i} onMouseEnter={() => setHoverIdx(i)} style={{ cursor: "pointer" }}>
               {/* Full-column hit area */}
               <rect x={padLR + i * gap} y={padTop} width={gap} height={chartH + padBot} fill="transparent" />
-              <rect x={x} y={y} width={barW} height={barH} rx={3}
+              <rect
+                className="flow-chart-bar-enter"
+                x={x} y={y} width={barW} height={barH} rx={3}
                 fill={color} opacity={lit ? 1 : 0.8}
-                style={{ transition: `opacity ${motion.fast.duration} ${motion.fast.easing}` }} />
+                style={{
+                  transformOrigin: `${x + barW / 2}px ${padTop + chartH}px`,
+                  animationDelay: `${Math.min(i * 40, 240)}ms`,
+                  transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
+                }} />
               <text x={x + barW / 2} y={y - 8} textAnchor="middle"
                 fill={lit ? color : c.textDim}
                 style={valueLabelStyle(lit)}>{val}</text>
@@ -214,7 +225,7 @@ export const MiniBarChart = ({ data, labels, color, highlightIndex, title, width
 // SparkLine — line chart with light area fill + dot at each week.
 // Props: same as MiniBarChart + `suffix` (e.g. "%").
 // ═══════════════════════════════════════════════════════════════
-export const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, width = 300, height = 170 }) => {
+export const SparkLine = ({ data, labels, color, title, suffix = "", highlightIndex, width = 300, height = 187 }) => {
   const [hoverIdx, setHoverIdx] = useState(null);
   if (!data || data.length === 0) return <ChartEmpty height={height} />;
 
@@ -240,7 +251,7 @@ export const SparkLine = ({ data, labels, color, title, suffix = "", highlightIn
   }));
 
   return (
-    <div style={{ flex: 1, minWidth: 180 }}>
+    <div className="flow-chart-enter" style={{ flex: 1, minWidth: 180 }}>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet"
         onMouseLeave={() => setHoverIdx(null)}>
         <line x1={padLR} y1={padTop + chartH} x2={width - padLR} y2={padTop + chartH}
@@ -257,9 +268,13 @@ export const SparkLine = ({ data, labels, color, title, suffix = "", highlightIn
             <g key={i} onMouseEnter={() => setHoverIdx(i)} style={{ cursor: "pointer" }}>
               <rect x={hz.left} y={padTop} width={hz.right - hz.left} height={chartH + padBot} fill="transparent" />
               {lit && <circle cx={p.x} cy={p.y} r={9} fill={color} opacity={0.1} />}
-              <circle cx={p.x} cy={p.y} r={lit ? 5 : 3}
+              <circle cx={p.x} cy={p.y} r={5}
                 fill={lit ? color : c.surface} stroke={color} strokeWidth={lit ? 2 : 1.5}
-                style={{ transition: `r ${motion.fast.duration} ${motion.fast.easing}` }} />
+                style={{
+                  transform: lit ? "scale(1)" : "scale(0.6)",
+                  transformBox: "fill-box", transformOrigin: "center",
+                  transition: `transform ${motion.fast.duration} ${motion.fast.easing}, fill ${motion.fast.duration} ${motion.fast.easing}, stroke-width ${motion.fast.duration} ${motion.fast.easing}`,
+                }} />
               <text x={p.x} y={p.y - 12} textAnchor="middle"
                 fill={lit ? color : c.textDim}
                 style={valueLabelStyle(lit)}>{p.val}{suffix}</text>
@@ -284,7 +299,7 @@ export const SparkLine = ({ data, labels, color, title, suffix = "", highlightIn
 //   height:         SVG height (default 220)
 //   legend:         show color-dot legend under chart (default true)
 // ═══════════════════════════════════════════════════════════════
-export const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 220, legend = true }) => {
+export const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 242, legend = true }) => {
   const [hoverIdx, setHoverIdx] = useState(null);
   const padTop = space[7], padBot = space[7], padLR = space[5] + 28;
   const width = 700;
@@ -296,7 +311,7 @@ export const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 2
   const barW = gap * 0.52;
 
   return (
-    <div>
+    <div className="flow-chart-enter">
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet"
         onMouseLeave={() => setHoverIdx(null)}>
         {/* Y-axis gridlines + labels */}
@@ -330,9 +345,15 @@ export const StackedBarChart = ({ series, weekLabels, highlightIndex, height = 2
                 const segH = maxTotal > 0 ? (val / maxTotal) * chartH : 0;
                 yOffset -= segH;
                 return segH > 0 ? (
-                  <rect key={s.label} x={x} y={yOffset} width={barW} height={segH} rx={3}
+                  <rect key={s.label}
+                    className="flow-chart-bar-enter"
+                    x={x} y={yOffset} width={barW} height={segH} rx={3}
                     fill={s.color} opacity={lit ? 1 : 0.8}
-                    style={{ transition: `opacity ${motion.fast.duration} ${motion.fast.easing}` }} />
+                    style={{
+                      transformOrigin: `${x + barW / 2}px ${padTop + chartH}px`,
+                      animationDelay: `${Math.min(wi * 40, 240)}ms`,
+                      transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
+                    }} />
                 ) : null;
               })}
               <text x={x + barW / 2} y={padTop + chartH - (weekTotals[wi] / maxTotal) * chartH - 8}

@@ -15,7 +15,7 @@ import useDevLabel from "../hooks/useDevLabel";
 // match the mock (wide first card + 3 equal). Callers can override cols.
 // ═══════════════════════════════════════════════════════════════
 export const KpiGrid = ({ children, cols = "1.5fr 1fr 1fr 1fr", gap = space[4], style: s }) => (
-  <div style={{ display: "grid", gridTemplateColumns: cols, gap, ...s }}>{children}</div>
+  <div className="flow-kpi-grid" style={{ display: "grid", gridTemplateColumns: cols, gap, ...s }}>{children}</div>
 );
 
 // ═══════════════════════════════════════════════════════════════
@@ -32,45 +32,52 @@ export const KpiGrid = ({ children, cols = "1.5fr 1fr 1fr 1fr", gap = space[4], 
 //   onClick, active: clickable filter tile behavior
 //   children: slot for PhasePills / Sparkline / tick bar
 // ═══════════════════════════════════════════════════════════════
-export const KpiCard = ({ label, value, sub, delta, deltaLabel, children, onClick, active, style: s }) => {
+export const KpiCard = ({ label, value, sub, delta, deltaLabel, children, onClick, active, style: s, index }) => {
   const devRef = useDevLabel('KpiCard', 'src/components/kpi.jsx', 'Steel & Orange KPI card per mock §kpi-card');
+  const handleKey = onClick ? (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(e); }
+  } : undefined;
   return (
     <div
       ref={devRef}
       onClick={onClick}
+      onKeyDown={handleKey}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      className={`flow-kpi-card${onClick ? " clickable" : ""}`}
       style={{
+        animationDelay: index != null ? `${index * 40}ms` : undefined,
         padding: space[6], borderRadius: layout.radiusLg,
         background: c.surface,
         border: `1px solid ${active ? c.accent + "30" : c.border}`,
         boxShadow: c.shadowCard,
         cursor: onClick ? "pointer" : "default",
         display: "flex", flexDirection: "column",
-        transition: `border-color ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
         ...s,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[2] + 2 }}>
         <span style={{
-          fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-          color: c.textDim, letterSpacing: "0.04em", textTransform: "uppercase",
+          fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700,
+          color: c.textMid, letterSpacing: "0.08em", textTransform: "uppercase",
         }}>{label}</span>
         {delta != null && Number.isFinite(Number(delta)) && (
           <span style={{
-            fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+            fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
             color: delta > 0 ? c.green : delta < 0 ? c.red : c.textGhost,
             fontVariantNumeric: "tabular-nums",
           }}>{delta > 0 ? "+" : ""}{delta}{deltaLabel ? ` ${deltaLabel}` : ""}</span>
         )}
       </div>
       <div style={{
-        fontFamily: typo.displayHero.font, fontSize: 36, fontWeight: 700,
-        color: c.text, letterSpacing: "-0.03em", lineHeight: 1,
+        fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight,
+        color: c.text, letterSpacing: typo.displayHero.tracking, lineHeight: 1,
         fontVariantNumeric: "tabular-nums",
       }}>{value}</div>
       {sub && (
         <div style={{
-          fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 500,
-          color: c.textDim, marginTop: 6,
+          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight,
+          color: c.textMid, marginTop: space[1] + 2,
         }}>{sub}</div>
       )}
       {children}
@@ -83,50 +90,59 @@ export const KpiCard = ({ label, value, sub, delta, deltaLabel, children, onClic
 // Gradient red→amber→green track, 0/25/50/75/100 tick marks.
 // Use as the 4th card of a KpiGrid wherever there's an aggregate health.
 // ═══════════════════════════════════════════════════════════════
-export const HealthGauge = ({ value, label = "Avg Health", sub = "portfolio health score" }) => (
-  <div style={{
-    padding: space[6], borderRadius: layout.radiusLg,
-    background: "#1A1A1E", border: "1px solid #1A1A1E",
-    boxShadow: c.shadowCard,
-    display: "flex", flexDirection: "column",
-  }}>
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-      <span style={{
-        fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-        color: "#6B6B78", letterSpacing: "0.04em", textTransform: "uppercase",
-      }}>{label}</span>
-    </div>
+export const HealthGauge = ({ value, label = "Avg Health", sub = "portfolio health score" }) => {
+  // Solid semantic fill — matches HealthBar thresholds (≥70 green, ≥40 amber, <40 red).
+  // Rainbow gradient fills are explicitly banned (DESIGN_SYSTEM.md §10).
+  const fill = value >= 70 ? c.green : value >= 40 ? c.orange : c.red;
+  return (
     <div style={{
-      fontFamily: typo.displayHero.font, fontSize: 36, fontWeight: 700,
-      color: "#F0F0F4", letterSpacing: "-0.03em", lineHeight: 1,
-      fontVariantNumeric: "tabular-nums",
-    }}>{value}</div>
-    <div style={{
-      fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 500,
-      color: "#6B6B78", marginTop: 6,
-    }}>{sub}</div>
-    <div style={{
-      height: 4, borderRadius: 2, background: "#2E2E36",
-      marginTop: 16, overflow: "hidden", position: "relative",
+      padding: space[6], borderRadius: layout.radiusLg,
+      background: c.surfaceInverse, border: `1px solid ${c.surfaceInverse}`,
+      boxShadow: c.shadowCard,
+      display: "flex", flexDirection: "column",
     }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[2] + 2 }}>
+        <span style={{
+          fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700,
+          color: c.textMidOnInverse, letterSpacing: "0.08em", textTransform: "uppercase",
+        }}>{label}</span>
+      </div>
       <div style={{
-        position: "absolute", left: 0, top: 0, bottom: 0,
-        width: `${Math.max(0, Math.min(100, value))}%`,
-        borderRadius: 2,
-        background: "linear-gradient(90deg, #DC2626 0%, #F59E0B 50%, #10B981 100%)",
-        transition: `width ${motion.normal.duration} ${motion.normal.easing}`,
-      }} />
+        fontFamily: typo.displayHero.font, fontSize: typo.displayHero.size, fontWeight: typo.displayHero.weight,
+        color: c.textOnInverse, letterSpacing: typo.displayHero.tracking, lineHeight: 1,
+        fontVariantNumeric: "tabular-nums",
+      }}>
+        {value}
+        <span style={{ fontSize: "0.55em", marginLeft: 2, color: c.textMidOnInverse, fontWeight: 600 }}>%</span>
+      </div>
+      <div style={{
+        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight,
+        color: c.textMidOnInverse, marginTop: space[1] + 2,
+      }}>{sub}</div>
+      <div style={{
+        height: 4, borderRadius: 2, background: c.insetInverse,
+        marginTop: 16, overflow: "hidden", position: "relative",
+      }}>
+        <div style={{
+          position: "absolute", left: 0, top: 0, right: 0, bottom: 0,
+          borderRadius: 2,
+          background: fill,
+          transformOrigin: "left center",
+          transform: `scaleX(${Math.max(0, Math.min(100, value)) / 100})`,
+          transition: `transform ${motion.normal.duration} ${motion.normal.easing}, background ${motion.fast.duration} ${motion.fast.easing}`,
+        }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+        {[0, 25, 50, 75, 100].map(t => (
+          <span key={t} style={{
+            fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textGhostOnInverse,
+            fontVariantNumeric: "tabular-nums",
+          }}>{t}</span>
+        ))}
+      </div>
     </div>
-    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
-      {[0, 25, 50, 75, 100].map(t => (
-        <span key={t} style={{
-          fontFamily: typo.monoSm.font, fontSize: 11, color: "#4A4A52",
-          fontVariantNumeric: "tabular-nums",
-        }}>{t}</span>
-      ))}
-    </div>
-  </div>
-);
+  );
+};
 
 // ═══════════════════════════════════════════════════════════════
 // SectionHead — "Project Matrix" / "People" / etc title on the left,
@@ -140,7 +156,7 @@ export const SectionHead = ({ title, right, style: s }) => (
     ...s,
   }}>
     <span style={{
-      fontFamily: typo.monoMd.font, fontSize: 12, fontWeight: 700,
+      fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight,
       letterSpacing: "0.08em", textTransform: "uppercase", color: c.text,
     }}>{title}</span>
     {right}
@@ -160,15 +176,15 @@ export const SegmentedToggle = ({ options, value, onChange }) => (
     {options.map(opt => {
       const active = value === opt.key;
       return (
-        <button key={opt.key} onClick={() => onChange(opt.key)} style={{
-          padding: `6px ${space[4]}px`,
+        <button key={opt.key} onClick={() => onChange(opt.key)} className={`flow-seg-btn${active ? " active" : ""}`} style={{
+          padding: `${space[1] + 2}px ${space[4]}px`,
           borderRadius: layout.radiusSm, border: "none", cursor: "pointer",
           background: active ? c.surface : "transparent",
-          fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600,
+          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
           color: active ? c.text : c.textDim,
           boxShadow: active ? c.shadowSm : "none",
           outline: "none",
-          transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+          transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
         }}>{opt.label}</button>
       );
     })}
@@ -183,27 +199,28 @@ export const SegmentedToggle = ({ options, value, onChange }) => (
 export const Pill = ({ count, label, color, active, onClick, style: s }) => (
   <button
     onClick={onClick}
+    className={onClick ? "flow-pill-clickable" : undefined}
     style={{
-      padding: "5px 11px", borderRadius: 6,
-      fontSize: 12, fontWeight: 700,
-      display: "flex", alignItems: "center", gap: 5,
+      padding: `${space[1] + 1}px ${space[3]}px`, borderRadius: layout.radiusSm,
+      fontSize: typo.bodyXs.size, fontWeight: 700,
+      display: "flex", alignItems: "center", gap: space[1] + 1,
       background: `${color}12`,
       border: `1px solid ${active ? color + "60" : "transparent"}`,
       color,
       cursor: onClick ? "pointer" : "default",
       fontFamily: typo.bodyMd.font,
-      transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
+      transition: `border-color ${motion.fast.duration} ${motion.fast.easing}, background ${motion.fast.duration} ${motion.fast.easing}, filter ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
       ...s,
     }}
   >
-    <span style={{ fontFamily: typo.monoSm.font, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{count}</span>
+    <span style={{ fontFamily: typo.monoSm.font, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{count}</span>
     {label}
   </button>
 );
 
 // PillRow — horizontal flex container for Pills. 6px gap per mock.
 export const PillRow = ({ children, style: s }) => (
-  <div style={{ display: "flex", gap: 6, marginTop: 16, flexWrap: "wrap", ...s }}>{children}</div>
+  <div style={{ display: "flex", gap: space[1] + 2, marginTop: space[4], flexWrap: "wrap", ...s }}>{children}</div>
 );
 
 // ═══════════════════════════════════════════════════════════════
@@ -228,21 +245,23 @@ export const Sparkline = ({ values, color, muted = false, height = 40, label }) 
           const isCurrent = i === lastIdx;
           const pct = Math.max(0.04, v / max); // ensure visible min
           const bg = isCurrent ? accent : muted ? c.surfaceAlt : accent;
-          const opacity = isCurrent ? 1 : muted ? 1 : 0.25;
+          const opacity = isCurrent ? 1 : muted ? 1 : 0.45;
           return (
-            <div key={i} style={{
+            <div key={i} className="flow-spark-bar" style={{
               flex: 1, borderRadius: 3, minHeight: 4,
               height: `${pct * 100}%`,
               background: bg,
               opacity,
+              animationDelay: `${Math.min(i * 50, 250)}ms`,
+              ["--spark-opacity"]: opacity,
             }} />
           );
         })}
       </div>
       {label && (
         <div style={{
-          fontFamily: typo.monoSm.font, fontSize: 11, color: c.textGhost || c.textDim,
-          marginTop: 4, textAlign: "right",
+          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid,
+          marginTop: space[1], textAlign: "right",
           fontVariantNumeric: "tabular-nums",
         }}>{label}</div>
       )}

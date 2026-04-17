@@ -1,21 +1,21 @@
 // Flow — Rant View (inline content, no shell)
 // Feature requests / bug reports — rendered inside TerminalView
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { space } from "../styles/theme";
+import { space, terminal, terminalRadius } from "../styles/theme";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
 
 const CATEGORIES = [
-  { key: "feature", label: "Feature Request", icon: "✦", color: "#A78BFA" },
-  { key: "bug", label: "Bug Report", icon: "⚠", color: "#FF6B35" },
-  { key: "rant", label: "General Rant", icon: "🔥", color: "#FF2D78" },
+  { key: "feature", label: "Feature Request", icon: "✦", color: terminal.purple },
+  { key: "bug", label: "Bug Report", icon: "⚠", color: terminal.coral },
+  { key: "rant", label: "General Rant", icon: "🔥", color: terminal.pink },
 ];
 
 const STATUS_CONFIG = {
-  pending:  { label: "Pending", color: "#FBBF24", icon: "◷" },
-  approved: { label: "Approved", color: "#84FF95", icon: "✓" },
-  rejected: { label: "Rejected", color: "#FF4D6A", icon: "✗" },
-  shipped:  { label: "Shipped", color: "#22D3EE", icon: "🚀" },
+  pending:  { label: "Pending", color: terminal.gold, icon: "◷" },
+  approved: { label: "Approved", color: terminal.success, icon: "✓" },
+  rejected: { label: "Rejected", color: terminal.red, icon: "✗" },
+  shipped:  { label: "Shipped", color: terminal.cyan, icon: "🚀" },
 };
 
 const MONO = "'JetBrains Mono', 'SF Mono', monospace";
@@ -187,7 +187,7 @@ export default function RantView({ onBack, auth }) {
         <button
           onClick={() => { setView("list"); setSelectedRant(null); }}
           style={{
-            background: "transparent", border: "none", color: "#00ff41",
+            background: "transparent", border: "none", color: terminal.green,
             fontFamily: MONO, fontSize: 12, cursor: "pointer", padding: 0,
             marginBottom: space[4], display: "flex", alignItems: "center", gap: 6,
           }}
@@ -196,35 +196,35 @@ export default function RantView({ onBack, auth }) {
         </button>
 
         <div style={{
-          border: "1px solid #00ff4120", borderRadius: 6, padding: space[5],
-          background: "#00ff4105",
+          border: `1px solid ${terminal.green}20`, borderRadius: terminalRadius.md, padding: space[5],
+          background: `${terminal.green}05`,
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: space[3] }}>
             <span style={{
               fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
               color: status.color, padding: "3px 10px",
-              border: `1px solid ${status.color}40`, borderRadius: 4,
+              border: `1px solid ${status.color}40`, borderRadius: terminalRadius.sm,
             }}>
               {status.icon} {status.label.toUpperCase()}
             </span>
             <span style={{
               fontSize: 11, color: cat.color, padding: "3px 10px",
-              border: `1px solid ${cat.color}40`, borderRadius: 4,
+              border: `1px solid ${cat.color}40`, borderRadius: terminalRadius.sm,
             }}>
               {cat.icon} {cat.label}
             </span>
           </div>
 
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: terminal.text, marginBottom: 4 }}>
             {r.title}
           </div>
-          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[4] }}>
+          <div style={{ fontSize: 11, color: `${terminal.green}90`, marginBottom: space[4] }}>
             by {r.user_name} · {timeAgo(r.created_at)} · ID: {r.id?.toString().slice(0, 8) || "?"}
           </div>
 
           {r.body && (
             <div style={{
-              fontSize: 13, color: "#ffffffcc", lineHeight: 1.7,
+              fontSize: 13, color: terminal.textMid, lineHeight: 1.7,
               whiteSpace: "pre-wrap", marginBottom: space[4],
             }}>
               {r.body}
@@ -237,8 +237,8 @@ export default function RantView({ onBack, auth }) {
                 src={r.image_url}
                 alt="Rant attachment"
                 style={{
-                  maxWidth: "100%", maxHeight: 400, borderRadius: 6,
-                  border: "1px solid #00ff4120",
+                  maxWidth: "100%", maxHeight: 400, borderRadius: terminalRadius.md,
+                  border: `1px solid ${terminal.green}20`,
                 }}
               />
             </div>
@@ -246,13 +246,13 @@ export default function RantView({ onBack, auth }) {
 
           {r.admin_note && (
             <div style={{
-              padding: space[3], border: "1px solid #FBBF2430",
-              borderRadius: 4, background: "#FBBF2408",
+              padding: space[3], border: `1px solid ${terminal.gold}30`,
+              borderRadius: terminalRadius.sm, background: `${terminal.gold}08`,
             }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#FBBF24", letterSpacing: "0.08em", marginBottom: 4 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: terminal.gold, letterSpacing: "0.08em", marginBottom: 4 }}>
                 ADMIN RESPONSE
               </div>
-              <div style={{ fontSize: 13, color: "#ffffffbb", lineHeight: 1.6 }}>
+              <div style={{ fontSize: 13, color: terminal.textDim, lineHeight: 1.6 }}>
                 {r.admin_note}
               </div>
             </div>
@@ -270,7 +270,7 @@ export default function RantView({ onBack, auth }) {
         <button
           onClick={() => setView("list")}
           style={{
-            background: "transparent", border: "none", color: "#00ff41",
+            background: "transparent", border: "none", color: terminal.green,
             fontFamily: MONO, fontSize: 12, cursor: "pointer", padding: 0,
             marginBottom: space[4], display: "flex", alignItems: "center", gap: 6,
           }}
@@ -278,13 +278,13 @@ export default function RantView({ onBack, auth }) {
           <span style={{ fontSize: 14 }}>←</span> back to rants
         </button>
 
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#00ff41", marginBottom: space[4], letterSpacing: "0.05em" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: terminal.green, marginBottom: space[4], letterSpacing: "0.05em" }}>
           NEW RANT
         </div>
 
         {/* Category selector */}
         <div style={{ marginBottom: space[4] }}>
-          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[2], letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: 11, color: `${terminal.green}90`, marginBottom: space[2], letterSpacing: "0.08em" }}>
             CATEGORY
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -293,10 +293,10 @@ export default function RantView({ onBack, auth }) {
                 key={cat.key}
                 onClick={() => setCategory(cat.key)}
                 style={{
-                  padding: "8px 16px", borderRadius: 4,
-                  border: `1px solid ${category === cat.key ? cat.color + "80" : "#00ff4120"}`,
+                  padding: "8px 16px", borderRadius: terminalRadius.sm,
+                  border: `1px solid ${category === cat.key ? cat.color + "80" : `${terminal.green}20`}`,
                   background: category === cat.key ? cat.color + "15" : "transparent",
-                  color: category === cat.key ? cat.color : "#00ff4160",
+                  color: category === cat.key ? cat.color : `${terminal.green}60`,
                   fontFamily: MONO, fontSize: 12, cursor: "pointer",
                   transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                 }}
@@ -309,7 +309,7 @@ export default function RantView({ onBack, auth }) {
 
         {/* Title */}
         <div style={{ marginBottom: space[4] }}>
-          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[2], letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: 11, color: `${terminal.green}90`, marginBottom: space[2], letterSpacing: "0.08em" }}>
             TITLE *
           </div>
           <input
@@ -320,18 +320,18 @@ export default function RantView({ onBack, auth }) {
             maxLength={200}
             style={{
               width: "100%", padding: "10px 14px",
-              background: "#00ff4108", border: "1px solid #00ff4120",
-              borderRadius: 4, color: "#fff", fontFamily: MONO, fontSize: 13,
+              background: `${terminal.green}08`, border: `1px solid ${terminal.green}20`,
+              borderRadius: terminalRadius.sm, color: terminal.text, fontFamily: MONO, fontSize: 13,
               outline: "none", boxSizing: "border-box",
             }}
-            onFocus={e => e.target.style.borderColor = "#00ff4150"}
-            onBlur={e => e.target.style.borderColor = "#00ff4120"}
+            onFocus={e => e.target.style.borderColor = `${terminal.green}50`}
+            onBlur={e => e.target.style.borderColor = `${terminal.green}20`}
           />
         </div>
 
         {/* Body */}
         <div style={{ marginBottom: space[4] }}>
-          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[2], letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: 11, color: `${terminal.green}90`, marginBottom: space[2], letterSpacing: "0.08em" }}>
             DETAILS
           </div>
           <textarea
@@ -342,19 +342,19 @@ export default function RantView({ onBack, auth }) {
             rows={6}
             style={{
               width: "100%", padding: "10px 14px",
-              background: "#00ff4108", border: "1px solid #00ff4120",
-              borderRadius: 4, color: "#fff", fontFamily: MONO, fontSize: 13,
+              background: `${terminal.green}08`, border: `1px solid ${terminal.green}20`,
+              borderRadius: terminalRadius.sm, color: terminal.text, fontFamily: MONO, fontSize: 13,
               outline: "none", resize: "vertical", lineHeight: 1.7,
               boxSizing: "border-box",
             }}
-            onFocus={e => e.target.style.borderColor = "#00ff4150"}
-            onBlur={e => e.target.style.borderColor = "#00ff4120"}
+            onFocus={e => e.target.style.borderColor = `${terminal.green}50`}
+            onBlur={e => e.target.style.borderColor = `${terminal.green}20`}
           />
         </div>
 
         {/* Image upload */}
         <div style={{ marginBottom: space[5] }}>
-          <div style={{ fontSize: 11, color: "#00ff4190", marginBottom: space[2], letterSpacing: "0.08em" }}>
+          <div style={{ fontSize: 11, color: `${terminal.green}90`, marginBottom: space[2], letterSpacing: "0.08em" }}>
             SCREENSHOT / IMAGE
           </div>
           <input
@@ -369,14 +369,14 @@ export default function RantView({ onBack, auth }) {
             <button
               onClick={() => fileInputRef.current?.click()}
               style={{
-                padding: "12px 20px", border: "1px dashed #00ff4130",
-                borderRadius: 4, background: "transparent",
-                color: "#00ff4160", fontFamily: MONO, fontSize: 12,
+                padding: "12px 20px", border: `1px dashed ${terminal.green}30`,
+                borderRadius: terminalRadius.sm, background: "transparent",
+                color: `${terminal.green}60`, fontFamily: MONO, fontSize: 12,
                 cursor: "pointer", width: "100%",
                 transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
               }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = "#00ff4160"; e.currentTarget.style.color = "#00ff41"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = "#00ff4130"; e.currentTarget.style.color = "#00ff4160"; }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = `${terminal.green}60`; e.currentTarget.style.color = terminal.green; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = `${terminal.green}30`; e.currentTarget.style.color = `${terminal.green}60`; }}
             >
               + Attach image (max 5MB)
             </button>
@@ -386,8 +386,8 @@ export default function RantView({ onBack, auth }) {
                 src={imagePreview}
                 alt="Preview"
                 style={{
-                  maxWidth: "100%", maxHeight: 200, borderRadius: 4,
-                  border: "1px solid #00ff4120",
+                  maxWidth: "100%", maxHeight: 200, borderRadius: terminalRadius.sm,
+                  border: `1px solid ${terminal.green}20`,
                 }}
               />
               <button
@@ -395,7 +395,7 @@ export default function RantView({ onBack, auth }) {
                 style={{
                   position: "absolute", top: 6, right: 6,
                   width: 24, height: 24, borderRadius: "50%",
-                  background: "#FF2D78", border: "none", color: "#fff",
+                  background: terminal.pink, border: "none", color: terminal.text,
                   fontFamily: MONO, fontSize: 14, cursor: "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center",
                 }}
@@ -411,10 +411,10 @@ export default function RantView({ onBack, auth }) {
           onClick={handleSubmit}
           disabled={submitting || !title.trim()}
           style={{
-            padding: "14px 32px", borderRadius: 6,
+            padding: "14px 32px", borderRadius: terminalRadius.md,
             border: `1px solid ${activeCat.color}60`,
             background: `linear-gradient(135deg, ${activeCat.color}20, ${activeCat.color}10)`,
-            color: !title.trim() ? "#00ff4130" : activeCat.color,
+            color: !title.trim() ? `${terminal.green}30` : activeCat.color,
             fontFamily: MONO, fontSize: 14, fontWeight: 700,
             letterSpacing: "0.1em", cursor: !title.trim() ? "not-allowed" : "pointer",
             transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
@@ -457,7 +457,7 @@ export default function RantView({ onBack, auth }) {
         <button
           onClick={onBack}
           style={{
-            background: "transparent", border: "none", color: "#00ff41",
+            background: "transparent", border: "none", color: terminal.green,
             fontFamily: MONO, fontSize: 12, cursor: "pointer", padding: 0,
             display: "flex", alignItems: "center", gap: 6,
           }}
@@ -467,19 +467,19 @@ export default function RantView({ onBack, auth }) {
         <button
           onClick={() => setView("new")}
           style={{
-            padding: "8px 20px", borderRadius: 4,
-            border: "1px solid #FF2D7860",
-            background: "linear-gradient(135deg, #FF2D7820, #FF2D7810)",
-            color: "#FF2D78", fontFamily: MONO, fontSize: 12,
+            padding: "8px 20px", borderRadius: terminalRadius.sm,
+            border: `1px solid ${terminal.pink}60`,
+            background: `linear-gradient(135deg, ${terminal.pink}20, ${terminal.pink}10)`,
+            color: terminal.pink, fontFamily: MONO, fontSize: 12,
             fontWeight: 700, letterSpacing: "0.08em",
             cursor: "pointer", transition: "background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, opacity 0.2s ease",
           }}
           onMouseEnter={e => {
-            e.currentTarget.style.background = "linear-gradient(135deg, #FF2D7830, #FF2D7820)";
-            e.currentTarget.style.boxShadow = "0 0 16px #FF2D7820";
+            e.currentTarget.style.background = `linear-gradient(135deg, ${terminal.pink}30, ${terminal.pink}20)`;
+            e.currentTarget.style.boxShadow = `0 0 16px ${terminal.pink}20`;
           }}
           onMouseLeave={e => {
-            e.currentTarget.style.background = "linear-gradient(135deg, #FF2D7820, #FF2D7810)";
+            e.currentTarget.style.background = `linear-gradient(135deg, ${terminal.pink}20, ${terminal.pink}10)`;
             e.currentTarget.style.boxShadow = "none";
           }}
         >
@@ -489,7 +489,7 @@ export default function RantView({ onBack, auth }) {
 
       {/* Category filter tabs */}
       <div style={{ display: "flex", gap: 6, marginBottom: space[3], flexWrap: "wrap" }}>
-        {[{ key: "all", label: "All", icon: "◈", color: "#00ff41" }, ...CATEGORIES].map(cat => {
+        {[{ key: "all", label: "All", icon: "◈", color: terminal.green }, ...CATEGORIES].map(cat => {
           const count = cat.key === "all" ? rants.length : rants.filter(r => r.category === cat.key).length;
           const active = filterCat === cat.key;
           return (
@@ -497,10 +497,10 @@ export default function RantView({ onBack, auth }) {
               key={cat.key}
               onClick={() => setFilterCat(cat.key)}
               style={{
-                padding: "6px 14px", borderRadius: 4,
-                border: `1px solid ${active ? cat.color + "70" : "#ffffff20"}`,
+                padding: "6px 14px", borderRadius: terminalRadius.sm,
+                border: `1px solid ${active ? cat.color + "70" : `${terminal.text}20`}`,
                 background: active ? cat.color + "20" : "transparent",
-                color: active ? cat.color : "#ffffffaa",
+                color: active ? cat.color : terminal.textGhost,
                 fontFamily: MONO, fontSize: 12, cursor: "pointer",
                 transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease", fontWeight: active ? 700 : 500,
               }}
@@ -513,7 +513,7 @@ export default function RantView({ onBack, auth }) {
 
       {/* Status filter pills */}
       <div style={{ display: "flex", gap: 5, marginBottom: space[4], flexWrap: "wrap" }}>
-        {[{ key: "all", label: "Any status", color: "#00ff41" },
+        {[{ key: "all", label: "Any status", color: terminal.green },
           ...Object.entries(STATUS_CONFIG).map(([k, v]) => ({ key: k, ...v }))
         ].map(st => {
           const count = st.key === "all"
@@ -525,10 +525,10 @@ export default function RantView({ onBack, auth }) {
               key={st.key}
               onClick={() => setFilterSt(st.key)}
               style={{
-                padding: "4px 12px", borderRadius: 12,
-                border: `1px solid ${active ? st.color + "60" : "#ffffff18"}`,
+                padding: "4px 12px", borderRadius: terminalRadius.lg,
+                border: `1px solid ${active ? st.color + "60" : `${terminal.text}18`}`,
                 background: active ? st.color + "15" : "transparent",
-                color: active ? st.color : "#ffffff80",
+                color: active ? st.color : terminal.textFaint,
                 fontFamily: MONO, fontSize: 11, cursor: "pointer",
                 transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease", fontWeight: active ? 600 : 400,
               }}
@@ -541,13 +541,13 @@ export default function RantView({ onBack, auth }) {
 
       {/* Rant list */}
       {loading ? (
-        <div style={{ color: "#00ff4160", fontSize: 12, padding: space[5] }}>
+        <div style={{ color: `${terminal.green}60`, fontSize: 12, padding: space[5] }}>
           Loading rants...
         </div>
       ) : visibleRants.length === 0 ? (
         <div style={{
           textAlign: "center", padding: `${space[8]}px ${space[5]}px`,
-          color: "#00ff4180",
+          color: `${terminal.green}80`,
         }}>
           <div style={{ fontSize: 32, marginBottom: space[3] }}>🔥</div>
           <div style={{ fontSize: 13, marginBottom: space[2] }}>
@@ -565,9 +565,9 @@ export default function RantView({ onBack, auth }) {
             const hasReply = !!r.admin_note;
             const isResolved = r.status === "approved" || r.status === "shipped";
             // Green tint for replied/resolved, subtle default
-            const borderColor = hasReply ? "#84FF9530" : "#00ff4115";
-            const bgBase = hasReply ? "#84FF9506" : "transparent";
-            const bgHover = hasReply ? "#84FF9512" : "#00ff4108";
+            const borderColor = hasReply ? `${terminal.success}30` : `${terminal.green}15`;
+            const bgBase = hasReply ? `${terminal.success}06` : "transparent";
+            const bgHover = hasReply ? `${terminal.success}12` : `${terminal.green}08`;
 
             return (
               <button
@@ -576,16 +576,16 @@ export default function RantView({ onBack, auth }) {
                 style={{
                   display: "flex", alignItems: "center", gap: 12,
                   padding: `${space[3]}px ${space[4]}px`,
-                  border: `1px solid ${borderColor}`, borderRadius: 6,
+                  border: `1px solid ${borderColor}`, borderRadius: terminalRadius.md,
                   background: bgBase, cursor: "pointer",
                   fontFamily: MONO, textAlign: "left", width: "100%",
                   transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                   animation: `flow-load-fade-in 0.3s ease-out ${Math.min(i, 10) * 40}ms both`,
-                  ...(hasReply ? { borderLeft: "3px solid #84FF9560" } : {}),
+                  ...(hasReply ? { borderLeft: `3px solid ${terminal.success}60` } : {}),
                 }}
                 onMouseEnter={e => {
                   e.currentTarget.style.background = bgHover;
-                  e.currentTarget.style.borderColor = hasReply ? "#84FF9550" : "#00ff4130";
+                  e.currentTarget.style.borderColor = hasReply ? `${terminal.success}50` : `${terminal.green}30`;
                 }}
                 onMouseLeave={e => {
                   e.currentTarget.style.background = bgBase;
@@ -596,7 +596,7 @@ export default function RantView({ onBack, auth }) {
                 <span style={{
                   fontSize: 14, flexShrink: 0, width: 28, height: 28,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  borderRadius: 6, background: cat.color + "12",
+                  borderRadius: terminalRadius.md, background: cat.color + "12",
                   border: `1px solid ${cat.color}20`,
                 }}>
                   {cat.icon}
@@ -605,12 +605,12 @@ export default function RantView({ onBack, auth }) {
                 {/* Title + meta */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontSize: 13, color: "#fff", fontWeight: 600,
+                    fontSize: 13, color: terminal.text, fontWeight: 600,
                     whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                   }}>
                     {r.title}
                   </div>
-                  <div style={{ fontSize: 11, color: "#00ff4190", marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ fontSize: 11, color: `${terminal.green}90`, marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
                     <span>{r.user_name}</span>
                     <span style={{ opacity: 0.4 }}>·</span>
                     <span>{timeAgo(r.created_at)}</span>
@@ -623,7 +623,7 @@ export default function RantView({ onBack, auth }) {
                   fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
                   color: status.color, padding: "3px 10px",
                   background: status.color + "12",
-                  border: `1px solid ${status.color}30`, borderRadius: 4,
+                  border: `1px solid ${status.color}30`, borderRadius: terminalRadius.sm,
                   flexShrink: 0,
                 }}>
                   {status.icon} {status.label.toUpperCase()}
@@ -633,13 +633,13 @@ export default function RantView({ onBack, auth }) {
                 {hasReply && (
                   <span style={{
                     fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
-                    color: "#84FF95", padding: "3px 8px",
-                    background: "#84FF9515", border: "1px solid #84FF9530",
-                    borderRadius: 4, flexShrink: 0,
+                    color: terminal.success, padding: "3px 8px",
+                    background: `${terminal.success}15`, border: `1px solid ${terminal.success}30`,
+                    borderRadius: terminalRadius.sm, flexShrink: 0,
                   }}>✓ REPLIED</span>
                 )}
 
-                <span style={{ fontSize: 11, color: "#00ff4120", flexShrink: 0 }}>→</span>
+                <span style={{ fontSize: 11, color: `${terminal.green}20`, flexShrink: 0 }}>→</span>
               </button>
             );
           })}
@@ -660,9 +660,9 @@ export default function RantView({ onBack, auth }) {
         <div style={{
           position: "fixed", bottom: 40, left: "50%", transform: "translateX(-50%)",
           zIndex: 9999,
-          background: "linear-gradient(135deg, #0a0e14 0%, #111820 100%)",
-          border: `1px solid ${toast.type === "error" ? "#FF4D6A40" : "#00ff4140"}`,
-          borderRadius: 12, padding: `${space[3]}px ${space[5]}px`,
+          background: `linear-gradient(135deg, ${terminal.gradientStart} 0%, ${terminal.gradientEnd} 100%)`,
+          border: `1px solid ${toast.type === "error" ? `${terminal.red}40` : `${terminal.green}40`}`,
+          borderRadius: terminalRadius.lg, padding: `${space[3]}px ${space[5]}px`,
           display: "flex", alignItems: "center", gap: 12,
           boxShadow: `0 8px 32px rgba(0,0,0,0.6), 0 0 20px ${toast.type === "error" ? "rgba(255,77,106,0.1)" : "rgba(0,255,65,0.1)"}`,
           animation: "flow-load-fade-in 0.4s ease-out",
@@ -671,15 +671,15 @@ export default function RantView({ onBack, auth }) {
           <span style={{
             width: 24, height: 24, borderRadius: "50%",
             background: toast.type === "error"
-              ? "linear-gradient(135deg, #FF4D6A, #cc3355)"
-              : "linear-gradient(135deg, #00ff41, #00cc33)",
+              ? `linear-gradient(135deg, ${terminal.red}, ${terminal.redDeep})`
+              : `linear-gradient(135deg, ${terminal.green}, ${terminal.greenDeep})`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, flexShrink: 0, color: "#0a0e14", fontWeight: 700,
+            fontSize: 12, flexShrink: 0, color: terminal.gradientStart, fontWeight: 700,
           }}>
             {toast.type === "error" ? "!" : "✓"}
           </span>
           <div style={{
-            color: toast.type === "error" ? "#FF4D6A" : "#00ff41",
+            color: toast.type === "error" ? terminal.red : terminal.green,
             fontSize: 13, fontWeight: 600,
           }}>
             {toast.msg}

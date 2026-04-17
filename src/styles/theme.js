@@ -4,7 +4,14 @@
 // light theme now pulls its values from ds.js. The dark theme is retained
 // for the Terminal / Rant / Admin exceptions.
 
-import { color as dsColor, fonts as dsFonts, radius as dsRadius, shadow as dsShadow } from "./ds";
+import { color as dsColor, fonts as dsFonts, radius as dsRadius, shadow as dsShadow, terminal as dsTerminal, terminalRadius as dsTerminalRadius } from "./ds";
+
+// ── Terminal Dark palette + radii (DESIGN_SYSTEM.md §12) ──
+// Re-exported from ds.js. The Terminal / Rant / Admin views import these
+// directly rather than going through `c.*`, since each view elects its
+// own primary accent and the global theme bridge doesn't model that.
+export const terminal = dsTerminal;
+export const terminalRadius = dsTerminalRadius;
 
 // ── Font stack ──────────────────────────────────────────────────
 // Steel & Orange uses a two-font system: Inter for prose/UI, JetBrains Mono
@@ -97,17 +104,24 @@ export const themes = {
     textCrit:       "#FFFFFF",            // text on accent bg
     // Accent — orange
     accent:         dsColor.accent,
+    accentHover:    dsColor.accentHover,
     accentDim:      dsColor.accentSoft,
     accentMid:      dsColor.accentMid,
     accentGlow:     dsColor.accentGlow,
-    // Semantic — data only
-    green:          dsColor.green,        greenDim:  dsColor.greenDim,
-    red:            dsColor.red,          redDim:    dsColor.redDim,
+    textOnAccent:   dsColor.textOnAccent,
+    surfaceInverse:     dsColor.surfaceInverse,
+    insetInverse:       dsColor.insetInverse,
+    textOnInverse:      dsColor.textOnInverse,
+    textMidOnInverse:   dsColor.textMidOnInverse,
+    textGhostOnInverse: dsColor.textGhostOnInverse,
+    // Semantic — data only. Family: <color> / <color>Dim (8%) / <color>Mid (18%) / <color>Border (25%).
+    green:          dsColor.green,        greenDim:  dsColor.greenDim,  greenMid:  dsColor.greenMid,  greenBorder:  dsColor.greenBorder,
+    red:            dsColor.red,          redDim:    dsColor.redDim,    redMid:    dsColor.redMid,    redBorder:    dsColor.redBorder,
     orange:         dsColor.amber,        orangeDim: dsColor.amberDim,  // "orange" = amber in Steel & Orange
-    amber:          dsColor.amber,        amberDim:  dsColor.amberDim,
-    blue:           dsColor.blue,         blueDim:   dsColor.blueDim,
-    cyan:           dsColor.cyan,         cyanDim:   dsColor.cyanDim,
-    purple:         dsColor.purple,       purpleDim: dsColor.purpleDim,
+    amber:          dsColor.amber,        amberDim:  dsColor.amberDim,  amberMid:  dsColor.amberMid,  amberBorder:  dsColor.amberBorder,
+    blue:           dsColor.blue,         blueDim:   dsColor.blueDim,   blueMid:   dsColor.blueMid,   blueBorder:   dsColor.blueBorder,
+    cyan:           dsColor.cyan,         cyanDim:   dsColor.cyanDim,   cyanMid:   dsColor.cyanMid,   cyanBorder:   dsColor.cyanBorder,
+    purple:         dsColor.purple,       purpleDim: dsColor.purpleDim, purpleMid: dsColor.purpleMid, purpleBorder: dsColor.purpleBorder,
     // Entity references
     projectGold:    dsColor.amber,        projectGoldDim: dsColor.amberDim,
     // Legacy glow tokens — kept near-zero so any stale consumer doesn't emit neon
@@ -142,16 +156,16 @@ export function setTheme(isDark) {
 
 // ── Canonical status semantics (consistent across all screens) ──
 export const typeConfig = () => ({
-  BUILD: { color: c.green, bg: c.greenDim, emoji: "~", label: "Build" },
-  JAM: { color: c.accent, bg: c.accentDim, emoji: "~", label: "Jam" },
+  BUILD: { color: c.green, bg: c.greenDim, emoji: "~", label: "BUILD" },
+  JAM: { color: c.accent, bg: c.accentDim, emoji: "~", label: "JAM" },
 });
 
 // ── Canonical outcome semantics ──
 export const outcomeConfig = () => ({
-  done: { color: c.green, bg: c.greenDim, label: "Completed", icon: "✓" },
+  done: { color: c.green, bg: c.greenDim, label: "Done", icon: "✓" },
   partial: { color: c.orange, bg: c.orangeDim, label: "Partial", icon: "◐" },
-  carry: { color: c.orange, bg: c.orangeDim, label: "Carry", icon: "→" },
-  done_carry: { color: c.orange, bg: c.orangeDim, label: "Done + Carry", icon: "✓→" },
+  carry: { color: c.orange, bg: c.orangeDim, label: "Carried", icon: "→" },
+  done_carry: { color: c.orange, bg: c.orangeDim, label: "Done + Carried", icon: "✓→" },
   blocked: { color: c.red, bg: c.redDim, label: "Blocked", icon: "✕" },
 });
 
@@ -165,6 +179,17 @@ export const riskConfig = () => ({
 export const phaseColors = () => ({
   PRD: c.purple, Design: c.blue, Dev: c.orange, QA: c.cyan,
   Alpha: "#6BCB77", Beta: "#36AE7C", GA: "#1FAA59",
+});
+
+// Phase → tinted background (18% alpha) and soft background (8% alpha).
+// Use phaseMids for cell highlights; phaseDims for tag / pill backgrounds.
+export const phaseMids = () => ({
+  PRD: c.purpleMid, Design: c.blueMid, Dev: c.amberMid, QA: c.cyanMid,
+  Alpha: c.greenMid, Beta: c.greenMid, GA: c.greenMid,
+});
+export const phaseDims = () => ({
+  PRD: c.purpleDim, Design: c.blueDim, Dev: c.amberDim, QA: c.cyanDim,
+  Alpha: c.greenDim, Beta: c.greenDim, GA: c.greenDim,
 });
 
 // ── Canonical project status semantics ──
@@ -189,6 +214,7 @@ export const typo = {
   displayMd:   { font: display, size: 20, weight: 700, tracking: "-0.02em", lineHeight: 1.2  }, // detail names
   displaySm:   { font: display, size: 16, weight: 700, tracking: "-0.01em", lineHeight: 1.3  }, // card headers
   // Body — Inter, rest of the app
+  bodyXl:      { font: body,    size: 16, weight: 500, tracking: "0",       lineHeight: 1.5 },
   bodyLg:      { font: body,    size: 15, weight: 500, tracking: "0",       lineHeight: 1.5 },
   bodyMd:      { font: body,    size: 14, weight: 500, tracking: "0",       lineHeight: 1.5 },
   bodySm:      { font: body,    size: 13, weight: 500, tracking: "0",       lineHeight: 1.5 },

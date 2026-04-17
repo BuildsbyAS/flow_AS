@@ -11,9 +11,9 @@ const MODES = ["OFF", "HOVER", "LABELS"];
 // ── Styles ──────────────────────────────────────────────────────
 const S = {
   pill: {
-    position: "fixed", bottom: 16, right: 16, zIndex: 99999,
+    position: "fixed", bottom: 16, left: 16, zIndex: 99999,
     padding: "6px 14px", borderRadius: 20,
-    background: "rgba(15, 23, 42, 0.92)", border: "1px solid rgba(59, 130, 246, 0.3)",
+    background: "rgba(15, 23, 42, 0.92)", border: "1px solid rgba(232, 89, 12, 0.3)",
     backdropFilter: "blur(12px)",
     fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11, fontWeight: 600,
     color: "rgba(255,255,255,0.7)", letterSpacing: "0.04em",
@@ -22,19 +22,19 @@ const S = {
     display: "flex", alignItems: "center", gap: 6,
   },
   pillActive: {
-    border: "1px solid rgba(59, 130, 246, 0.6)",
-    color: "#3B82F6",
-    boxShadow: "0 0 20px rgba(59, 130, 246, 0.15)",
+    border: "1px solid rgba(232, 89, 12, 0.6)",
+    color: "#E8590C",
+    boxShadow: "0 0 20px rgba(232, 89, 12, 0.15)",
   },
   dot: (active) => ({
     width: 6, height: 6, borderRadius: "50%",
-    background: active ? "#3B82F6" : "rgba(255,255,255,0.25)",
+    background: active ? "#E8590C" : "rgba(255,255,255,0.25)",
     transition: "background 0.15s ease",
   }),
   tooltip: {
     position: "fixed", zIndex: 99998, pointerEvents: "none",
     padding: "10px 14px", borderRadius: 8,
-    background: "rgba(15, 23, 42, 0.95)", border: "1px solid rgba(59, 130, 246, 0.25)",
+    background: "rgba(15, 23, 42, 0.95)", border: "1px solid rgba(232, 89, 12, 0.25)",
     backdropFilter: "blur(12px)",
     fontFamily: "'Inter', system-ui, sans-serif", fontSize: 12,
     color: "rgba(255,255,255,0.85)",
@@ -44,7 +44,7 @@ const S = {
   label: {
     position: "absolute", top: 0, left: 0, zIndex: 99997,
     padding: "2px 8px", borderRadius: "0 0 6px 0",
-    background: "rgba(59, 130, 246, 0.85)",
+    background: "rgba(232, 89, 12, 0.85)",
     fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600,
     color: "#fff", letterSpacing: "0.02em",
     pointerEvents: "none", whiteSpace: "nowrap",
@@ -61,7 +61,7 @@ function Tooltip({ entry, x, y }) {
   };
   return (
     <div style={style}>
-      <div style={{ fontWeight: 700, fontSize: 13, color: "#3B82F6", marginBottom: 4 }}>
+      <div style={{ fontWeight: 700, fontSize: 13, color: "#E8590C", marginBottom: 4 }}>
         {entry.name}
       </div>
       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: entry.description ? 4 : 0 }}>
@@ -115,7 +115,7 @@ function LabelOverlays() {
         <div key={`${p.name}-${i}`} style={{
           position: "absolute", top: p.top, left: p.left,
           width: p.width, height: p.height,
-          border: "1px solid rgba(59, 130, 246, 0.2)",
+          border: "1px solid rgba(232, 89, 12, 0.2)",
           borderRadius: 4, pointerEvents: "none", zIndex: 99996,
         }}>
           <div style={S.label}>{p.name}</div>
@@ -188,7 +188,7 @@ function DevOverlayInner() {
           navigator.clipboard.writeText(path).catch(() => {});
           // Brief flash feedback
           const orig = el.style.outline;
-          el.style.outline = "2px solid #3B82F6";
+          el.style.outline = "2px solid #E8590C";
           setTimeout(() => { el.style.outline = orig; }, 300);
           return;
         }
@@ -212,7 +212,7 @@ function DevOverlayInner() {
       {/* Hover outline */}
       <div ref={outlineRef} style={{
         position: "fixed", display: "none", zIndex: 99997,
-        border: "1.5px solid rgba(59, 130, 246, 0.5)",
+        border: "1.5px solid rgba(232, 89, 12, 0.5)",
         borderRadius: 4, pointerEvents: "none",
         transition: "background 0.08s ease, border-color 0.08s ease, color 0.08s ease, box-shadow 0.08s ease, transform 0.08s ease, opacity 0.08s ease",
       }} />
@@ -225,6 +225,7 @@ function DevOverlayInner() {
 
       {/* Mode pill */}
       <div
+        className="flow-dev-pill"
         style={{ ...S.pill, ...(isActive ? S.pillActive : {}) }}
         onClick={() => setMode(m => (m + 1) % 3)}
         title="Ctrl+Shift+D to toggle"

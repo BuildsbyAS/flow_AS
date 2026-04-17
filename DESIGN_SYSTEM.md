@@ -222,9 +222,10 @@ The core 4-card pattern. `1.5fr 1fr 1fr 1fr` grid by default, 16px gap.
 - Clickable: `active` prop adds accent border ring
 
 **`<HealthGauge>`** — the only inverted card:
-- `#1A1A1E` bg, 36px mono value `#F0F0F4`
-- Gradient track `#DC2626 → #F59E0B → #10B981`
-- Tick marks at 0/25/50/75/100 in 11px mono `#4A4A52`
+- `c.surfaceInverse` bg (#1A1A1E), 36px mono value `c.textOnInverse` (#F0F0F4)
+- Track fill is a **solid semantic color** picked by threshold (≥70 green, ≥40 amber, <40 red). Rainbow gradients are banned (§10); HealthGauge uses the same threshold-to-color rule as `HealthBar`.
+- Track bg `c.insetInverse` (#2E2E36)
+- Tick marks at 0/25/50/75/100 in 11px mono `c.textGhostOnInverse` (#8F8F9A)
 - Always the 4th card in a KPI grid
 
 ### 7.4 Tables
@@ -378,16 +379,11 @@ Shared rules across all charts:
 - Phase bars: phase-colored (`phaseColors()`), `radiusXs`, mono 11 project ID inside
 - Hover card: `c.surface`, `radiusLg`, `shadowFloat`, portal-rendered
 
-### 7.18 Terminal view (exception — stays dark)
+### 7.18 Terminal view (Terminal Dark theme — see §12)
 
-Terminal (`TerminalView`), Rant (`RantView`), Admin (`AdminSettingsView`) are intentionally dark-themed. AppShell is hidden when `activeTab === "terminal"` to avoid a light/dark seam. CRT scanlines + block cursor are scoped to `.flow-terminal-root` via a `:not(.flow-terminal-root)` override so they never leak into light views.
+Terminal (`TerminalView`), Rant (`RantView`), Admin (`AdminSettingsView`) run a dedicated Terminal Dark theme — a sibling of Steel & Orange, not an exception. AppShell is hidden when `activeTab === "terminal"` to avoid a light/dark seam. CRT scanlines + block cursor are scoped to `.flow-terminal-root` via a `:not(.flow-terminal-root)` override so they never leak into light views.
 
-```
-Background:  #0D0F0D dark
-Text:        #00ff41 (terminal green), #C8E6C9 for content
-Font:        'JetBrains Mono' (was SF Mono — purged)
-Height:      100vh (full viewport, no header visible)
-```
+See §12 for the full Terminal Dark token set.
 
 ---
 
@@ -435,6 +431,80 @@ Height:      100vh (full viewport, no header visible)
 - **Keyboard:** Full keyboard nav preserved — 1–6 tabs, T terminal, Cmd+K palette, arrows in tables, Escape to go back
 - **Reduced motion:** `@media (prefers-reduced-motion: reduce)` disables decorative animations; structural transitions remain
 - **Screen reader:** Modals have `role="dialog"`, `aria-modal="true"`, `aria-label`. Tables use proper `<thead>`/`<tbody>`. Focus trap on modals
+
+---
+
+## 12. Terminal Dark (sibling theme)
+
+Terminal Dark is the second theme in the system — not an exception. It lives on `TerminalView`, `RantView`, and `AdminSettingsView`. Retro phosphor aesthetic: near-black canvas, single monochrome phosphor accent per view, tighter radii, CRT affordances (scanlines, block cursor) scoped to `.flow-terminal-root`.
+
+**Source of truth:** `src/styles/ds.js` → `terminal` and `terminalRadius` exports. Re-exported via `src/styles/theme.js` so views import as `import { terminal, terminalRadius } from "../styles/theme"`.
+
+### 12.1 Palette (`terminal.*`)
+
+**Surfaces**
+
+| Token | Hex | Usage |
+|---|---|---|
+| `terminal.bg` | `#0D0F0D` | Near-black page canvas |
+| `terminal.surfaceDeep` | `#060A12` | Recessed panels (log viewer, auth box) |
+| `terminal.gradientStart` | `#0a0e14` | Hero-card gradient start |
+| `terminal.gradientEnd` | `#111820` | Hero-card gradient end |
+
+**Primary phosphor accents** — each view elects one:
+
+| Token | Hex | Where |
+|---|---|---|
+| `terminal.green` | `#00ff41` | Terminal shell, Rant form |
+| `terminal.greenDeep` | `#00cc33` | Gradient stop for green hero |
+| `terminal.gold` | `#FBBF24` | Admin Settings, Terminal admin path |
+| `terminal.goldDeep` | `#F59E0B` | Gradient stop for gold hero |
+
+**Semantic accents** — chips, category tags, status pills:
+
+| Token | Hex | Usage |
+|---|---|---|
+| `terminal.pink` | `#FF2D78` | Rant "general rant" category |
+| `terminal.coral` | `#FF6B35` | Rant "bug report" category |
+| `terminal.purple` | `#A78BFA` | Rant "feature request" category |
+| `terminal.red` | `#FF4D6A` | Errors, destructive |
+| `terminal.redDeep` | `#cc3355` | Gradient stop for error toast |
+| `terminal.success` | `#84FF95` | Approved, replied |
+| `terminal.cyan` | `#22D3EE` | Shipped, info |
+
+**Text** (on dark):
+
+| Token | Hex | Usage |
+|---|---|---|
+| `terminal.text` | `#FFFFFF` | Primary text, typed input |
+| `terminal.textMid` | `#FFFFFFCC` | Body prose |
+| `terminal.textDim` | `#FFFFFFBB` | Secondary body |
+| `terminal.textGhost` | `#FFFFFFAA` | Tertiary helper text |
+| `terminal.textFaint` | `#FFFFFF80` | Faint decorative |
+
+**Tinting convention:** use hex-alpha suffix in template literals. E.g. `` `${terminal.green}20` `` = 12% opacity fill, `` `${terminal.gold}40` `` = 25% border. This keeps one source of truth for each accent hex; tint tiers are per call site.
+
+### 12.2 Radius (`terminalRadius.*`)
+
+Terminal Dark runs a tighter radius scale than Steel & Orange — sharper corners read more retro-phosphor.
+
+| Token | Value | Usage |
+|---|---|---|
+| `terminalRadius.xs` | 3 | Inline ID / status chips |
+| `terminalRadius.sm` | 4 | Chips, inputs, secondary buttons (the default) |
+| `terminalRadius.md` | 6 | Cards, primary CTAs, image thumbs |
+| `terminalRadius.lg` | 12 | Floating toasts, notification pills |
+
+### 12.3 Typography
+
+Terminal Dark uses `'JetBrains Mono'` across the board — no Inter. Font floor is still 11px.
+
+### 12.4 Rules
+
+- **One phosphor per view.** Terminal shell uses green exclusively; Admin uses gold exclusively; Rant uses green for chrome but admits the full semantic set for category/status pills.
+- **No cross-contamination.** Terminal colors must not appear in Steel & Orange views, and vice versa. `c.*` tokens are for light views; `terminal.*` for dark.
+- **CRT effects scoped.** Scanlines and blink cursors live only under `.flow-terminal-root`.
+- **Tints via template literals.** Never write `"#00ff4120"` — write `` `${terminal.green}20` ``.
 
 ---
 

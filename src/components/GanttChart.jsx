@@ -185,7 +185,7 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
               style={{
                 height: ROW_H, display: "flex", alignItems: "center", padding: `0 ${space[4]}px`,
                 gap: space[3], cursor: "pointer", borderBottom: `1px solid rgba(0,0,0,0.04)`,
-                transition: "background 0.4s ease",
+                transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
                 background: highlightId === p.id ? "rgba(0,0,0,0.04)" : "transparent",
               }}
               onMouseEnter={(e) => { if (highlightId !== p.id) e.currentTarget.style.background = `rgba(0,0,0,0.03)`; }}
@@ -278,22 +278,27 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
               <div key={p.id + "-bar"} style={{ height: ROW_H, position: "relative",
                 borderBottom: "1px solid rgba(0,0,0,0.04)",
                 background: highlightId === p.id ? "rgba(0,0,0,0.04)" : "transparent",
-                transition: "background 0.4s ease",
+                transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
               }}>
 
                 {/* Main bar */}
                 <div
+                  className="flow-gantt-bar"
+                  tabIndex={0}
+                  role="button"
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onProjectClick?.(p.id); } }}
                   onClick={() => onProjectClick?.(p.id)}
-                  onMouseEnter={(e) => showTooltip(e, p)}
-                  onMouseLeave={hideTooltip}
+                  onMouseEnter={(e) => { showTooltip(e, p); const el = e.currentTarget; el.style.willChange = "transform, filter"; el.style.filter = "brightness(1.08)"; el.style.boxShadow = "0 4px 10px rgba(0,0,0,0.12)"; el.style.zIndex = 5; }}
+                  onMouseLeave={(e) => { hideTooltip(); const el = e.currentTarget; el.style.transform = "scale(1)"; el.style.filter = "none"; el.style.boxShadow = "none"; el.style.zIndex = 1; setTimeout(() => { if (el) el.style.willChange = "auto"; }, 160); }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = "scale(0.98)"; }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
                   style={{
                     position: "absolute", top: 12, height: 24, left, width,
                     borderRadius: 5, cursor: "pointer", overflow: "hidden",
                     display: "flex", alignItems: "center",
-                    transition: `transform ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}`,
+                    transformOrigin: "center",
+                    transition: `transform ${motion.fast.duration} ${motion.fast.easing}, filter ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
                   }}
-                  onMouseOver={(e) => { e.currentTarget.style.transform = "scaleY(1.15)"; e.currentTarget.style.zIndex = 5; }}
-                  onMouseOut={(e) => { e.currentTarget.style.transform = "scaleY(1)"; e.currentTarget.style.zIndex = 1; }}
                 >
                   {/* Track */}
                   <div style={{
@@ -309,11 +314,13 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
                   {!isDepri && (
                     <div style={{
                       position: "absolute", top: 0, left: 0, bottom: 0,
-                      width: isComplete ? "100%" : `${pct}%`,
+                      width: "100%",
+                      transform: `scaleX(${isComplete ? 1 : Math.max(0, Math.min(pct, 100)) / 100})`,
+                      transformOrigin: "left center",
                       borderRadius: 5,
                       background: isComplete ? c.green : color,
                       opacity: isComplete ? 0.4 : 0.7,
-                      transition: "width 0.4s ease",
+                      transition: `transform ${motion.normal.duration} ${motion.normal.easing}, background ${motion.fast.duration} ${motion.fast.easing}`,
                     }} />
                   )}
 
@@ -399,7 +406,7 @@ export default function GanttChart({ projects, weekConfig, onProjectClick }) {
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <div style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
               <span style={{ fontSize: 14, fontWeight: 700, color: c.text, flex: 1 }}>{p.name}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4,
+              <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: layout.radiusXs,
                 background: `${color}22`, color }}>{p.phase}</span>
             </div>
             {[

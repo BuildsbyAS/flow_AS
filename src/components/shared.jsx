@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom";
 import { c, typo, layout, space, motion, btnVariants, entityColors } from "../styles/theme";
 import useDevLabel from "../hooks/useDevLabel";
+import useExitAnimation from "../hooks/useExitAnimation";
 
 // ══════════════════════════════════════════════════════════════
 // Modal — accessible centered dialog with focus trap
@@ -18,6 +19,7 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
   const dialogRef = React.useRef(null);
   const previousFocusRef = React.useRef(null);
   const titleId = React.useId ? React.useId() : React.useMemo(() => `modal-title-${Math.random().toString(36).slice(2, 8)}`, []);
+  const { mounted, visible } = useExitAnimation(open, 270);
 
   // Capture focus on open, restore on close
   React.useEffect(() => {
@@ -75,7 +77,7 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
     return () => document.removeEventListener("keydown", trap);
   }, [open]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   return ReactDOM.createPortal(
     <div
@@ -93,6 +95,7 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
           background: "rgba(0,0,0,0.4)",
           backdropFilter: blur ? `blur(${blur}px)` : undefined,
           WebkitBackdropFilter: blur ? `blur(${blur}px)` : undefined,
+          animation: `${visible ? "fadeIn" : "fadeOut"} ${motion.normal.duration} ${motion.normal.easing} both`,
         }}
       />
       {/* Dialog */}
@@ -109,9 +112,9 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
           borderLeft: accent ? `3px solid ${accent}` : undefined,
           borderRadius: layout.radiusLg,
           padding: `${space[6]}px`,
-          width, maxWidth: "90vw",
+          width: "100%", maxWidth: `min(${width}px, calc(100vw - ${space[4] * 2}px))`,
           boxShadow: c.shadowElevated || c.shadowOverlay,
-          animation: `fadeIn 0.2s ${motion.normal.easing} both`,
+          animation: `${visible ? "fadeScaleIn" : "fadeScaleOut"} ${motion.normal.duration} ${motion.normal.easing} both`,
           ...s,
         }}
         onClick={e => e.stopPropagation()}
@@ -149,8 +152,8 @@ export const Badge = ({ color, bg, children, style: s }) => (
 // Tag — compact mono tag (small, tight, for inline metadata)
 // Use for: type indicators, phase labels, quality flags, counts
 // ══════════════════════════════════════════════════════════════
-export const Tag = ({ color, bg, children, uppercase = true, style: s }) => (
-  <span style={{
+export const Tag = ({ color, bg, children, uppercase = true, style: s, className }) => (
+  <span className={className} style={{
     fontSize: typo.tag.size, fontFamily: typo.tag.font, fontWeight: typo.tag.weight,
     letterSpacing: typo.tag.tracking, lineHeight: typo.tag.lineHeight,
     textTransform: uppercase ? "uppercase" : "none",
@@ -246,7 +249,7 @@ export const Btn = ({ children, variant = "secondary", size = "default", style: 
       fontWeight: 600,
       cursor: rest.disabled ? "default" : "pointer",
       opacity: rest.disabled ? 0.4 : 1,
-      transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
+      transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}, filter ${motion.fast.duration} ${motion.fast.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
       boxSizing: "border-box",
       display: "inline-flex", alignItems: "center", gap: space[2],
       ...s,
@@ -257,17 +260,18 @@ export const Btn = ({ children, variant = "secondary", size = "default", style: 
 // ══════════════════════════════════════════════════════════════
 // Inp — text input (38–42px height per spec)
 // ══════════════════════════════════════════════════════════════
-export const Inp = ({ style: s, ...rest }) => (
-  <input {...rest} className="flow-input" style={{
+export const Inp = React.forwardRef(({ style: s, ...rest }, ref) => (
+  <input ref={ref} {...rest} className="flow-input" style={{
     height: 40, padding: `0 ${space[4] - 2}px`,
     borderRadius: layout.radiusSm,
     border: `1px solid ${c.border}`, background: c.surfaceAlt,
     color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
     outline: "none", boxSizing: "border-box",
-    transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}`,
+    transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
     ...s,
   }} />
-);
+));
+Inp.displayName = "Inp";
 
 // ══════════════════════════════════════════════════════════════
 // TextArea — multi-line text input (matches Inp styling)
@@ -282,7 +286,7 @@ export const TextArea = ({ style: s, ...rest }) => (
     fontWeight: typo.bodyMd.weight, lineHeight: typo.bodyMd.lineHeight,
     outline: "none", boxSizing: "border-box",
     resize: "vertical", minHeight: 72,
-    transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}`,
+    transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
     ...s,
   }} />
 );
@@ -328,7 +332,7 @@ export const Sel = ({ children, style: s, ...rest }) => (
     color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
     cursor: "pointer", appearance: "auto",
     boxSizing: "border-box",
-    transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}`,
+    transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
     ...s,
   }}>{children}</select>
 );
@@ -401,10 +405,14 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
         color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
         cursor: "pointer", textAlign: "left", boxSizing: "border-box",
         display: "flex", alignItems: "center", justifyContent: "space-between",
-        transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}`,
+        transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
       }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || placeholder}</span>
-        <span style={{ color: c.textDim, fontSize: typo.monoSm.size, marginLeft: space[2], flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+        <span style={{
+          color: c.textDim, fontSize: typo.monoSm.size, marginLeft: space[2], flexShrink: 0,
+          display: "inline-block", transform: open ? "rotate(180deg)" : "rotate(0deg)",
+          transition: `transform ${motion.fast.duration} ${motion.fast.easing}`,
+        }}>▼</span>
       </button>
       {open && ReactDOM.createPortal(
         <div ref={dropdownRef} style={{
@@ -438,7 +446,7 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
                   fontFamily: typo.bodyMd.font, fontSize: typo.bodySm.size,
                   color: opt === value ? c.accent : c.text,
                   fontWeight: opt === value ? 600 : 400,
-                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}`,
+                  transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}`,
                 }}>{opt}</div>
             ))}
           </div>
@@ -739,6 +747,63 @@ export const SummaryTile = ({ value, label, color, active, onClick, icon, prevVa
 };
 
 // ══════════════════════════════════════════════════════════════
+// TableShell — shared chrome for registry-style tables
+// Wraps a <table> in the standard card (surface + border + radiusLg +
+// shadowCard + overflow clip) and provides the inner horizontal-scroll
+// container (.flow-hscroll). All three registry tables (Projects, Pulse,
+// Commit) use this so sticky header + sticky-left first column behave
+// identically everywhere.
+// Props: minWidth (default 700), separate (default false → borderCollapse),
+//        className (forwarded), style (forwarded to outer card)
+// ══════════════════════════════════════════════════════════════
+export const TableShell = ({ minWidth = 700, separate = false, className, style: s, children }) => (
+  <div
+    className={className}
+    style={{
+      background: c.surface,
+      border: `1px solid ${c.border}`,
+      borderRadius: layout.radiusLg,
+      boxShadow: c.shadowCard,
+      overflow: "clip",
+      ...s,
+    }}
+  >
+    {/* Inner wrapper keeps the .flow-hscroll class for the mobile fade hint
+        but intentionally does NOT set overflowX — any overflow value would
+        make this element the scroll ancestor for sticky headers, breaking
+        viewport-sticky pinning. The outer card already clips horizontally. */}
+    <div className="flow-hscroll" style={{ borderRadius: layout.radiusLg }}>
+      <table style={{
+        width: "100%",
+        borderCollapse: separate ? "separate" : "collapse",
+        borderSpacing: separate ? 0 : undefined,
+        minWidth,
+      }}>
+        {children}
+      </table>
+    </div>
+  </div>
+);
+
+// ══════════════════════════════════════════════════════════════
+// StickyLeftTd — first-column body cell with sticky-left pattern
+// Used by all three registry tables to keep the Squad column pinned
+// while the rest of the row scrolls horizontally. Caller controls
+// the background (must match the row background to prevent bleed).
+// Props: bg (required — row's current background), style (forwarded),
+//        children, ...rest (forwarded to <td>)
+// ══════════════════════════════════════════════════════════════
+export const StickyLeftTd = ({ bg, style: s, children, ...rest }) => (
+  <td
+    {...rest}
+    style={{
+      position: "sticky", left: 0, background: bg, zIndex: 1,
+      ...s,
+    }}
+  >{children}</td>
+);
+
+// ══════════════════════════════════════════════════════════════
 // Th — shared sortable table header cell
 // Use for: all sortable table headers across Registry, Analytics, Admin tables
 // Props: col (sort key), sortKey, sortDir, onSort, children, style
@@ -746,19 +811,24 @@ export const SummaryTile = ({ value, label, color, active, onClick, icon, prevVa
 export const Th = ({ col, sortKey, sortDir, onSort, children, style: s }) => {
   const devRef = useDevLabel('Sortable table header cell shared across registry tables');
   return (
-    <th ref={devRef} onClick={() => onSort && onSort(col)} style={{
-      padding: `${space[3]}px ${space[4]}px`, textAlign: "left",
-      fontFamily: typo.tableHeader?.font || typo.bodySm.font,
-      fontSize: 12, fontWeight: 600,
-      letterSpacing: "0.03em", textTransform: "uppercase",
-      cursor: onSort ? "pointer" : "default", userSelect: "none",
-      borderBottom: `1px solid ${c.borderMedium || c.border}`,
-      background: c.tableHeader || c.surfaceAlt,
-      color: sortKey === col ? c.accent : c.textDim,
-      transition: `color ${motion.fast.duration}`,
-      position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 2,
-      whiteSpace: "nowrap", ...s,
-    }}>{children}{sortKey === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}</th>
+    <th
+      ref={devRef}
+      className={`flow-th-sticky${onSort ? " flow-sort-th" : ""}`}
+      onClick={() => onSort && onSort(col)}
+      style={{
+        padding: `${space[3]}px ${space[4]}px`, textAlign: "left",
+        fontFamily: typo.tableHeader?.font || typo.bodySm.font,
+        fontSize: 12, fontWeight: 600,
+        letterSpacing: "0.03em", textTransform: "uppercase",
+        cursor: onSort ? "pointer" : "default", userSelect: "none",
+        borderBottom: `1px solid ${c.borderMedium || c.border}`,
+        background: c.tableHeader || c.surfaceAlt,
+        color: sortKey === col ? c.accent : c.textDim,
+        transition: `color ${motion.fast.duration} ${motion.fast.easing}, background ${motion.fast.duration} ${motion.fast.easing}`,
+        position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 2,
+        whiteSpace: "nowrap", ...s,
+      }}
+    >{children}{sortKey === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}</th>
   );
 };
 

@@ -66,7 +66,9 @@ const PROJECTS = [
   "X81","X82","X83","X84","X85",
 ];
 
-const STAGES = ["PRD", "Design", "Dev", "Alpha", "Beta", "QA", "GA"];
+// Work-function stages only. Alpha/Beta/GA are project lifecycle states,
+// not commit stages — the Commit tab never offers them.
+const STAGES = ["PRD", "Design", "Dev", "QA"];
 
 const TASKS_BUILD = [
   "Ship error handling for", "Build frontend components for", "Set up data models for",

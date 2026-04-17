@@ -104,7 +104,7 @@ export default function OnboardingScreen({ user, onComplete }) {
           padding-right: 36px !important;
         }
         .flow-onboard-primary:hover:not(:disabled) {
-          background: #D24E0A !important;
+          background: ${c.accentHover} !important;
         }
         .flow-onboard-primary:active:not(:disabled) {
           transform: translateY(1px);
@@ -263,7 +263,7 @@ export default function OnboardingScreen({ user, onComplete }) {
               background: canSubmit ? c.accent : c.surfaceAlt,
               border: canSubmit ? "none" : `1px solid ${c.border}`,
               borderRadius: layout.radiusSm,
-              color: canSubmit ? "#FFFFFF" : c.textDim,
+              color: canSubmit ? c.textOnAccent : c.textDim,
               fontFamily: body,
               fontSize: 14,
               fontWeight: 600,

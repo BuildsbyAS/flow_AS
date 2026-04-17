@@ -196,7 +196,7 @@ export function Header({
   React.useEffect(() => {
     const headerH = showContextBar ? 104 : 52;
     document.documentElement.style.setProperty('--flow-header-h', `${headerH}px`);
-    document.documentElement.style.setProperty('--flow-header-offset', collapsed ? '0px' : `${headerH}px`);
+    document.documentElement.style.setProperty('--flow-header-offset', collapsed ? '60px' : `${headerH}px`);
     document.body.classList.toggle('flow-chrome-collapsed', collapsed);
     return () => document.body.classList.remove('flow-chrome-collapsed');
   }, [collapsed, showContextBar]);
@@ -278,6 +278,7 @@ export function Header({
       onMouseLeave={endPeek}
       style={{
         position: "sticky", top: 0, zIndex: 50,
+        width: "100%", minWidth: 0,
         transform: collapsed ? "translate3d(0,-100%,0)" : "translate3d(0,0,0)",
         opacity: collapsed ? 0 : 1,
         transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease",
@@ -292,6 +293,7 @@ export function Header({
       borderBottom: `1px solid ${c.border}`,
       boxShadow: c.shadowSm,
       position: "relative", zIndex: 2,
+      minWidth: 0, overflow: "hidden",
     }}>
 
       {/* ── Logo — orange dot + FLOW wordmark ── */}
@@ -322,7 +324,7 @@ export function Header({
           onBack={onBack}
         />
       ) : (
-        <nav className="flow-nav-rail" style={{ display: "flex", alignItems: "stretch", gap: 2, minWidth: 0, overflowX: "auto", overflowY: "hidden", height: "100%", scrollbarWidth: "none" }}>
+        <nav className="flow-nav-rail" style={{ display: "flex", alignItems: "stretch", gap: 2, flex: 1, minWidth: 0, overflowX: "auto", overflowY: "hidden", height: "100%", scrollbarWidth: "none" }}>
           {PRIMARY_NAV.map(tab => {
             if (tab.separator) {
               return <div key={tab.key} style={{ width: 1, height: 20, alignSelf: "center", background: c.border, margin: `0 ${space[1]}px`, flexShrink: 0 }} />;
@@ -337,12 +339,12 @@ export function Header({
                 fontWeight: 600,
                 color: active ? c.accent : c.textDim,
                 display: "flex", alignItems: "center", gap: 6,
-                position: "relative",
+                position: "relative", flexShrink: 0, whiteSpace: "nowrap",
                 transition: `color ${motion.fast.duration} ${motion.fast.easing}`,
               }}>
                 {tab.label}
                 {/* Numeric shortcut hint — subtle hotkey */}
-                {tab.num && <span style={{
+                {tab.num && <span className="flow-tab-hotkey" style={{
                   fontFamily: typo.monoSm.font, fontSize: 11,
                   fontWeight: 700, letterSpacing: typo.monoSm.tracking,
                   color: c.textGhost || c.textDim,
@@ -368,8 +370,8 @@ export function Header({
         </nav>
       )}
 
-      {/* ── Spacer ── */}
-      <div style={{ flex: 1, minWidth: space[2] }} />
+      {/* Spacer removed — nav-rail grows to fill remaining space (flex:1) */}
+      <div style={{ width: space[2], flexShrink: 0 }} />
 
       {/* ── Utility cluster: search · user ── */}
       <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
@@ -392,10 +394,12 @@ export function Header({
 
         {/* ── Notification bell (admin rant replies) ── */}
         {currentUser?.user?.email && (
-          <NotificationBell
-            userEmail={currentUser.user.email}
-            onNavigate={(rantId) => { onTabSwitch("terminal"); }}
-          />
+          <div className="flow-bell-sm-hide" style={{ display: "flex", alignItems: "center" }}>
+            <NotificationBell
+              userEmail={currentUser.user.email}
+              onNavigate={(rantId) => { onTabSwitch("terminal"); }}
+            />
+          </div>
         )}
 
         {/* ── User avatar + logout ── */}
@@ -455,14 +459,22 @@ export function Header({
               }}>PAST</span>
             )}
           </div>
-          <button onClick={weekOffset < 0 ? onWeekNext : undefined} className="flow-btn" style={{
-            padding: `2px ${space[1] + 2}px`, border: "none", background: "transparent",
-            cursor: weekOffset < 0 ? "pointer" : "default",
-            display: "flex", alignItems: "center",
-            color: weekOffset < 0 ? c.textMid : c.textDim,
-            opacity: weekOffset < 0 ? 1 : 0.3,
-            transition: `color ${motion.interaction.duration}`,
-          }} title="Next week">
+          <button
+            onClick={weekOffset < 0 ? onWeekNext : undefined}
+            className="flow-btn"
+            disabled={weekOffset >= 0}
+            aria-disabled={weekOffset >= 0}
+            style={{
+              padding: `2px ${space[1] + 2}px`, border: "none", background: "transparent",
+              cursor: weekOffset < 0 ? "pointer" : "not-allowed",
+              display: "flex", alignItems: "center",
+              color: weekOffset < 0 ? c.textMid : c.textGhost || c.textDim,
+              opacity: weekOffset < 0 ? 1 : 0.35,
+              pointerEvents: weekOffset < 0 ? "auto" : "none",
+              transition: `color ${motion.interaction.duration}`,
+            }}
+            title={weekOffset < 0 ? "Next week" : "Already on current week"}
+          >
             <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
               <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -538,6 +550,9 @@ export function Header({
       onPeekLeave={endPeek}
     />
 
+    {/* ═══ MOBILE BOTTOM NAV — visible only at ≤640px so all 6 tabs stay reachable ═══ */}
+    <MobileBottomNav activeTab={activeTab} onTabSwitch={onTabSwitch} />
+
     {/* ═══ FILTER DRAWER — slides from right ═══ */}
     <FilterDrawer
       open={drawerOpen}
@@ -569,6 +584,23 @@ function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPee
   const radius = layout.radiusPill;
 
   return (
+    <>
+      {/* Top scrim — hides content scrolling behind the pills.
+          Only visible while pills are shown. Height 52 matches --flow-sticky-top
+          so sticky table headers pin cleanly below the scrim. zIndex 54 sits
+          above the pulse stacking context but below the pills (55). */}
+      <div aria-hidden style={{
+        position: "fixed", top: 0, left: 0, right: 0, height: 60,
+        // Solid page-bg through the full scrim so there is no translucent seam
+        // between the scrim's end and the sticky table header's start. A 6px
+        // soft fade BELOW the scrim masks any sub-pixel rounding without
+        // letting the content row behind bleed through.
+        background: c.bg,
+        boxShadow: `0 6px 6px -6px ${c.bg}`,
+        pointerEvents: "none", zIndex: 54,
+        opacity: visible ? 1 : 0,
+        transition: "opacity 0.28s ease",
+      }} />
     <div
       onMouseEnter={onPeekEnter}
       onMouseLeave={onPeekLeave}
@@ -582,12 +614,12 @@ function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPee
         transition: "opacity 0.28s ease, transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)",
       }}
     >
-      {/* ── Left pill: logo mark ── */}
+      {/* ── Left pill: logo mark + page label stacked ── */}
       <button
         onClick={onLogoClick}
         title="Home"
         style={{
-          display: "flex", alignItems: "center", gap: 8,
+          display: "flex", alignItems: "center", gap: 10,
           padding: "6px 14px 6px 8px", height: 40,
           borderRadius: radius, border: pillBorder,
           background: pillBg,
@@ -597,39 +629,38 @@ function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPee
         }}
       >
         <FlowLogo size={24} />
-        <span style={{
-          fontFamily: mono,
-          fontSize: 14, fontWeight: 700,
-          color: c.text, letterSpacing: "0.04em",
-        }}>FLOW</span>
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "flex-start",
+          lineHeight: 1.05, gap: 1,
+        }}>
+          <span style={{
+            fontFamily: mono,
+            fontSize: 13, fontWeight: 700,
+            color: c.text, letterSpacing: "0.04em",
+          }}>FLOW</span>
+          {label && (
+            <span style={{
+              fontFamily: typo.bodyXs.font, fontSize: 11,
+              fontWeight: 500, color: c.textMid,
+              letterSpacing: "-0.01em",
+              whiteSpace: "nowrap", maxWidth: 180,
+              overflow: "hidden", textOverflow: "ellipsis",
+            }}>{label}</span>
+          )}
+        </div>
       </button>
 
-      {/* ── Right pill: page label + search ── */}
+      {/* ── Right pill: search only ── */}
       <div style={{
         display: "flex", alignItems: "center", gap: 0,
-        height: 40, padding: "0 6px 0 16px",
+        height: 40, padding: "0 6px",
         borderRadius: radius, border: pillBorder,
         background: pillBg,
         boxShadow: pillShadow,
       }}>
-        {label && (
-          <>
-            <span style={{
-              fontFamily: typo.bodySm.font, fontSize: 13,
-              fontWeight: 600, color: c.text,
-              letterSpacing: "-0.01em",
-              whiteSpace: "nowrap", maxWidth: 240,
-              overflow: "hidden", textOverflow: "ellipsis",
-            }}>{label}</span>
-            <div style={{
-              width: 1, height: 18, margin: `0 ${space[3]}px`,
-              background: c.border, flexShrink: 0,
-            }} />
-          </>
-        )}
         <button
           onClick={onSearchClick}
-          title="Search (⌘K)"
+          title="Search (F)"
           className="flow-hide-mobile"
           style={{
             display: "flex", alignItems: "center", gap: 8,
@@ -659,6 +690,47 @@ function FloatingHeaderPills({ visible, label, onLogoClick, onSearchClick, onPee
         </button>
       </div>
     </div>
+    </>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   MOBILE BOTTOM NAV — fixed footer bar with all 6 primary tabs.
+   Visible only at ≤640px (CSS gate). Stays reachable when the top
+   header is scroll-collapsed.
+   ════════════════════════════════════════════════════════════════════ */
+function MobileBottomNav({ activeTab, onTabSwitch }) {
+  const tabs = PRIMARY_NAV.filter(t => !t.separator);
+  return (
+    <nav className="flow-mobile-bottom-nav" aria-label="Primary navigation" style={{
+      position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 56,
+      display: "none",
+      background: c.surface,
+      borderTop: `1px solid ${c.border}`,
+      boxShadow: c.shadowCard,
+      paddingBottom: "env(safe-area-inset-bottom, 0)",
+    }}>
+      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-around", height: 56 }}>
+        {tabs.map(tab => {
+          const active = activeTab === tab.key;
+          return (
+            <button key={tab.key} type="button" onClick={() => onTabSwitch(tab.key)} aria-label={tab.label} aria-current={active ? "page" : undefined} style={{
+              flex: 1, minWidth: 0, height: "100%",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+              background: "none", border: 0, padding: "4px 2px",
+              cursor: "pointer",
+              color: active ? c.accent : c.textMid,
+              fontFamily: typo.bodyXs.font, fontSize: 11, fontWeight: 600,
+              borderTop: `2px solid ${active ? c.accent : "transparent"}`,
+              transition: `color ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+            }}>
+              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
 
@@ -964,7 +1036,7 @@ function DrawerFilterGroup({ label, options, value = [], onChange }) {
           }}>
             {allSelected && (
               <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-                <path d="M2.5 6l2.5 2.5 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2.5 6l2.5 2.5 5-5" stroke={c.textOnAccent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             )}
           </span>
@@ -998,7 +1070,7 @@ function DrawerFilterGroup({ label, options, value = [], onChange }) {
               }}>
                 {selected && (
                   <svg width="8" height="8" viewBox="0 0 12 12" fill="none">
-                    <path d="M2.5 6l2.5 2.5 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M2.5 6l2.5 2.5 5-5" stroke={c.textOnAccent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 )}
               </span>
@@ -1028,7 +1100,7 @@ function DrawerFilterGroup({ label, options, value = [], onChange }) {
 function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: space[2], minWidth: 0, flex: 1 }}>
-      {/* Back link — parent section */}
+      {/* Back link — parent section. On narrow viewports, collapse to chevron only. */}
       <span onClick={onBack} className="flow-breadcrumb" style={{
         fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
         fontWeight: 500, color: c.textMid, cursor: "pointer", flexShrink: 0,
@@ -1041,7 +1113,7 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.6 }}>
           <path d="M10 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        {breadcrumbLabel}
+        <span className="flow-breadcrumb-label">{breadcrumbLabel}</span>
       </span>
 
       {/* Separator — chevron */}
@@ -1056,7 +1128,7 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
         borderRadius: layout.radiusSm,
         background: c.accentDim,
         border: `1px solid ${c.accent}25`,
-        minWidth: 0,
+        minWidth: 0, flex: 1,
       }}>
         <div style={{
           width: 5, height: 5, borderRadius: "50%",
@@ -1083,7 +1155,7 @@ const TAB_HELP = {
   pulse:    { text: "Live team activity — who's doing what right now", section: "guide-pulse" },
   commit:   { text: "Your commits for the week — add, lock, ship", section: "guide-commit" },
   projects: { text: "Every project, one view — roadmap & status", section: "guide-projects" },
-  people:   { text: "Person deep-dive — history, momentum, workload", section: "guide-people" },
+  people:   { text: "Person deep-dive — commitments, momentum, activity timeline", section: "guide-people" },
   guide:    { text: "How Flow works — the playbook", section: null },
 };
 
@@ -1545,7 +1617,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
             width: 28, height: 28, borderRadius: "50%",
             background: c.accent,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 700, color: "#fff",
+            fontSize: 12, fontWeight: 700, color: c.textOnAccent,
             border: `2px solid ${c.border}`,
           }}>
             {(displayName || "?")[0].toUpperCase()}
@@ -1645,7 +1717,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
                   style={{
                     flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 500, fontFamily: "inherit",
                     background: "transparent", border: `1px solid ${c.border}`,
-                    borderRadius: 6, color: c.text, cursor: "pointer",
+                    borderRadius: layout.radiusSm, color: c.text, cursor: "pointer",
                   }}
                 >Cancel</button>
                 <button
@@ -1653,8 +1725,8 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
                   disabled={saving || !editName.trim() || !editSquadId || !editRoleId}
                   style={{
                     flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, fontFamily: "inherit",
-                    background: saving ? c.accentDim : `linear-gradient(135deg, ${c.accent}, #2563EB)`,
-                    border: "none", borderRadius: 6, color: "#fff", cursor: saving ? "wait" : "pointer",
+                    background: saving ? c.accentDim : c.accent,
+                    border: "none", borderRadius: layout.radiusSm, color: c.textOnAccent, cursor: saving ? "wait" : "pointer",
                   }}
                 >{saving ? "Saving…" : "Save"}</button>
               </div>
@@ -1699,7 +1771,7 @@ function CompactSearch({ onClick }) {
         borderRadius: layout.radiusTag + 1,
         lineHeight: 1.4, flexShrink: 0,
         boxShadow: `0 1px 0 ${c.border}`,
-      }}>F</span>
+      }}>⌘K</span>
     </div>
   );
 }

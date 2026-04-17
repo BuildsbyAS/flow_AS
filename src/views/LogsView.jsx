@@ -1,70 +1,135 @@
 // Flow — Logs View
-// Terminal-style activity ledger showing who did what and when
-// Dark Terminal exception per DESIGN_SYSTEM.md §7.18
+// Activity ledger showing who did what and when.
+// Dark exception per DESIGN_SYSTEM.md §7.18.
+//
+// Layout: four-column table — Time | User | Action | What.
+// - Action column uses a colored chip per verb (green=add, red=delete,
+//   amber=mutation, cyan=auth, gray=low-signal).
+// - Consecutive same-actor + same-action events collapse into one row
+//   ("added 8 squads · T&S · AI · …") with a Show-all toggle.
+// - No decorative terminal header; page uses full horizontal space.
 
 import React, { useState, useEffect, useMemo } from "react";
 import { c, typo, space, layout, motion, themes, mono } from "../styles/theme";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
 
-// Terminal dark palette — consistent with TerminalView/Rant/Admin exception.
-// We pin these locally so the Logs card renders correctly even when global `c`
-// is the light theme (Steel & Orange).
 const td = themes.dark;
 
+// Every action maps to a verb label + chip color. The verb label is what
+// renders inside the chip. Color also stripes the left edge of the row so
+// you can pattern-match at scan speed.
 const ACTION_CONFIG = {
-  login:              { icon: "→", color: () => td.cyan,    label: "signed in" },
-  logout:             { icon: "←", color: () => td.textDim, label: "signed out" },
-  lock_commitment:    { icon: "🔒", color: () => td.green,   label: "locked commitment" },
-  unlock_commitment:  { icon: "🔓", color: () => td.orange,  label: "unlocked commitment" },
-  edit_commitment:    { icon: "✎", color: () => td.purple,  label: "edited commitment" },
-  edit_project:       { icon: "✎", color: () => td.accent,  label: "edited project" },
-  create_project:     { icon: "+", color: () => td.green,   label: "created project" },
-  add_person:         { icon: "+", color: () => td.cyan,    label: "added person" },
-  settings_change:    { icon: "⚙", color: () => td.orange,  label: "changed settings" },
-  onboard:            { icon: "★", color: () => td.orange,  label: "joined Flow" },
-  terminal_unlock:    { icon: "🔓", color: () => td.green,   label: "unlocked terminal" },
-  terminal_attempt:   { icon: "⚠", color: () => td.red,     label: "failed terminal attempt" },
-  admin_unlock:       { icon: "🔓", color: () => td.orange,  label: "unlocked admin" },
-  admin_attempt:      { icon: "⚠", color: () => td.red,     label: "failed admin attempt" },
-  edit_person:        { icon: "✎", color: () => td.cyan,    label: "edited person" },
-  delete_person:      { icon: "−", color: () => td.red,     label: "deleted person" },
+  login:              { label: "signed in",               color: () => td.cyan    },
+  logout:             { label: "signed out",              color: () => td.textDim },
+  lock_commitment:    { label: "locked week",             color: () => td.green   },
+  unlock_commitment:  { label: "unlocked week",           color: () => td.orange  },
+  edit_commitment:    { label: "edited commits",          color: () => td.orange  },
+  edit_project:       { label: "edited project",          color: () => td.orange  },
+  create_project:     { label: "created project",         color: () => td.green   },
+  add_person:         { label: "added person",            color: () => td.green   },
+  delete_person:      { label: "removed person",          color: () => td.red     },
+  edit_person:        { label: "edited person",           color: () => td.orange  },
+  settings_change:    { label: "changed settings",        color: () => td.orange  },
+  onboard:            { label: "joined Flow",             color: () => td.orange  },
+  terminal_unlock:    { label: "unlocked terminal",       color: () => td.green   },
+  terminal_attempt:   { label: "failed terminal attempt", color: () => td.red     },
+  admin_unlock:       { label: "unlocked admin",          color: () => td.orange  },
+  admin_attempt:      { label: "failed admin attempt",    color: () => td.red     },
 };
+const DEFAULT_ACTION = { label: "action", color: () => td.textDim };
 
-const DEFAULT_ACTION = { icon: "·", color: () => td.textDim, label: "action" };
+// Split settings_change subtype off the top-level action so chip labels
+// and colors match exactly (add vs delete vs rename, squad vs role).
+function resolvedVerb(log) {
+  if (log.action === "settings_change" && log.details?.action) {
+    const sub = log.details.action;
+    if (sub === "add_squad")    return { label: "added squad",     color: () => td.green  };
+    if (sub === "delete_squad") return { label: "deleted squad",   color: () => td.red    };
+    if (sub === "rename_squad") return { label: "renamed squad",   color: () => td.orange };
+    if (sub === "add_role")     return { label: "added role",      color: () => td.green  };
+    if (sub === "delete_role")  return { label: "deleted role",    color: () => td.red    };
+    if (sub === "rename_role")  return { label: "renamed role",    color: () => td.orange };
+  }
+  return ACTION_CONFIG[log.action] || DEFAULT_ACTION;
+}
 
 function formatTime(ts) {
   const d = new Date(ts);
   const now = new Date();
-  const diffMs = now - d;
-  const diffMin = Math.floor(diffMs / 60000);
-  const diffHr = Math.floor(diffMs / 3600000);
-  const diffDay = Math.floor(diffMs / 86400000);
-
+  const diffMin = Math.floor((now - d) / 60000);
+  const diffHr = Math.floor((now - d) / 3600000);
+  const diffDay = Math.floor((now - d) / 86400000);
   if (diffMin < 1) return "just now";
   if (diffMin < 60) return `${diffMin}m ago`;
   if (diffHr < 24) return `${diffHr}h ago`;
   if (diffDay < 7) return `${diffDay}d ago`;
-
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function formatFullTime(ts) {
-  const d = new Date(ts);
-  return d.toLocaleString("en-US", {
+  return new Date(ts).toLocaleString("en-US", {
     month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit",
   });
 }
 
+// Describe the "What" column contents for a single log entry.
+function describeWhat(log) {
+  const d = log.details;
+  if (log.action === "settings_change" && d?.action) {
+    if (d.from && d.to) return <><b style={{ color: td.text }}>{d.from}</b> → <b style={{ color: td.text }}>{d.to}</b></>;
+    if (d.name)         return <b style={{ color: td.text }}>{d.name}</b>;
+  }
+  if (log.entity_name || log.entity_id) {
+    return <b style={{ color: td.text }}>{log.entity_name || log.entity_id}</b>;
+  }
+  if (d && typeof d === "object") {
+    const pairs = Object.entries(d).filter(([k]) => k !== "success" && k !== "action");
+    if (pairs.length === 0) return null;
+    return (
+      <span title={JSON.stringify(d)} style={{ color: td.textDim }}>
+        {pairs.map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`).join(" · ")}
+      </span>
+    );
+  }
+  return null;
+}
+
+// Batch consecutive rows that share actor + verb within a 2-minute window.
+// A run of ≥3 collapses to one "N items" row; anything under 3 stays as-is.
+const BATCH_WINDOW_MS = 2 * 60 * 1000;
+function batchEntries(entries) {
+  const out = [];
+  let i = 0;
+  while (i < entries.length) {
+    const head = entries[i];
+    const vKey = head.action === "settings_change" ? `${head.action}:${head.details?.action || ""}` : head.action;
+    const aKey = head.user_name || head.user_email;
+    let j = i + 1;
+    while (j < entries.length) {
+      const n = entries[j];
+      const nv = n.action === "settings_change" ? `${n.action}:${n.details?.action || ""}` : n.action;
+      const na = n.user_name || n.user_email;
+      const within = Math.abs(new Date(head.created_at) - new Date(n.created_at)) <= BATCH_WINDOW_MS;
+      if (nv === vKey && na === aKey && within) j++;
+      else break;
+    }
+    if (j - i >= 3) out.push({ type: "batch", logs: entries.slice(i, j) });
+    else for (let k = i; k < j; k++) out.push({ type: "single", log: entries[k] });
+    i = j;
+  }
+  return out;
+}
+
 export default function LogsView() {
-  const devRef = useDevLabel('Terminal-style activity ledger showing user actions chronologically');
+  const devRef = useDevLabel("Activity ledger of user actions across Flow");
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
   const [filterEmail, setFilterEmail] = useState("");
   const [filterAction, setFilterAction] = useState("");
+  const [expandedBatch, setExpandedBatch] = useState({});
 
-  // Fetch logs
   useEffect(() => {
     (async () => {
       const { data, error } = await supabase
@@ -72,34 +137,27 @@ export default function LogsView() {
         .select("*")
         .order("created_at", { ascending: false })
         .limit(500);
-
       if (data) setLogs(data);
       if (error) { console.error("Failed to fetch logs:", error); setFetchError(error.message); }
       setLoading(false);
     })();
-
-    // Real-time subscription for new logs
     const channel = supabase
       .channel("activity_log_changes")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "activity_log" }, (payload) => {
         setLogs(prev => [payload.new, ...prev].slice(0, 500));
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Unique emails for filter
   const uniqueEmails = useMemo(() =>
     [...new Set(logs.map(l => l.user_email).filter(Boolean))].sort(),
     [logs]
   );
-
   const uniqueActions = useMemo(() =>
     [...new Set(logs.map(l => l.action).filter(Boolean))].sort(),
     [logs]
   );
-
   const filtered = useMemo(() =>
     logs.filter(l =>
       (!filterEmail || l.user_email === filterEmail) &&
@@ -108,7 +166,6 @@ export default function LogsView() {
     [logs, filterEmail, filterAction]
   );
 
-  // Group by date
   const grouped = useMemo(() => {
     const groups = {};
     for (const log of filtered) {
@@ -117,11 +174,11 @@ export default function LogsView() {
       if (!groups[key]) groups[key] = [];
       groups[key].push(log);
     }
-    return Object.entries(groups);
+    return Object.entries(groups).map(([k, v]) => [k, batchEntries(v)]);
   }, [filtered]);
 
   const selectStyle = {
-    padding: "6px 10px", fontSize: 11, fontFamily: mono, fontWeight: 600,
+    padding: "6px 10px", fontSize: 12, fontFamily: mono, fontWeight: 600,
     background: td.surfaceAlt, border: `1px solid ${td.border}`, borderRadius: layout.radiusSm,
     color: td.text, outline: "none", cursor: "pointer", appearance: "none",
     paddingRight: 24, letterSpacing: "0.04em",
@@ -129,11 +186,129 @@ export default function LogsView() {
     backgroundRepeat: "no-repeat", backgroundPosition: "right 8px center",
   };
 
+  // Column template: Time | User | Action chip | What | Expand (only rendered for batches)
+  const COL_TEMPLATE = "90px 200px 200px 1fr 80px";
+
+  const ActionChip = ({ cfg }) => (
+    <span style={{
+      display: "inline-block",
+      fontFamily: mono, fontSize: 11, fontWeight: 700,
+      letterSpacing: "0.06em", textTransform: "uppercase",
+      color: cfg.color(), background: `${cfg.color()}1f`,
+      padding: "3px 8px", borderRadius: layout.radiusXs,
+      whiteSpace: "nowrap",
+    }}>{cfg.label}</span>
+  );
+
+  const SingleRow = ({ log }) => {
+    const cfg = resolvedVerb(log);
+    const color = cfg.color();
+    return (
+      <div style={{
+        display: "grid", gridTemplateColumns: COL_TEMPLATE,
+        alignItems: "center", gap: space[3],
+        padding: `10px ${space[4]}px 10px ${space[4] - 3}px`,
+        borderLeft: `3px solid ${color}`,
+        fontFamily: typo.bodyMd.font, fontSize: 13,
+        transition: `background ${motion.instant.duration} ${motion.instant.easing}`,
+      }}
+        onMouseEnter={e => e.currentTarget.style.background = td.surfaceAlt}
+        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+      >
+        <span style={{ color: td.textDim, fontFamily: mono, fontSize: 11, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
+          title={formatFullTime(log.created_at)}>
+          {formatTime(log.created_at)}
+        </span>
+        <span style={{ color: td.cyan, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          title={log.user_email}>
+          {log.user_name || log.user_email || "anonymous"}
+        </span>
+        <span><ActionChip cfg={cfg} /></span>
+        <span style={{ color: td.textMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {describeWhat(log)}
+        </span>
+        <span />
+      </div>
+    );
+  };
+
+  const BatchRow = ({ logs: groupLogs, groupKey }) => {
+    const head = groupLogs[0];
+    const cfg = resolvedVerb(head);
+    const color = cfg.color();
+    const expanded = !!expandedBatch[groupKey];
+    const names = groupLogs
+      .map(l => l.details?.name || l.details?.to || l.entity_name || l.entity_id)
+      .filter(Boolean);
+    const preview = names.slice(0, 5).join(" · ");
+    const extra = Math.max(0, names.length - 5);
+    return (
+      <div style={{
+        borderLeft: `3px solid ${color}`,
+        transition: `background ${motion.instant.duration} ${motion.instant.easing}`,
+      }}
+        onMouseEnter={e => e.currentTarget.style.background = td.surfaceAlt}
+        onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+      >
+        <div style={{
+          display: "grid", gridTemplateColumns: COL_TEMPLATE,
+          alignItems: "center", gap: space[3],
+          padding: `10px ${space[4]}px 10px ${space[4] - 3}px`,
+          fontFamily: typo.bodyMd.font, fontSize: 13,
+        }}>
+          <span style={{ color: td.textDim, fontFamily: mono, fontSize: 11, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
+            title={`${formatFullTime(groupLogs[groupLogs.length - 1].created_at)} → ${formatFullTime(head.created_at)}`}>
+            {formatTime(head.created_at)}
+          </span>
+          <span style={{ color: td.cyan, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+            title={head.user_email}>
+            {head.user_name || head.user_email || "anonymous"}
+          </span>
+          <span><ActionChip cfg={cfg} /></span>
+          <span style={{ color: td.textMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <b style={{ color: td.text }}>{groupLogs.length} items</b>
+            {preview && <span style={{ color: td.textDim, marginLeft: 8 }}>· {preview}{extra > 0 ? ` · +${extra}` : ""}</span>}
+          </span>
+          <button onClick={() => setExpandedBatch(s => ({ ...s, [groupKey]: !s[groupKey] }))}
+            style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              color: td.textDim, fontFamily: mono, fontSize: 11, fontWeight: 600,
+              padding: 0, letterSpacing: "0.04em", textAlign: "right",
+            }}>
+            {expanded ? "Hide" : "Show all"}
+          </button>
+        </div>
+        {expanded && (
+          <div style={{ padding: `0 ${space[4]}px ${space[3]}px calc(${space[4]}px + 90px + ${space[3]}px - 3px)` }}>
+            {groupLogs.map(l => (
+              <div key={l.id} style={{
+                display: "grid", gridTemplateColumns: "90px 1fr",
+                columnGap: space[3], alignItems: "baseline",
+                padding: "2px 0",
+                fontFamily: typo.bodyMd.font, fontSize: 12,
+              }}>
+                <span style={{ color: td.textDim, fontFamily: mono, fontSize: 11, fontVariantNumeric: "tabular-nums" }}
+                  title={formatFullTime(l.created_at)}>
+                  {formatTime(l.created_at)}
+                </span>
+                <span style={{ color: td.text }}>
+                  {l.details?.from && l.details?.to
+                    ? <><span style={{ color: td.textDim }}>{l.details.from}</span> → <b>{l.details.to}</b></>
+                    : (l.details?.name || l.entity_name || l.entity_id || "—")}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <div ref={devRef} style={{ maxWidth: 900, margin: "0 auto", display: "flex", flexDirection: "column", gap: space[4] }}>
+    <div ref={devRef} style={{ maxWidth: 1400, margin: "0 auto", display: "flex", flexDirection: "column", gap: space[4] }}>
 
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[3], flexWrap: "wrap" }}>
         <div>
           <div style={{
             fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
@@ -144,10 +319,9 @@ export default function LogsView() {
             fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
             fontWeight: 600, letterSpacing: typo.monoSm.tracking,
             color: td.textDim, marginTop: 4, fontVariantNumeric: "tabular-nums",
-          }}>{filtered.length} entries · {uniqueEmails.length} users</div>
+          }}>{filtered.length} {filtered.length === 1 ? "entry" : "entries"} · {uniqueEmails.length} {uniqueEmails.length === 1 ? "user" : "users"}</div>
         </div>
 
-        {/* Filters */}
         <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
           <select value={filterEmail} onChange={e => setFilterEmail(e.target.value)} aria-label="Filter by user" style={selectStyle}>
             <option value="">All users</option>
@@ -161,7 +335,7 @@ export default function LogsView() {
             <button
               onClick={() => { setFilterEmail(""); setFilterAction(""); }}
               style={{
-                padding: "6px 10px", fontSize: 11, fontFamily: mono, fontWeight: 600,
+                padding: "6px 10px", fontSize: 12, fontFamily: mono, fontWeight: 600,
                 letterSpacing: "0.04em",
                 background: "transparent", border: `1px solid ${td.border}`, borderRadius: layout.radiusSm,
                 color: td.textDim, cursor: "pointer",
@@ -171,137 +345,68 @@ export default function LogsView() {
         </div>
       </div>
 
-      {/* Terminal-style log card (dark exception) */}
+      {/* Log card — dark exception. No decorative terminal header. */}
       <div style={{
         background: td.bg, border: `1px solid ${td.border}`,
         borderRadius: layout.radiusLg, overflow: "hidden",
       }}>
-        {/* Terminal header — single accent dot + filename (no macOS traffic lights) */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: space[2],
-          padding: "10px 16px",
-          background: td.surfaceAlt,
-          borderBottom: `1px solid ${td.border}`,
-        }}>
-          <div style={{ width: 8, height: 8, borderRadius: "50%", background: td.accent }} />
-          <span style={{
-            fontFamily: mono, fontSize: 11, fontWeight: 600,
-            letterSpacing: "0.04em",
-            color: td.textDim,
-          }}>flow@logs ~ tail -f activity.log</span>
-        </div>
+        {/* Column headers */}
+        {!loading && filtered.length > 0 && (
+          <div style={{
+            display: "grid", gridTemplateColumns: COL_TEMPLATE,
+            alignItems: "center", gap: space[3],
+            padding: `10px ${space[4]}px`,
+            borderBottom: `1px solid ${td.border}`,
+            background: td.surfaceAlt,
+            fontFamily: mono, fontSize: 11, fontWeight: 700,
+            color: td.textDim, letterSpacing: "0.08em", textTransform: "uppercase",
+          }}>
+            <span>Time</span>
+            <span>User</span>
+            <span>Action</span>
+            <span>What</span>
+            <span />
+          </div>
+        )}
 
-        {/* Log entries */}
-        <div style={{ padding: "8px 0", maxHeight: "calc(100vh - 280px)", minHeight: 200, overflowY: "auto" }}>
+        <div style={{ maxHeight: "calc(100vh - 260px)", minHeight: 200, overflowY: "auto" }}>
           {loading && (
-            <div style={{
-              padding: "20px 16px", fontFamily: mono,
-              fontSize: 12, fontWeight: 600, color: td.textDim, textAlign: "center",
-            }}>Loading logs...</div>
+            <div style={{ padding: "20px 16px", fontFamily: mono, fontSize: 12, fontWeight: 600, color: td.textDim, textAlign: "center" }}>
+              Loading logs...
+            </div>
           )}
 
           {!loading && filtered.length === 0 && (
-            <div style={{
-              padding: "40px 16px", fontFamily: mono,
-              fontSize: 12, fontWeight: 600, color: td.textDim, textAlign: "center",
-            }}>{logs.length > 0 && (filterEmail || filterAction)
-              ? "No logs match your filters. Try clearing them."
-              : fetchError
-                ? `Failed to load logs: ${fetchError}`
-                : "No activity recorded yet. Actions will appear here as your team uses Flow."
-            }</div>
+            <div style={{ padding: "40px 16px", fontFamily: mono, fontSize: 12, fontWeight: 600, color: td.textDim, textAlign: "center" }}>
+              {logs.length > 0 && (filterEmail || filterAction)
+                ? "No logs match your filters. Try clearing them."
+                : fetchError
+                  ? `Failed to load logs: ${fetchError}`
+                  : "No activity recorded yet."}
+            </div>
           )}
 
-          {grouped.map(([dateLabel, entries]) => (
+          {grouped.map(([dateLabel, rows], di) => (
             <React.Fragment key={dateLabel}>
-              {/* Date separator */}
               <div style={{
                 display: "flex", alignItems: "center", gap: 8,
-                padding: "10px 16px 4px",
+                padding: `${di === 0 ? 6 : 14}px 16px 4px`,
               }}>
                 <div style={{ height: 1, flex: 1, background: td.border }} />
                 <span style={{
-                  fontFamily: mono,
-                  fontWeight: 700, color: td.textDim, textTransform: "uppercase",
-                  letterSpacing: "0.06em", fontSize: 11,
+                  fontFamily: mono, fontWeight: 700, color: td.textDim,
+                  textTransform: "uppercase", letterSpacing: "0.06em", fontSize: 11,
                 }}>{dateLabel}</span>
                 <div style={{ height: 1, flex: 1, background: td.border }} />
               </div>
 
-              {entries.map((log) => {
-                const cfg = ACTION_CONFIG[log.action] || DEFAULT_ACTION;
-                return (
-                  <div key={log.id} style={{
-                    display: "flex", alignItems: "flex-start", gap: 10,
-                    padding: "8px 16px",
-                    fontFamily: mono, fontSize: 11, fontWeight: 600,
-                    transition: `background ${motion.instant.duration} ${motion.instant.easing}`,
-                  }}
-                    onMouseEnter={e => e.currentTarget.style.background = td.surfaceAlt}
-                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
-                  >
-                    {/* Timestamp */}
-                    <span style={{ color: td.textDim, flexShrink: 0, width: 72, textAlign: "right", fontVariantNumeric: "tabular-nums" }}
-                      title={formatFullTime(log.created_at)}>
-                      {formatTime(log.created_at)}
-                    </span>
-
-                    {/* Action icon */}
-                    <span style={{
-                      color: cfg.color(), flexShrink: 0, width: 18, textAlign: "center",
-                      fontSize: 12,
-                    }}>{cfg.icon}</span>
-
-                    {/* User */}
-                    <span style={{ color: td.cyan, flexShrink: 0, minWidth: 120, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                      title={log.user_email}>
-                      {log.user_name || log.user_email}
-                    </span>
-
-                    {/* Action badge */}
-                    <span style={{
-                      fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                      color: cfg.color(), background: `${cfg.color()}1F`,
-                      padding: "2px 6px", borderRadius: layout.radiusXs, flexShrink: 0,
-                    }}>{cfg.label}</span>
-
-                    {/* Entity name */}
-                    {(log.entity_id || log.entity_name) && (
-                      <span style={{ color: td.text, fontWeight: 600 }}>
-                        {log.entity_name || log.entity_id}
-                      </span>
-                    )}
-
-                    {/* What changed */}
-                    {log.details && (
-                      <span style={{ color: td.textDim, opacity: 0.75 }}
-                        title={JSON.stringify(log.details)}>
-                        → {log.details.projects
-                          ? log.details.projects
-                          : Object.entries(log.details)
-                              .filter(([k]) => k !== "success")
-                              .map(([k, v]) => `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`)
-                              .join(", ")
-                        }
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+              {rows.map(row =>
+                row.type === "batch"
+                  ? <BatchRow key={`${dateLabel}-${row.logs[0].id}`} logs={row.logs} groupKey={`${dateLabel}-${row.logs[0].id}`} />
+                  : <SingleRow key={row.log.id} log={row.log} />
+              )}
             </React.Fragment>
           ))}
-
-          {/* Terminal cursor */}
-          {!loading && filtered.length > 0 && (
-            <div style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, color: td.accent }}>$</span>
-              <span style={{
-                width: 7, height: 14, background: td.accent,
-                animation: "sync-cursor-blink 1s step-end infinite",
-              }} />
-            </div>
-          )}
         </div>
       </div>
     </div>

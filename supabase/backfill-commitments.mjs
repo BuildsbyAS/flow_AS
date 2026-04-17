@@ -16,7 +16,9 @@ const MAR23_WEEK_ID = '6f2091d4-7d64-4270-a16c-00c40ccb8f65';
 
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
-const STAGES = ["PRD", "Design", "Dev", "Alpha", "Beta", "QA", "GA"];
+// Work-function stages only. Alpha/Beta/GA are project lifecycle states,
+// not commit stages — the Commit tab never offers them.
+const STAGES = ["PRD", "Design", "Dev", "QA"];
 const TYPES = ["BUILD", "JAM", "BLOCKED"];
 const PROJECTS = [
   "X01","X02","X03","X05","X06","X08","X10","X12","X13","X15",

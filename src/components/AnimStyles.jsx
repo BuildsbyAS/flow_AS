@@ -43,6 +43,10 @@ const AnimStyles = () => (
       0% { transform: translateY(-100%); }
       100% { transform: translateY(100vh); }
     }
+    @keyframes savingPulse {
+      0%, 100% { opacity: 0.55; }
+      50% { opacity: 1; }
+    }
 
     /* ── Interaction keyframes ── */
     @keyframes fadeIn {
@@ -64,6 +68,30 @@ const AnimStyles = () => (
     @keyframes scaleIn {
       from { opacity: 0; transform: scale(0.96); }
       to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
+    }
+    @keyframes fadeScaleOut {
+      from { opacity: 1; transform: translateY(0) scale(1); }
+      to { opacity: 0; transform: translateY(-4px) scale(0.97); }
+    }
+    @keyframes slideDownOut {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(24px); }
+    }
+    @keyframes slotSlideInRight {
+      from { opacity: 0; transform: translateX(16px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes slotSlideInLeft {
+      from { opacity: 0; transform: translateX(-16px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .flow-gantt-bar:focus-visible {
+      outline: 2px solid ${c.accent};
+      outline-offset: 2px;
     }
 
     /* ── Critical keyframes ── */
@@ -176,9 +204,9 @@ const AnimStyles = () => (
       overflow: hidden;
       border-radius: 12px;
       cursor: pointer;
-      transition: transform 0.22s ${motion.interaction.easing},
-                  box-shadow 0.22s ${motion.interaction.easing},
-                  border-color 0.22s ${motion.interaction.easing};
+      transition: transform ${motion.fast.duration} ${motion.fast.easing},
+                  box-shadow ${motion.fast.duration} ${motion.fast.easing},
+                  border-color ${motion.fast.duration} ${motion.fast.easing};
       box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
     }
     .flow-glass-tile::after {
@@ -191,31 +219,22 @@ const AnimStyles = () => (
       pointer-events: none;
     }
     .flow-glass-tile:hover {
-      transform: perspective(600px) rotateY(-2deg) rotateX(1deg) scale(1.02);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.15);
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
     }
     .flow-glass-tile:active {
-      transform: scale(0.98);
+      transform: translateY(0);
     }
 
-    /* ── Risk radar ring ── */
+    /* ── Risk radar ring (static; infinite spin removed for motion hygiene) ── */
     .flow-risk-radar {
       position: relative;
       display: inline-flex;
     }
-    .flow-risk-radar::before {
-      content: '';
-      position: absolute;
-      inset: -4px;
-      border-radius: 50%;
-      border: 1.5px dashed ${c.red}60;
-      animation: radarSpin 4s linear infinite;
-      pointer-events: none;
-    }
 
     /* ── View morph wrapper ── */
     .flow-view-morph {
-      animation: viewMorphIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) both;
+      animation: viewMorphIn ${motion.normal.duration} ${motion.normal.easing} both;
     }
 
     /* ── Telemetry side panel backdrop ── */
@@ -226,11 +245,18 @@ const AnimStyles = () => (
       background: rgba(0, 0, 0, 0.5);
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
-      animation: sidePanelBackdropIn 0.2s ease both;
+      animation: sidePanelBackdropIn ${motion.normal.duration} ${motion.normal.easing} both;
+    }
+    .flow-side-panel-backdrop-exit {
+      animation: sidePanelBackdropOut ${motion.fast.duration} ${motion.fast.easing} both;
     }
     @keyframes sidePanelBackdropIn {
       from { opacity: 0; }
       to { opacity: 1; }
+    }
+    @keyframes sidePanelBackdropOut {
+      from { opacity: 1; }
+      to { opacity: 0; }
     }
 
     /* ── Telemetry side panel ── */
@@ -245,10 +271,10 @@ const AnimStyles = () => (
       box-shadow: -12px 0 40px rgba(0,0,0,0.4);
       z-index: 91;
       overflow-y: auto;
-      animation: slidePanelIn 0.22s ${motion.interaction.easing} both;
+      animation: slidePanelIn ${motion.normal.duration} ${motion.normal.easing} both;
     }
     .flow-side-panel-exit {
-      animation: slidePanelOut 0.18s ${motion.interaction.easing} both;
+      animation: slidePanelOut ${motion.fast.duration} ${motion.fast.easing} both;
     }
 
     /* ── Delta tokens ── */
@@ -339,7 +365,7 @@ const AnimStyles = () => (
 
     /* ── Outcome buttons ── */
     .flow-outcome-btn {
-      transition: all 0.15s ${motion.interaction.easing};
+      transition: background 0.15s ${motion.interaction.easing}, color 0.15s ${motion.interaction.easing}, border-color 0.15s ${motion.interaction.easing}, transform 0.15s ${motion.interaction.easing}, box-shadow 0.15s ${motion.interaction.easing};
     }
     .flow-outcome-btn:hover {
       transform: scale(1.02);
@@ -380,6 +406,107 @@ const AnimStyles = () => (
     .flow-summary-scroll::-webkit-scrollbar { display: none; }
     .flow-summary-scroll { scrollbar-width: none; }
 
+    /* ── Summary: KPI card entrance + hover lift ── */
+    @keyframes kpiEnter {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .flow-kpi-card {
+      animation: kpiEnter ${motion.normal.duration} ${motion.normal.easing} both;
+      transition: border-color ${motion.fast.duration} ${motion.fast.easing},
+                  box-shadow ${motion.fast.duration} ${motion.fast.easing},
+                  transform ${motion.fast.duration} ${motion.fast.easing};
+    }
+    .flow-kpi-card.clickable:hover {
+      border-color: rgba(0,0,0,0.12);
+      box-shadow: ${c.shadowElevated};
+      transform: translateY(-1px);
+    }
+    .flow-kpi-card.clickable:active { transform: scale(0.99); transition-duration: ${motion.instant.duration}; }
+
+    /* ── Summary: sparkline bar entrance (scaleY from baseline) ── */
+    @keyframes sparkBarGrow {
+      from { transform: scaleY(0.05); opacity: 0.4; }
+      to { transform: scaleY(1); opacity: var(--spark-opacity, 1); }
+    }
+    .flow-spark-bar {
+      transform-origin: bottom;
+      animation: sparkBarGrow ${motion.normal.duration} ${motion.normal.easing} both;
+      transition: opacity ${motion.fast.duration} ${motion.fast.easing},
+                  background ${motion.fast.duration} ${motion.fast.easing};
+    }
+
+    /* ── Summary: clickable chip button (uncommitted people, blocked) ── */
+    .flow-chip-btn {
+      transition: background ${motion.fast.duration} ${motion.fast.easing},
+                  border-color ${motion.fast.duration} ${motion.fast.easing},
+                  color ${motion.fast.duration} ${motion.fast.easing},
+                  transform ${motion.fast.duration} ${motion.fast.easing};
+    }
+    .flow-chip-btn:hover {
+      background: ${c.surface};
+      border-color: rgba(0,0,0,0.18);
+    }
+    .flow-chip-btn:active { transform: scale(0.97); }
+    .flow-chip-btn-danger { transition: background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}; }
+    .flow-chip-btn-danger:hover { border-color: ${c.red}60; }
+    .flow-chip-btn-danger:active { transform: scale(0.98); }
+
+    /* ── Summary: sortable table headers ── */
+    .flow-sort-th {
+      transition: color ${motion.fast.duration} ${motion.fast.easing},
+                  background ${motion.fast.duration} ${motion.fast.easing};
+    }
+    .flow-sort-th:hover { color: ${c.text}; background: ${c.surfaceAlt}; }
+    .flow-sort-th:focus-visible {
+      outline: none;
+      box-shadow: inset 0 0 0 2px ${c.accent};
+    }
+
+    /* ── Summary banner entrance ── */
+    .flow-banner-enter {
+      animation: slideDown ${motion.normal.duration} ${motion.normal.easing} both;
+    }
+    .flow-fade-enter {
+      animation: fadeIn ${motion.fast.duration} ${motion.fast.easing} both;
+    }
+    .flow-fade-exit {
+      animation: fadeOut ${motion.fast.duration} ${motion.fast.easing} both;
+    }
+
+    /* ── Summary: KpiCard focus ring (keyboard a11y) ── */
+    .flow-kpi-card.clickable:focus-visible {
+      outline: none;
+      box-shadow: ${c.shadowElevated}, 0 0 0 2px ${c.accent};
+    }
+
+    /* ── Summary: chart entrance (fade + lift) ── */
+    @keyframes chartEnter {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .flow-chart-enter {
+      animation: chartEnter ${motion.normal.duration} ${motion.normal.easing} both;
+    }
+
+    /* ── Summary: chart bar entrance (scaleY from baseline) ── */
+    @keyframes chartBarGrow {
+      from { transform: scaleY(0); }
+      to { transform: scaleY(1); }
+    }
+    .flow-chart-bar-enter {
+      transform-origin: bottom;
+      animation: chartBarGrow ${motion.normal.duration} ${motion.normal.easing} both;
+    }
+
+    /* ── Pill hover (clickable chips inside KpiCards) ── */
+    .flow-pill-clickable:hover { filter: brightness(0.96); }
+    .flow-pill-clickable:active { transform: scale(0.97); }
+
+    /* ── SegmentedToggle inactive hover + press ── */
+    .flow-seg-btn:not(.active):hover { color: ${c.text}; }
+    .flow-seg-btn:active { transform: scale(0.98); transition-duration: ${motion.instant.duration}; }
+
     /* ── Commit scroll area — thin custom scrollbar ── */
     .flow-commit-scroll::-webkit-scrollbar { width: 4px; }
     .flow-commit-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -398,7 +525,7 @@ const AnimStyles = () => (
 
     /* ── Commit person row hover ── */
     .flow-commit-person-row {
-      transition: all 0.15s ${motion.interaction.easing};
+      transition: background 0.15s ${motion.interaction.easing}, border-color 0.15s ${motion.interaction.easing}, transform 0.15s ${motion.interaction.easing};
       cursor: pointer;
     }
     .flow-commit-person-row:hover {
@@ -548,7 +675,7 @@ const AnimStyles = () => (
       font-family: 'JetBrains Mono', monospace;
       font-size: 11px;
       font-weight: 700;
-      transition: all 0.3s ${motion.interaction.easing};
+      transition: background 0.3s ${motion.interaction.easing}, color 0.3s ${motion.interaction.easing}, border-color 0.3s ${motion.interaction.easing}, box-shadow 0.3s ${motion.interaction.easing}, transform 0.3s ${motion.interaction.easing};
       position: relative;
       z-index: 2;
       flex-shrink: 0;
@@ -640,7 +767,7 @@ const AnimStyles = () => (
       background: ${c.surface};
       border: 1px solid ${c.border};
       padding: 12px 14px;
-      transition: all 0.2s ${motion.interaction.easing};
+      transition: background 0.2s ${motion.interaction.easing}, border-color 0.2s ${motion.interaction.easing}, box-shadow 0.2s ${motion.interaction.easing};
       animation: evidenceSlideIn 0.3s ${motion.interaction.easing} both;
     }
     .flow-evidence-card:hover {
@@ -811,7 +938,7 @@ const AnimStyles = () => (
       border: 1px solid ${c.border};
       border-left: 3px solid ${c.textDim};
       overflow: hidden;
-      transition: all 0.2s ${motion.interaction.easing};
+      transition: background 0.2s ${motion.interaction.easing}, border-color 0.2s ${motion.interaction.easing}, box-shadow 0.2s ${motion.interaction.easing};
       cursor: pointer;
     }
     .flow-signal-card:hover {
@@ -1024,7 +1151,7 @@ const AnimStyles = () => (
       border: 2px solid ${c.border};
       background: ${c.surface};
       color: ${c.textMid};
-      transition: all 0.2s;
+      transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
       flex-shrink: 0;
       cursor: pointer;
     }
@@ -1174,7 +1301,7 @@ const AnimStyles = () => (
       font-weight: 700;
       letter-spacing: 0.05em;
       text-transform: none;
-      transition: all 0.15s;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
       white-space: nowrap;
     }
     .flow-cmd-btn:hover {
@@ -1279,11 +1406,76 @@ const AnimStyles = () => (
     }
 
     .flow-row {
-      transition: background ${motion.interaction.duration} ${motion.interaction.easing},
-                  border-color ${motion.interaction.duration} ${motion.interaction.easing};
+      transition: background ${motion.fast.duration} ${motion.fast.easing},
+                  border-color ${motion.fast.duration} ${motion.fast.easing};
     }
     .flow-row:hover {
       background: ${c.surfaceAlt} !important;
+      --row-bg: ${c.surfaceAlt};
+    }
+    .flow-row:active {
+      transition-duration: ${motion.instant.duration};
+    }
+    .flow-row:focus-visible {
+      outline: 2px solid ${c.accent};
+      outline-offset: 2px;
+      transition: outline-color ${motion.fast.duration} ${motion.fast.easing},
+                  border-color ${motion.fast.duration} ${motion.fast.easing},
+                  box-shadow ${motion.fast.duration} ${motion.fast.easing};
+    }
+
+    /* Subtle color transition for numeric/threshold displays and clickable IDs */
+    .flow-color-tween {
+      transition: color ${motion.fast.duration} ${motion.fast.easing};
+    }
+    .flow-proj-link {
+      transition: color ${motion.fast.duration} ${motion.fast.easing},
+                  filter ${motion.fast.duration} ${motion.fast.easing};
+      border-radius: 2px;
+    }
+    .flow-proj-link:hover {
+      filter: brightness(1.15);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .flow-proj-link:active {
+      filter: brightness(0.9);
+    }
+    .flow-proj-link:focus-visible {
+      outline: 2px solid ${c.accent};
+      outline-offset: 2px;
+    }
+
+    /* Tag / outcome pill color + bg crossfade for threshold changes */
+    .flow-pill-tween {
+      transition: color ${motion.fast.duration} ${motion.fast.easing},
+                  background ${motion.fast.duration} ${motion.fast.easing},
+                  border-color ${motion.fast.duration} ${motion.fast.easing};
+    }
+
+    /* Activity/timeline row hover affordance */
+    .flow-timeline-row {
+      transition: background ${motion.fast.duration} ${motion.fast.easing};
+    }
+    .flow-timeline-row:hover {
+      background: ${c.surfaceAlt};
+    }
+
+    /* Fade-in for detail-view swaps and section content */
+    .flow-enter-fade {
+      animation: fadeIn ${motion.normal.duration} ${motion.normal.easing} both;
+    }
+    .flow-enter-slide {
+      animation: slideUp ${motion.normal.duration} ${motion.normal.easing} both;
+    }
+
+    /* Delayed loading placeholder — avoids flash on fast loads */
+    @keyframes flowLoadingReveal {
+      0%, 40% { opacity: 0; }
+      100% { opacity: 1; }
+    }
+    .flow-loading-delayed {
+      animation: flowLoadingReveal 500ms ${motion.normal.easing} both;
     }
 
     /* Custom dropdown items */
@@ -1340,7 +1532,7 @@ const AnimStyles = () => (
     }
     .flow-input:focus {
       border-color: ${c.accent} !important;
-      box-shadow: 0 0 0 2px ${c.accentDim}, 0 0 20px ${c.accentDim};
+      box-shadow: 0 0 0 3px ${c.accentDim};
     }
 
     /* ═══════════════════════════════════════════════════════════════
@@ -1391,14 +1583,14 @@ const AnimStyles = () => (
       opacity: 0.85;
     }
     .flow-header-tab {
-      transition: all 0.15s ease !important;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease !important;
     }
     .flow-header-tab:hover {
       background: ${c.surface} !important;
       color: ${c.text} !important;
     }
     .flow-header-cta {
-      transition: all 0.15s ease !important;
+      transition: background 0.15s ease, color 0.15s ease, filter 0.15s ease, transform 0.15s ease !important;
     }
     .flow-header-cta:hover {
       filter: brightness(1.15);
@@ -1524,7 +1716,7 @@ const AnimStyles = () => (
     /* ── Search glow indicator ── */
     .flow-cmd-search-glow {
       animation: cmdSearchPulse 2.5s ease-in-out infinite;
-      transition: all 0.2s ease;
+      transition: background 0.2s ease, opacity 0.2s ease;
     }
 
     /* ── Results list ── */
@@ -1542,7 +1734,7 @@ const AnimStyles = () => (
 
     /* ── Result items ── */
     .flow-cmd-item {
-      transition: all 0.1s ease;
+      transition: background 0.1s ease, color 0.1s ease, border-color 0.1s ease;
       animation: cmdSlideUp 0.12s ${motion.interaction.easing} both;
     }
     .flow-cmd-active {
@@ -1551,7 +1743,7 @@ const AnimStyles = () => (
 
     /* ── Category pills ── */
     .flow-cmd-category-pill {
-      transition: all 0.15s ease;
+      transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
       position: relative;
       overflow: hidden;
     }
@@ -1620,6 +1812,7 @@ const AnimStyles = () => (
     .flow-texture-grid,
     .flow-texture-noise {
       display: none !important;
+      animation: none !important;
     }
     .flow-neon-card::before,
     .flow-neon-card.flow-neon-active { box-shadow: none !important; animation: none !important; }
@@ -1678,8 +1871,10 @@ const AnimStyles = () => (
        ═══════════════════════════════════════════════════════════════ */
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
-        animation-duration: 0.001ms !important;
-        transition-duration: 0.001ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
       }
       .flow-texture-blob { display: none; }
     }

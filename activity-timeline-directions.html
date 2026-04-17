@@ -1,0 +1,762 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Flow — Activity Timeline Directions</title>
+<meta name="viewport" content="width=1280" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --page: #EDEDF0;
+    --card: #FFFFFF;
+    --inset: #F3F3F6;
+    --text:  #1A1A1E;
+    --text2: #4A4A52;
+    --text3: #7E7E8A;
+    --text4: #AEAEB8;
+    --accent: #E8590C;
+    --accent-soft: rgba(232,89,12,0.08);
+    --accent-mid:  rgba(232,89,12,0.25);
+    --border: rgba(0,0,0,0.07);
+    --border-m: rgba(0,0,0,0.12);
+    --shadow: 0 1px 3px rgba(0,0,0,0.03), 0 4px 16px rgba(0,0,0,0.05);
+    --green:   #059669;  --green-bg: rgba(5,150,105,0.1);
+    --red:     #DC2626;  --red-bg:   rgba(220,38,38,0.1);
+    --amber:   #B45309;  --amber-bg: rgba(180,83,9,0.1);
+    --purple:  #6D28D9;  --purple-bg: rgba(109,40,217,0.1);
+    --blue:    #1D4ED8;  --blue-bg:  rgba(29,78,216,0.1);
+    --cyan:    #0E7490;  --cyan-bg:  rgba(14,116,144,0.1);
+    --orange:  #E8590C;  --orange-bg: rgba(232,89,12,0.1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--page);
+    color: var(--text);
+    padding: 32px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .pageHead {
+    margin-bottom: 32px;
+  }
+  .pageHead h1 {
+    font-size: 24px; font-weight: 700; letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  .pageHead p {
+    color: var(--text3); font-size: 14px; max-width: 780px;
+  }
+
+  .dir {
+    margin-top: 56px;
+  }
+  .dir:first-of-type { margin-top: 0; }
+  .dir-head {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 16px;
+  }
+  .dir-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .dir-title {
+    font-size: 18px; font-weight: 700;
+  }
+  .dir-note {
+    color: var(--text3); font-size: 13px; max-width: 720px;
+    margin-top: 6px;
+  }
+
+  /* Reused card chrome */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: var(--shadow);
+    overflow: clip;
+  }
+
+  /* Person-name link treatment */
+  .who { color: var(--cyan); font-weight: 600; font-size: 13px; }
+
+  /* Stage pill (used by A, B, D) */
+  .stage {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 3px 8px; border-radius: 5px;
+    min-width: 56px; text-align: center; display: inline-block;
+  }
+  .stage.prd { color: var(--purple); background: var(--purple-bg); }
+  .stage.design { color: var(--blue); background: var(--blue-bg); }
+  .stage.dev { color: var(--amber); background: var(--amber-bg); }
+  .stage.qa { color: var(--cyan); background: var(--cyan-bg); }
+
+  /* Type pill */
+  .type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    padding: 3px 8px; border-radius: 5px;
+    background: var(--inset); color: var(--text2);
+  }
+
+  /* Outcome pill */
+  .out {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700;
+    padding: 4px 8px; border-radius: 5px;
+    display: inline-flex; align-items: center; gap: 4px;
+    white-space: nowrap;
+  }
+  .out.done { color: var(--green); background: var(--green-bg); }
+  .out.carried { color: var(--orange); background: var(--orange-bg); }
+  .out.blocked { color: var(--red); background: var(--red-bg); }
+
+  /* ════════════════════════════════════════════════════════════
+     DIRECTION A — true timeline with left rail
+     ════════════════════════════════════════════════════════════ */
+  .A-body { padding: 28px 32px 28px 52px; position: relative; }
+  /* the rail */
+  .A-rail {
+    position: absolute; left: 24px; top: 32px; bottom: 32px;
+    width: 2px; background: var(--border-m);
+  }
+  .A-week {
+    position: relative;
+    margin-bottom: 24px;
+  }
+  .A-week-head {
+    display: flex; align-items: baseline; gap: 12px;
+    padding: 0 0 10px 16px;
+    margin-left: -16px;  /* align text back to content area */
+    position: relative;
+  }
+  .A-week-dot {
+    position: absolute; left: -24px; top: 5px;
+    width: 10px; height: 10px; border-radius: 999px;
+    background: var(--accent); border: 2px solid var(--card);
+    box-shadow: 0 0 0 2px var(--accent-mid);
+  }
+  .A-week.past .A-week-dot { background: var(--text3); box-shadow: 0 0 0 2px var(--border); }
+  .A-week-title {
+    font-size: 15px; font-weight: 700; color: var(--text);
+  }
+  .A-week.past .A-week-title { color: var(--text2); }
+  .A-week-meta {
+    font-size: 12px; color: var(--text3);
+  }
+  .A-week-stats { margin-left: auto; font-size: 12px; color: var(--text3); }
+  .A-entry {
+    display: grid; grid-template-columns: 64px 1fr auto auto;
+    gap: 16px; align-items: center;
+    padding: 10px 0 10px 16px;
+    margin-left: -16px;
+    position: relative;
+  }
+  .A-entry::before {
+    content: ''; position: absolute; left: -22px; top: 50%;
+    width: 8px; height: 8px; border-radius: 999px;
+    transform: translateY(-50%);
+    background: var(--card); border: 2px solid var(--text3);
+  }
+  .A-entry.done::before { border-color: var(--green); background: var(--green); }
+  .A-entry.carried::before { border-color: var(--orange); background: var(--orange); }
+  .A-entry.current::before { border-color: var(--accent); background: var(--accent); }
+  .A-entry .task {
+    font-size: 14px; color: var(--text);
+  }
+  .A-entry.past .task { color: var(--text2); }
+
+  /* ════════════════════════════════════════════════════════════
+     DIRECTION B — quiet dense table
+     ════════════════════════════════════════════════════════════ */
+  .B-body { padding: 4px 0; }
+  .B-weekhead {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 10px 24px 8px;
+    background: var(--inset);
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; color: var(--text2);
+  }
+  .B-weekhead .date { color: var(--text3); font-weight: 500; font-size: 12px; }
+  .B-weekhead .stats { margin-left: auto; color: var(--text3); font-size: 12px; }
+  .B-weekhead .stats b { color: var(--text); font-weight: 600; }
+  .B-row {
+    display: grid; grid-template-columns: 120px 1fr 120px 60px;
+    gap: 16px; align-items: center;
+    padding: 8px 24px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .B-row:last-child { border-bottom: none; }
+  .B-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text3); font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+  .B-label .stageName { color: var(--text); font-weight: 700; }
+  .B-task { color: var(--text); }
+  .B-outcome {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-family: 'JetBrains Mono', monospace;
+    color: var(--text3);
+  }
+  .B-outcome .dot {
+    width: 8px; height: 8px; border-radius: 999px;
+    background: var(--text4);
+  }
+  .B-outcome.done .dot { background: var(--green); }
+  .B-outcome.carried .dot { background: var(--orange); }
+
+  /* ════════════════════════════════════════════════════════════
+     DIRECTION C — card per entry
+     ════════════════════════════════════════════════════════════ */
+  .C-body { padding: 20px 24px; }
+  .C-weekhead {
+    display: flex; align-items: baseline; gap: 14px;
+    padding: 18px 0 10px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 14px;
+  }
+  .C-weekhead:first-child { padding-top: 0; }
+  .C-weekhead h3 { font-size: 16px; font-weight: 700; }
+  .C-weekhead .meta { color: var(--text3); font-size: 13px; }
+  .C-weekhead .pills { margin-left: auto; display: flex; gap: 8px; }
+  .C-weekhead .pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 8px; border-radius: 5px;
+    background: var(--inset); color: var(--text3);
+  }
+  .C-weekhead .pill.done { background: var(--green-bg); color: var(--green); }
+  .C-weekhead .pill.carried { background: var(--orange-bg); color: var(--orange); }
+  .C-entry {
+    display: grid; grid-template-columns: auto 1fr auto auto;
+    gap: 14px; align-items: center;
+    padding: 14px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 10px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .C-entry:hover { border-color: var(--border-m); box-shadow: var(--shadow); }
+  .C-entry .left { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+  .C-entry .task { font-size: 14px; font-weight: 600; color: var(--text); }
+  .C-entry .by { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .C-entry .by b { color: var(--cyan); font-weight: 600; }
+  .C-entry .type { font-size: 10px; }
+  .C-entry .big-out {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    padding: 6px 12px; border-radius: 8px;
+  }
+  .C-entry .big-out.done { color: var(--green); background: var(--green-bg); }
+  .C-entry .big-out.carried { color: var(--orange); background: var(--orange-bg); }
+
+  /* ════════════════════════════════════════════════════════════
+     DIRECTION D — pointed polish on current design
+     ════════════════════════════════════════════════════════════ */
+  .D-body { padding: 4px 0; }
+  .D-weekhead {
+    display: flex; align-items: baseline; gap: 12px;
+    padding: 14px 24px 8px;
+    position: sticky; top: 0; background: var(--card);
+    border-bottom: 1px solid var(--border);
+  }
+  .D-weekhead h4 {
+    font-size: 14px; font-weight: 600; color: var(--text);
+  }
+  .D-weekhead .date { color: var(--text3); font-size: 13px; }
+  .D-weekhead .stats { margin-left: auto; font-size: 12px; color: var(--text3); }
+  .D-weekhead .stats b { color: var(--text); font-weight: 600; }
+  .D-weekhead .stats .done-n { color: var(--green); }
+  .D-weekhead .stats .carried-n { color: var(--orange); }
+  /* Thicker dividing band between weeks */
+  .D-divider {
+    height: 10px; background: var(--page);
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  .D-row {
+    display: grid; grid-template-columns: 64px 1fr 120px 80px 120px;
+    gap: 12px; align-items: center;
+    padding: 10px 24px 10px 22px;
+    border-left: 3px solid transparent;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .D-row:last-child { border-bottom: none; }
+  .D-row.done { border-left-color: var(--green); }
+  .D-row.carried { border-left-color: var(--orange); }
+
+  /* section heading above each direction's body */
+  .section-head {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text2);
+    margin-bottom: 10px;
+  }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="pageHead">
+    <h1>Activity Timeline — four directions</h1>
+    <p>Same data, four treatments. Each uses the live sample from the X40 deep-dive: 1 current entry, 2 done + 2 from Mar&nbsp;16, 3 done + 1 carried from Mar&nbsp;2, 2 done from Feb&nbsp;23. Pick the one that matches what you have in mind, or mix pieces.</p>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- DIRECTION A — true timeline with left rail -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="dir">
+    <div class="dir-head">
+      <span class="dir-tag">Direction A</span>
+      <span class="dir-title">True timeline — left rail with dots</span>
+    </div>
+    <p class="dir-note">A vertical spine anchors the whole section, with colored dots for each entry. Reads top-to-bottom as a sequence of events. Most "timeline-feel." Works best when you want the scroll itself to tell a story.</p>
+    <div class="section-head">Activity Timeline</div>
+    <div class="card">
+      <div class="A-body">
+        <div class="A-rail"></div>
+
+        <div class="A-week current">
+          <div class="A-week-head">
+            <span class="A-week-dot"></span>
+            <span class="A-week-title" style="color: var(--accent);">This week</span>
+            <span class="A-week-meta">Apr 13 – 17</span>
+            <span class="A-week-stats">1 item</span>
+          </div>
+          <div class="A-entry current">
+            <span class="stage prd">PRD</span>
+            <span class="task">YO</span>
+            <span class="who">AJ</span>
+            <span class="type">BUILD</span>
+          </div>
+        </div>
+
+        <div class="A-week past">
+          <div class="A-week-head">
+            <span class="A-week-dot"></span>
+            <span class="A-week-title">4 weeks ago</span>
+            <span class="A-week-meta">Mar 16</span>
+            <span class="A-week-stats">2 items · 2 done</span>
+          </div>
+          <div class="A-entry done past">
+            <span class="stage prd">PRD</span>
+            <span class="task">Sync on priorities</span>
+            <span class="who">Sara L.</span>
+            <span class="out done">Done</span>
+          </div>
+          <div class="A-entry done past">
+            <span class="stage dev">Dev</span>
+            <span class="task">Create dashboard widgets</span>
+            <span class="who">Bilal C.</span>
+            <span class="out done">Done</span>
+          </div>
+        </div>
+
+        <div class="A-week past">
+          <div class="A-week-head">
+            <span class="A-week-dot"></span>
+            <span class="A-week-title">6 weeks ago</span>
+            <span class="A-week-meta">Mar 2</span>
+            <span class="A-week-stats">4 items · 3 done · 1 carried</span>
+          </div>
+          <div class="A-entry carried past">
+            <span class="stage prd">PRD</span>
+            <span class="task">Build export functionality</span>
+            <span class="who">Omar H.</span>
+            <span class="out carried">Carried</span>
+          </div>
+          <div class="A-entry done past">
+            <span class="stage dev">Dev</span>
+            <span class="task">Capacity planning</span>
+            <span class="who">Noura S.</span>
+            <span class="out done">Done</span>
+          </div>
+          <div class="A-entry done past">
+            <span class="stage qa">QA</span>
+            <span class="task">Risk assessment</span>
+            <span class="who">Amira J.</span>
+            <span class="out done">Done</span>
+          </div>
+          <div class="A-entry done past">
+            <span class="stage dev">Dev</span>
+            <span class="task">Scope refinement</span>
+            <span class="who">Soumya P.</span>
+            <span class="out done">Done</span>
+          </div>
+        </div>
+
+        <div class="A-week past">
+          <div class="A-week-head">
+            <span class="A-week-dot"></span>
+            <span class="A-week-title">7 weeks ago</span>
+            <span class="A-week-meta">Feb 23</span>
+            <span class="A-week-stats">2 items · 2 done</span>
+          </div>
+          <div class="A-entry done past">
+            <span class="stage dev">Dev</span>
+            <span class="task">Build export functionality</span>
+            <span class="who">Priya D.</span>
+            <span class="out done">Done</span>
+          </div>
+          <div class="A-entry done past">
+            <span class="stage dev">Dev</span>
+            <span class="task">Implement rate limiting</span>
+            <span class="who">Karthik S.</span>
+            <span class="out done">Done</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- DIRECTION B — quiet dense table -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="dir">
+    <div class="dir-head">
+      <span class="dir-tag">Direction B</span>
+      <span class="dir-title">Quiet dense table — low contrast, high density</span>
+    </div>
+    <p class="dir-note">Opposite of A. No all-caps, soft gray week bands, stage+type merged into a compact mono label, outcome is just a dot. Fits more items per screen. Good when the project has a long history and you want to scan fast.</p>
+    <div class="section-head">Activity Timeline</div>
+    <div class="card">
+      <div class="B-body">
+
+        <div class="B-weekhead">
+          <span style="color: var(--accent);">This week</span>
+          <span class="date">· Apr 13 – 17</span>
+          <span class="stats">1 item</span>
+        </div>
+        <div class="B-row">
+          <span class="B-label"><span class="stageName">Prd</span> · Build</span>
+          <span class="B-task">YO</span>
+          <span class="who" style="text-align: right;">AJ</span>
+          <span></span>
+        </div>
+
+        <div class="B-weekhead">
+          <span>4 weeks ago</span>
+          <span class="date">· Mar 16</span>
+          <span class="stats"><b>2</b> items · 2 done</span>
+        </div>
+        <div class="B-row">
+          <span class="B-label"><span class="stageName">Prd</span> · Jam</span>
+          <span class="B-task">Sync on priorities</span>
+          <span class="who" style="text-align: right;">Sara L.</span>
+          <span class="B-outcome done"><span class="dot"></span>Done</span>
+        </div>
+        <div class="B-row">
+          <span class="B-label"><span class="stageName">Dev</span> · Build</span>
+          <span class="B-task">Create dashboard widgets</span>
+          <span class="who" style="text-align: right;">Bilal C.</span>
+          <span class="B-outcome done"><span class="dot"></span>Done</span>
+        </div>
+
+        <div class="B-weekhead">
+          <span>6 weeks ago</span>
+          <span class="date">· Mar 2</span>
+          <span class="stats"><b>4</b> items · 3 done · 1 carried</span>
+        </div>
+        <div class="B-row">
+          <span class="B-label"><span class="stageName">Prd</span> · Build</span>
+          <span class="B-task">Build export functionality</span>
+          <span class="who" style="text-align: right;">Omar H.</span>
+          <span class="B-outcome carried"><span class="dot"></span>Carried</span>
+        </div>
+        <div class="B-row">
+          <span class="B-label"><span class="stageName">Dev</span> · Jam</span>
+          <span class="B-task">Capacity planning</span>
+          <span class="who" style="text-align: right;">Noura S.</span>
+          <span class="B-outcome done"><span class="dot"></span>Done</span>
+        </div>
+        <div class="B-row">
+          <span class="B-label"><span class="stageName">QA</span> · Jam</span>
+          <span class="B-task">Risk assessment</span>
+          <span class="who" style="text-align: right;">Amira J.</span>
+          <span class="B-outcome done"><span class="dot"></span>Done</span>
+        </div>
+        <div class="B-row">
+          <span class="B-label"><span class="stageName">Dev</span> · Jam</span>
+          <span class="B-task">Scope refinement</span>
+          <span class="who" style="text-align: right;">Soumya P.</span>
+          <span class="B-outcome done"><span class="dot"></span>Done</span>
+        </div>
+
+        <div class="B-weekhead">
+          <span>7 weeks ago</span>
+          <span class="date">· Feb 23</span>
+          <span class="stats"><b>2</b> items · 2 done</span>
+        </div>
+        <div class="B-row">
+          <span class="B-label"><span class="stageName">Dev</span> · Build</span>
+          <span class="B-task">Build export functionality</span>
+          <span class="who" style="text-align: right;">Priya D.</span>
+          <span class="B-outcome done"><span class="dot"></span>Done</span>
+        </div>
+        <div class="B-row">
+          <span class="B-label"><span class="stageName">Dev</span> · Build</span>
+          <span class="B-task">Implement rate limiting</span>
+          <span class="who" style="text-align: right;">Karthik S.</span>
+          <span class="B-outcome done"><span class="dot"></span>Done</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- DIRECTION C — card per entry -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="dir">
+    <div class="dir-head">
+      <span class="dir-tag">Direction C</span>
+      <span class="dir-title">Card per entry — each commit breathes</span>
+    </div>
+    <p class="dir-note">Each commit becomes an event with real visual weight. Outcome takes the right-side anchor position. Week headers become proud section titles. Fewer items per screen but each feels like a deliverable.</p>
+    <div class="section-head">Activity Timeline</div>
+    <div class="card">
+      <div class="C-body">
+
+        <div class="C-weekhead" style="padding-top: 0;">
+          <h3 style="color: var(--accent);">This week</h3>
+          <span class="meta">Apr 13 – 17</span>
+          <div class="pills">
+            <span class="pill">1 item</span>
+          </div>
+        </div>
+        <div class="C-entry">
+          <span class="stage prd">PRD</span>
+          <div class="left">
+            <div class="task">YO</div>
+            <div class="by">by <b>AJ</b> · BUILD</div>
+          </div>
+          <span></span>
+          <span></span>
+        </div>
+
+        <div class="C-weekhead">
+          <h3>4 weeks ago</h3>
+          <span class="meta">Mar 16</span>
+          <div class="pills">
+            <span class="pill">2 items</span>
+            <span class="pill done">2 done</span>
+          </div>
+        </div>
+        <div class="C-entry">
+          <span class="stage prd">PRD</span>
+          <div class="left">
+            <div class="task">Sync on priorities</div>
+            <div class="by">by <b>Sara L.</b> · JAM</div>
+          </div>
+          <span></span>
+          <span class="big-out done">✓ Done</span>
+        </div>
+        <div class="C-entry">
+          <span class="stage dev">Dev</span>
+          <div class="left">
+            <div class="task">Create dashboard widgets</div>
+            <div class="by">by <b>Bilal C.</b> · BUILD</div>
+          </div>
+          <span></span>
+          <span class="big-out done">✓ Done</span>
+        </div>
+
+        <div class="C-weekhead">
+          <h3>6 weeks ago</h3>
+          <span class="meta">Mar 2</span>
+          <div class="pills">
+            <span class="pill">4 items</span>
+            <span class="pill done">3 done</span>
+            <span class="pill carried">1 carried</span>
+          </div>
+        </div>
+        <div class="C-entry">
+          <span class="stage prd">PRD</span>
+          <div class="left">
+            <div class="task">Build export functionality</div>
+            <div class="by">by <b>Omar H.</b> · BUILD</div>
+          </div>
+          <span></span>
+          <span class="big-out carried">→ Carried</span>
+        </div>
+        <div class="C-entry">
+          <span class="stage dev">Dev</span>
+          <div class="left">
+            <div class="task">Capacity planning</div>
+            <div class="by">by <b>Noura S.</b> · JAM</div>
+          </div>
+          <span></span>
+          <span class="big-out done">✓ Done</span>
+        </div>
+        <div class="C-entry">
+          <span class="stage qa">QA</span>
+          <div class="left">
+            <div class="task">Risk assessment</div>
+            <div class="by">by <b>Amira J.</b> · JAM</div>
+          </div>
+          <span></span>
+          <span class="big-out done">✓ Done</span>
+        </div>
+        <div class="C-entry">
+          <span class="stage dev">Dev</span>
+          <div class="left">
+            <div class="task">Scope refinement</div>
+            <div class="by">by <b>Soumya P.</b> · JAM</div>
+          </div>
+          <span></span>
+          <span class="big-out done">✓ Done</span>
+        </div>
+
+        <div class="C-weekhead">
+          <h3>7 weeks ago</h3>
+          <span class="meta">Feb 23</span>
+          <div class="pills">
+            <span class="pill">2 items</span>
+            <span class="pill done">2 done</span>
+          </div>
+        </div>
+        <div class="C-entry">
+          <span class="stage dev">Dev</span>
+          <div class="left">
+            <div class="task">Build export functionality</div>
+            <div class="by">by <b>Priya D.</b> · BUILD</div>
+          </div>
+          <span></span>
+          <span class="big-out done">✓ Done</span>
+        </div>
+        <div class="C-entry" style="margin-bottom: 0;">
+          <span class="stage dev">Dev</span>
+          <div class="left">
+            <div class="task">Implement rate limiting</div>
+            <div class="by">by <b>Karthik S.</b> · BUILD</div>
+          </div>
+          <span></span>
+          <span class="big-out done">✓ Done</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- DIRECTION D — pointed polish -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="dir">
+    <div class="dir-head">
+      <span class="dir-tag">Direction D</span>
+      <span class="dir-title">Pointed polish — keep layout, fix the cryptic bits</span>
+    </div>
+    <p class="dir-note">Minimum change. Kill the "THIS WK" redundancy. Week headers become Title Case, softer weight. Stats read as real words ("2 done" not "✓2"). Stronger divider band between weeks. Outcome pills keep the same shape. No redesign — just polish.</p>
+    <div class="section-head">Activity Timeline</div>
+    <div class="card">
+      <div class="D-body">
+
+        <div class="D-weekhead">
+          <h4 style="color: var(--accent);">This week</h4>
+          <span class="date">Apr 13 – 17</span>
+          <span class="stats"><b>1</b> item</span>
+        </div>
+        <div class="D-row">
+          <span class="stage prd">PRD</span>
+          <span style="color: var(--text);">YO</span>
+          <span class="who" style="text-align: right;">AJ</span>
+          <span class="type" style="text-align: center;">BUILD</span>
+          <span></span>
+        </div>
+
+        <div class="D-divider"></div>
+
+        <div class="D-weekhead">
+          <h4>4 weeks ago</h4>
+          <span class="date">Mar 16</span>
+          <span class="stats"><b>2</b> items · <span class="done-n">2 done</span></span>
+        </div>
+        <div class="D-row done">
+          <span class="stage prd">PRD</span>
+          <span>Sync on priorities</span>
+          <span class="who" style="text-align: right;">Sara L.</span>
+          <span class="type" style="text-align: center;">JAM</span>
+          <span class="out done">✓ Done</span>
+        </div>
+        <div class="D-row done">
+          <span class="stage dev">Dev</span>
+          <span>Create dashboard widgets</span>
+          <span class="who" style="text-align: right;">Bilal C.</span>
+          <span class="type" style="text-align: center;">BUILD</span>
+          <span class="out done">✓ Done</span>
+        </div>
+
+        <div class="D-divider"></div>
+
+        <div class="D-weekhead">
+          <h4>6 weeks ago</h4>
+          <span class="date">Mar 2</span>
+          <span class="stats"><b>4</b> items · <span class="done-n">3 done</span> · <span class="carried-n">1 carried</span></span>
+        </div>
+        <div class="D-row carried">
+          <span class="stage prd">PRD</span>
+          <span>Build export functionality</span>
+          <span class="who" style="text-align: right;">Omar H.</span>
+          <span class="type" style="text-align: center;">BUILD</span>
+          <span class="out carried">→ Carried</span>
+        </div>
+        <div class="D-row done">
+          <span class="stage dev">Dev</span>
+          <span>Capacity planning</span>
+          <span class="who" style="text-align: right;">Noura S.</span>
+          <span class="type" style="text-align: center;">JAM</span>
+          <span class="out done">✓ Done</span>
+        </div>
+        <div class="D-row done">
+          <span class="stage qa">QA</span>
+          <span>Risk assessment</span>
+          <span class="who" style="text-align: right;">Amira J.</span>
+          <span class="type" style="text-align: center;">JAM</span>
+          <span class="out done">✓ Done</span>
+        </div>
+        <div class="D-row done">
+          <span class="stage dev">Dev</span>
+          <span>Scope refinement</span>
+          <span class="who" style="text-align: right;">Soumya P.</span>
+          <span class="type" style="text-align: center;">JAM</span>
+          <span class="out done">✓ Done</span>
+        </div>
+
+        <div class="D-divider"></div>
+
+        <div class="D-weekhead">
+          <h4>7 weeks ago</h4>
+          <span class="date">Feb 23</span>
+          <span class="stats"><b>2</b> items · <span class="done-n">2 done</span></span>
+        </div>
+        <div class="D-row done">
+          <span class="stage dev">Dev</span>
+          <span>Build export functionality</span>
+          <span class="who" style="text-align: right;">Priya D.</span>
+          <span class="type" style="text-align: center;">BUILD</span>
+          <span class="out done">✓ Done</span>
+        </div>
+        <div class="D-row done">
+          <span class="stage dev">Dev</span>
+          <span>Implement rate limiting</span>
+          <span class="who" style="text-align: right;">Karthik S.</span>
+          <span class="type" style="text-align: center;">BUILD</span>
+          <span class="out done">✓ Done</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

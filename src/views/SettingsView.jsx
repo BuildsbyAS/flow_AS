@@ -143,10 +143,60 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
     return true;
   };
 
+  // Edit role state — renaming a role must cascade to every person currently
+  // holding that role so we don't orphan them on a dead role name.
+  const [editRoleTarget, setEditRoleTarget] = useState(null); // { idx, name }
+  const [editRoleName, setEditRoleName] = useState("");
+
+  const startEditRole = (idx, name) => {
+    setEditRoleTarget({ idx, name });
+    setEditRoleName(name);
+    setPanel({ type: "editRole" });
+  };
+  const saveRoleEdit = () => {
+    if (!editRoleTarget || !editRoleName.trim()) return false;
+    const oldName = editRoleTarget.name;
+    const newName = editRoleName.trim();
+    if (newName === oldName) return true; // no-op
+    if (roles.includes(newName)) return false; // duplicate guard
+    // useSyncedSetters.setRoles handles: renameRoleInDB (UPDATE, preserves
+    // UUID — no CASCADE wipe), in-memory people.role refresh via rawSetPeople,
+    // and SyncToast show/done lifecycle. Do NOT call setPeople here — it
+    // would trigger redundant per-person DB writes.
+    setRoles(prev => prev.map(r => r === oldName ? newName : r));
+    logAction("edit", "role", newName, "Renamed", oldName, newName);
+    setEditRoleTarget(null);
+    return true;
+  };
+
+  // Edit squad state — same pattern as role rename. useSyncedSetters.setSquads
+  // handles the renameSquadInDB UPDATE + in-memory people.squad refresh.
+  const [editSquadTarget, setEditSquadTarget] = useState(null); // { idx, name }
+  const [editSquadName, setEditSquadName] = useState("");
+
+  const startEditSquad = (idx, name) => {
+    setEditSquadTarget({ idx, name });
+    setEditSquadName(name);
+    setPanel({ type: "editSquad" });
+  };
+  const saveSquadEdit = () => {
+    if (!editSquadTarget || !editSquadName.trim()) return false;
+    const oldName = editSquadTarget.name;
+    const newName = editSquadName.trim();
+    if (newName === oldName) return true; // no-op
+    if (squads.includes(newName)) return false; // duplicate guard
+    setSquads(prev => prev.map(s => s === oldName ? newName : s));
+    logAction("edit", "squad", newName, "Renamed", oldName, newName);
+    setEditSquadTarget(null);
+    return true;
+  };
+
   const closePanel = () => {
     setNewSquad(""); setNewRole("");
     setPName(""); setPRole(""); setPSquad("");
     setEditPerson(null);
+    setEditRoleTarget(null); setEditRoleName("");
+    setEditSquadTarget(null); setEditSquadName("");
     setPanel(null);
     setPanelStep(0);
   };
@@ -213,7 +263,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             </Btn>
           </div>
           <div className="flow-data-grid">
-            <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 100px 100px 80px" }}>
+            <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 100px 100px 140px" }}>
               <span>Squad</span>
               <span style={{ textAlign: "center" }}>Members</span>
               <span style={{ textAlign: "center" }}>Projects</span>
@@ -224,11 +274,19 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                 const memberCount = people.filter(p => p.squad === sq).length;
                 const projCount = projects.filter(p => p.squad === sq).length;
                 return (
-                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 100px 100px 80px" }}>
-                    <span style={{
-                      fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
-                      fontWeight: typo.bodyLg.weight, color: c.text,
-                    }}>{sq}</span>
+                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 100px 100px 140px" }}>
+                    <button
+                      onClick={() => startEditSquad(i, sq)}
+                      title="Rename squad"
+                      style={{
+                        background: "transparent", border: "none", cursor: "pointer",
+                        textAlign: "left", padding: 0,
+                        fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+                        fontWeight: typo.bodyLg.weight, color: c.text,
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = c.accent; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = c.text; }}
+                    >{sq}</button>
                     <span style={{
                       fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                       fontWeight: typo.monoLg.weight, color: c.textMid,
@@ -239,7 +297,16 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                       fontWeight: typo.monoLg.weight, color: c.textMid,
                       textAlign: "center", fontVariantNumeric: "tabular-nums",
                     }}>{projCount}</span>
-                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: space[1] }}>
+                      <button onClick={() => startEditSquad(i, sq)} style={{
+                        background: "transparent", border: `1px solid transparent`, cursor: "pointer",
+                        fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid,
+                        padding: "4px 10px", borderRadius: layout.radiusXs,
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.color = c.accent; e.currentTarget.style.borderColor = c.accent + "30"; e.currentTarget.style.background = c.accent + "08"; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                      >Edit</button>
                       <button onClick={() => requestDelete("squad", i, sq)} style={{
                         background: "transparent", border: `1px solid transparent`, cursor: "pointer",
                         fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid,
@@ -277,7 +344,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             </Btn>
           </div>
           <div className="flow-data-grid">
-            <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 100px 80px" }}>
+            <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 100px 140px" }}>
               <span>Role</span>
               <span style={{ textAlign: "center" }}>Holders</span>
               <span style={{ textAlign: "right" }}></span>
@@ -286,17 +353,34 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
               {roles.map((rl, i) => {
                 const holderCount = people.filter(p => p.role === rl).length;
                 return (
-                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 100px 80px" }}>
-                    <span style={{
-                      fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
-                      fontWeight: typo.bodyLg.weight, color: c.text,
-                    }}>{rl}</span>
+                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 100px 140px" }}>
+                    <button
+                      onClick={() => startEditRole(i, rl)}
+                      title="Rename role"
+                      style={{
+                        background: "transparent", border: "none", cursor: "pointer",
+                        textAlign: "left", padding: 0,
+                        fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+                        fontWeight: typo.bodyLg.weight, color: c.text,
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.color = c.accent; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = c.text; }}
+                    >{rl}</button>
                     <span style={{
                       fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size,
                       fontWeight: typo.monoLg.weight, color: c.textMid,
                       textAlign: "center", fontVariantNumeric: "tabular-nums",
                     }}>{holderCount}</span>
-                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: space[1] }}>
+                      <button onClick={() => startEditRole(i, rl)} style={{
+                        background: "transparent", border: `1px solid transparent`, cursor: "pointer",
+                        fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid,
+                        padding: "4px 10px", borderRadius: layout.radiusXs,
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.color = c.accent; e.currentTarget.style.borderColor = c.accent + "30"; e.currentTarget.style.background = c.accent + "08"; }}
+                        onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.background = "transparent"; }}
+                      >Edit</button>
                       <button onClick={() => requestDelete("role", i, rl)} style={{
                         background: "transparent", border: `1px solid transparent`, cursor: "pointer",
                         fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid,
@@ -581,7 +665,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                   fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
                   color: c.text,
                 }}>
-                  {panel.type === "squad" ? "Add Squad" : panel.type === "role" ? "Add Role" : panel.type === "editPerson" ? "Edit Person" : "Add Person"}
+                  {panel.type === "squad" ? "Add Squad" : panel.type === "role" ? "Add Role" : panel.type === "editRole" ? "Rename Role" : panel.type === "editSquad" ? "Rename Squad" : panel.type === "editPerson" ? "Edit Person" : "Add Person"}
                 </span>
                 <Btn variant="ghost" size="sm" onClick={closePanel} style={{
                   width: 28, height: 28, padding: 0,
@@ -620,6 +704,56 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                     autoFocus
                     style={{ width: "100%" }}
                   />
+                </div>
+              )}
+
+              {/* Edit squad form */}
+              {panel.type === "editSquad" && (
+                <div>
+                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>SQUAD NAME</TelemetryLabel>
+                  <Inp value={editSquadName} onChange={e => setEditSquadName(e.target.value)}
+                    placeholder="Squad name..."
+                    onKeyDown={e => e.key === "Enter" && saveSquadEdit() && closePanel()}
+                    autoFocus
+                    style={{ width: "100%" }}
+                  />
+                  {editSquadName.trim() && editSquadName.trim() !== editSquadTarget?.name && squads.includes(editSquadName.trim()) && (
+                    <div style={{ marginTop: space[2], fontFamily: typo.bodySm.font, fontSize: 12, color: c.red }}>A squad with this name already exists.</div>
+                  )}
+                  {editSquadTarget && editSquadName.trim() !== editSquadTarget.name && (() => {
+                    const pc = people.filter(p => p.squad === editSquadTarget.name).length;
+                    const prc = projects.filter(p => p.squad === editSquadTarget.name).length;
+                    if (pc === 0 && prc === 0) return null;
+                    const parts = [];
+                    if (pc) parts.push(`${pc} person${pc === 1 ? "" : "s"}`);
+                    if (prc) parts.push(`${prc} project${prc === 1 ? "" : "s"}`);
+                    return (
+                      <div style={{ marginTop: space[2], fontFamily: typo.bodySm.font, fontSize: 12, color: c.textMid }}>
+                        {parts.join(" and ")} will be reassigned to the new name.
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Edit role form */}
+              {panel.type === "editRole" && (
+                <div>
+                  <TelemetryLabel style={{ marginBottom: space[1], display: "block" }}>ROLE NAME</TelemetryLabel>
+                  <Inp value={editRoleName} onChange={e => setEditRoleName(e.target.value)}
+                    placeholder="Role / designation..."
+                    onKeyDown={e => e.key === "Enter" && saveRoleEdit() && closePanel()}
+                    autoFocus
+                    style={{ width: "100%" }}
+                  />
+                  {editRoleName.trim() && editRoleName.trim() !== editRoleTarget?.name && roles.includes(editRoleName.trim()) && (
+                    <div style={{ marginTop: space[2], fontFamily: typo.bodySm.font, fontSize: 12, color: c.red }}>A role with this name already exists.</div>
+                  )}
+                  {editRoleTarget && people.filter(p => p.role === editRoleTarget.name).length > 0 && editRoleName.trim() !== editRoleTarget.name && (
+                    <div style={{ marginTop: space[2], fontFamily: typo.bodySm.font, fontSize: 12, color: c.textMid }}>
+                      {people.filter(p => p.role === editRoleTarget.name).length} person{people.filter(p => p.role === editRoleTarget.name).length === 1 ? "" : "s"} will be reassigned to the new name.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -696,6 +830,14 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                 {panel.type === "role" && (
                   <Btn variant="primary" onClick={() => { if (addRole()) closePanel(); }}
                     disabled={!newRole.trim() || roles.includes(newRole.trim())}>Add Role</Btn>
+                )}
+                {panel.type === "editRole" && (
+                  <Btn variant="primary" onClick={() => { if (saveRoleEdit()) closePanel(); }}
+                    disabled={!editRoleName.trim() || (editRoleName.trim() !== editRoleTarget?.name && roles.includes(editRoleName.trim()))}>Save Changes</Btn>
+                )}
+                {panel.type === "editSquad" && (
+                  <Btn variant="primary" onClick={() => { if (saveSquadEdit()) closePanel(); }}
+                    disabled={!editSquadName.trim() || (editSquadName.trim() !== editSquadTarget?.name && squads.includes(editSquadName.trim()))}>Save Changes</Btn>
                 )}
                 {panel.type === "person" && (
                   <Btn variant="primary" onClick={() => { if (addPerson()) closePanel(); }}

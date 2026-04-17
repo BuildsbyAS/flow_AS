@@ -126,7 +126,7 @@ const GuideView = ({ onNavigate }) => {
           fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
           lineHeight: 1.7, color: c.textMid, textAlign: "center", margin: 0,
         }}>
-          Flow is built around two layers. Navigate with <Kbd>1</Kbd>–<Kbd>6</Kbd>, or press <Kbd>F</Kbd> to search anything.
+          Flow is built around two layers. Navigate with <Kbd>1</Kbd>–<Kbd>6</Kbd>, or press <Kbd>⌘K</Kbd> to search anything.
         </p>
 
         {/* Layer cards */}
@@ -153,7 +153,7 @@ const GuideView = ({ onNavigate }) => {
               Manage the team's weekly commits in real time.
             </div>
             <div style={{ display: "flex", gap: space[2], marginTop: space[1] }}>
-              {[{ label: "Pulse", num: "2" }, { label: "Commit", num: "3" }].map(t => (
+              {[{ label: "Pulse", num: "4" }, { label: "Commit", num: "5" }].map(t => (
                 <span key={t.num} style={{
                   fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                   fontWeight: 600, color: c.accent, background: c.accentDim,
@@ -188,7 +188,7 @@ const GuideView = ({ onNavigate }) => {
               Timelines, trends, momentum, and history.
             </div>
             <div style={{ display: "flex", gap: space[2], marginTop: space[1], flexWrap: "wrap" }}>
-              {[{ label: "Summary", num: "1", color: c.green }, { label: "Projects", num: "4", color: c.cyan }, { label: "People", num: "5", color: c.cyan }].map(t => (
+              {[{ label: "Summary", num: "1", color: c.green }, { label: "Projects", num: "2", color: c.cyan }, { label: "People", num: "3", color: c.cyan }].map(t => (
                 <span key={t.num} style={{
                   fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                   fontWeight: 600, color: t.color, background: `${t.color}12`,
@@ -223,7 +223,7 @@ const GuideView = ({ onNavigate }) => {
         <Surface variant="panel" style={{ padding: `${space[4] + 2}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[3], marginLeft: space[4] + 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
             <div style={{ width: 32, height: 32, borderRadius: layout.radiusSm, background: `${c.accent}12`, border: `1px solid ${c.accent}25`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.accent }}>2</span>
+              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.accent }}>4</span>
             </div>
             <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Pulse</div>
           </div>
@@ -251,7 +251,7 @@ const GuideView = ({ onNavigate }) => {
         <Surface id="guide-commit" variant="panel" style={{ padding: `${space[4] + 2}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[3], marginLeft: space[4] + 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
             <div style={{ width: 32, height: 32, borderRadius: layout.radiusSm, background: `${c.accent}12`, border: `1px solid ${c.accent}25`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.accent }}>3</span>
+              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.accent }}>5</span>
             </div>
             <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Commit</div>
           </div>
@@ -347,25 +347,30 @@ const GuideView = ({ onNavigate }) => {
             </div>
           </div>
 
-          {/* Outcomes mini card */}
+          {/* Outcomes mini card — mirrors outcomeConfig() in theme.js */}
           <ExampleCard style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
               <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.green }}>{"✓"}</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.green }}>Completed</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Done, shipped.</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.cyan }}>{"→"}</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.cyan }}>Carry</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Not finished, carrying to next week. Select which week to carry to.</span>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.green }}>Done</span>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Fully shipped.</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
               <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.orange }}>{"◐"}</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.orange }}>Completed + Carry</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— This piece is done but the work continues next week.</span>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.orange }}>Partial</span>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Some progress, but not complete and not rolling forward.</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.red }}>{"!"}</span>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.orange }}>{"→"}</span>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.orange }}>Carried</span>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Not finished; continues next week. Pick a target week.</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.orange }}>{"✓→"}</span>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.orange }}>Done + Carried</span>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— This piece is done; the broader work continues next week.</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.red }}>{"✕"}</span>
               <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.red }}>Blocked</span>
               <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Could not complete. You'll be asked to explain why.</span>
             </div>
@@ -405,7 +410,7 @@ const GuideView = ({ onNavigate }) => {
         <Surface id="guide-projects" variant="panel" style={{ padding: `${space[4] + 2}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[3], marginLeft: space[4] + 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
             <div style={{ width: 32, height: 32, borderRadius: layout.radiusSm, background: `${c.cyan}12`, border: `1px solid ${c.cyan}25`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.cyan }}>4</span>
+              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.cyan }}>2</span>
             </div>
             <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Projects</div>
           </div>
@@ -416,7 +421,10 @@ const GuideView = ({ onNavigate }) => {
             Click into any project for a deep-dive: week-by-week activity, who worked on it, phase changes, and total investment.
           </div>
           <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-            We also have a <strong style={{ color: c.text, fontWeight: 600 }}>Gantt chart</strong> view — switch to it for a visual timeline of all projects with filterable squad and phase views.
+            Three view modes: <strong style={{ color: c.text, fontWeight: 600 }}>Table</strong> for dense sortable data, <strong style={{ color: c.text, fontWeight: 600 }}>Board</strong> to see work grouped by phase, and <strong style={{ color: c.text, fontWeight: 600 }}>Gantt</strong> for a timeline with squad and phase filters.
+          </div>
+          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
+            Scope chips at the top filter by <strong style={{ color: c.text, fontWeight: 600 }}>In Flight</strong>, <strong style={{ color: c.text, fontWeight: 600 }}>Shipped</strong> (reached GA), <strong style={{ color: c.text, fontWeight: 600 }}>Deprioritized</strong>, or <strong style={{ color: c.text, fontWeight: 600 }}>All</strong>. The KPI cards above surface <strong style={{ color: c.orange, fontWeight: 600 }}>At Risk</strong> and <strong style={{ color: c.red, fontWeight: 600 }}>Overdue</strong> as sub-filters of In Flight.
           </div>
           {/* Mini visual: project timeline */}
           <ExampleCard>
@@ -500,7 +508,7 @@ const GuideView = ({ onNavigate }) => {
         <Surface id="guide-people" variant="panel" style={{ padding: `${space[4] + 2}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[3], marginLeft: space[4] + 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
             <div style={{ width: 32, height: 32, borderRadius: layout.radiusSm, background: `${c.cyan}12`, border: `1px solid ${c.cyan}25`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.cyan }}>5</span>
+              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.cyan }}>3</span>
             </div>
             <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>People</div>
           </div>
@@ -620,7 +628,7 @@ const GuideView = ({ onNavigate }) => {
         </div>
 
         <p style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid, margin: 0, paddingLeft: space[4] + 4 }}>
-          Press <Kbd>F</Kbd> to open the command palette. Search across projects (by name or ID), people, tabs, and actions — all from one place.
+          Press <Kbd>⌘K</Kbd> (or <Kbd>Ctrl+K</Kbd>) to open the command palette. Search across projects (by name or ID), people, tabs, and actions — all from one place.
         </p>
 
         <Surface variant="panel" style={{ padding: `${space[4] + 2}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[3], marginLeft: space[4] + 4 }}>
@@ -664,7 +672,7 @@ const GuideView = ({ onNavigate }) => {
         </div>
 
         <p style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid, margin: 0, paddingLeft: space[4] + 4 }}>
-          Press <Kbd>T</Kbd> to enter the terminal. It has four modules: <strong style={{ color: c.text, fontWeight: 600 }}>Settings</strong> (manage squads, roles, and people), <strong style={{ color: c.text, fontWeight: 600 }}>Logs</strong> (a live activity ledger), <strong style={{ color: c.text, fontWeight: 600 }}>Rant</strong> (submit feature requests and feedback), and <strong style={{ color: c.text, fontWeight: 600 }}>Admin</strong> (paperwork and admin tools). Settings, Logs, and Admin are password-gated — Rant is always open.
+          Press <Kbd>T</Kbd> to enter the terminal. It's the gateway to four tools: <strong style={{ color: c.text, fontWeight: 600 }}>Settings</strong> (squads, roles, and people — now with rename support), <strong style={{ color: c.text, fontWeight: 600 }}>Logs</strong> (a live activity ledger of every change), <strong style={{ color: c.text, fontWeight: 600 }}>Rant</strong> (submit feature requests and feedback), and <strong style={{ color: c.text, fontWeight: 600 }}>Admin</strong> (app-wide paperwork and admin controls). The terminal boots once per session — after that, all four are one click away.
         </p>
       </div>
 
@@ -749,13 +757,13 @@ const GuideView = ({ onNavigate }) => {
         <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Quick Reference</div>
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: `${space[2]}px ${space[4]}px`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size }}>
           {[
-            ["1 – 6", "Navigate tabs: Summary, Pulse, Commit, Projects, People, Guide"],
-            ["T", "Open Terminal (Settings, Logs, Rant, Admin)"],
-            ["F", "Open command palette / universal search"],
-            ["⌘K", "Open command palette (also Ctrl+K)"],
+            ["1 – 6", "Navigate tabs: Summary, Projects, People, Pulse, Commit, Guide"],
+            ["T", "Open Terminal (gate to Settings, Logs, Rant, Admin)"],
+            ["⌘K / Ctrl+K", "Open command palette / universal search"],
             ["/", "Focus in-tab search bar"],
+            ["↑ ↓", "Move focus up / down through rows; Enter to open"],
             ["?", "Toggle keyboard shortcut hints"],
-            ["Esc", "Go back / close palette"],
+            ["Esc", "Go back / close palette / exit detail"],
           ].map(([key, desc], i) => (
             <React.Fragment key={i}>
               <div style={{ textAlign: "right" }}><Kbd>{key}</Kbd></div>
@@ -776,14 +784,14 @@ const GuideView = ({ onNavigate }) => {
           Start with <strong style={{ color: c.green, fontWeight: 600 }}>Summary</strong> to
           see the overall health of your team. Then jump
           to <strong style={{ color: c.accent, fontWeight: 600 }}>Pulse</strong> or <strong style={{ color: c.accent, fontWeight: 600 }}>Commit</strong> to
-          manage this week's commits. Use number keys <Kbd>1</Kbd> through <Kbd>5</Kbd> to
+          manage this week's commits. Use number keys <Kbd>1</Kbd> through <Kbd>6</Kbd> to
           navigate instantly, or press <Kbd>?</Kbd> to see all keyboard shortcuts.
         </p>
         <p style={{
           fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
           color: c.textDim, marginTop: space[4],
         }}>
-          Search anything with <Kbd>F</Kbd> or <Kbd>⌘K</Kbd> — project IDs, names, squads, people. It works everywhere.
+          Search anything with <Kbd>⌘K</Kbd> or <Kbd>Ctrl+K</Kbd> — project IDs, names, squads, people. It works everywhere.
         </p>
         <div style={{ marginTop: space[5], display: "flex", gap: space[3], justifyContent: "center" }}>
           <Btn variant="secondary" onClick={() => onNavigate("summary")}>Start with Summary</Btn>

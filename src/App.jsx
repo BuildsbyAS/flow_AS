@@ -79,7 +79,18 @@ export default function FlowApp() {
 }
 
 function FlowDashboard({ auth }) {
-  const [activeTab, setActiveTab] = useState("pulse");
+  const [activeTab, setActiveTab] = useState(() => {
+    // Honor ?tab=<key> on initial load; also auto-route to Pulse when
+    // a Pulse-specific param (?mode=people) is present.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      const validTabs = NAV.filter(n => !n.separator).map(n => n.key);
+      if (tab && validTabs.includes(tab)) return tab;
+      if (params.get("mode") === "people" || params.get("mode") === "matrix") return "pulse";
+    } catch { /* ignore */ }
+    return "summary";
+  });
   const [navPayload, setNavPayload] = useState(null);
   const darkMode = false;
   const [terminalUnlocked, setTerminalUnlocked] = useState(() => sessionStorage.getItem("flow_terminal_unlocked") === "true");
@@ -188,6 +199,7 @@ function FlowDashboard({ auth }) {
   }, [people, pendingFilters.squad]);
 
   const setGoBack = useCallback((fn) => { goBackRef.current = fn; }, []);
+  const returnContextRef = useRef(null);
 
   const handleTerminalUnlock = useCallback((moduleKey) => {
     sessionStorage.setItem("flow_terminal_unlocked", "true");
@@ -226,22 +238,49 @@ function FlowDashboard({ auth }) {
     }
     setDetailLabel(null);
     goBackRef.current = null;
+    if (returnContextRef.current) returnContextRef.current = null;
     tactile.click();
   }, [flushDirtyToDB, terminalUnlocked, activeTab]);
 
   const handleBack = useCallback(() => {
+    flushDirtyToDB();
+    const ret = returnContextRef.current;
+    if (ret && ret.tab) {
+      returnContextRef.current = null;
+      setNavPayload(ret.id || null);
+      setActiveTab(ret.tab);
+      setDetailLabel(null);
+      goBackRef.current = null;
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      return;
+    }
     if (goBackRef.current) {
-      flushDirtyToDB();
       goBackRef.current();
       setDetailLabel(null);
       goBackRef.current = null;
     }
   }, [flushDirtyToDB]);
 
-  const handleNavigate = useCallback((tab, id) => {
+  // Intercept browser back button: keep users inside the app and route
+  // the gesture to in-app back navigation (deep-dive → list) instead of
+  // exiting to about:blank. Push a sentinel entry on mount so the first
+  // back press has somewhere to land, and re-push after each pop.
+  React.useEffect(() => {
+    window.history.pushState({ flowInApp: true }, "");
+    const onPop = () => {
+      if (goBackRef.current) handleBack();
+      window.history.pushState({ flowInApp: true }, "");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [handleBack]);
+
+  const handleNavigate = useCallback((tab, id, returnTo) => {
     flushDirtyToDB();
+    returnContextRef.current = returnTo || null;
     setNavPayload(id);
     setActiveTab(tab);
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [flushDirtyToDB]);
 
   const c = setTheme(darkMode);
@@ -265,7 +304,9 @@ function FlowDashboard({ auth }) {
     { key: "k", ctrl: true, fn: () => { setCmdOpen(v => !v); tactile.cmdOpen(); }, force: true },
     { key: "k", meta: true, fn: () => { setCmdOpen(v => !v); tactile.cmdOpen(); }, force: true },
     { key: "Escape", fn: () => { if (cmdOpen) { setCmdOpen(false); } else if (suppressBackRef.current) { /* child handled it */ } else if (goBackRef.current) handleBack(); }, force: true },
-    { key: "f", fn: () => { setCmdOpen(true); tactile.cmdOpen(); } },
+    // Removed bare "f" shortcut — conflicted with typing F in any input across
+    // the app (e.g. new-project name field). Cmd/Ctrl+K is the canonical way
+    // to open the command palette.
     { key: "/", fn: () => { if (searchRef.current) searchRef.current.focus(); }, force: true },
     { key: "?", fn: () => setShowHints(v => !v) },
     { key: "t", fn: () => handleTabSwitch("terminal") },
@@ -387,11 +428,11 @@ function FlowDashboard({ auth }) {
       {activeTab !== "terminal" && (
       <main key={activeTab} className="flow-page" style={{ maxWidth: 1440, margin: "0 auto", padding: `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
         <ErrorCatcher key={activeTab}>
-          {activeTab === "summary" && <SummaryView history={history} commitments={effectiveCommitments} projects={projects} people={people} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} />}
+          {activeTab === "summary" && <SummaryView loading={loading} error={error} history={history} commitments={effectiveCommitments} projects={projects} people={people} squads={squads} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} isHistorical={isHistorical} onNavigate={handleNavigate} cycleStage={cycleStage} />}
           {activeTab === "pulse" && <PulseView loading={loading} error={error} commitments={effectiveCommitments} projects={projects} people={people} history={history} onNavigate={handleNavigate} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} appSettings={appSettings} />}
-          {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} onSave={flushDirtyToDB} />}
-          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} history={history} weekConfig={weekConfig} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
-          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} people={people} commitments={effectiveCommitments} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} />}
+          {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} loading={loading} error={error} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} onSave={flushDirtyToDB} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} squads={squads} history={history} weekConfig={weekConfig} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
+          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} commitments={effectiveCommitments} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} />}
           {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} commitments={commitments} />}
           {activeTab === "guide" && (
             <React.Suspense fallback={<div style={{ padding: 40, color: c.textDim, fontFamily: body, fontSize: 16, textAlign: "center" }}>Loading...</div>}>

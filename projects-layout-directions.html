@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Flow — Projects Layout Directions</title>
+<meta name="viewport" content="width=1280" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --page: #EDEDF0;
+    --card: #FFFFFF;
+    --inset: #F3F3F6;
+    --th-bg: #F7F7FA;
+    --text: #1A1A1E;
+    --text2: #4A4A52;
+    --text3: #7E7E8A;
+    --text4: #AEAEB8;
+    --accent: #E8590C;
+    --accent-soft: rgba(232,89,12,0.08);
+    --accent-mid: rgba(232,89,12,0.18);
+    --border: rgba(0,0,0,0.07);
+    --border-m: rgba(0,0,0,0.12);
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.03), 0 4px 16px rgba(0,0,0,0.05);
+    --green: #059669; --green-bg: rgba(5,150,105,0.1);
+    --red: #DC2626; --red-bg: rgba(220,38,38,0.1);
+    --amber: #B45309; --amber-bg: rgba(180,83,9,0.1);
+    --purple: #6D28D9; --purple-bg: rgba(109,40,217,0.1);
+    --blue: #1D4ED8; --blue-bg: rgba(29,78,216,0.1);
+    --cyan: #0E7490; --cyan-bg: rgba(14,116,144,0.1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--page);
+    color: var(--text);
+    padding: 40px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1440px; margin: 0 auto; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .dir-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent);
+    margin: 48px 0 4px;
+  }
+  .dir-title:first-child { margin-top: 0; }
+  .dir-sub {
+    font-size: 14px; color: var(--text3);
+    margin-bottom: 20px; max-width: 800px;
+  }
+  .dir-sub b { color: var(--text2); font-weight: 600; }
+
+  /* Shared: KPI cards */
+  .kpi-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    margin-bottom: 16px;
+  }
+  .kpi {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: var(--shadow-card);
+    padding: 20px 24px; cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .kpi:hover { border-color: var(--border-m); }
+  .kpi.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-card); }
+  .kpi-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text3);
+  }
+  .kpi-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 44px; font-weight: 700; line-height: 1;
+    margin: 8px 0 6px;
+  }
+  .kpi-sub { font-size: 13px; color: var(--text3); }
+  .kpi-phases { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .phase-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 600;
+    padding: 3px 8px; border-radius: 5px;
+  }
+  .phase-chip.prd { color: var(--purple); background: var(--purple-bg); }
+  .phase-chip.design { color: var(--blue); background: var(--blue-bg); }
+  .phase-chip.dev { color: var(--amber); background: var(--amber-bg); }
+  .phase-chip.qa { color: var(--cyan); background: var(--cyan-bg); }
+
+  /* Secondary pills */
+  .sec-pills {
+    display: flex; gap: 8px; margin-bottom: 16px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .pill {
+    padding: 6px 12px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--border);
+    font-size: 12px; font-weight: 600; color: var(--text2);
+    cursor: pointer;
+  }
+  .pill .cnt { color: var(--text3); margin-left: 4px; }
+  .pill.active { background: var(--accent-soft); border-color: var(--accent-mid); color: var(--accent); }
+
+  /* The table card */
+  .table-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; box-shadow: var(--shadow-card);
+    overflow: clip;
+  }
+  .toolbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .search {
+    flex: 1; display: flex; align-items: center; gap: 10px;
+    padding: 9px 14px;
+    background: var(--inset);
+    border: 1px solid transparent;
+    border-radius: 10px;
+    color: var(--text4); font-size: 14px;
+  }
+  .search .kbd {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text3);
+    background: var(--card); border: 1px solid var(--border);
+    padding: 2px 7px; border-radius: 5px;
+  }
+  .search-icon {
+    width: 15px; height: 15px; opacity: 0.5;
+  }
+  .view-toggle {
+    display: flex; background: var(--inset); padding: 3px;
+    border-radius: 10px; gap: 2px;
+  }
+  .view-toggle button {
+    font: inherit; font-size: 13px; font-weight: 500;
+    padding: 6px 14px; border: 0; background: transparent;
+    color: var(--text3); border-radius: 7px; cursor: pointer;
+  }
+  .view-toggle button.active {
+    background: var(--card); color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+
+  /* Table */
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 12px 16px; text-align: left;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.03em;
+    text-transform: uppercase; color: var(--text3);
+    background: var(--th-bg); border-bottom: 1px solid var(--border-m);
+    white-space: nowrap;
+  }
+  thead th.sorted { color: var(--accent); }
+  thead th.center { text-align: center; }
+  tbody td {
+    padding: 14px 16px; font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr:hover { background: rgba(0,0,0,0.012); }
+  .squad { color: var(--text2); font-size: 13px; }
+  .pid {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    margin-right: 8px;
+  }
+  .pname { font-weight: 600; color: var(--text); }
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 600;
+    padding: 2px 6px; border-radius: 4px;
+    color: var(--amber); background: var(--amber-bg);
+    margin-left: 8px; letter-spacing: 0.04em;
+  }
+  .owner { color: var(--cyan); font-weight: 500; }
+  .phase-cell { text-align: center; }
+  .health-cell { text-align: center; display: flex; align-items: center; gap: 8px; justify-content: center; }
+  .health-bar {
+    width: 40px; height: 5px; background: rgba(0,0,0,0.08); border-radius: 3px;
+    overflow: hidden;
+  }
+  .health-fill { height: 100%; background: var(--amber); }
+  .num { font-family: 'JetBrains Mono', monospace; font-weight: 700; text-align: center; }
+  .num.dim { color: var(--text4); font-weight: 500; }
+  .num.cyan { color: var(--cyan); }
+  .last-active { text-align: center; font-size: 13px; color: var(--text2); }
+  .last-active.this-wk { color: var(--cyan); font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .timeline-cell { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text2); position: relative; }
+  .timeline-cell::after {
+    content: ""; position: absolute; left: 18px; right: 18px; bottom: 8px;
+    height: 1.5px; background: var(--amber); border-radius: 2px; opacity: 0.7;
+  }
+
+  /* Section label (for Option C) */
+  .section-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text2);
+  }
+
+  .ghost-row {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  /* Option B — segmented tabs */
+  .seg-tabs {
+    display: flex; background: var(--inset); padding: 3px;
+    border-radius: 10px; gap: 2px; flex: 1;
+  }
+  .seg-tabs button {
+    font: inherit; font-size: 13px; font-weight: 500;
+    padding: 7px 14px; border: 0; background: transparent;
+    color: var(--text3); border-radius: 7px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .seg-tabs button .cnt {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text4);
+  }
+  .seg-tabs button.active {
+    background: var(--card); color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .seg-tabs button.active .cnt { color: var(--accent); }
+  .seg-divider { width: 1px; background: var(--border); margin: 4px 4px; }
+
+  .label-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--text4);
+    background: var(--inset);
+    padding: 4px 10px; border-radius: 6px;
+    display: inline-block;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div class="dir-title">Option A — Unified Toolbar</div>
+  <div class="dir-sub">
+    KPI cards stay as primary filter tabs. Secondary pills sit right under the KPIs.
+    <b>Search + view-toggle attach to the table card itself</b> as a toolbar row. "PROJECTS" label dropped — the card is obviously projects.
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi active">
+      <div class="kpi-label">Active</div>
+      <div class="kpi-val">80</div>
+      <div class="kpi-sub">across all squads</div>
+      <div class="kpi-phases">
+        <span class="phase-chip prd">19 PRD</span>
+        <span class="phase-chip design">19 Design</span>
+        <span class="phase-chip dev">22 Dev</span>
+        <span class="phase-chip qa">20 QA</span>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">At Risk</div>
+      <div class="kpi-val">56</div>
+      <div class="kpi-sub">need attention</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Overdue</div>
+      <div class="kpi-val">46</div>
+      <div class="kpi-sub">past end date</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Shipped</div>
+      <div class="kpi-val">22</div>
+      <div class="kpi-sub">in Alpha / Beta / GA</div>
+    </div>
+  </div>
+
+  <div class="sec-pills">
+    <div class="pill">All<span class="cnt">108</span></div>
+    <div class="pill">Deprioritized<span class="cnt">6</span></div>
+  </div>
+
+  <div class="table-card">
+    <div class="toolbar">
+      <div class="search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <span>Search projects by name, ID, owner, or squad…</span>
+        <span class="kbd">/</span>
+      </div>
+      <div class="view-toggle">
+        <button class="active">Table</button>
+        <button>Board</button>
+        <button>Gantt</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="sorted">Squad ↑</th>
+          <th>Project</th>
+          <th>Owner</th>
+          <th class="center">Phase</th>
+          <th class="center">Health</th>
+          <th class="center">Total</th>
+          <th class="center">This Wk</th>
+          <th class="center">People</th>
+          <th class="center">Last Active</th>
+          <th class="center">Timeline</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="squad">Ads</td>
+          <td><span class="pid">X24</span><span class="pname">Size Guide</span><span class="tag">ENDING SOON</span></td>
+          <td class="owner">Noura S.</td>
+          <td class="phase-cell"><span class="phase-chip prd">PRD</span></td>
+          <td><div class="health-cell"><div class="health-bar"><div class="health-fill" style="width:50%"></div></div><span class="mono" style="font-size:12px;font-weight:700">50</span></div></td>
+          <td class="num">23</td>
+          <td class="num dim">—</td>
+          <td class="num">16</td>
+          <td class="last-active">Mar 9</td>
+          <td class="timeline-cell">24 Jan → 18 Apr</td>
+        </tr>
+        <tr>
+          <td class="squad">Ads</td>
+          <td><span class="pid">X48</span><span class="pname">Route Optimization</span></td>
+          <td class="owner">Hana W.</td>
+          <td class="phase-cell"><span class="phase-chip dev">Dev</span></td>
+          <td><div class="health-cell"><div class="health-bar"><div class="health-fill" style="width:40%"></div></div><span class="mono" style="font-size:12px;font-weight:700">40</span></div></td>
+          <td class="num">9</td>
+          <td class="num dim">—</td>
+          <td class="num">8</td>
+          <td class="last-active">Mar 16</td>
+          <td class="timeline-cell">28 Jan → 3 Mar</td>
+        </tr>
+        <tr>
+          <td class="squad">Ads</td>
+          <td><span class="pid">X56</span><span class="pname">Search Autocomplete</span></td>
+          <td class="owner">Lina B.</td>
+          <td class="phase-cell"><span class="phase-chip qa">QA</span></td>
+          <td><div class="health-cell"><div class="health-bar"><div class="health-fill" style="width:65%;background:var(--amber)"></div></div><span class="mono" style="font-size:12px;font-weight:700">65</span></div></td>
+          <td class="num">19</td>
+          <td class="num cyan">1</td>
+          <td class="num">15</td>
+          <td class="last-active this-wk">This wk</td>
+          <td class="timeline-cell">14 Jan → 9 Feb</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div class="dir-title" style="margin-top: 72px;">Option B — Segmented Tabs Inline</div>
+  <div class="dir-sub">
+    KPI cards become <b>pure metrics</b> (not clickable tabs). All 6 tabs live in a segmented strip inside the table toolbar. Single source of truth for filtering.
+    Trade-off: loses the "click a KPI to filter" affordance and the strip gets crowded.
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi" style="cursor:default">
+      <div class="kpi-label">Active</div>
+      <div class="kpi-val">80</div>
+      <div class="kpi-sub">across all squads</div>
+      <div class="kpi-phases">
+        <span class="phase-chip prd">19 PRD</span>
+        <span class="phase-chip design">19 Design</span>
+        <span class="phase-chip dev">22 Dev</span>
+        <span class="phase-chip qa">20 QA</span>
+      </div>
+    </div>
+    <div class="kpi" style="cursor:default">
+      <div class="kpi-label">At Risk</div>
+      <div class="kpi-val">56</div>
+      <div class="kpi-sub">need attention</div>
+    </div>
+    <div class="kpi" style="cursor:default">
+      <div class="kpi-label">Overdue</div>
+      <div class="kpi-val">46</div>
+      <div class="kpi-sub">past end date</div>
+    </div>
+    <div class="kpi" style="cursor:default">
+      <div class="kpi-label">Shipped</div>
+      <div class="kpi-val">22</div>
+      <div class="kpi-sub">in Alpha / Beta / GA</div>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="toolbar" style="padding-bottom: 10px;">
+      <div class="seg-tabs">
+        <button class="active">Active <span class="cnt">80</span></button>
+        <button>At Risk <span class="cnt">56</span></button>
+        <button>Overdue <span class="cnt">46</span></button>
+        <button>Shipped <span class="cnt">22</span></button>
+        <div class="seg-divider"></div>
+        <button>All <span class="cnt">108</span></button>
+        <button>Deprioritized <span class="cnt">6</span></button>
+      </div>
+    </div>
+    <div class="toolbar" style="padding-top: 10px; border-top: 0;">
+      <div class="search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <span>Search projects by name, ID, owner, or squad…</span>
+        <span class="kbd">/</span>
+      </div>
+      <div class="view-toggle">
+        <button class="active">Table</button>
+        <button>Board</button>
+        <button>Gantt</button>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="sorted">Squad ↑</th>
+          <th>Project</th>
+          <th>Owner</th>
+          <th class="center">Phase</th>
+          <th class="center">Health</th>
+          <th class="center">Total</th>
+          <th class="center">This Wk</th>
+          <th class="center">People</th>
+          <th class="center">Last Active</th>
+          <th class="center">Timeline</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="squad">Ads</td>
+          <td><span class="pid">X24</span><span class="pname">Size Guide</span><span class="tag">ENDING SOON</span></td>
+          <td class="owner">Noura S.</td>
+          <td class="phase-cell"><span class="phase-chip prd">PRD</span></td>
+          <td><div class="health-cell"><div class="health-bar"><div class="health-fill" style="width:50%"></div></div><span class="mono" style="font-size:12px;font-weight:700">50</span></div></td>
+          <td class="num">23</td>
+          <td class="num dim">—</td>
+          <td class="num">16</td>
+          <td class="last-active">Mar 9</td>
+          <td class="timeline-cell">24 Jan → 18 Apr</td>
+        </tr>
+        <tr>
+          <td class="squad">Ads</td>
+          <td><span class="pid">X48</span><span class="pname">Route Optimization</span></td>
+          <td class="owner">Hana W.</td>
+          <td class="phase-cell"><span class="phase-chip dev">Dev</span></td>
+          <td><div class="health-cell"><div class="health-bar"><div class="health-fill" style="width:40%"></div></div><span class="mono" style="font-size:12px;font-weight:700">40</span></div></td>
+          <td class="num">9</td>
+          <td class="num dim">—</td>
+          <td class="num">8</td>
+          <td class="last-active">Mar 16</td>
+          <td class="timeline-cell">28 Jan → 3 Mar</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div class="dir-title" style="margin-top: 72px;">Option C — Minimal (lowest risk)</div>
+  <div class="dir-sub">
+    Keep everything; just collapse the floating rows. <b>Drop "PROJECTS" label</b>, <b>merge the pill row with the view-toggle row</b>, and <b>move the search bar inside the card</b> flush with the table header.
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi active">
+      <div class="kpi-label">Active</div>
+      <div class="kpi-val">80</div>
+      <div class="kpi-sub">across all squads</div>
+      <div class="kpi-phases">
+        <span class="phase-chip prd">19 PRD</span>
+        <span class="phase-chip design">19 Design</span>
+        <span class="phase-chip dev">22 Dev</span>
+        <span class="phase-chip qa">20 QA</span>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">At Risk</div>
+      <div class="kpi-val">56</div>
+      <div class="kpi-sub">need attention</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Overdue</div>
+      <div class="kpi-val">46</div>
+      <div class="kpi-sub">past end date</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Shipped</div>
+      <div class="kpi-val">22</div>
+      <div class="kpi-sub">in Alpha / Beta / GA</div>
+    </div>
+  </div>
+
+  <div class="ghost-row">
+    <div class="sec-pills" style="margin: 0;">
+      <div class="pill">All<span class="cnt">108</span></div>
+      <div class="pill">Deprioritized<span class="cnt">6</span></div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="view-toggle">
+      <button class="active">Table</button>
+      <button>Board</button>
+      <button>Gantt</button>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="toolbar">
+      <div class="search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <span>Search projects by name, ID, owner, or squad…</span>
+        <span class="kbd">/</span>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th class="sorted">Squad ↑</th>
+          <th>Project</th>
+          <th>Owner</th>
+          <th class="center">Phase</th>
+          <th class="center">Health</th>
+          <th class="center">Total</th>
+          <th class="center">This Wk</th>
+          <th class="center">People</th>
+          <th class="center">Last Active</th>
+          <th class="center">Timeline</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="squad">Ads</td>
+          <td><span class="pid">X24</span><span class="pname">Size Guide</span><span class="tag">ENDING SOON</span></td>
+          <td class="owner">Noura S.</td>
+          <td class="phase-cell"><span class="phase-chip prd">PRD</span></td>
+          <td><div class="health-cell"><div class="health-bar"><div class="health-fill" style="width:50%"></div></div><span class="mono" style="font-size:12px;font-weight:700">50</span></div></td>
+          <td class="num">23</td>
+          <td class="num dim">—</td>
+          <td class="num">16</td>
+          <td class="last-active">Mar 9</td>
+          <td class="timeline-cell">24 Jan → 18 Apr</td>
+        </tr>
+        <tr>
+          <td class="squad">Ads</td>
+          <td><span class="pid">X48</span><span class="pname">Route Optimization</span></td>
+          <td class="owner">Hana W.</td>
+          <td class="phase-cell"><span class="phase-chip dev">Dev</span></td>
+          <td><div class="health-cell"><div class="health-bar"><div class="health-fill" style="width:40%"></div></div><span class="mono" style="font-size:12px;font-weight:700">40</span></div></td>
+          <td class="num">9</td>
+          <td class="num dim">—</td>
+          <td class="num">8</td>
+          <td class="last-active">Mar 16</td>
+          <td class="timeline-cell">28 Jan → 3 Mar</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

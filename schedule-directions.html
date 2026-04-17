@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Flow — Schedule Section Directions</title>
+<meta name="viewport" content="width=1280" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --page: #EDEDF0;
+    --card: #FFFFFF;
+    --inset: #F3F3F6;
+    --text:  #1A1A1E;
+    --text2: #4A4A52;
+    --text3: #7E7E8A;
+    --text4: #AEAEB8;
+    --accent: #E8590C;
+    --border: rgba(0,0,0,0.07);
+    --border-m: rgba(0,0,0,0.12);
+    --shadow: 0 1px 3px rgba(0,0,0,0.03), 0 4px 16px rgba(0,0,0,0.05);
+    --green:  #059669; --green-bg: rgba(5,150,105,0.1);
+    --red:    #DC2626; --red-bg:   rgba(220,38,38,0.1);
+    --amber:  #B45309; --amber-bg: rgba(180,83,9,0.1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--page); color: var(--text);
+    padding: 32px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .pageHead { margin-bottom: 32px; }
+  .pageHead h1 {
+    font-size: 24px; font-weight: 700; letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }
+  .pageHead p {
+    color: var(--text3); font-size: 14px; max-width: 780px;
+  }
+  .current {
+    margin: 24px 0 32px;
+    padding: 16px 20px; border-radius: 10px;
+    background: rgba(220,38,38,0.04); border: 1px solid rgba(220,38,38,0.18);
+  }
+  .current .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--red);
+    margin-bottom: 8px;
+  }
+
+  .dir { margin-top: 56px; }
+  .dir:first-of-type { margin-top: 0; }
+  .dir-head {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 10px;
+  }
+  .dir-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .dir-title { font-size: 18px; font-weight: 700; }
+  .dir-note {
+    color: var(--text3); font-size: 13px; max-width: 720px;
+    margin-bottom: 16px;
+  }
+
+  /* shared section-label (reused by all directions) */
+  .sec-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text3);
+  }
+  .card-wrap {
+    background: var(--inset); border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     CURRENT (for reference)
+     ════════════════════════════════════════════════════════════ */
+  .X-wrap { padding: 16px 24px; display: grid; grid-template-columns: 120px 1fr 1fr; gap: 32px; align-items: center; }
+  .X-col .X-head {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 4px;
+  }
+  .X-col .X-dates { font-size: 14px; color: var(--text); }
+  .X-col .X-dates b { font-weight: 700; }
+  .X-col .X-slip {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+    color: var(--red); margin-left: 8px;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     DIRECTION A — delta-first headline
+     ════════════════════════════════════════════════════════════ */
+  .A-wrap {
+    padding: 16px 24px;
+    display: grid; grid-template-columns: 120px 1fr; gap: 24px; align-items: center;
+  }
+  .A-body { display: flex; flex-direction: column; gap: 4px; }
+  .A-headline {
+    font-size: 18px; font-weight: 700; color: var(--red);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .A-dot {
+    width: 10px; height: 10px; border-radius: 999px;
+    background: var(--red);
+  }
+  .A-detail {
+    font-size: 13px; color: var(--text3);
+  }
+  .A-detail b { color: var(--text2); font-weight: 600; }
+
+  /* ════════════════════════════════════════════════════════════
+     DIRECTION B — visual bars
+     ════════════════════════════════════════════════════════════ */
+  .B-wrap { padding: 18px 24px; display: grid; grid-template-columns: 120px 1fr; gap: 24px; align-items: center; }
+  .B-body { display: flex; flex-direction: column; gap: 10px; }
+  .B-row {
+    display: grid; grid-template-columns: 60px 1fr auto;
+    gap: 12px; align-items: center;
+  }
+  .B-row .cap {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; color: var(--text3);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .B-bar {
+    position: relative; height: 8px; border-radius: 4px;
+    background: var(--border);
+  }
+  .B-bar .fill-plan {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--text4); border-radius: 4px;
+  }
+  .B-bar .fill-actual {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--red); border-radius: 4px;
+  }
+  .B-bar .slip-tail {
+    position: absolute; top: 0; bottom: 0;
+    background: repeating-linear-gradient(45deg, var(--red), var(--red) 3px, rgba(220,38,38,0.6) 3px, rgba(220,38,38,0.6) 6px);
+    border-radius: 0 4px 4px 0;
+  }
+  .B-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700; color: var(--text2);
+    min-width: 70px; text-align: right;
+  }
+  .B-num.late { color: var(--red); }
+  .B-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text3);
+    margin-left: 72px;
+    display: flex; gap: 20px;
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     DIRECTION C — clean two-column hierarchy
+     ════════════════════════════════════════════════════════════ */
+  .C-wrap { padding: 16px 24px; display: grid; grid-template-columns: 120px 1fr 1fr; gap: 32px; align-items: center; }
+  .C-col .C-head {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 6px;
+  }
+  .C-col .C-actual {
+    font-size: 15px; font-weight: 700; color: var(--text);
+  }
+  .C-col .C-plan {
+    font-size: 12px; color: var(--text3); margin-top: 2px;
+  }
+  .C-col .C-plan b { color: var(--text2); font-weight: 500; }
+  .C-col .C-slip {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 2px 8px; border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; font-weight: 700;
+    color: var(--red); background: var(--red-bg);
+  }
+
+  /* ════════════════════════════════════════════════════════════
+     DIRECTION D — sentence + duration
+     ════════════════════════════════════════════════════════════ */
+  .D-wrap { padding: 16px 24px; display: grid; grid-template-columns: 120px 1fr; gap: 24px; align-items: center; }
+  .D-body { display: flex; flex-direction: column; gap: 6px; }
+  .D-headline {
+    font-size: 15px; color: var(--text);
+  }
+  .D-headline .plan { color: var(--text3); }
+  .D-headline .actual { font-weight: 700; }
+  .D-headline .pct {
+    margin-left: 8px; padding: 2px 8px; border-radius: 5px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 700;
+    color: var(--red); background: var(--red-bg);
+  }
+  .D-detail {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; color: var(--text3);
+  }
+  .D-detail .arrow { margin: 0 6px; opacity: 0.6; }
+
+  /* ════════════════════════════════════════════════════════════
+     E-P — polished "sentence" scenarios showing all states
+     ════════════════════════════════════════════════════════════ */
+  .scenarios {
+    margin-top: 64px;
+  }
+  .scenarios h2 {
+    font-size: 18px; font-weight: 700; margin-bottom: 6px;
+  }
+  .scenarios .note {
+    color: var(--text3); font-size: 13px; margin-bottom: 16px;
+    max-width: 720px;
+  }
+  .scen-grid {
+    display: grid; grid-template-columns: 1fr; gap: 10px;
+  }
+  .scen {
+    padding: 14px 20px; border-radius: 10px;
+    background: var(--inset); border: 1px solid var(--border);
+    display: grid; grid-template-columns: 120px 1fr auto; gap: 24px; align-items: center;
+  }
+  .scen .sec-label { align-self: center; }
+  .scen .summary {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 15px; font-weight: 600;
+  }
+  .scen .summary.late { color: var(--red); }
+  .scen .summary.early { color: var(--green); }
+  .scen .summary.ontrack { color: var(--text); }
+  .scen .summary .dot { width: 10px; height: 10px; border-radius: 999px; }
+  .scen .summary.late .dot { background: var(--red); }
+  .scen .summary.early .dot { background: var(--green); }
+  .scen .summary.ontrack .dot { background: var(--text3); }
+  .scen .detail {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text3);
+    text-align: right;
+  }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="pageHead">
+    <h1>Plan vs Actual — four directions</h1>
+    <p>All four use the same X40 scenario: <b>planned Mar 26 – Mar 29 (4d)</b>, actually <b>Mar 29 – Apr 3 (6d)</b> — so started 3d late and ended 5d late. Pick the shape that fits, then we can tune copy.</p>
+  </div>
+
+  <!-- CURRENT (before) -->
+  <div class="current">
+    <div class="label">Current — what's shipped today</div>
+    <div class="card-wrap" style="background: var(--card);">
+      <div class="X-wrap">
+        <span class="sec-label">Plan vs Actual</span>
+        <div class="X-col">
+          <div class="X-head">Start</div>
+          <div class="X-dates">Mar 26 → <b>Mar 29</b> <span class="X-slip">3d late</span></div>
+        </div>
+        <div class="X-col">
+          <div class="X-head">End</div>
+          <div class="X-dates">Mar 29 → <b>Apr 3</b> <span class="X-slip">5d late</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- DIRECTION A -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="dir">
+    <div class="dir-head">
+      <span class="dir-tag">Direction A</span>
+      <span class="dir-title">Delta-first, headline-style</span>
+    </div>
+    <p class="dir-note">Lead with the story; details follow. When someone walks past the deep-dive, the most useful fact — "this shipped 5 days late" — is what they want. Minimum ink, maximum signal.</p>
+    <div class="card-wrap" style="background: var(--card);">
+      <div class="A-wrap">
+        <span class="sec-label">Schedule</span>
+        <div class="A-body">
+          <div class="A-headline"><span class="A-dot"></span>Shipped 5 days late</div>
+          <div class="A-detail">Actual <b>Mar 29 → Apr 3</b>  ·  planned Mar 26 → Mar 29</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- DIRECTION B -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="dir">
+    <div class="dir-head">
+      <span class="dir-tag">Direction B</span>
+      <span class="dir-title">Visual bars — plan vs actual</span>
+    </div>
+    <p class="dir-note">Plan as gray bar, actual as colored bar underneath. The overshoot gets a hatched red tail so the slip is impossible to miss. Best when you want the <i>proportion</i> of slip visible (e.g., a 5-day slip on a 4-day plan is huge).</p>
+    <div class="card-wrap" style="background: var(--card);">
+      <div class="B-wrap">
+        <span class="sec-label">Schedule</span>
+        <div class="B-body">
+          <div class="B-row">
+            <span class="cap">Plan</span>
+            <div class="B-bar">
+              <div class="fill-plan" style="width: 40%;"></div>
+            </div>
+            <span class="B-num">4 days</span>
+          </div>
+          <div class="B-row">
+            <span class="cap">Actual</span>
+            <div class="B-bar">
+              <div class="fill-actual" style="width: 40%;"></div>
+              <div class="slip-tail" style="left: 40%; width: 20%;"></div>
+            </div>
+            <span class="B-num late">6 days · 5d late</span>
+          </div>
+          <div class="B-meta">
+            <span>Mar 26 → Mar 29 <span style="color: var(--text4);">(planned)</span></span>
+            <span style="color: var(--red);">Mar 29 → Apr 3 (actual)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- DIRECTION C -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="dir">
+    <div class="dir-head">
+      <span class="dir-tag">Direction C</span>
+      <span class="dir-title">Clean two-column — actual primary, plan secondary</span>
+    </div>
+    <p class="dir-note">Keeps the start/end split you have now but fixes hierarchy: actual dates are the story (bold), planned dates live quietly in parens, and slip becomes a proper status chip on its own line.</p>
+    <div class="card-wrap" style="background: var(--card);">
+      <div class="C-wrap">
+        <span class="sec-label">Schedule</span>
+        <div class="C-col">
+          <div class="C-head">Start</div>
+          <div class="C-actual">Mar 29</div>
+          <div class="C-plan">planned <b>Mar 26</b></div>
+          <div class="C-slip">3 days late</div>
+        </div>
+        <div class="C-col">
+          <div class="C-head">End</div>
+          <div class="C-actual">Apr 3</div>
+          <div class="C-plan">planned <b>Mar 29</b></div>
+          <div class="C-slip">5 days late</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- DIRECTION D -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="dir">
+    <div class="dir-head">
+      <span class="dir-tag">Direction D</span>
+      <span class="dir-title">Sentence form — duration-first</span>
+    </div>
+    <p class="dir-note">Forces the proportion into view. "Planned 4d, took 6d — 50% over" reads as a story, not a table. Good when the duration delta matters more than which day things happened.</p>
+    <div class="card-wrap" style="background: var(--card);">
+      <div class="D-wrap">
+        <span class="sec-label">Schedule</span>
+        <div class="D-body">
+          <div class="D-headline">
+            <span class="plan">Planned 4 days,</span>
+            <span class="actual">took 6 days</span>
+            <span class="pct">50% over</span>
+          </div>
+          <div class="D-detail">Mar 26 → Mar 29 <span class="arrow">→</span> Mar 29 → Apr 3</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- SCENARIOS (A adapted) — how each state reads -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="scenarios">
+    <h2>Same component, four states (using Direction A)</h2>
+    <p class="note">What the section looks like across the real lifecycle. Late → On plan → Early → still in-flight. The "hide when on-plan" rule is optional.</p>
+    <div class="scen-grid">
+      <div class="scen">
+        <span class="sec-label">Schedule</span>
+        <div class="summary late"><span class="dot"></span>Shipped 5 days late</div>
+        <div class="detail">Mar 29 → Apr 3<br><span style="color: var(--text4);">planned Mar 26 → Mar 29</span></div>
+      </div>
+      <div class="scen">
+        <span class="sec-label">Schedule</span>
+        <div class="summary ontrack"><span class="dot"></span>Shipped on plan</div>
+        <div class="detail">Mar 26 → Mar 29</div>
+      </div>
+      <div class="scen">
+        <span class="sec-label">Schedule</span>
+        <div class="summary early"><span class="dot"></span>Shipped 2 days early</div>
+        <div class="detail">Mar 26 → Mar 27<br><span style="color: var(--text4);">planned Mar 26 → Mar 29</span></div>
+      </div>
+      <div class="scen">
+        <span class="sec-label">Schedule</span>
+        <div class="summary ontrack"><span class="dot"></span>Tracking on plan</div>
+        <div class="detail">Started Mar 26 · targets Mar 29<br><span style="color: var(--text4);">3 days remaining</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
