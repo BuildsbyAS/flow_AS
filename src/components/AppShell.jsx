@@ -293,7 +293,7 @@ export function Header({
       borderBottom: `1px solid ${c.border}`,
       boxShadow: c.shadowSm,
       position: "relative", zIndex: 2,
-      minWidth: 0, overflow: "hidden",
+      minWidth: 0,
     }}>
 
       {/* ── Logo — orange dot + FLOW wordmark ── */}
