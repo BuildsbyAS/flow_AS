@@ -618,6 +618,129 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
     if (setIsLocked) setIsLocked(true);
     setLockSuccess(true);
   };
+  // Commits outcomes + carry-forward + closedAt to the DB. Called from the
+  // floating dock's "Confirm Close" CTA in closing phase.
+  const confirmCloseWeek = () => {
+    setCommitments(prev => {
+      if (activePerson < 0 || activePerson >= prev.length) return prev;
+      const next = [...prev];
+      const p = { ...next[activePerson] };
+      const normalizeWeek = (ws) => ws ? String(ws).slice(0, 10) : "";
+      const myWeekStart = normalizeWeek(p.weekStart);
+
+      const alreadyCarriedByKey = (targetRow, sourceKey) =>
+        (targetRow.items || []).some(t => t && t._carrySourceKey === sourceKey);
+
+      // 1. Collect all carry intents (slots + buffer) with stable source keys.
+      const carries = [];
+      p.items.slice(0, 3).forEach((it, idx) => {
+        if (!(it.title || "").trim()) return;
+        if (p.deselected === idx) return;
+        if (it.outcome !== "carry" && it.outcome !== "done_carry") return;
+        if (!it.carryTo) return;
+        const targetWeek = normalizeWeek(it.carryTo);
+        if (!targetWeek || targetWeek === myWeekStart) return;
+        const nextWeeksRemaining = it.outcome === "done_carry"
+          ? Math.max(1, it.weeksRemaining || 1)
+          : Math.max(1, (it.weeksRemaining || it.duration || 1) - 1);
+        carries.push({
+          targetWeek,
+          sourceKey: `${myWeekStart}:slot:${idx}`,
+          newItem: {
+            title: it.title, type: it.type, project: it.project, stage: it.stage,
+            duration: nextWeeksRemaining,
+            weeksRemaining: nextWeeksRemaining,
+            outcome: null, carryTo: null, blockedReason: "",
+            carriedFrom: weekLabel,
+            _carrySourceKey: `${myWeekStart}:slot:${idx}`,
+          },
+        });
+      });
+      const bufferTarget = normalizeWeek(p.bufferCarryTo);
+      if ((p.bufferOutcome === "carry" || p.bufferOutcome === "done_carry") && bufferTarget && (p.buffer || "").trim() && bufferTarget !== myWeekStart) {
+        carries.push({
+          targetWeek: bufferTarget,
+          sourceKey: `${myWeekStart}:buffer`,
+          newItem: {
+            title: p.buffer, type: p.bufferType || "", project: p.bufferProject || "", stage: p.bufferStage || "",
+            duration: p.bufferDuration || 1,
+            weeksRemaining: p.bufferDuration || 1,
+            outcome: null, carryTo: null, blockedReason: "",
+            carriedFrom: weekLabel,
+            _carrySourceKey: `${myWeekStart}:buffer`,
+          },
+        });
+      }
+
+      // 2. Group by target week and apply in one pass per target.
+      const byTarget = new Map();
+      for (const c of carries) {
+        if (!byTarget.has(c.targetWeek)) byTarget.set(c.targetWeek, []);
+        byTarget.get(c.targetWeek).push(c);
+      }
+
+      for (const [targetWeek, group] of byTarget) {
+        let targetIdx = next.findIndex((entry, ei) =>
+          entry.person === p.person && ei !== activePerson &&
+          normalizeWeek(entry.weekStart) === targetWeek
+        );
+        if (targetIdx !== -1 && next[targetIdx].closedAt) {
+          console.warn("[Flow] Carry target week is closed; dropping carries", group.map(g => g.sourceKey));
+          continue;
+        }
+        let target;
+        if (targetIdx === -1) {
+          target = makeCarriedWeekRow(p.person, targetWeek, group[0].newItem);
+          for (let gi = 1; gi < group.length; gi++) {
+            const { newItem, sourceKey } = group[gi];
+            if (alreadyCarriedByKey(target, sourceKey)) continue;
+            const items = target.items || [];
+            const emptyIdx = items.findIndex(t => !(t && (t.title || "").trim()));
+            if (emptyIdx !== -1 && emptyIdx < 3) {
+              items[emptyIdx] = newItem;
+            } else if (!(target.buffer || "").trim()) {
+              target.buffer = newItem.title;
+              target.bufferProject = newItem.project;
+              target.bufferStage = newItem.stage;
+              target.bufferType = newItem.type;
+              target.bufferDuration = newItem.duration;
+            } else {
+              console.warn("[Flow] Carry target week is full; dropping", sourceKey);
+            }
+          }
+          next.push(target);
+        } else {
+          target = { ...next[targetIdx], items: [...(next[targetIdx].items || [])] };
+          for (const { newItem, sourceKey } of group) {
+            if (alreadyCarriedByKey(target, sourceKey)) continue;
+            const emptyIdx = target.items.findIndex(t => !(t && (t.title || "").trim()));
+            if (emptyIdx !== -1 && emptyIdx < 3) {
+              target.items[emptyIdx] = newItem;
+            } else if (!(target.buffer || "").trim()) {
+              target.buffer = newItem.title;
+              target.bufferProject = newItem.project;
+              target.bufferStage = newItem.stage;
+              target.bufferType = newItem.type;
+              target.bufferDuration = newItem.duration;
+            } else {
+              console.warn("[Flow] Carry target week is full; dropping", sourceKey);
+            }
+          }
+          next[targetIdx] = target;
+        }
+      }
+
+      p.closedAt = new Date().toISOString();
+      p.closedAtDate = toLocalISODate(new Date());
+      next[activePerson] = p; return next;
+    });
+    justClosedRef.current = true;
+    setTimeout(async () => {
+      setClosingMode(false);
+      if (onSave) { try { await onSave(); } catch (_) {} }
+      goBackToList();
+    }, 0);
+  };
   const handleUnlock = () => {
     if (!canUnlock || isClosed || isHistorical) return;
     setCommitments(prev => {
@@ -1239,11 +1362,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                   <div style={{ width: 6, height: 6, borderRadius: "50%", background: isClosed ? c.textMid : c.green }} />
                   <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, color: isClosed ? c.textMid : c.green, textTransform: "uppercase" }}>{isClosed ? "Closed" : "Locked"}</span>
                 </div>
-                {!isHistorical && !isClosed && (
-                  <Btn variant="primary" size="sm" onClick={() => setClosingMode(true)}>
-                    Close <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, marginLeft: space[1], padding: `2px ${space[1]}px`, borderRadius: layout.radiusXs, background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.28)" }}>C</kbd>
-                  </Btn>
-                )}
+                {/* Close CTA lives in the floating action dock (bottom-right) */}
               </div>
             )}
             {/* Closing: progress bars + resolved text + Closing pill + Back button */}
@@ -1309,10 +1428,9 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
         const bufferHasContent = bufferActive && (person.buffer || "").trim() && person.bufferProject && person.bufferStage && person.bufferType;
         const activeItems = person.items.slice(0, 3).filter((_, idx) => person.deselected !== idx);
 
-        // ── Review Mode: stacked cards + Lock Week CTA ──
+        // ── Review Mode: stacked cards (Lock CTA is in the dock) ──
         if (reviewModeAnim.mounted) {
           return (
-            <>
             <div style={{
               maxWidth: 640, margin: `${space[4]}px auto 0`, width: "100%",
               animation: reviewModeAnim.visible
@@ -1485,39 +1603,6 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                 <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textMid }}>Click any commit above to edit</span>
               </div>
             </div>
-
-            {/* ── Floating action dock — Save + Lock Week always reachable ── */}
-            <div
-              role="toolbar"
-              aria-label="Review actions"
-              style={{
-                position: "fixed", bottom: space[5], right: space[5],
-                display: "flex", gap: space[2],
-                padding: space[2],
-                background: c.surface, border: `1px solid ${c.border}`,
-                borderRadius: layout.radiusLg, boxShadow: c.shadowElevated,
-                zIndex: 40,
-                animation: `fadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
-              }}
-            >
-              <Btn variant="secondary" size="md" onClick={async () => {
-                setAutoSaveStatus("saving");
-                try {
-                  if (onSave) await onSave();
-                  setAutoSaveStatus("saved");
-                } catch (_) {
-                  setAutoSaveStatus("error");
-                }
-                clearTimeout(autoSaveStatusTimer.current);
-                autoSaveStatusTimer.current = setTimeout(() => setAutoSaveStatus(null), 2000);
-              }}>
-                Save
-              </Btn>
-              <Btn variant="success" size="md" disabled={!canLock} onClick={() => { if (canLock) setConfirmAction("lock"); }}>
-                Lock Week
-              </Btn>
-            </div>
-          </>
           );
         }
 
@@ -1810,20 +1895,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                   </div>
                 )}
 
-                {/* ── Forward action ── */}
-                {slotFilled[detailFocus] && detailFocus <= 2 && (
-                  <div style={{ display: "flex", justifyContent: "flex-end", paddingTop: space[2], borderTop: `1px solid ${c.border}`, animation: `fadeScaleIn ${motion.fast.duration} ${motion.fast.easing} both`, animationDelay: "120ms" }}>
-                    {detailFocus < 2 ? (
-                      <Btn variant="primary" size="sm" onClick={() => setDetailFocus(detailFocus + 1)}>
-                        Next {"\u2192"}
-                      </Btn>
-                    ) : (
-                      <Btn variant="success" size="sm" onClick={() => setReviewMode(true)}>
-                        Review Plan {"\u2192"}
-                      </Btn>
-                    )}
-                  </div>
-                )}
+                {/* Next / Review Plan CTA lives in the floating action dock */}
 
               </div>
             )}
@@ -2301,153 +2373,13 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
           maxWidth: 640, margin: "0 auto", width: "100%",
           background: weekComplete ? `${c.green}08` : c.surfaceAlt,
           borderLeft: `3px solid ${weekComplete ? c.green : c.border}`,
-          display: "flex", alignItems: "center", justifyContent: "space-between",
         }}>
-          <div>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking, color: weekComplete ? c.green : c.textMid }}>
-              {weekComplete ? "All commits resolved" : `${fullyResolved}/${totalToResolve} resolved`}
-            </div>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginTop: 2 }}>
-              {weekComplete ? "Ready to close this week" : "Resolve all items to close the week"}
-            </div>
+          <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking, color: weekComplete ? c.green : c.textMid }}>
+            {weekComplete ? "All commits resolved" : `${fullyResolved}/${totalToResolve} resolved`}
           </div>
-          <Btn
-            variant="success"
-            disabled={!weekComplete}
-            onClick={() => {
-              setCommitments(prev => {
-                if (activePerson < 0 || activePerson >= prev.length) return prev;
-                const next = [...prev];
-                const p = { ...next[activePerson] };
-                const normalizeWeek = (ws) => ws ? String(ws).slice(0, 10) : "";
-                const myWeekStart = normalizeWeek(p.weekStart);
-
-                // Stable-identity dedup: key on (sourceWeek, sourceSlot) rather than title,
-                // so a buffer matching a slot title doesn't collide.
-                const alreadyCarriedByKey = (targetRow, sourceKey) =>
-                  (targetRow.items || []).some(t => t && t._carrySourceKey === sourceKey);
-
-                // 1. Collect all carry intents (slots + buffer) with stable source keys.
-                const carries = [];
-                p.items.slice(0, 3).forEach((it, idx) => {
-                  if (!(it.title || "").trim()) return;
-                  if (p.deselected === idx) return;
-                  if (it.outcome !== "carry" && it.outcome !== "done_carry") return;
-                  if (!it.carryTo) return;
-                  const targetWeek = normalizeWeek(it.carryTo);
-                  if (!targetWeek || targetWeek === myWeekStart) return;
-                  // Plain carry decrements weeksRemaining; done_carry already did.
-                  const nextWeeksRemaining = it.outcome === "done_carry"
-                    ? Math.max(1, it.weeksRemaining || 1)
-                    : Math.max(1, (it.weeksRemaining || it.duration || 1) - 1);
-                  carries.push({
-                    targetWeek,
-                    sourceKey: `${myWeekStart}:slot:${idx}`,
-                    newItem: {
-                      title: it.title, type: it.type, project: it.project, stage: it.stage,
-                      duration: nextWeeksRemaining,
-                      weeksRemaining: nextWeeksRemaining,
-                      outcome: null, carryTo: null, blockedReason: "",
-                      carriedFrom: weekLabel,
-                      _carrySourceKey: `${myWeekStart}:slot:${idx}`,
-                    },
-                  });
-                });
-                const bufferTarget = normalizeWeek(p.bufferCarryTo);
-                if ((p.bufferOutcome === "carry" || p.bufferOutcome === "done_carry") && bufferTarget && (p.buffer || "").trim() && bufferTarget !== myWeekStart) {
-                  carries.push({
-                    targetWeek: bufferTarget,
-                    sourceKey: `${myWeekStart}:buffer`,
-                    newItem: {
-                      title: p.buffer, type: p.bufferType || "", project: p.bufferProject || "", stage: p.bufferStage || "",
-                      duration: p.bufferDuration || 1,
-                      weeksRemaining: p.bufferDuration || 1,
-                      outcome: null, carryTo: null, blockedReason: "",
-                      carriedFrom: weekLabel,
-                      _carrySourceKey: `${myWeekStart}:buffer`,
-                    },
-                  });
-                }
-
-                // 2. Group by target week and apply in one pass per target.
-                const byTarget = new Map();
-                for (const c of carries) {
-                  if (!byTarget.has(c.targetWeek)) byTarget.set(c.targetWeek, []);
-                  byTarget.get(c.targetWeek).push(c);
-                }
-
-                for (const [targetWeek, group] of byTarget) {
-                  // Locate or create the target row once per target week.
-                  let targetIdx = next.findIndex((entry, ei) =>
-                    entry.person === p.person && ei !== activePerson &&
-                    normalizeWeek(entry.weekStart) === targetWeek
-                  );
-                  if (targetIdx !== -1 && next[targetIdx].closedAt) {
-                    // Never mutate a closed target week silently.
-                    console.warn("[Flow] Carry target week is closed; dropping carries", group.map(g => g.sourceKey));
-                    continue;
-                  }
-                  let target;
-                  if (targetIdx === -1) {
-                    target = makeCarriedWeekRow(p.person, targetWeek, group[0].newItem);
-                    // Apply remaining group entries against this new row.
-                    for (let gi = 1; gi < group.length; gi++) {
-                      const { newItem, sourceKey } = group[gi];
-                      if (alreadyCarriedByKey(target, sourceKey)) continue;
-                      const items = target.items || [];
-                      const emptyIdx = items.findIndex(t => !(t && (t.title || "").trim()));
-                      if (emptyIdx !== -1 && emptyIdx < 3) {
-                        items[emptyIdx] = newItem;
-                      } else if (!(target.buffer || "").trim()) {
-                        target.buffer = newItem.title;
-                        target.bufferProject = newItem.project;
-                        target.bufferStage = newItem.stage;
-                        target.bufferType = newItem.type;
-                        target.bufferDuration = newItem.duration;
-                      } else {
-                        console.warn("[Flow] Carry target week is full; dropping", sourceKey);
-                      }
-                    }
-                    next.push(target);
-                  } else {
-                    target = { ...next[targetIdx], items: [...(next[targetIdx].items || [])] };
-                    for (const { newItem, sourceKey } of group) {
-                      if (alreadyCarriedByKey(target, sourceKey)) continue;
-                      const emptyIdx = target.items.findIndex(t => !(t && (t.title || "").trim()));
-                      if (emptyIdx !== -1 && emptyIdx < 3) {
-                        target.items[emptyIdx] = newItem;
-                      } else if (!(target.buffer || "").trim()) {
-                        target.buffer = newItem.title;
-                        target.bufferProject = newItem.project;
-                        target.bufferStage = newItem.stage;
-                        target.bufferType = newItem.type;
-                        target.bufferDuration = newItem.duration;
-                      } else {
-                        console.warn("[Flow] Carry target week is full; dropping", sourceKey);
-                      }
-                    }
-                    next[targetIdx] = target;
-                  }
-                }
-
-                p.closedAt = new Date().toISOString();
-                p.closedAtDate = toLocalISODate(new Date());
-                next[activePerson] = p; return next;
-              });
-              // Mark the exit as a successful close so setClosingMode(false)
-              // does not wipe outcomes via its Escape-path cleanup.
-              justClosedRef.current = true;
-              // Defer navigation + save so React commits the close mutation first;
-              // otherwise flushDirtyToDB can persist a stale pre-close snapshot.
-              // Explicit flush here because triggerAutoSave is suppressed during
-              // closing mode — this is the user-confirmed moment outcomes hit the DB.
-              setTimeout(async () => {
-                setClosingMode(false);
-                if (onSave) { try { await onSave(); } catch (_) {} }
-                goBackToList();
-              }, 0);
-            }}
-          >Close Week</Btn>
+          <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginTop: 2 }}>
+            {weekComplete ? "Confirm close in the action dock" : "Resolve all items to close the week"}
+          </div>
         </Surface>
       )}
 
@@ -2598,6 +2530,53 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
           <Btn variant="danger" disabled={!blockedText.trim()} onClick={saveBlockedReason}>Mark Blocked</Btn>
         </div>
       </Modal>
+
+      {/* ═══ FLOATING ACTION DOCK ═══════════════════════════════════════
+          Single primary CTA anchored bottom-right. Label + action
+          derived from the current phase so the user always knows the
+          next step and never hunts for it inline.
+          ═══════════════════════════════════════════════════════════════ */}
+      {(() => {
+        if (!person || activePerson < 0) return null;
+        if (isHistorical || isClosed) return null;
+        let action = null;
+        if (reviewMode) {
+          action = { label: "Lock Week", variant: "success", disabled: !canLock,
+                     onClick: () => { if (canLock) setConfirmAction("lock"); } };
+        } else if (phase === "closing") {
+          action = { label: "Confirm Close", variant: "success", disabled: !weekComplete,
+                     onClick: confirmCloseWeek };
+        } else if (phase === "locked") {
+          action = { label: "Close Week \u2192", variant: "primary",
+                     onClick: () => setClosingMode(true) };
+        } else if (allSlotsFilled) {
+          action = { label: "Review Plan \u2192", variant: "success",
+                     onClick: () => setReviewMode(true) };
+        } else {
+          const dockSlotFilled = person.items.slice(0, 3).map(it =>
+            !!it?.project && !!(it?.title || "").trim() && !!it?.stage && allPhases.includes(it?.stage) && !!it?.type
+          );
+          if (detailFocus >= 0 && detailFocus < 2 && dockSlotFilled[detailFocus]) {
+            action = { label: "Next \u2192", variant: "primary",
+                       onClick: () => setDetailFocus(detailFocus + 1) };
+          }
+        }
+        if (!action) return null;
+        return (
+          <div role="toolbar" aria-label="Primary action" style={{
+            position: "fixed", bottom: space[5], right: space[5],
+            padding: space[2],
+            background: c.surface, border: `1px solid ${c.border}`,
+            borderRadius: layout.radiusLg, boxShadow: c.shadowElevated,
+            zIndex: 40,
+            animation: `fadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+          }}>
+            <Btn variant={action.variant} size="md" disabled={action.disabled} onClick={action.onClick}>
+              {action.label}
+            </Btn>
+          </div>
+        );
+      })()}
     </div>
   );
 };
