@@ -1921,28 +1921,26 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
             }
 
             // ── Outcome styling (closed weeks only) ──
-            // Mirrors the closing-phase treatment so a closed week "freezes"
-            // with its final outcomes visible: colored slot chip + icon,
-            // tinted border/bg, strikethrough on completed items, and an
-            // explicit outcome badge.
+            // Surfaces final outcomes on archived cards: tinted slot chip,
+            // outcome badge, carry-to date, and blocker reason. No
+            // strikethrough — this is a record, not a crossed-off todo.
             const outcome = isClosed ? item.outcome : null;
             const outcomeColor = outcome === "done" || outcome === "done_carry" ? c.green
               : outcome === "blocked" ? c.red
               : outcome === "carry" ? c.cyan
               : outcome === "partial" ? c.orange
               : null;
-            const outcomeLabel = outcome === "done" || outcome === "done_carry" ? "Completed"
-              : outcome === "blocked" ? "Blocked"
-              : outcome === "carry" ? "Carry"
-              : outcome === "partial" ? "Partial"
-              : null;
             const outcomeIcon = outcome === "done" || outcome === "done_carry" ? "\u2713"
               : outcome === "carry" ? "\u2192"
               : outcome === "blocked" ? "!"
+              : outcome === "partial" ? "\u00BD"
+              : null;
+            // Format carryTo ISO date → "Apr 27"
+            const carryToLabel = item.carryTo
+              ? (() => { try { const d = new Date(item.carryTo + "T00:00:00"); return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }); } catch { return null; } })()
               : null;
             const cardBorder = outcomeColor ? `${outcomeColor}25` : c.border;
             const cardBg = outcomeColor ? `${outcomeColor}08` : c.surface;
-            const titleStruck = outcome === "done" || outcome === "done_carry";
 
             return (
               <div key={idx} style={{
@@ -1963,10 +1961,29 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                   }}>{outcomeIcon || (idx + 1)}</div>
                   {projObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: entityColors().project }}>{projObj.id}</span>}
                   {projObj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{projObj.name}</span>}
-                  {outcomeLabel && (
-                    <Badge color={outcomeColor} bg={`${outcomeColor}12`} style={{ marginLeft: "auto", border: `1px solid ${outcomeColor}25` }}>{outcomeLabel}</Badge>
+                  {outcome && (
+                    <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap", justifyContent: "flex-end" }}>
+                      {outcome === "done" && (
+                        <Badge color={c.green} bg={`${c.green}12`} style={{ border: `1px solid ${c.green}25` }}>Completed</Badge>
+                      )}
+                      {outcome === "done_carry" && (
+                        <>
+                          <Badge color={c.green} bg={`${c.green}12`} style={{ border: `1px solid ${c.green}25` }}>Completed</Badge>
+                          {carryToLabel && <Badge color={c.amber || c.orange} bg={`${c.amber || c.orange}12`} style={{ border: `1px solid ${(c.amber || c.orange)}25` }}>Continues {carryToLabel}</Badge>}
+                        </>
+                      )}
+                      {outcome === "carry" && (
+                        <Badge color={c.cyan} bg={`${c.cyan}12`} style={{ border: `1px solid ${c.cyan}25` }}>{carryToLabel ? `Carry \u2192 ${carryToLabel}` : "Carry"}</Badge>
+                      )}
+                      {outcome === "blocked" && (
+                        <Badge color={c.red} bg={`${c.red}12`} style={{ border: `1px solid ${c.red}25` }}>Blocked</Badge>
+                      )}
+                      {outcome === "partial" && (
+                        <Badge color={c.orange} bg={`${c.orange}12`} style={{ border: `1px solid ${c.orange}25` }}>Partial</Badge>
+                      )}
+                    </div>
                   )}
-                  {!outcomeLabel && !bufferActive && !isHistorical && !isClosed && (
+                  {!outcome && !bufferActive && !isHistorical && !isClosed && (
                     <button className="flow-press" onClick={() => { setDepriModal({ idx }); setDepriText(""); }} style={{
                       marginLeft: "auto", cursor: "pointer", border: `1px solid ${c.orange}35`,
                       background: `${c.orange}0C`, borderRadius: layout.radiusSm,
@@ -1981,19 +1998,23 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                   )}
                 </div>
                 <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
-                <div style={{
-                  fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight,
-                  color: titleStruck ? c.textMid : c.text,
-                  lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7],
-                  overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0,
-                  textDecoration: titleStruck ? "line-through" : "none",
-                  textDecorationColor: titleStruck ? c.textMid : "transparent",
-                }}>{item.title}</div>
+                <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.text, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap", paddingLeft: space[7] }}>
                   {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(tCfg.color || c.textDim)}15` }}>{tCfg.label || item.type}</Badge>}
                   {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
                   <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textMid, padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{item.duration || 1}w</span>
                 </div>
+                {/* Blocker reason — mirrors the closing-phase callout */}
+                {outcome === "blocked" && (item.blockedReason || "").trim() && (
+                  <div style={{
+                    marginLeft: space[7], padding: `${space[2]}px ${space[3]}px`,
+                    borderLeft: `3px solid ${c.red}`, background: `${c.red}08`,
+                    borderRadius: `0 ${layout.radiusSm}px ${layout.radiusSm}px 0`,
+                  }}>
+                    <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.red, textTransform: "uppercase", marginBottom: 2 }}>Blocker</div>
+                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, lineHeight: typo.bodySm.lineHeight }}>{item.blockedReason}</div>
+                  </div>
+                )}
               </div>
             );
           })}
