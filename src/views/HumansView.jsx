@@ -163,21 +163,31 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
   useEffect(() => { prevDetailFocusRef.current = detailFocus; }, [detailFocus]);
   const [closingMode, _setClosingMode] = useState(false);
   const closingModeRef = useRef(false);
+  // Set by Close Week right before it exits closing mode, so the cleanup
+  // below knows this exit is a successful close (preserve outcomes) vs.
+  // an Escape/back exit (discard outcomes). Avoids relying on React's
+  // state-batching order between the Close setCommitments and the
+  // setClosingMode(false) that follows.
+  const justClosedRef = useRef(false);
   const setClosingMode = (val) => {
     // When leaving closing mode, clear any partial outcome writes that may have
     // landed during the transition — they'd otherwise display under Locked phase.
     if (closingModeRef.current && !val && rawSetCommitments) {
-      rawSetCommitments(prev => {
-        if (!prev || activePerson < 0 || activePerson >= prev.length) return prev;
-        const next = [...prev]; const p = { ...next[activePerson] };
-        if (!p.closedAt) {
-          p.items = (p.items || []).map(it => ({ ...it, outcome: null, carryTo: null, blockedReason: "" }));
-          p.bufferOutcome = null; p.bufferCarryTo = null; p.bufferBlockedReason = "";
-          next[activePerson] = p;
-          return next;
-        }
-        return prev;
-      });
+      const wasJustClosed = justClosedRef.current;
+      justClosedRef.current = false;
+      if (!wasJustClosed) {
+        rawSetCommitments(prev => {
+          if (!prev || activePerson < 0 || activePerson >= prev.length) return prev;
+          const next = [...prev]; const p = { ...next[activePerson] };
+          if (!p.closedAt) {
+            p.items = (p.items || []).map(it => ({ ...it, outcome: null, carryTo: null, blockedReason: "" }));
+            p.bufferOutcome = null; p.bufferCarryTo = null; p.bufferBlockedReason = "";
+            next[activePerson] = p;
+            return next;
+          }
+          return prev;
+        });
+      }
     }
     closingModeRef.current = val;
     _setClosingMode(val);
@@ -203,6 +213,9 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
     // them mid-flow would write state the user never confirmed.
     if (closingModeRef.current) return;
     clearTimeout(autoSaveTimer.current);
+    // Surface a "pending" state during the debounce window so the user
+    // knows edits are unsaved — previously the UI was silent for 800ms.
+    setAutoSaveStatus("pending");
     autoSaveTimer.current = setTimeout(async () => {
       if (onSave) {
         setAutoSaveStatus("saving");
@@ -335,7 +348,10 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
   };
   const updateOutcome = (idx, val) => {
     if (isHistorical) return;
-    if (!person || !person.lockedAt || !closingModeRef.current) return;
+    // Use derived isLocked (lockedAtTime || lockedAt || closedAt) so outcome
+    // writes never silently drop on zombie rows where only one of the three
+    // lock signals is set. Block once the week is closed.
+    if (!person || !isLocked || isClosed || !closingModeRef.current) return;
     // Blocked: toggle off if already blocked, otherwise open modal
     if (val === "blocked") {
       if (person?.items[idx]?.outcome === "blocked") {
@@ -454,32 +470,41 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
   // Deprioritize — unlocks the week so buffer can be filled and re-locked
   // Preserves lockedAtTime so restoreSlot can re-lock
   const deprioritizeSlot = (idx, reason) => {
-    if (isHistorical) return;
+    if (isHistorical || isClosed) return;
     if (idx < 0 || idx > 2) return;
     setCommitments(prev => {
       const next = [...prev]; const p = { ...next[activePerson] };
       p.deselected = idx;
       p.depriReason = reason || "";
+      // Preserve BOTH the timestamp and the display string + ISO so restore
+      // can reconstitute the exact original lock moment instead of stamping "now".
       p.wasLockedAtTime = p.lockedAtTime || null;
+      p.wasLockedAt = p.lockedAt || null;
+      p.wasLockedAtISO = p._lockedAtISO || null;
       p.lockedAt = null;
       p.lockedAtTime = null;
+      p._lockedAtISO = null;
       next[activePerson] = p; return next;
     });
     if (setIsLocked) setIsLocked(false);
     triggerAutoSave();
   };
   const restoreSlot = () => {
-    if (isHistorical) return;
+    if (isHistorical || isClosed) return;
     setCommitments(prev => {
       const next = [...prev]; const p = { ...next[activePerson] };
-      // Re-lock if person was locked before deprioritize
+      // Re-lock if person was locked before deprioritize — restore the
+      // original display string and ISO so the UI doesn't falsely imply
+      // a re-lock at the restore moment.
       if (p.wasLockedAtTime && !p.lockedAt) {
-        const ts = new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-        p.lockedAt = ts;
+        p.lockedAt = p.wasLockedAt || new Date(p.wasLockedAtTime).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
         p.lockedAtTime = p.wasLockedAtTime;
+        p._lockedAtISO = p.wasLockedAtISO || new Date(p.wasLockedAtTime).toISOString();
         if (setIsLocked) setIsLocked(true);
       }
       p.wasLockedAtTime = null;
+      p.wasLockedAt = null;
+      p.wasLockedAtISO = null;
       p.deselected = -1; p.depriReason = ""; p.buffer = ""; p.bufferProject = "";
       p.bufferStage = ""; p.bufferType = ""; p.bufferDuration = 1;
       p.bufferOutcome = null; p.bufferCarryTo = null; p.bufferBlockedReason = "";
@@ -564,12 +589,16 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
     if (reviewMode && !allSlotsFilled && !isLocked) setReviewMode(false);
   }, [allSlotsFilled, isLocked, reviewMode]);
 
-  // Lock is permanent — no cooldown. Unlock is always allowed via explicit action.
-  const canUnlock = true;
+  // Unlock is allowed on locked-but-not-closed weeks. A closed week is
+  // read-only — reopening it requires its own dedicated Reopen affordance.
+  const canUnlock = !isClosed && !isHistorical;
 
   const handleLock = () => {
     if (!canLock || isLocked) return;
-    const ts = new Date().toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const now = new Date();
+    const ts = now.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+    const iso = now.toISOString();
+    const nowMs = now.getTime();
     setCommitments(prev => {
       if (activePerson < 0 || activePerson >= prev.length) return prev;
       const next = [...prev]; const p = { ...next[activePerson] };
@@ -578,14 +607,16 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
         ...it,
         weeksRemaining: (typeof it.weeksRemaining === "number" && it.weeksRemaining > 0) ? it.weeksRemaining : (it.duration || 1),
       }));
-      next[activePerson] = { ...p, lockedAt: ts, lockedAtTime: Date.now() };
+      // Stamp _lockedAtISO at click time so DB locked_at reflects when the
+      // user actually locked, not when the background sync happened.
+      next[activePerson] = { ...p, lockedAt: ts, lockedAtTime: nowMs, _lockedAtISO: iso };
       return next;
     });
     if (setIsLocked) setIsLocked(true);
     setLockSuccess(true);
   };
   const handleUnlock = () => {
-    if (!canUnlock) return;
+    if (!canUnlock || isClosed || isHistorical) return;
     setCommitments(prev => {
       const next = [...prev];
       const p = { ...next[activePerson] };
@@ -605,13 +636,13 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
 
   // ── Keyboard: detail view ──
   useKeyboard(person ? [
-    { key: "Escape", fn: () => { if (depriModal) { setDepriModal(null); setDepriText(""); } else if (blockedModal) { setBlockedModal(null); setBlockedText(""); } else if (confirmAction) { setConfirmAction(null); } else if (closingModeRef.current) { setClosingMode(false); } else if (reviewMode) { setReviewMode(false); } else goBackToList(); }, force: true },
+    { key: "Escape", fn: () => { if (depriModal) { setDepriModal(null); setDepriText(""); } else if (blockedModal) { setBlockedModal(null); setBlockedText(""); } else if (confirmAction) { setConfirmAction(null); } else if (lockSuccess) { setLockSuccess(false); } else if (closingModeRef.current) { setClosingMode(false); } else if (reviewMode) { setReviewMode(false); } else goBackToList(); }, force: true },
     { key: "l", fn: () => { if (phase === "planning" && canLock) setConfirmAction("lock"); } },
     { key: "u", fn: () => { if (isLocked && !closingMode && canUnlock) setConfirmAction("unlock"); } },
     { key: "c", fn: () => { if (phase === "locked" && !isClosed) setClosingMode(true); } },
     { key: "ArrowUp", fn: () => setDetailFocus(i => Math.max(0, i - 1)) },
     { key: "ArrowDown", fn: () => setDetailFocus(i => Math.min(person.items.length - 1, i + 1)) },
-  ] : [], [activePerson, isLocked, filledSlots, person?.items?.length, closingMode, phase, reviewMode, allSlotsFilled]);
+  ] : [], [activePerson, isLocked, isClosed, filledSlots, person?.items?.length, closingMode, phase, reviewMode, allSlotsFilled, lockSuccess]);
 
   useEffect(() => {
     if (focusIdx >= filtered.length && filtered.length > 0) setFocusIdx(filtered.length - 1);
@@ -829,15 +860,26 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
           // into "Open" — we still track the finer-grained state for sorting
           // (ready rows first inside the Open bucket), but don't show it as a
           // separate group.
+          const validStagesForRow = [...commitPhases, ...shipPhases];
           const rows = filtered.map(cm => {
             const pObj = people.find(p => p.name === cm.person);
-            const filledCount = cm.items.slice(0, 3).filter((it) => (it.title || "").trim()).length;
-            const completeCount = cm.items.slice(0, 3).filter((it) => (it.title || "").trim() && it.project && it.stage && it.type).length;
+            // Mirror the detail view's readyCount: title + project + valid stage
+            // + type, excluding deprioritized slots. Previously counted by title
+            // alone, which disagreed with the detail's "X/3 filled" card.
+            const completeCount = cm.items.slice(0, 3).filter((it, idx) =>
+              cm.deselected !== idx &&
+              (it.title || "").trim() &&
+              it.project &&
+              it.stage && validStagesForRow.includes(it.stage) &&
+              it.type
+            ).length;
+            const anyStarted = cm.items.slice(0, 3).some((it) => (it.title || "").trim());
+            const filledCount = completeCount;
             const isClosed = !!cm.closedAt;
             const isLkd = !!cm.lockedAt && !cm.closedAt;
             const status = isClosed ? "Closed" : isLkd ? "Locked" : "Open";
-            // Sub-state used only to order rows within the Open group.
-            const openSub = completeCount >= 3 ? 0 : filledCount > 0 ? 1 : 2;
+            // Sub-state orders rows within Open: ready → partial → empty.
+            const openSub = completeCount >= 3 ? 0 : anyStarted ? 1 : 2;
             return { cm, pObj, filledCount, status, openSub, realIdx: commitments.indexOf(cm) };
           });
 
@@ -1039,9 +1081,13 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
   const weekLabel = `${currentWeekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} \u2013 ${weekEnd.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
 
   // Closing phase: track outcomes — only first 3 commit slots (excluding deprioritized)
+  // Include every non-deprioritized locked slot, even if title is blank — a
+  // race that leaves an empty slot after lock shouldn't silently drop it from
+  // the resolve count (user would close a 2/3 week thinking all is done).
+  // Title-required validation is enforced at lock time.
   const activeItems = person.items.slice(0, 3)
     .map((it, idx) => ({ ...it, idx }))
-    .filter(it => (it.title || "").trim() && person.deselected !== it.idx);
+    .filter(it => person.deselected !== it.idx && (isLocked || (it.title || "").trim()));
   const bufferNeedsOutcome = bufferActive && (person.buffer || "").trim();
   const totalToResolve = activeItems.length + (bufferNeedsOutcome ? 1 : 0);
   const fullyResolved = activeItems.filter(it => {
@@ -1055,7 +1101,9 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
     if (bo === "blocked" && !(person.bufferBlockedReason || "").trim()) return false;
     return true;
   })() ? 1 : 0);
-  const allDeclared = totalToResolve === 0 ? true : (fullyResolved === totalToResolve);
+  // An empty locked week (e.g. legacy malformed rows) has nothing to resolve —
+  // do NOT let the user close an empty week. Require at least one resolvable item.
+  const allDeclared = totalToResolve > 0 && fullyResolved === totalToResolve;
   const weekComplete = allDeclared;
 
   return (
@@ -1127,6 +1175,9 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
               <div key="planning-cluster" style={{ display: "flex", alignItems: "center", gap: space[2], animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>
                 {/* Auto-save status */}
                 <span role="status" aria-live="polite" aria-atomic="true" style={{ display: "inline-flex", alignItems: "center" }}>
+                  {autoSaveStatus === "pending" && (
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textDim, letterSpacing: typo.monoSm.tracking }}>Unsaved</span>
+                  )}
                   {autoSaveStatus === "saved" && (
                     <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.green, letterSpacing: typo.monoSm.tracking, animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>{"\u2713"} Saved</span>
                   )}
@@ -1463,10 +1514,12 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                   const filled = slotFilled[di];
                   const active = di === detailFocus;
                   const depri = person.deselected === di;
-                  // Semantic color: depri=red, active=accent (orange), filled=green, empty=neutral
-                  const stateColor = depri ? c.red : active ? c.accent : filled ? c.green : c.textDim;
-                  const bg = active ? `${stateColor}15` : depri ? `${c.red}08` : filled ? `${c.green}08` : c.surfaceAlt;
-                  const border = active ? `${stateColor}50` : depri ? `${c.red}25` : filled ? `${c.green}25` : c.border;
+                  // Semantic color encodes state (depri=red, filled=green, empty=neutral).
+                  // Active state uses a heavier accent border + inner ring — it does NOT
+                  // override the fill color, so a selected filled slot still reads as filled.
+                  const stateColor = depri ? c.red : filled ? c.green : c.textDim;
+                  const baseBg = depri ? `${c.red}08` : filled ? `${c.green}08` : c.surfaceAlt;
+                  const baseBorder = depri ? `${c.red}25` : filled ? `${c.green}25` : c.border;
                   return (
                     <button
                       key={di}
@@ -1479,14 +1532,16 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                         flex: 1, height: 32, padding: `0 ${space[3]}px`,
                         display: "flex", alignItems: "center", justifyContent: "center", gap: space[1] + 2,
                         borderRadius: layout.radiusSm, cursor: "pointer",
-                        background: bg, border: `1px solid ${border}`,
+                        background: baseBg,
+                        border: `1px solid ${active ? c.accent : baseBorder}`,
+                        boxShadow: active ? `inset 0 0 0 1px ${c.accent}40` : "none",
                         fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                         fontWeight: active ? 800 : 700, letterSpacing: typo.monoSm.tracking,
                         color: stateColor,
-                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
                       }}
-                      onMouseEnter={e => { if (!active) { e.currentTarget.style.background = `${stateColor}15`; e.currentTarget.style.borderColor = `${stateColor}40`; } }}
-                      onMouseLeave={e => { if (!active) { e.currentTarget.style.background = bg; e.currentTarget.style.borderColor = border; } }}
+                      onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor = `${stateColor}60`; } }}
+                      onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor = baseBorder; } }}
                     >
                       <span style={{ opacity: 0.8 }}>{di + 1}</span>
                       {/* Status dot — green=filled, red=depri, hollow=empty */}
@@ -2354,76 +2409,124 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                 if (activePerson < 0 || activePerson >= prev.length) return prev;
                 const next = [...prev];
                 const p = { ...next[activePerson] };
-                // Normalize weekStart across rows — some rows may carry full ISO timestamps.
-                const normalizeWeek = (ws) => {
-                  if (!ws) return "";
-                  const s = String(ws).slice(0, 10);
-                  return s;
-                };
+                const normalizeWeek = (ws) => ws ? String(ws).slice(0, 10) : "";
                 const myWeekStart = normalizeWeek(p.weekStart);
-                // Idempotency: a target row can already have a carry from this week (re-close case).
-                const alreadyCarried = (targetRow, sourceTitle) =>
-                  (targetRow.items || []).some(t => t && t.carriedFrom === weekLabel && (t.title || "") === sourceTitle);
-                const placeIntoTarget = (existingIdx, newItem) => {
-                  const target = { ...next[existingIdx] };
-                  const targetItems = [...(target.items || [])];
-                  if (alreadyCarried(target, newItem.title)) return; // already carried — skip dup
-                  const emptyIdx = targetItems.findIndex(t => !(t && (t.title || "").trim()));
-                  if (emptyIdx !== -1 && emptyIdx < 3) {
-                    targetItems[emptyIdx] = newItem;
-                  } else {
-                    // Target week is full: stash as buffer if free, otherwise drop with a console warning.
-                    if (!(target.buffer || "").trim()) {
-                      target.buffer = newItem.title;
-                      target.bufferProject = newItem.project;
-                      target.bufferStage = newItem.stage;
-                      target.bufferType = newItem.type;
-                      target.bufferDuration = newItem.duration;
-                    } else {
-                      console.warn("[Flow] Carry target week is full; dropping carried item", newItem);
-                      return;
-                    }
-                  }
-                  target.items = targetItems; next[existingIdx] = target;
-                };
-                const carriedItems = p.items.slice(0, 3).filter((it, idx) =>
-                  (it.title || "").trim() && p.deselected !== idx &&
-                  (it.outcome === "carry" || it.outcome === "done_carry") && it.carryTo
-                );
-                carriedItems.forEach(item => {
-                  const targetWeek = normalizeWeek(item.carryTo);
-                  if (!targetWeek || targetWeek === myWeekStart) return; // never target self
-                  const newItem = {
-                    title: item.title, type: item.type, project: item.project, stage: item.stage,
-                    duration: item.outcome === "done_carry" ? Math.max(1, (item.weeksRemaining || 1)) : (item.duration || 1),
-                    outcome: null, carryTo: null, blockedReason: "", carriedFrom: weekLabel,
-                  };
-                  const existingIdx = next.findIndex((entry, ei) => entry.person === p.person && ei !== activePerson && normalizeWeek(entry.weekStart) === targetWeek);
-                  if (existingIdx === -1) {
-                    next.push(makeCarriedWeekRow(p.person, targetWeek, newItem));
-                  } else {
-                    placeIntoTarget(existingIdx, newItem);
-                  }
+
+                // Stable-identity dedup: key on (sourceWeek, sourceSlot) rather than title,
+                // so a buffer matching a slot title doesn't collide.
+                const alreadyCarriedByKey = (targetRow, sourceKey) =>
+                  (targetRow.items || []).some(t => t && t._carrySourceKey === sourceKey);
+
+                // 1. Collect all carry intents (slots + buffer) with stable source keys.
+                const carries = [];
+                p.items.slice(0, 3).forEach((it, idx) => {
+                  if (!(it.title || "").trim()) return;
+                  if (p.deselected === idx) return;
+                  if (it.outcome !== "carry" && it.outcome !== "done_carry") return;
+                  if (!it.carryTo) return;
+                  const targetWeek = normalizeWeek(it.carryTo);
+                  if (!targetWeek || targetWeek === myWeekStart) return;
+                  // Plain carry decrements weeksRemaining; done_carry already did.
+                  const nextWeeksRemaining = it.outcome === "done_carry"
+                    ? Math.max(1, it.weeksRemaining || 1)
+                    : Math.max(1, (it.weeksRemaining || it.duration || 1) - 1);
+                  carries.push({
+                    targetWeek,
+                    sourceKey: `${myWeekStart}:slot:${idx}`,
+                    newItem: {
+                      title: it.title, type: it.type, project: it.project, stage: it.stage,
+                      duration: nextWeeksRemaining,
+                      weeksRemaining: nextWeeksRemaining,
+                      outcome: null, carryTo: null, blockedReason: "",
+                      carriedFrom: weekLabel,
+                      _carrySourceKey: `${myWeekStart}:slot:${idx}`,
+                    },
+                  });
                 });
-                // Carry buffer task if applicable
                 const bufferTarget = normalizeWeek(p.bufferCarryTo);
                 if ((p.bufferOutcome === "carry" || p.bufferOutcome === "done_carry") && bufferTarget && (p.buffer || "").trim() && bufferTarget !== myWeekStart) {
-                  const bufItem = {
-                    title: p.buffer, type: p.bufferType || "", project: p.bufferProject || "", stage: p.bufferStage || "",
-                    duration: p.bufferDuration || 1,
-                    outcome: null, carryTo: null, blockedReason: "", carriedFrom: weekLabel,
-                  };
-                  const existingIdx = next.findIndex((entry, ei) => entry.person === p.person && ei !== activePerson && normalizeWeek(entry.weekStart) === bufferTarget);
-                  if (existingIdx === -1) {
-                    next.push(makeCarriedWeekRow(p.person, bufferTarget, bufItem));
+                  carries.push({
+                    targetWeek: bufferTarget,
+                    sourceKey: `${myWeekStart}:buffer`,
+                    newItem: {
+                      title: p.buffer, type: p.bufferType || "", project: p.bufferProject || "", stage: p.bufferStage || "",
+                      duration: p.bufferDuration || 1,
+                      weeksRemaining: p.bufferDuration || 1,
+                      outcome: null, carryTo: null, blockedReason: "",
+                      carriedFrom: weekLabel,
+                      _carrySourceKey: `${myWeekStart}:buffer`,
+                    },
+                  });
+                }
+
+                // 2. Group by target week and apply in one pass per target.
+                const byTarget = new Map();
+                for (const c of carries) {
+                  if (!byTarget.has(c.targetWeek)) byTarget.set(c.targetWeek, []);
+                  byTarget.get(c.targetWeek).push(c);
+                }
+
+                for (const [targetWeek, group] of byTarget) {
+                  // Locate or create the target row once per target week.
+                  let targetIdx = next.findIndex((entry, ei) =>
+                    entry.person === p.person && ei !== activePerson &&
+                    normalizeWeek(entry.weekStart) === targetWeek
+                  );
+                  if (targetIdx !== -1 && next[targetIdx].closedAt) {
+                    // Never mutate a closed target week silently.
+                    console.warn("[Flow] Carry target week is closed; dropping carries", group.map(g => g.sourceKey));
+                    continue;
+                  }
+                  let target;
+                  if (targetIdx === -1) {
+                    target = makeCarriedWeekRow(p.person, targetWeek, group[0].newItem);
+                    // Apply remaining group entries against this new row.
+                    for (let gi = 1; gi < group.length; gi++) {
+                      const { newItem, sourceKey } = group[gi];
+                      if (alreadyCarriedByKey(target, sourceKey)) continue;
+                      const items = target.items || [];
+                      const emptyIdx = items.findIndex(t => !(t && (t.title || "").trim()));
+                      if (emptyIdx !== -1 && emptyIdx < 3) {
+                        items[emptyIdx] = newItem;
+                      } else if (!(target.buffer || "").trim()) {
+                        target.buffer = newItem.title;
+                        target.bufferProject = newItem.project;
+                        target.bufferStage = newItem.stage;
+                        target.bufferType = newItem.type;
+                        target.bufferDuration = newItem.duration;
+                      } else {
+                        console.warn("[Flow] Carry target week is full; dropping", sourceKey);
+                      }
+                    }
+                    next.push(target);
                   } else {
-                    placeIntoTarget(existingIdx, bufItem);
+                    target = { ...next[targetIdx], items: [...(next[targetIdx].items || [])] };
+                    for (const { newItem, sourceKey } of group) {
+                      if (alreadyCarriedByKey(target, sourceKey)) continue;
+                      const emptyIdx = target.items.findIndex(t => !(t && (t.title || "").trim()));
+                      if (emptyIdx !== -1 && emptyIdx < 3) {
+                        target.items[emptyIdx] = newItem;
+                      } else if (!(target.buffer || "").trim()) {
+                        target.buffer = newItem.title;
+                        target.bufferProject = newItem.project;
+                        target.bufferStage = newItem.stage;
+                        target.bufferType = newItem.type;
+                        target.bufferDuration = newItem.duration;
+                      } else {
+                        console.warn("[Flow] Carry target week is full; dropping", sourceKey);
+                      }
+                    }
+                    next[targetIdx] = target;
                   }
                 }
+
                 p.closedAt = new Date().toISOString();
                 p.closedAtDate = toLocalISODate(new Date());
                 next[activePerson] = p; return next;
               });
+              // Mark the exit as a successful close so setClosingMode(false)
+              // does not wipe outcomes via its Escape-path cleanup.
+              justClosedRef.current = true;
               // Defer navigation + save so React commits the close mutation first;
               // otherwise flushDirtyToDB can persist a stale pre-close snapshot.
               // Explicit flush here because triggerAutoSave is suppressed during
@@ -2534,6 +2637,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
         <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
           <Btn variant="ghost" onClick={() => setConfirmReset(false)}>Cancel</Btn>
           <Btn variant="danger" onClick={() => {
+            if (isHistorical || isClosed || isLocked) { setConfirmReset(false); return; }
             setCommitments(prev => {
               const next = [...prev];
               const p = { ...next[activePerson] };
