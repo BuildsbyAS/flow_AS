@@ -1937,7 +1937,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                   }}>{idx + 1}</div>
                   {projObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: entityColors().project }}>{projObj.id}</span>}
                   {projObj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{projObj.name}</span>}
-                  {!bufferActive && !isHistorical && (
+                  {!bufferActive && !isHistorical && !isClosed && (
                     <button className="flow-press" onClick={() => { setDepriModal({ idx }); setDepriText(""); }} style={{
                       marginLeft: "auto", cursor: "pointer", border: `1px solid ${c.orange}35`,
                       background: `${c.orange}0C`, borderRadius: layout.radiusSm,
