@@ -1430,7 +1430,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                       <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
                       <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.text, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
                       <div style={{ display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap", paddingLeft: space[7] }}>
-                        {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(tCfg.color || c.textDim)}15` }}>{tCfg.label || item.type}</Badge>}
+                        {tc[item.type] && <Badge color={tCfg.color} bg={tCfg.bg} style={{ border: `1px solid ${tCfg.color}15` }}>{tCfg.label}</Badge>}
                         {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
                         <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textMid, padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{item.duration || 1}w</span>
                       </div>
@@ -1875,7 +1875,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                     </div>
                     <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, paddingLeft: space[7], lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: space[1], paddingLeft: space[7] }}>
-                      {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(tCfg.color || c.textDim)}15` }}>{tCfg.label || item.type}</Badge>}
+                      {tc[item.type] && <Badge color={tCfg.color} bg={tCfg.bg} style={{ border: `1px solid ${tCfg.color}15` }}>{tCfg.label}</Badge>}
                       {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
                       <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{item.duration || 1}w</span>
                     </div>
@@ -2069,7 +2069,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                 <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
                 <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.text, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap", paddingLeft: space[7] }}>
-                  {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(tCfg.color || c.textDim)}15` }}>{tCfg.label || item.type}</Badge>}
+                  {tc[item.type] && <Badge color={tCfg.color} bg={tCfg.bg} style={{ border: `1px solid ${tCfg.color}15` }}>{tCfg.label}</Badge>}
                   {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
                   <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, color: c.textMid, padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm, background: c.surfaceAlt, border: `1px solid ${c.border}` }}>{item.duration || 1}w</span>
                 </div>
@@ -2201,7 +2201,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                     transition: `color ${motion.fast.duration} ${motion.fast.easing}, text-decoration-color ${motion.fast.duration} ${motion.fast.easing}`,
                   }}>{item.title}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: space[1], paddingLeft: space[7] }}>
-                    {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt}>{tCfg.label || item.type}</Badge>}
+                    {tc[item.type] && <Badge color={tCfg.color} bg={tCfg.bg}>{tCfg.label}</Badge>}
                     {item.stage && <Badge color={stageColor} bg={stageColor + "10"}>{item.stage}</Badge>}
                   </div>
                   {/* Blocked reason */}

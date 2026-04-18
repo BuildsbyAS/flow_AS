@@ -105,10 +105,8 @@ async function clearWeek(weekId) {
 }
 
 function pickItemType(rng) {
-  const r = rng();
-  if (r < 0.65) return "BUILD";
-  if (r < 0.92) return "JAM";
-  return "BLOCKED";
+  // Only BUILD or JAM. "BLOCKED" is an outcome, not a type.
+  return rng() < 0.7 ? "BUILD" : "JAM";
 }
 
 function pickOutcome(rng) {

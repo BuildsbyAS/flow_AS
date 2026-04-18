@@ -19,7 +19,9 @@ function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 // Work-function stages only. Alpha/Beta/GA are project lifecycle states,
 // not commit stages — the Commit tab never offers them.
 const STAGES = ["PRD", "Design", "Dev", "QA"];
-const TYPES = ["BUILD", "JAM", "BLOCKED"];
+// BUILD/JAM are the only valid commit types. "blocked" is an outcome, not a
+// type — mixing it in here produces phantom "BLOCKED" badges on planning cards.
+const TYPES = ["BUILD", "JAM"];
 const PROJECTS = [
   "X01","X02","X03","X05","X06","X08","X10","X12","X13","X15",
   "X17","X19","X21","X23","X25","X27","X29","X30","X34","X36",
@@ -169,7 +171,7 @@ async function main() {
       for (let s = 0; s < 3; s++) {
         items.push({
           commitment_id: commitment.id, slot: s,
-          title: pick(TASKS), type: pick(["BUILD", "BUILD", "JAM", "BLOCKED"]),
+          title: pick(TASKS), type: pick(["BUILD", "BUILD", "JAM"]),
           project_id: pick(PROJECTS), stage: pick(STAGES), outcome: null,
         });
       }

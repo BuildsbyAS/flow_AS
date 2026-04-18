@@ -107,11 +107,12 @@ function pickOutcome(doneRate, carryRate, blockedRate) {
   return "done"; // fallback
 }
 
-function pickType(blockedRate) {
-  const r = Math.random();
-  if (r < blockedRate) return "BLOCKED";
-  if (r < blockedRate + 0.25) return "JAM";
-  return "BUILD";
+// Commit type is only BUILD or JAM. "blocked" is an outcome and must never be
+// written to the type column. We still thread blockedRate through to the
+// outcome picker (separate from type) via pickOutcome; it's preserved here for
+// call-site compatibility but intentionally unused.
+function pickType(_blockedRate) {
+  return Math.random() < 0.25 ? "JAM" : "BUILD";
 }
 
 function generateWeekEntries(weekLabel, weekId, peopleCount, entryCount, outcomeRates) {
@@ -126,9 +127,11 @@ function generateWeekEntries(weekLabel, weekId, peopleCount, entryCount, outcome
       const type = pickType(outcomeRates.blockedType || 0.08);
       const project = pick(activeProjects);
       const stage = pick(STAGES);
-      const taskList = type === "BLOCKED" ? TASKS_BLOCKED : type === "JAM" ? TASKS_JAM : TASKS_BUILD;
-      const task = `${pick(taskList)} ${project}`;
+      // Blocker-flavored task phrasing only shows up when the OUTCOME is
+      // blocked — picked by outcome, not type.
       const outcome = pickOutcome(outcomeRates.done, outcomeRates.carry, outcomeRates.blocked);
+      const taskList = outcome === "blocked" ? TASKS_BLOCKED : type === "JAM" ? TASKS_JAM : TASKS_BUILD;
+      const task = `${pick(taskList)} ${project}`;
       entries.push({ project_id: project, week_id: weekId, person_name: person, type, task, stage, outcome });
     }
   }
@@ -170,7 +173,7 @@ async function main() {
     allEntries.push(...entries);
 
     // Count stats
-    const types = { BUILD: 0, JAM: 0, BLOCKED: 0 };
+    const types = { BUILD: 0, JAM: 0 };
     const outcomes = { done: 0, carry: 0, blocked: 0 };
     const people = new Set();
     entries.forEach(e => {
@@ -178,7 +181,7 @@ async function main() {
       outcomes[e.outcome] = (outcomes[e.outcome] || 0) + 1;
       people.add(e.person_name);
     });
-    console.log(`   ${wc.label}: ${entries.length} entries, ${people.size} people | BUILD=${types.BUILD} JAM=${types.JAM} BLOCKED=${types.BLOCKED} | done=${outcomes.done} carry=${outcomes.carry} blocked=${outcomes.blocked}`);
+    console.log(`   ${wc.label}: ${entries.length} entries, ${people.size} people | BUILD=${types.BUILD} JAM=${types.JAM} | done=${outcomes.done} carry=${outcomes.carry} blocked=${outcomes.blocked}`);
   }
 
   // Step 3: Insert in batches
