@@ -1456,33 +1456,47 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
             <div style={{ maxWidth: 640, margin: "0 auto", width: "100%" }}>
               <SectionHead title="Plan This Week" />
             </div>
-            {/* ── Minimal Progress Indicator ── */}
+            {/* ── Slot picker — numbered buttons for quick jumping ── */}
             <div style={{ maxWidth: 640, margin: `0 auto ${space[4]}px`, width: "100%", display: "flex", alignItems: "center", gap: space[3] }}>
-              {/* Segmented bar */}
-              <div role="progressbar" aria-label="Commit slots filled" aria-valuemin={0} aria-valuemax={3} aria-valuenow={slotFilled.filter(Boolean).length} style={{ display: "flex", gap: space[1], flex: 1 }}>
+              <div role="tablist" aria-label="Commit slots" style={{ display: "flex", gap: space[1], flex: 1 }}>
                 {[0, 1, 2].map((di) => {
                   const filled = slotFilled[di];
                   const active = di === detailFocus;
                   const depri = person.deselected === di;
+                  // Semantic color: depri=red, active=accent (orange), filled=green, empty=neutral
+                  const stateColor = depri ? c.red : active ? c.accent : filled ? c.green : c.textDim;
+                  const bg = active ? `${stateColor}15` : depri ? `${c.red}08` : filled ? `${c.green}08` : c.surfaceAlt;
+                  const border = active ? `${stateColor}50` : depri ? `${c.red}25` : filled ? `${c.green}25` : c.border;
                   return (
-                    <div
+                    <button
                       key={di}
-                      role="button"
-                      tabIndex={0}
-                      className="flow-focus-ring"
-                      aria-label={`Go to commit ${di + 1}${filled ? " (filled)" : ""}${active ? " (current)" : ""}`}
-                      aria-current={active ? "step" : undefined}
+                      role="tab"
+                      aria-selected={active}
+                      aria-label={`Commit ${di + 1}${depri ? " (deprioritized)" : filled ? " (filled)" : " (empty)"}`}
                       onClick={() => setDetailFocus(di)}
-                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailFocus(di); } }}
-                      onMouseEnter={e => { if (!depri && !active) e.currentTarget.style.transform = "scaleY(1.5)"; }}
-                      onMouseLeave={e => { if (!active) e.currentTarget.style.transform = "scaleY(1)"; }}
+                      className="flow-press flow-focus-ring"
                       style={{
-                        flex: 1, height: 4, borderRadius: layout.radiusXs, cursor: "pointer",
-                        background: depri ? c.red : filled ? c.green : active ? c.accent : (c.borderMedium || c.border),
-                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
-                        transformOrigin: "center",
+                        flex: 1, height: 32, padding: `0 ${space[3]}px`,
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: space[1] + 2,
+                        borderRadius: layout.radiusSm, cursor: "pointer",
+                        background: bg, border: `1px solid ${border}`,
+                        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                        fontWeight: active ? 800 : 700, letterSpacing: typo.monoSm.tracking,
+                        color: stateColor,
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
                       }}
-                    />
+                      onMouseEnter={e => { if (!active) { e.currentTarget.style.background = `${stateColor}15`; e.currentTarget.style.borderColor = `${stateColor}40`; } }}
+                      onMouseLeave={e => { if (!active) { e.currentTarget.style.background = bg; e.currentTarget.style.borderColor = border; } }}
+                    >
+                      <span style={{ opacity: 0.8 }}>{di + 1}</span>
+                      {/* Status dot — green=filled, red=depri, hollow=empty */}
+                      <span aria-hidden style={{
+                        width: 6, height: 6, borderRadius: "50%",
+                        background: depri ? c.red : filled ? c.green : "transparent",
+                        border: `1px solid ${depri ? c.red : filled ? c.green : c.border}`,
+                        flexShrink: 0,
+                      }} />
+                    </button>
                   );
                 })}
               </div>
