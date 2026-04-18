@@ -300,8 +300,11 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
 
   // ── Derived phase ──
   // Use lockedAtTime (numeric) as the source of truth; fall back to lockedAt
-  // display string for older rows that pre-date lockedAtTime.
-  const isLocked = person ? !!(person.lockedAtTime || person.lockedAt) : false;
+  // display string for older rows that pre-date lockedAtTime. closedAt is a
+  // stronger signal than lockedAt — if the week was closed, the wizard stays
+  // read-only even if lockedAt was later cleared via unlock. Keeps this view
+  // in sync with PulseView, which groups on closedAt.
+  const isLocked = person ? !!(person.lockedAtTime || person.lockedAt || person.closedAt) : false;
   const phase = !isLocked ? "planning" : closingMode ? "closing" : "locked";
 
   // Exit animations for gated sections
