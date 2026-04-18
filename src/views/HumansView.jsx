@@ -1318,7 +1318,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                             {person.depriReason ? `Reason: ${person.depriReason}` : ""}
                           </span>
                           <Badge color={c.red} bg={`${c.red}08`} style={{ border: `1px solid ${c.red}20`, flexShrink: 0 }}>Deprioritized</Badge>
-                          {!isHistorical && (
+                          {!isHistorical && !isClosed && (
                             <button className="flow-press" onClick={restoreSlot} style={{
                               fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
                               color: c.accent, cursor: "pointer", background: `${c.accent}08`,
@@ -1547,15 +1547,17 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                   )}
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingLeft: space[7], marginTop: space[1] }}>
                     <Badge color={c.red} bg={`${c.red}08`} style={{ border: `1px solid ${c.red}20` }}>Deprioritized</Badge>
-                    <button className="flow-press" onClick={restoreSlot} style={{
-                      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
-                      color: c.accent, cursor: "pointer", background: `${c.accent}08`,
-                      border: `1px solid ${c.accent}20`, borderRadius: layout.radiusSm,
-                      padding: `${space[1]}px ${space[3]}px`,
-                      transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = `${c.accent}15`; e.currentTarget.style.borderColor = `${c.accent}40`; }}
-                       onMouseLeave={e => { e.currentTarget.style.background = `${c.accent}08`; e.currentTarget.style.borderColor = `${c.accent}20`; }}>Restore</button>
+                    {!isHistorical && !isClosed && (
+                      <button className="flow-press" onClick={restoreSlot} style={{
+                        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+                        color: c.accent, cursor: "pointer", background: `${c.accent}08`,
+                        border: `1px solid ${c.accent}20`, borderRadius: layout.radiusSm,
+                        padding: `${space[1]}px ${space[3]}px`,
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = `${c.accent}15`; e.currentTarget.style.borderColor = `${c.accent}40`; }}
+                         onMouseLeave={e => { e.currentTarget.style.background = `${c.accent}08`; e.currentTarget.style.borderColor = `${c.accent}20`; }}>Restore</button>
+                    )}
                   </div>
                 </div>
               );
@@ -1902,15 +1904,17 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                       {person.depriReason ? `Reason: ${person.depriReason}` : ""}
                     </span>
                     <Badge color={c.red} bg={`${c.red}08`} style={{ border: `1px solid ${c.red}20`, flexShrink: 0 }}>Deprioritized</Badge>
-                    <button className="flow-press" onClick={restoreSlot} style={{
-                      fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
-                      color: c.accent, cursor: "pointer", background: `${c.accent}08`,
-                      border: `1px solid ${c.accent}20`, borderRadius: layout.radiusSm,
-                      padding: `${space[1]}px ${space[3]}px`, flexShrink: 0,
-                      transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = `${c.accent}15`; e.currentTarget.style.borderColor = `${c.accent}40`; }}
-                       onMouseLeave={e => { e.currentTarget.style.background = `${c.accent}08`; e.currentTarget.style.borderColor = `${c.accent}20`; }}>Restore</button>
+                    {!isHistorical && !isClosed && (
+                      <button className="flow-press" onClick={restoreSlot} style={{
+                        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+                        color: c.accent, cursor: "pointer", background: `${c.accent}08`,
+                        border: `1px solid ${c.accent}20`, borderRadius: layout.radiusSm,
+                        padding: `${space[1]}px ${space[3]}px`, flexShrink: 0,
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.instant.duration} ${motion.instant.easing}`,
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.background = `${c.accent}15`; e.currentTarget.style.borderColor = `${c.accent}40`; }}
+                         onMouseLeave={e => { e.currentTarget.style.background = `${c.accent}08`; e.currentTarget.style.borderColor = `${c.accent}20`; }}>Restore</button>
+                    )}
                   </div>
                 </div>
               );
