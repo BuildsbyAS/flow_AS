@@ -304,6 +304,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
   // stronger signal than lockedAt — if the week was closed, the wizard stays
   // read-only even if lockedAt was later cleared via unlock. Keeps this view
   // in sync with PulseView, which groups on closedAt.
+  const isClosed = person ? !!person.closedAt : false;
   const isLocked = person ? !!(person.lockedAtTime || person.lockedAt || person.closedAt) : false;
   const phase = !isLocked ? "planning" : closingMode ? "closing" : "locked";
 
@@ -607,7 +608,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
     { key: "Escape", fn: () => { if (depriModal) { setDepriModal(null); setDepriText(""); } else if (blockedModal) { setBlockedModal(null); setBlockedText(""); } else if (confirmAction) { setConfirmAction(null); } else if (closingModeRef.current) { setClosingMode(false); } else if (reviewMode) { setReviewMode(false); } else goBackToList(); }, force: true },
     { key: "l", fn: () => { if (phase === "planning" && canLock) setConfirmAction("lock"); } },
     { key: "u", fn: () => { if (isLocked && !closingMode && canUnlock) setConfirmAction("unlock"); } },
-    { key: "c", fn: () => { if (phase === "locked") setClosingMode(true); } },
+    { key: "c", fn: () => { if (phase === "locked" && !isClosed) setClosingMode(true); } },
     { key: "ArrowUp", fn: () => setDetailFocus(i => Math.max(0, i - 1)) },
     { key: "ArrowDown", fn: () => setDetailFocus(i => Math.min(person.items.length - 1, i + 1)) },
   ] : [], [activePerson, isLocked, filledSlots, person?.items?.length, closingMode, phase, reviewMode, allSlotsFilled]);
@@ -1171,18 +1172,20 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                 </div>
               </div>
             )}
-            {/* Locked: Locked pill with timer + Close button */}
+            {/* Locked: Locked pill with timer + Close button. Once closedAt is
+                set, swap to a gray "Closed" pill and drop the Close CTA. */}
             {phase === "locked" && (
               <div key="locked-cluster" style={{ display: "flex", alignItems: "center", gap: space[2], animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both` }}>
                 <div style={{
                   display: "flex", alignItems: "center", gap: space[2],
                   padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
-                  background: c.greenDim, border: `1px solid ${c.greenBorder}`,
+                  background: isClosed ? c.surfaceAlt : c.greenDim,
+                  border: `1px solid ${isClosed ? c.border : c.greenBorder}`,
                 }}>
-                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: c.green }} />
-                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, color: c.green, textTransform: "uppercase" }}>Locked</span>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: isClosed ? c.textMid : c.green }} />
+                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: typo.monoMd.tracking, color: isClosed ? c.textMid : c.green, textTransform: "uppercase" }}>{isClosed ? "Closed" : "Locked"}</span>
                 </div>
-                {!isHistorical && (
+                {!isHistorical && !isClosed && (
                   <Btn variant="primary" size="sm" onClick={() => setClosingMode(true)}>
                     Close <kbd style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, marginLeft: space[1], padding: `2px ${space[1]}px`, borderRadius: layout.radiusXs, background: "rgba(255,255,255,0.18)", border: "1px solid rgba(255,255,255,0.28)" }}>C</kbd>
                   </Btn>
@@ -1224,11 +1227,11 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
       {/* ═══ HERO KPI GRID — compact week summary ═══ */}
       {(() => {
         const lockedCount = readyCount;
-        const lockStateLabel = isHistorical ? "Past" : phase === "locked" ? "Locked" : phase === "closing" ? "Closing" : allSlotsFilled ? "Ready" : filledSlots > 0 ? "Partial" : "Empty";
-        const lockStateColor = phase === "locked" ? c.green : phase === "closing" ? c.accent : allSlotsFilled ? c.accent : c.textMid;
-        const lockStateSub = isHistorical ? "read-only" : phase === "locked" ? "locked for the week" : phase === "closing" ? "closing phase" : "planning phase";
-        const weekStateLabel = isHistorical ? (person?.closedAt ? "Closed" : "Past") : phase === "closing" ? (totalToResolve > 0 ? `${Math.round((fullyResolved / totalToResolve) * 100)}%` : "—") : phase === "locked" ? "In progress" : "Planning";
-        const weekStateSub = isHistorical ? weekLabel : phase === "closing" ? `${fullyResolved} of ${totalToResolve} resolved` : phase === "locked" ? weekLabel : "Not yet locked";
+        const lockStateLabel = isHistorical ? "Past" : isClosed ? "Closed" : phase === "locked" ? "Locked" : phase === "closing" ? "Closing" : allSlotsFilled ? "Ready" : filledSlots > 0 ? "Partial" : "Empty";
+        const lockStateColor = isClosed ? c.textMid : phase === "locked" ? c.green : phase === "closing" ? c.accent : allSlotsFilled ? c.accent : c.textMid;
+        const lockStateSub = isHistorical ? "read-only" : isClosed ? "week closed" : phase === "locked" ? "locked for the week" : phase === "closing" ? "closing phase" : "planning phase";
+        const weekStateLabel = isHistorical ? (person?.closedAt ? "Closed" : "Past") : isClosed ? "Closed" : phase === "closing" ? (totalToResolve > 0 ? `${Math.round((fullyResolved / totalToResolve) * 100)}%` : "—") : phase === "locked" ? "In progress" : "Planning";
+        const weekStateSub = isHistorical ? weekLabel : isClosed ? weekLabel : phase === "closing" ? `${fullyResolved} of ${totalToResolve} resolved` : phase === "locked" ? weekLabel : "Not yet locked";
         return (
           <KpiGrid cols="1fr 1fr 1fr">
             <KpiCard label="Commitments" value={<span style={{ fontVariantNumeric: "tabular-nums" }}>{lockedCount}/3</span>} sub="filled this week" />
