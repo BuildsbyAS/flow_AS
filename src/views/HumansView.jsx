@@ -199,7 +199,10 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
   const [depriModal, setDepriModal] = useState(null); // { idx: number } | null
   const [depriText, setDepriText] = useState("");
   const [reviewMode, setReviewMode] = useState(false);
-  const [lockSuccess, setLockSuccess] = useState(false);
+  // lockSuccess interstitial removed — locking goes straight to the locked
+  // panel. Flag + setter are no-ops so older call sites don't error.
+  const lockSuccess = false;
+  const setLockSuccess = () => {};
   const [overflowOpen, setOverflowOpen] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState(null); // null | "saving" | "saved"
   const autoSaveTimer = useRef(null);
@@ -1829,117 +1832,8 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
         );
       })()}
 
-      {/* ═══ LOCK SUCCESS INTERSTITIAL ═══ */}
-      {lockSuccessAnim.mounted && (() => {
-        const activeItems = person.items.slice(0, 3).filter((_, idx) => person.deselected !== idx);
-        return (
-          <div style={{
-            maxWidth: 640, margin: `${space[6]}px auto`, width: "100%",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: space[5],
-            animation: lockSuccessAnim.visible
-              ? `fadeIn ${motion.normal.duration} ${motion.normal.easing} both`
-              : `fadeOut ${motion.normal.duration} ${motion.normal.easing} both`,
-          }}>
-            {/* Lock icon */}
-            <div style={{
-              width: 72, height: 72, borderRadius: "50%",
-              background: `${c.green}12`, border: `2px solid ${c.green}30`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={c.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            </div>
-            {/* Title */}
-            <div style={{ textAlign: "center" }}>
-              <div style={{
-                fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size,
-                fontWeight: typo.displayLg.weight, letterSpacing: typo.displayLg.tracking,
-                color: c.green, marginBottom: space[2],
-              }}>Week Locked</div>
-              <div style={{
-                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                color: c.textMid, lineHeight: 1.6,
-              }}>
-                {activeItems.length + (bufferFilled ? 1 : 0)} commits locked for <span style={{ color: c.text, fontWeight: 600 }}>{weekLabel}</span>. Your plan is set and visible to your team.
-              </div>
-            </div>
-            {/* Commit summary cards */}
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: space[3] }}>
-              {activeItems.map((item, i) => {
-                const projObj = projects.find(p => p.id === item.project);
-                const stageColor = pc[item.stage] || c.textDim;
-                const tCfg = tc[item.type] || {};
-                return (
-                  <div key={i} style={{
-                    padding: `${space[3]}px ${space[4]}px`,
-                    background: `${c.green}0C`, border: `1px solid ${c.green}12`,
-                    borderRadius: layout.radiusSm,
-                    display: "flex", flexDirection: "column", gap: space[2],
-                    animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
-                    animationDelay: `${150 + i * 60}ms`,
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-                      <div style={{
-                        width: 22, height: 22, borderRadius: layout.radiusSm - 2,
-                        background: `${c.green}15`, display: "flex", alignItems: "center", justifyContent: "center",
-                        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800, color: c.green, flexShrink: 0,
-                      }}>{i + 1}</div>
-                      {projObj && <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: entityColors().project }}>{projObj.id}</span>}
-                      <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, flex: 1 }}>{projObj?.name || item.project}</span>
-                    </div>
-                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, paddingLeft: space[7], lineHeight: 1.5, overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: space[1], paddingLeft: space[7] }}>
-                      {tc[item.type] && <Badge color={tCfg.color} bg={tCfg.bg} style={{ border: `1px solid ${tCfg.color}15` }}>{tCfg.label}</Badge>}
-                      {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
-                      <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{item.duration || 1}w</span>
-                    </div>
-                  </div>
-                );
-              })}
-              {/* Buffer summary card */}
-              {bufferActive && bufferFilled && (() => {
-                const bProj = projects.find(p => p.id === person.bufferProject);
-                const bStageColor = pc[person.bufferStage] || c.textDim;
-                const bTCfg = tc[person.bufferType] || {};
-                return (
-                  <div style={{
-                    padding: `${space[3]}px ${space[4]}px`,
-                    background: `${c.cyan}0C`, border: `1px solid ${c.cyan}12`,
-                    borderRadius: layout.radiusSm,
-                    display: "flex", flexDirection: "column", gap: space[2],
-                  }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-                      <div style={{
-                        width: 22, height: 22, borderRadius: layout.radiusSm - 2,
-                        background: `${c.cyan}15`, display: "flex", alignItems: "center", justifyContent: "center",
-                        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800, color: c.cyan, flexShrink: 0,
-                      }}>B</div>
-                      {bProj && <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: entityColors().project }}>{bProj.id}</span>}
-                      <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, flex: 1 }}>{bProj?.name || person.bufferProject}</span>
-                      <Badge color={c.cyan} bg={`${c.cyan}10`} style={{ border: `1px solid ${c.cyan}15` }}>Buffer</Badge>
-                    </div>
-                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 400, color: c.textMid, paddingLeft: space[7], lineHeight: 1.5 }}>{person.buffer}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: space[1], paddingLeft: space[7] }}>
-                      {person.bufferType && <Badge color={bTCfg.color || c.textDim} bg={bTCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(bTCfg.color || c.textDim)}15` }}>{bTCfg.label || person.bufferType}</Badge>}
-                      {person.bufferStage && <Badge color={bStageColor} bg={bStageColor + "10"} style={{ border: `1px solid ${bStageColor}15` }}>{person.bufferStage}</Badge>}
-                      <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>{person.bufferDuration || 1}w</span>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-            {/* Dismiss */}
-            <Btn variant="success" size="sm" onClick={() => setLockSuccess(false)} style={{ marginTop: space[2] }}>
-              Done
-            </Btn>
-          </div>
-        );
-      })()}
-
       {/* ═══ LOCKED PHASE — all 3 cards stacked + buffer ═══ */}
-      {phase === "locked" && !lockSuccess && (() => {
+      {phase === "locked" && (() => {
         const bufferHasContent = bufferActive && (person.buffer || "").trim() && person.bufferProject && person.bufferStage && person.bufferType;
         const showBufferForm = bufferActive;
         const bufProj = projects.find(p => p.id === person.bufferProject);
