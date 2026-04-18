@@ -1309,6 +1309,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
         // ── Review Mode: stacked cards + Lock Week CTA ──
         if (reviewModeAnim.mounted) {
           return (
+            <>
             <div style={{
               maxWidth: 640, margin: `${space[4]}px auto 0`, width: "100%",
               animation: reviewModeAnim.visible
@@ -1476,29 +1477,44 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                   );
                 })()}
               </div>
-              {/* Save + Lock Week CTAs */}
-              <div style={{ display: "flex", justifyContent: "center", gap: space[3], marginTop: space[5] }}>
-                <Btn variant="secondary" size="md" onClick={async () => {
-                  setAutoSaveStatus("saving");
-                  try {
-                    if (onSave) await onSave();
-                    setAutoSaveStatus("saved");
-                  } catch (_) {
-                    setAutoSaveStatus("error");
-                  }
-                  clearTimeout(autoSaveStatusTimer.current);
-                  autoSaveStatusTimer.current = setTimeout(() => setAutoSaveStatus(null), 2000);
-                }}>
-                  Save
-                </Btn>
-                <Btn variant="success" size="md" disabled={!canLock} onClick={() => { if (canLock) setConfirmAction("lock"); }}>
-                  Lock Week
-                </Btn>
-              </div>
-              <div style={{ textAlign: "center", marginTop: space[2] }}>
+              {/* Edit hint — stays inline under the cards */}
+              <div style={{ textAlign: "center", marginTop: space[5] }}>
                 <span style={{ fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, color: c.textMid }}>Click any commit above to edit</span>
               </div>
             </div>
+
+            {/* ── Floating action dock — Save + Lock Week always reachable ── */}
+            <div
+              role="toolbar"
+              aria-label="Review actions"
+              style={{
+                position: "fixed", bottom: space[5], right: space[5],
+                display: "flex", gap: space[2],
+                padding: space[2],
+                background: c.surface, border: `1px solid ${c.border}`,
+                borderRadius: layout.radiusLg, boxShadow: c.shadowElevated,
+                zIndex: 40,
+                animation: `fadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+              }}
+            >
+              <Btn variant="secondary" size="md" onClick={async () => {
+                setAutoSaveStatus("saving");
+                try {
+                  if (onSave) await onSave();
+                  setAutoSaveStatus("saved");
+                } catch (_) {
+                  setAutoSaveStatus("error");
+                }
+                clearTimeout(autoSaveStatusTimer.current);
+                autoSaveStatusTimer.current = setTimeout(() => setAutoSaveStatus(null), 2000);
+              }}>
+                Save
+              </Btn>
+              <Btn variant="success" size="md" disabled={!canLock} onClick={() => { if (canLock) setConfirmAction("lock"); }}>
+                Lock Week
+              </Btn>
+            </div>
+          </>
           );
         }
 
