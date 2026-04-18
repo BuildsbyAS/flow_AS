@@ -1920,9 +1920,33 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
               );
             }
 
+            // ── Outcome styling (closed weeks only) ──
+            // Mirrors the closing-phase treatment so a closed week "freezes"
+            // with its final outcomes visible: colored slot chip + icon,
+            // tinted border/bg, strikethrough on completed items, and an
+            // explicit outcome badge.
+            const outcome = isClosed ? item.outcome : null;
+            const outcomeColor = outcome === "done" || outcome === "done_carry" ? c.green
+              : outcome === "blocked" ? c.red
+              : outcome === "carry" ? c.cyan
+              : outcome === "partial" ? c.orange
+              : null;
+            const outcomeLabel = outcome === "done" || outcome === "done_carry" ? "Completed"
+              : outcome === "blocked" ? "Blocked"
+              : outcome === "carry" ? "Carry"
+              : outcome === "partial" ? "Partial"
+              : null;
+            const outcomeIcon = outcome === "done" || outcome === "done_carry" ? "\u2713"
+              : outcome === "carry" ? "\u2192"
+              : outcome === "blocked" ? "!"
+              : null;
+            const cardBorder = outcomeColor ? `${outcomeColor}25` : c.border;
+            const cardBg = outcomeColor ? `${outcomeColor}08` : c.surface;
+            const titleStruck = outcome === "done" || outcome === "done_carry";
+
             return (
               <div key={idx} style={{
-                background: c.surface, border: `1px solid ${c.border}`,
+                background: cardBg, border: `1px solid ${cardBorder}`,
                 borderRadius: layout.radiusLg, padding: space[6],
                 display: "flex", flexDirection: "column", gap: space[3],
                 animation: `cardFadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
@@ -1931,13 +1955,18 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                 <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
                   <div style={{
                     width: 24, height: 24, borderRadius: layout.radiusSm,
-                    background: `${entityColors().project}10`, border: `1px solid ${entityColors().project}20`,
+                    background: outcomeColor ? `${outcomeColor}15` : `${entityColors().project}10`,
+                    border: `1px solid ${outcomeColor ? outcomeColor + "25" : entityColors().project + "20"}`,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800, color: entityColors().project,
-                  }}>{idx + 1}</div>
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 800,
+                    color: outcomeColor || entityColors().project,
+                  }}>{outcomeIcon || (idx + 1)}</div>
                   {projObj && <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: typo.monoMd.tracking, color: entityColors().project }}>{projObj.id}</span>}
                   {projObj && <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{projObj.name}</span>}
-                  {!bufferActive && !isHistorical && !isClosed && (
+                  {outcomeLabel && (
+                    <Badge color={outcomeColor} bg={`${outcomeColor}12`} style={{ marginLeft: "auto", border: `1px solid ${outcomeColor}25` }}>{outcomeLabel}</Badge>
+                  )}
+                  {!outcomeLabel && !bufferActive && !isHistorical && !isClosed && (
                     <button className="flow-press" onClick={() => { setDepriModal({ idx }); setDepriText(""); }} style={{
                       marginLeft: "auto", cursor: "pointer", border: `1px solid ${c.orange}35`,
                       background: `${c.orange}0C`, borderRadius: layout.radiusSm,
@@ -1952,7 +1981,14 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                   )}
                 </div>
                 <div style={{ marginLeft: space[7], marginRight: space[3], height: 1, background: c.border }} />
-                <div style={{ fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight, color: c.text, lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7], overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0 }}>{item.title}</div>
+                <div style={{
+                  fontFamily: typo.bodyXl.font, fontSize: typo.bodyXl.size, fontWeight: typo.bodyXl.weight,
+                  color: titleStruck ? c.textMid : c.text,
+                  lineHeight: typo.bodyXl.lineHeight, paddingLeft: space[7],
+                  overflowWrap: "anywhere", wordBreak: "break-word", minWidth: 0,
+                  textDecoration: titleStruck ? "line-through" : "none",
+                  textDecorationColor: titleStruck ? c.textMid : "transparent",
+                }}>{item.title}</div>
                 <div style={{ display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap", paddingLeft: space[7] }}>
                   {item.type && <Badge color={tCfg.color || c.textDim} bg={tCfg.bg || c.surfaceAlt} style={{ border: `1px solid ${(tCfg.color || c.textDim)}15` }}>{tCfg.label || item.type}</Badge>}
                   {item.stage && <Badge color={stageColor} bg={stageColor + "10"} style={{ border: `1px solid ${stageColor}15` }}>{item.stage}</Badge>}
