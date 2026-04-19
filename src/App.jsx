@@ -10,6 +10,7 @@ import useSupabaseData from "./hooks/useSupabaseData";
 import { useSyncedSetters } from "./hooks/useSyncedSetters";
 import useAuth from "./hooks/useAuth";
 import LoginScreen from "./components/LoginScreen";
+import QAReviewView from "./views/QAReviewView";
 import OnboardingScreen from "./components/OnboardingScreen";
 import { Header, NAV, getCycleStage, getStageConfig, getAttentionItems } from "./components/AppShell";
 import SummaryView from "./views/SummaryView";
@@ -69,6 +70,9 @@ export default function FlowApp() {
 
   // Preview gate — ?login=1 shows the login screen even on localhost
   const params = new URLSearchParams(window.location.search);
+  if (params.has("qaReview")) {
+    return <QAReviewView />;
+  }
   if (params.has("login")) {
     return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={signInError} />;
   }
