@@ -210,6 +210,12 @@ function FlowDashboard({ auth }) {
 
   const setGoBack = useCallback((fn) => { goBackRef.current = fn; }, []);
   const returnContextRef = useRef(null);
+  // Remember the last non-Terminal tab so Escape / close from Terminal
+  // drops the user back where they came from instead of always Summary.
+  const prevNonTerminalTabRef = useRef("summary");
+  useEffect(() => {
+    if (activeTab !== "terminal") prevNonTerminalTabRef.current = activeTab;
+  }, [activeTab]);
 
   const handleTerminalUnlock = useCallback((moduleKey) => {
     sessionStorage.setItem("flow_terminal_unlocked", "true");
@@ -411,7 +417,13 @@ function FlowDashboard({ auth }) {
         weekOffset={weekOffset}
         onWeekPrev={handleWeekPrev}
         onWeekNext={handleWeekNext}
-        onLogoClick={() => handleTabSwitch("pulse")}
+        onLogoClick={() => {
+          handleTabSwitch("pulse");
+          // Smooth-scroll to the top — without this, clicking the logo mid-page
+          // switches tabs but leaves the user halfway down the new page, which
+          // reads as "nothing happened".
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
         detailLabel={detailLabel}
         onBack={handleBack}
         breadcrumbLabel={activeNavItem?.label}
@@ -432,7 +444,7 @@ function FlowDashboard({ auth }) {
       )}
 
       {/* ═══ TERMINAL VIEW (full-bleed, outside main) ═══ */}
-      {activeTab === "terminal" && <TerminalView onUnlock={handleTerminalUnlock} unlockedSections={terminalUnlocked} auth={auth} appSettings={appSettings} setAppSettings={setAppSettings} resetKey={terminalResetKey} initialModule={navPayload} onConsumePayload={() => setNavPayload(null)} />}
+      {activeTab === "terminal" && <TerminalView onUnlock={handleTerminalUnlock} unlockedSections={terminalUnlocked} auth={auth} appSettings={appSettings} setAppSettings={setAppSettings} resetKey={terminalResetKey} initialModule={navPayload} onConsumePayload={() => setNavPayload(null)} onExit={() => handleTabSwitch(prevNonTerminalTabRef.current || "summary")} />}
 
       {/* ═══ MAIN CANVAS ═══ */}
       {activeTab !== "terminal" && (

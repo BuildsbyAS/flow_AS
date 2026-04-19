@@ -203,6 +203,9 @@ const SummaryView = ({
     : [...new Set(filteredProjects.map(p => p.squad).filter(Boolean))].sort();
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("desc");
+  // Hide squads with no projects / people / commits by default — they
+  // read as "missing data" and bloat the table. Toggled via footer link.
+  const [showInactive, setShowInactive] = useState(false);
 
   // Row animation plays only on the first mount per selectedWeek change,
   // not on every sort / filter re-render (P11).
@@ -581,6 +584,9 @@ const SummaryView = ({
                     { key: "pctCarried", label: "% Carried", minW: colWidths.pct.min, tip: "Items marked Carry (pure carry, not Done+Carry)" },
                   ].map(col => {
                     const isSorted = sortCol === col.key;
+                    // First column (Squad) gets sticky-left so it stays
+                    // visible during horizontal scroll on tablet/mobile.
+                    const isSquadCol = col.key === "squad";
                     return (
                       <th
                         key={col.key}
@@ -604,6 +610,11 @@ const SummaryView = ({
                           userSelect: "none",
                           ...(col.borderL ? { borderLeft: `1px dotted ${c.border}` } : {}),
                           ...(isSorted ? { color: c.accent } : {}),
+                          ...(isSquadCol ? {
+                            position: "sticky", left: 0, zIndex: 2,
+                            background: c.surfaceAlt || c.surface,
+                            boxShadow: `1px 0 0 ${c.border}`,
+                          } : {}),
                         }}
                       >
                         {col.label}
@@ -626,7 +637,7 @@ const SummaryView = ({
                     carriedCount: 0, blockedCount: 0,
                     totalPeople: 0, membersActive: 0,
                   };
-                  const rows = allSquads.map(sq => {
+                  const rowsAll = allSquads.map(sq => {
                     const d = metrics?.squads?.[sq] || EMPTY_METRICS;
                     const sqShipped = d.shippedCount || 0;
                     const projBase = d.activeProjects + d.noActionProjects;
@@ -635,8 +646,14 @@ const SummaryView = ({
                     const pD = d.outcomeLoggedCount > 0 ? (d.completionRate || 0) : null;
                     const pC = d.commits > 0 ? Math.round(((d.carriedCount || 0) / d.commits) * 100) : 0;
                     const pB = d.commits > 0 ? Math.round(((d.blockedCount || 0) / d.commits) * 100) : 0;
-                    return { sq, d, sqShipped, pA, pPpl, pD, pC, pB };
+                    // Inactive = no projects, no commits, no people. These
+                    // squads read as either zero or missing — collapse them
+                    // behind a footer toggle and render '—' in metric cells.
+                    const isInactive = d.activeProjects === 0 && d.noActionProjects === 0 && sqShipped === 0 && d.commits === 0 && d.totalPeople === 0;
+                    return { sq, d, sqShipped, pA, pPpl, pD, pC, pB, isInactive };
                   });
+                  const inactiveCount = rowsAll.filter(r => r.isInactive).length;
+                  const rows = showInactive ? rowsAll : rowsAll.filter(r => !r.isInactive);
 
                   if (sortCol) {
                     const valFor = (r) => {
@@ -666,34 +683,111 @@ const SummaryView = ({
                     <tr><td colSpan={11} style={{ ...tdBase, textAlign: "center", color: c.textMid, padding: `${space[7]}px`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, letterSpacing: 0 }}>No squad data for this selection</td></tr>
                   );
 
-                  return rows.map((r, i) => {
-                    const { sq, d, sqShipped, pA, pPpl, pD, pC, pB } = r;
+                  // Em-dash placeholder for inactive-row metric cells, with
+                  // a tooltip so hover reveals WHY it's blank.
+                  const emDash = (tip) => (
+                    <span title={tip || "No data this week"} style={{ color: c.textDim }}>—</span>
+                  );
+                  const rendered = rows.map((r, i) => {
+                    const { sq, d, sqShipped, pA, pPpl, pD, pC, pB, isInactive } = r;
                     const actClr = pA >= 60 ? c.green : pA >= 40 ? c.orange : c.red;
                     const pplClr = pPpl >= 80 ? c.green : pPpl >= 50 ? c.orange : c.red;
+                    const rowOpacity = isInactive ? 0.55 : 1;
                     return (
                       <tr key={sq} className="flow-row" style={{
                         animation: `rowSlideIn 0.3s ${motion.normal.easing} both`,
                         animationDelay: `${Math.min(i * 50, 300)}ms`,
+                        opacity: rowOpacity,
                       }}>
+                        {/* Sticky first column — stays pinned during horizontal
+                            scroll on tablet/mobile where the table overflows. */}
                         <td title={sq} style={{
                           ...tdBase, textAlign: "left",
                           fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
                           fontWeight: 600, color: c.text,
                           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200,
+                          position: "sticky", left: 0, background: c.surface, zIndex: 1,
+                          boxShadow: `1px 0 0 ${c.border}`,
                         }}>{sq}</td>
-                        <td style={{ ...tdBase, color: c.green }}>{d.activeProjects}</td>
-                        <td style={{ ...tdBase, color: d.noActionProjects > 0 ? c.orange : c.textDim }}>{d.noActionProjects}</td>
-                        <td style={{ ...tdBase, color: sqShipped > 0 ? c.green : c.textDim }}>{sqShipped}</td>
-                        <td style={{ ...tdBase }}>{pctPill(pA, actClr)}</td>
-                        <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}`, color: c.text }}>{d.totalPeople}</td>
-                        <td style={{ ...tdBase }}>{pctPill(pPpl, pplClr)}</td>
-                        <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}`, color: c.text }}>{d.commits}</td>
-                        <td style={{ ...tdBase }}>{pD == null ? <span style={{ color: c.textDim }}>—</span> : pctPill(pD, c.green)}</td>
-                        <td style={{ ...tdBase }}>{pB > 0 ? pctPill(pB, c.red) : pctPill(0, c.red, true)}</td>
-                        <td style={{ ...tdBase }}>{pctPill(pC, c.orange, pC === 0)}</td>
+                        {isInactive ? (
+                          <>
+                            <td style={{ ...tdBase }}>{emDash("No projects this week")}</td>
+                            <td style={{ ...tdBase }}>{emDash("No projects this week")}</td>
+                            <td style={{ ...tdBase }}>{emDash("No projects this week")}</td>
+                            <td style={{ ...tdBase }}>{emDash("No projects this week")}</td>
+                            <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}` }}>{emDash("No people assigned")}</td>
+                            <td style={{ ...tdBase }}>{emDash("No people assigned")}</td>
+                            <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}` }}>{emDash("No commits this week")}</td>
+                            <td style={{ ...tdBase }}>{emDash("No commits this week")}</td>
+                            <td style={{ ...tdBase }}>{emDash("No commits this week")}</td>
+                            <td style={{ ...tdBase }}>{emDash("No commits this week")}</td>
+                          </>
+                        ) : (
+                          <>
+                            <td style={{ ...tdBase, color: c.green }}>{d.activeProjects}</td>
+                            <td style={{ ...tdBase, color: d.noActionProjects > 0 ? c.orange : c.textDim }}>{d.noActionProjects}</td>
+                            <td style={{ ...tdBase, color: sqShipped > 0 ? c.green : c.textDim }}>{sqShipped}</td>
+                            <td style={{ ...tdBase }}>{pctPill(pA, actClr)}</td>
+                            <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}`, color: c.text }}>{d.totalPeople}</td>
+                            <td style={{ ...tdBase }}>{pctPill(pPpl, pplClr)}</td>
+                            <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}`, color: c.text }}>{d.commits}</td>
+                            <td style={{ ...tdBase }}>{pD == null ? <span style={{ color: c.textDim }}>—</span> : pctPill(pD, c.green)}</td>
+                            <td style={{ ...tdBase }}>{pB > 0 ? pctPill(pB, c.red) : pctPill(0, c.red, true)}</td>
+                            <td style={{ ...tdBase }}>{pctPill(pC, c.orange, pC === 0)}</td>
+                          </>
+                        )}
                       </tr>
                     );
                   });
+                  // Footer toggle — surfaces hidden-count and lets the user
+                  // expand inactive squads without cluttering the table.
+                  if (inactiveCount > 0 && !showInactive) {
+                    rendered.push(
+                      <tr key="__inactive_toggle__">
+                        <td colSpan={11} style={{
+                          ...tdBase, textAlign: "center",
+                          padding: `${space[3]}px`,
+                          background: c.surfaceAlt || c.surface,
+                          borderTop: `1px solid ${c.border}`,
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                          color: c.textDim, fontWeight: 500, letterSpacing: 0,
+                        }}>
+                          {inactiveCount} inactive squad{inactiveCount === 1 ? "" : "s"} hidden ·{" "}
+                          <button
+                            onClick={() => setShowInactive(true)}
+                            style={{
+                              background: "transparent", border: "none", padding: 0,
+                              color: c.accent, textDecoration: "underline", cursor: "pointer",
+                              fontFamily: "inherit", fontSize: "inherit", fontWeight: 600,
+                            }}
+                          >Show all</button>
+                        </td>
+                      </tr>
+                    );
+                  } else if (showInactive && inactiveCount > 0) {
+                    rendered.push(
+                      <tr key="__inactive_toggle__">
+                        <td colSpan={11} style={{
+                          ...tdBase, textAlign: "center",
+                          padding: `${space[3]}px`,
+                          background: c.surfaceAlt || c.surface,
+                          borderTop: `1px solid ${c.border}`,
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                          color: c.textDim, fontWeight: 500, letterSpacing: 0,
+                        }}>
+                          <button
+                            onClick={() => setShowInactive(false)}
+                            style={{
+                              background: "transparent", border: "none", padding: 0,
+                              color: c.accent, textDecoration: "underline", cursor: "pointer",
+                              fontFamily: "inherit", fontSize: "inherit", fontWeight: 600,
+                            }}
+                          >Hide inactive squads</button>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return rendered;
                 })()}
               </tbody>
             </table>

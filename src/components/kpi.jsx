@@ -94,13 +94,22 @@ export const HealthGauge = ({ value, label = "Avg Health", sub = "portfolio heal
   // Solid semantic fill — matches HealthBar thresholds (≥70 green, ≥40 amber, <40 red).
   // Rainbow gradient fills are explicitly banned (DESIGN_SYSTEM.md §10).
   const fill = value >= 70 ? c.green : value >= 40 ? c.orange : c.red;
+  const clamped = Math.max(0, Math.min(100, Number(value) || 0));
   return (
-    <div style={{
-      padding: space[6], borderRadius: layout.radiusLg,
-      background: c.surfaceInverse, border: `1px solid ${c.surfaceInverse}`,
-      boxShadow: c.shadowCard,
-      display: "flex", flexDirection: "column",
-    }}>
+    <div
+      role="meter"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={clamped}
+      aria-valuetext={`${clamped}% · ${sub}`}
+      aria-label={label}
+      style={{
+        padding: space[6], borderRadius: layout.radiusLg,
+        background: c.surfaceInverse, border: `1px solid ${c.surfaceInverse}`,
+        boxShadow: c.shadowCard,
+        display: "flex", flexDirection: "column",
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[2] + 2 }}>
         <span style={{
           fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700,
@@ -119,7 +128,7 @@ export const HealthGauge = ({ value, label = "Avg Health", sub = "portfolio heal
         fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight,
         color: c.textMidOnInverse, marginTop: space[1] + 2,
       }}>{sub}</div>
-      <div style={{
+      <div aria-hidden style={{
         height: 4, borderRadius: 2, background: c.insetInverse,
         marginTop: 16, overflow: "hidden", position: "relative",
       }}>
@@ -128,7 +137,7 @@ export const HealthGauge = ({ value, label = "Avg Health", sub = "portfolio heal
           borderRadius: 2,
           background: fill,
           transformOrigin: "left center",
-          transform: `scaleX(${Math.max(0, Math.min(100, value)) / 100})`,
+          transform: `scaleX(${clamped / 100})`,
           transition: `transform ${motion.normal.duration} ${motion.normal.easing}, background ${motion.fast.duration} ${motion.fast.easing}`,
         }} />
       </div>

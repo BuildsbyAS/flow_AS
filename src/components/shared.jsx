@@ -296,16 +296,41 @@ export const TextArea = ({ style: s, ...rest }) => (
 // Use for: stage, type, duration pickers in Commit cards
 // mono: true → uses monoMd tokens (for type codes); false → bodySm (for labels)
 // ══════════════════════════════════════════════════════════════
-export const ChoiceGroup = ({ options, value, onChange, mono = false }) => {
+export const ChoiceGroup = ({ options, value, onChange, mono = false, label }) => {
   const devRef = useDevLabel('Single-select toggle button group for stage and type pickers');
   const font = mono ? typo.monoMd : typo.bodySm;
+  // ARIA radiogroup: each option is a role="radio", one is aria-checked.
+  // Keyboard: ← ↑ Home go to prev / first; → ↓ End go to next / last.
+  // Selection moves WITH focus (per WAI-ARIA radio-group pattern).
+  const onKey = (e, idx) => {
+    const last = options.length - 1;
+    let next = null;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = idx === last ? 0 : idx + 1;
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = idx === 0 ? last : idx - 1;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = last;
+    if (next !== null) {
+      e.preventDefault();
+      onChange(options[next].value);
+      // Focus moves too so the keyboard user can keep nav-ing.
+      const buttons = e.currentTarget.parentElement.querySelectorAll('[role="radio"]');
+      buttons[next]?.focus();
+    }
+  };
   return (
-    <div ref={devRef} style={{ display: "flex", gap: space[1], flexWrap: "wrap" }}>
-      {options.map(opt => {
+    <div ref={devRef} role="radiogroup" aria-label={label} style={{ display: "flex", gap: space[1], flexWrap: "wrap" }}>
+      {options.map((opt, idx) => {
         const active = value === opt.value;
         const clr = opt.color || c.accent;
         return (
-          <button key={opt.value} onClick={() => onChange(opt.value)} className="flow-btn" style={{
+          <button key={opt.value}
+            role="radio"
+            aria-checked={active}
+            // Roving tabindex: only the selected (or first, if none selected) is tabbable.
+            tabIndex={active || (value == null && idx === 0) ? 0 : -1}
+            onClick={() => onChange(opt.value)}
+            onKeyDown={(e) => onKey(e, idx)}
+            className="flow-btn" style={{
             padding: `${space[1] + 1}px ${space[3] - 2}px`, borderRadius: layout.radiusSm,
             border: `1px solid ${active ? clr + "40" : c.border}`,
             background: active ? (opt.bg || clr + "12") : "transparent",

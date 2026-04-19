@@ -1616,7 +1616,20 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
             </div>
             {/* ── Slot picker — numbered buttons for quick jumping ── */}
             <div style={{ maxWidth: 640, margin: `0 auto ${space[4]}px`, width: "100%", display: "flex", alignItems: "center", gap: space[3] }}>
-              <div role="tablist" aria-label="Commit slots" style={{ display: "flex", gap: space[1], flex: 1 }}>
+              <div role="tablist" aria-label="Commit slots" onKeyDown={(e) => {
+                // Tablist keyboard pattern: ← → Home End move between slots.
+                const last = 2;
+                let next = null;
+                if (e.key === "ArrowRight") next = detailFocus === last ? 0 : Math.min(last, detailFocus + 1);
+                else if (e.key === "ArrowLeft") next = detailFocus === 0 ? last : Math.max(0, detailFocus - 1);
+                else if (e.key === "Home") next = 0;
+                else if (e.key === "End") next = last;
+                if (next !== null) {
+                  e.preventDefault();
+                  setDetailFocus(next);
+                  e.currentTarget.querySelectorAll('[role="tab"]')[next]?.focus();
+                }
+              }} style={{ display: "flex", gap: space[1], flex: 1 }}>
                 {[0, 1, 2].map((di) => {
                   const filled = slotFilled[di];
                   const active = di === detailFocus;
@@ -1632,6 +1645,9 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
                       key={di}
                       role="tab"
                       aria-selected={active}
+                      aria-current={active ? "step" : undefined}
+                      // Roving tabindex — only the active tab is reachable via Tab.
+                      tabIndex={active ? 0 : -1}
                       aria-label={`Commit ${di + 1}${depri ? " (deprioritized)" : filled ? " (filled)" : " (empty)"}`}
                       onClick={() => setDetailFocus(di)}
                       className="flow-press flow-focus-ring"

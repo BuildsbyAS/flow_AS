@@ -139,9 +139,9 @@ body.flow-chrome-collapsed .flow-th-sticky {
   border-color: var(--flow-border-medium) !important;
 }
 
-.flow-logo-group:hover .flow-logo-mark {
-  box-shadow: 0 0 0 4px var(--flow-accent-soft) !important;
-}
+/* Logo hover ring removed — read as an accidental focus/selection state
+   rather than a decorative hover (QA feedback). The .flow-logo-group
+   opacity dip in AnimStyles gives enough affordance on its own. */
 
 .flow-breadcrumb:hover {
   background: rgba(0, 0, 0, 0.04);

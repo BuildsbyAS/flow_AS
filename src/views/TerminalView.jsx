@@ -27,7 +27,7 @@ const WARNING_MESSAGES = [
   "the key is literally what you're trying to bypass",
 ];
 
-function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSettings, resetKey, initialModule, onConsumePayload }) {
+function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSettings, resetKey, initialModule, onConsumePayload, onExit }) {
   const devRef = useDevLabel('Locked terminal gate with boot sequence and password-protected module access');
   const [bootLines, setBootLines] = useState(unlockedSections ? BOOT_LINES : []);
   const [bootDone, setBootDone] = useState(!!unlockedSections);
@@ -105,7 +105,8 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
     }
   }, [resetKey]);
 
-  // Escape key returns to terminal root
+  // Escape key returns to terminal root — or exits the Terminal entirely
+  // back to the previous tab if we're already at the root.
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === "Escape" && !e.defaultPrevented) {
@@ -121,12 +122,19 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
           e.preventDefault();
           e.stopPropagation();
           setActiveModule(null);
+          return;
+        }
+        // Already at terminal root — exit to previous tab.
+        if (onExit) {
+          e.preventDefault();
+          e.stopPropagation();
+          onExit();
         }
       }
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [activeModule, adminPrompt]);
+  }, [activeModule, adminPrompt, onExit]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -271,6 +279,30 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
         cursor: "text",
       }}
     >
+      {/* Close button — always reachable exit from the Terminal view.
+          ESC also works, but a visible X is the discoverable affordance
+          for mouse users who never think to press Escape. */}
+      {onExit && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onExit(); }}
+          title="Exit Terminal (Esc)"
+          aria-label="Exit Terminal"
+          style={{
+            position: "absolute", top: 16, right: 16, zIndex: 20,
+            width: 32, height: 32, borderRadius: 6,
+            background: "rgba(0,255,65,0.06)",
+            border: "1px solid rgba(0,255,65,0.25)",
+            color: terminal.green, cursor: "pointer",
+            fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
+            fontSize: 14, fontWeight: 700,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            transition: "background 0.15s ease, border-color 0.15s ease",
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,255,65,0.14)"; e.currentTarget.style.borderColor = "rgba(0,255,65,0.45)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(0,255,65,0.06)"; e.currentTarget.style.borderColor = "rgba(0,255,65,0.25)"; }}
+        >✕</button>
+      )}
+
       {/* Scanline overlay */}
       <div style={{
         position: "absolute", inset: 0, pointerEvents: "none", zIndex: 10,
