@@ -8,6 +8,7 @@ import { FilterChip, Btn } from "./shared";
 import FlowLogo from "./FlowLogo";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
+import { initialsOf } from "../lib/names";
 
 // weekConfig now passed via props from App.jsx
 
@@ -1621,7 +1622,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
             fontSize: 12, fontWeight: 700, color: c.textOnAccent,
             border: `2px solid ${c.border}`,
           }}>
-            {(displayName || "?")[0].toUpperCase()}
+            {initialsOf(displayName)}
           </div>
         )}
       </button>

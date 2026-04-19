@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { c, typo, layout, space, motion } from "../styles/theme";
 import { NAV } from "./AppShell";
 import useDevLabel from "../hooks/useDevLabel";
+import { initialsOf } from "../lib/names";
 
 // ═══════════════════════════════════════════════════════════════
 // UNIVERSAL SEARCH — F / Cmd+K
@@ -101,7 +102,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
           hint: `${p.role || "No role"} · ${p.squad || "No squad"}`,
           section: "People",
           cat: "people",
-          icon: p.name.split(" ").filter(Boolean).map(w => w?.[0] || "").join(""),
+          icon: initialsOf(p.name),
           action: () => { if (onNavigate) onNavigate("commit", p.name); onClose(); },
         });
       });

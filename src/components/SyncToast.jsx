@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { c, typo, layout, space } from "../styles/theme";
 import useDevLabel from "../hooks/useDevLabel";
+import { firstNameLower } from "../lib/names";
 
 const TOAST_DURATION = 2400;
 const EXIT_MS = 200;
@@ -156,7 +157,7 @@ export default function SyncToast() {
               </span>
               {personName && (
                 <span style={{ color: c.textDim, marginLeft: 2 }}>
-                  {personName.split(" ")[0].toLowerCase()}
+                  {firstNameLower(personName)}
                 </span>
               )}
               {!isDone && !isError && (

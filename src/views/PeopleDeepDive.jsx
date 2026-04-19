@@ -6,6 +6,7 @@ import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../co
 import ActivityTimeline from "../components/ActivityTimeline";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
+import { initialsOf } from "../lib/names";
 
 function parseWeekKey(key) {
   const m = /^(\d{4})-W(\d{1,2})$/.exec(String(key || ""));
@@ -161,13 +162,7 @@ const firstGlyph = (name) => {
   return arr.length ? arr[0].toUpperCase() : "?";
 };
 
-// Multi-grapheme initials (e.g. "Anna Ng" → "AN"). Unicode-safe.
-const initialsOf = (name) => {
-  if (!name) return "?";
-  const parts = String(name).trim().split(/\s+/).filter(Boolean).slice(0, 2);
-  if (parts.length === 0) return "?";
-  return parts.map(p => [...p][0]?.toUpperCase() || "").join("") || "?";
-};
+// initialsOf moved to src/lib/names.js — imported above for shared use.
 
 const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical, selectedWeekKey, weekConfig: weekConfigProp, globalFilters = {}, loading, error }) => {
   const devRef = useDevLabel(

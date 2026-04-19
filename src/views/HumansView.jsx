@@ -6,6 +6,7 @@ import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../co
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
 import useExitAnimation from "../hooks/useExitAnimation";
+import { initialsOf } from "../lib/names";
 
 // ─── PROJECT SEARCH/SELECT — supports typing project ID ──────────
 const ProjectSearchSelect = ({ projects, value, onChange, placeholder }) => {
@@ -1272,7 +1273,7 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
             display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: typo.monoMd.font, fontWeight: 700, fontSize: typo.displaySm.size,
             letterSpacing: typo.monoMd.tracking, color: c.text, flexShrink: 0,
-          }}>{person.person.split(" ").map(w => w.charAt(0)).slice(0, 2).join("").toUpperCase()}</div>
+          }}>{initialsOf(person.person)}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             <span style={{
               fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
