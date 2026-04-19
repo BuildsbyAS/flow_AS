@@ -1,5 +1,5 @@
 // Flow — Main App Shell
-import React, { useState, useCallback, useRef, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { setTheme, c, body, space } from "./styles/theme";
 import AnimStyles from "./components/AnimStyles";
 import CommandPalette from "./components/CommandPalette";
