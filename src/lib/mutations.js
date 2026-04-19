@@ -231,7 +231,8 @@ export async function syncCommitmentToDB(commitment, lookups) {
       buffer_outcome: commitment.bufferOutcome || null,
       buffer_carry_to: commitment.bufferCarryTo || null,
       buffer_blocked_reason: commitment.bufferBlockedReason || '',
-      depri_reason: commitment.depriReason || null,
+      // depri_reason is NOT NULL DEFAULT '' in migration 005 — send '' not null.
+      depri_reason: commitment.depriReason || '',
       closed_at: commitment.closedAt || null,
     };
 
@@ -254,11 +255,12 @@ export async function syncCommitmentToDB(commitment, lookups) {
         title: item.title || '',
         duration: item.duration || null,
         outcome: item.outcome || null,
-        // Always write these — null clears stale values on outcome-toggle-off / unlock.
-        blocked_reason: item.blockedReason || null,
+        // blocked_reason + carried_from are NOT NULL DEFAULT '' (migration 005)
+        // — send '' not null so empty strings clear stale values without 23502.
+        blocked_reason: item.blockedReason || '',
         carry_to: item.carryTo || null,
         weeks_remaining: item.weeksRemaining || null,
-        carried_from: item.carriedFrom || null,
+        carried_from: item.carriedFrom || '',
       }));
 
       // Upsert items by (commitment_id, slot) to avoid delete-then-insert race condition
