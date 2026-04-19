@@ -1179,7 +1179,7 @@ function TabHelpText({ activeTab, onNavigate }) {
 
   return (
     <span
-      className="flow-context-hint"
+      className="flow-tab-help-chip"
       onClick={handleClick}
       style={{
         display: "inline-flex", alignItems: "center", gap: 5,
