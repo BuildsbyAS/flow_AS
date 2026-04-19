@@ -210,27 +210,30 @@ export async function syncCommitmentToDB(commitment, lookups) {
 
   try {
     // 1. Upsert the commitment row
+    // Explicitly write null/empty for every persisted field so clearing works
+    // (e.g. unlock → closed_at=null, restore → depri_reason='', toggle-off →
+    // buffer_outcome=null). Previous "if truthy" gates left stale values in DB.
     const upsertData = {
       person_id: personId,
       week_id: commitment._weekId,
       buffer: commitment.buffer || null,
       deselected: commitment.deselected ?? -1,
-      // Preserve original lock timestamp; only set on first lock
       locked_at: commitment.lockedAt
         ? (commitment._lockedAtISO || new Date().toISOString())
         : null,
+      buffer_project: commitment.bufferProject || null,
+      // buffer_type / buffer_stage / buffer_blocked_reason are declared
+      // NOT NULL DEFAULT '' in migration 005, so an empty buffer must send
+      // '' (not null) or the upsert fails with 23502.
+      buffer_type: commitment.bufferType || '',
+      buffer_stage: commitment.bufferStage || '',
+      buffer_duration: commitment.bufferDuration || null,
+      buffer_outcome: commitment.bufferOutcome || null,
+      buffer_carry_to: commitment.bufferCarryTo || null,
+      buffer_blocked_reason: commitment.bufferBlockedReason || '',
+      depri_reason: commitment.depriReason || null,
+      closed_at: commitment.closedAt || null,
     };
-    // Buffer metadata fields (require migration 005)
-    // Only include if values exist to avoid schema errors on unmigrated DBs
-    if (commitment.bufferProject) upsertData.buffer_project = commitment.bufferProject;
-    if (commitment.bufferType) upsertData.buffer_type = commitment.bufferType;
-    if (commitment.bufferStage) upsertData.buffer_stage = commitment.bufferStage;
-    if (commitment.bufferDuration) upsertData.buffer_duration = commitment.bufferDuration;
-    if (commitment.bufferOutcome) upsertData.buffer_outcome = commitment.bufferOutcome;
-    if (commitment.bufferCarryTo) upsertData.buffer_carry_to = commitment.bufferCarryTo;
-    if (commitment.bufferBlockedReason) upsertData.buffer_blocked_reason = commitment.bufferBlockedReason;
-    if (commitment.depriReason) upsertData.depri_reason = commitment.depriReason;
-    if (commitment.closedAt) upsertData.closed_at = commitment.closedAt;
 
     const { data: commitRow, error: commitError } = await supabase
       .from('commitments')
@@ -242,24 +245,21 @@ export async function syncCommitmentToDB(commitment, lookups) {
 
     // 2. Build new items first, insert, then delete old (safer order)
     if (commitment.items && commitment.items.length > 0) {
-      const items = commitment.items.map((item, idx) => {
-        const row = {
-          commitment_id: commitRow.id,
-          slot: idx,
-          project_id: item.project || null,
-          type: item.type || '',
-          stage: item.stage || '',
-          title: item.title || '',
-          duration: item.duration || null,
-          outcome: item.outcome || null,
-        };
-        // Closing-phase fields (require migration 005)
-        if (item.blockedReason) row.blocked_reason = item.blockedReason;
-        if (item.carryTo) row.carry_to = item.carryTo;
-        if (item.weeksRemaining) row.weeks_remaining = item.weeksRemaining;
-        if (item.carriedFrom) row.carried_from = item.carriedFrom;
-        return row;
-      });
+      const items = commitment.items.map((item, idx) => ({
+        commitment_id: commitRow.id,
+        slot: idx,
+        project_id: item.project || null,
+        type: item.type || '',
+        stage: item.stage || '',
+        title: item.title || '',
+        duration: item.duration || null,
+        outcome: item.outcome || null,
+        // Always write these — null clears stale values on outcome-toggle-off / unlock.
+        blocked_reason: item.blockedReason || null,
+        carry_to: item.carryTo || null,
+        weeks_remaining: item.weeksRemaining || null,
+        carried_from: item.carriedFrom || null,
+      }));
 
       // Upsert items by (commitment_id, slot) to avoid delete-then-insert race condition
       const { error: upsertError } = await supabase
