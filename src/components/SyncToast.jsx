@@ -35,7 +35,9 @@ export default function SyncToast() {
   const [visible, setVisible] = useState(false);
   const [phase, setPhase] = useState("idle"); // idle | syncing | done | error
   const [personName, setPersonName] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
   const [exiting, setExiting] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const timer = useRef(null);
 
   const dismiss = useCallback(() => {
@@ -44,12 +46,15 @@ export default function SyncToast() {
       setVisible(false);
       setPhase("idle");
       setExiting(false);
+      setExpanded(false);
+      setErrorMsg("");
     }, EXIT_MS);
   }, []);
 
   const show = useCallback((name) => {
     setPersonName(name || "");
     setPhase("syncing");
+    setErrorMsg("");
     setExiting(false);
     setVisible(true);
     clearTimeout(timer.current);
@@ -63,11 +68,13 @@ export default function SyncToast() {
     timer.current = setTimeout(() => dismiss(), TOAST_DURATION);
   }, [dismiss]);
 
-  const error = useCallback((name) => {
+  const error = useCallback((name, detail) => {
     setPersonName(name || "");
+    setErrorMsg(typeof detail === "string" ? detail : (detail?.message || ""));
     setPhase("error");
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => dismiss(), TOAST_DURATION + 1000);
+    // Error toasts persist longer — user needs a moment to read the reason.
+    timer.current = setTimeout(() => dismiss(), TOAST_DURATION + 4000);
   }, [dismiss]);
 
   useEffect(() => {
@@ -100,14 +107,15 @@ export default function SyncToast() {
           borderRadius: layout.radiusSm,
           padding: `10px ${space[4]}px`,
           display: "flex",
-          alignItems: "center",
-          gap: space[3],
+          flexDirection: "column",
+          gap: expanded && isError ? space[1] : 0,
           fontFamily: typo.monoMd.font,
           fontSize: typo.monoMd.size,
           fontWeight: 600,
           letterSpacing: typo.monoMd.tracking,
           color: c.textMid,
           minWidth: 180,
+          maxWidth: expanded && isError ? 420 : undefined,
           boxShadow: c.shadowFloat,
           overflow: "hidden",
           position: "relative",
@@ -127,47 +135,73 @@ export default function SyncToast() {
             </div>
           )}
 
-          {/* Status indicator — flat solid dot, no glow */}
-          <div style={{
-            width: 8, height: 8, borderRadius: "50%",
-            background: statusColor,
-            flexShrink: 0,
-            transition: "background 200ms ease",
-          }} />
+          <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
+            {/* Status indicator — flat solid dot, no glow */}
+            <div style={{
+              width: 8, height: 8, borderRadius: "50%",
+              background: statusColor,
+              flexShrink: 0,
+              transition: "background 200ms ease",
+            }} />
 
-          {/* Message */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: space[1],
-            fontVariantNumeric: "tabular-nums",
-          }}>
-            <span style={{ color: c.textDim }}>$</span>
-            <span style={{ color: statusColor }}>sync</span>
-            <span style={{ color: c.textDim }}>
-              {isError ? "err" : isDone ? "ok" : "..."}
-            </span>
-            {personName && (
-              <span style={{ color: c.textDim, marginLeft: 2 }}>
-                {personName.split(" ")[0].toLowerCase()}
+            {/* Message */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: space[1],
+              fontVariantNumeric: "tabular-nums", flex: 1,
+            }}>
+              <span style={{ color: c.textDim }}>$</span>
+              <span style={{ color: statusColor }}>sync</span>
+              <span style={{ color: c.textDim }}>
+                {isError ? "err" : isDone ? "ok" : "..."}
               </span>
-            )}
-            {!isDone && !isError && (
-              <span style={{
-                animation: "sync-cursor-blink 1s step-end infinite",
-                color: c.accent,
-                marginLeft: 1,
-              }}>_</span>
-            )}
-            {isDone && (
-              <span style={{ color: c.green, marginLeft: 2, opacity: 0.75 }}>
-                ✓
-              </span>
-            )}
-            {isError && (
-              <span style={{ color: c.red, marginLeft: 2, opacity: 0.75 }}>
-                ✗
-              </span>
+              {personName && (
+                <span style={{ color: c.textDim, marginLeft: 2 }}>
+                  {personName.split(" ")[0].toLowerCase()}
+                </span>
+              )}
+              {!isDone && !isError && (
+                <span style={{
+                  animation: "sync-cursor-blink 1s step-end infinite",
+                  color: c.accent,
+                  marginLeft: 1,
+                }}>_</span>
+              )}
+              {isDone && (
+                <span style={{ color: c.green, marginLeft: 2, opacity: 0.75 }}>
+                  ✓
+                </span>
+              )}
+              {isError && (
+                <span style={{ color: c.red, marginLeft: 2, opacity: 0.75 }}>
+                  ✗
+                </span>
+              )}
+            </div>
+
+            {/* Error: expand toggle to reveal the error reason */}
+            {isError && errorMsg && (
+              <button
+                onClick={() => setExpanded(v => !v)}
+                title={expanded ? "Hide details" : "Show details"}
+                style={{
+                  background: "transparent", border: `1px solid ${c.red}25`,
+                  borderRadius: 4, color: c.red, cursor: "pointer",
+                  padding: "1px 6px", fontFamily: "inherit", fontSize: 10,
+                  fontWeight: 700, letterSpacing: "0.08em",
+                }}
+              >{expanded ? "HIDE" : "WHY"}</button>
             )}
           </div>
+
+          {/* Error detail — collapsible */}
+          {isError && errorMsg && expanded && (
+            <div style={{
+              paddingLeft: 16, color: c.textMid,
+              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 500,
+              lineHeight: 1.5, letterSpacing: 0,
+              wordBreak: "break-word", whiteSpace: "pre-wrap",
+            }}>{errorMsg}</div>
+          )}
         </div>
       </div>
     </>

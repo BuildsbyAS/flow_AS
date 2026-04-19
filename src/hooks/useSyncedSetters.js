@@ -99,11 +99,30 @@ export function useSyncedSetters({
     const lk = lookupsRef.current;
     if (!lk?.current || !wc) return;
 
+    // Resolve the right week_id: a carried-forward row sets its own weekStart,
+    // and MUST persist against that week's ID — not the current week — or
+    // the upsert would overwrite the current-week row for the same person.
+    let weekId = wc._currentWeekId;
+    const weekStart = commitment.weekStart ? String(commitment.weekStart).slice(0, 10) : null;
+    if (weekStart) {
+      const byStart = lk.current.weekIdByStart || {};
+      if (byStart[weekStart]) {
+        weekId = byStart[weekStart];
+      } else {
+        // Future week row doesn't exist yet — skip sync rather than overwrite
+        // current week. Row stays in localStorage draft + React state until
+        // the weeks table gets that row (auto-provisioned when that Monday
+        // becomes "current"). Log once so this is diagnosable.
+        console.warn('[Flow] Skipping sync: no weeks row for', weekStart, '— carry stays in local state for', commitment.person);
+        return;
+      }
+    }
+
     if (onSyncStartRef.current) onSyncStartRef.current();
 
     try {
       await syncCommitmentToDB(
-        { ...commitment, _weekId: wc._currentWeekId },
+        { ...commitment, _weekId: weekId },
         lk.current
       );
       // Clear the localStorage draft after successful DB write
@@ -111,8 +130,12 @@ export function useSyncedSetters({
       if (onSyncDoneRef.current) onSyncDoneRef.current(commitment.person);
     } catch (err) {
       console.error('[Flow DB] Sync failed for', commitment.person, err);
-      // Signal error to SyncToast so it doesn't hang forever
-      if (window.__flowSyncToast?.error) window.__flowSyncToast.error(commitment.person);
+      // Pass a human-readable detail to SyncToast so the user can see WHY
+      // the sync failed (Supabase codes are cryptic — prefer message + code).
+      const detail = [err?.code, err?.message, err?.details].filter(Boolean).join(' · ')
+        || err?.toString?.()
+        || 'unknown error';
+      if (window.__flowSyncToast?.error) window.__flowSyncToast.error(commitment.person, detail);
     }
   }, []);
 
@@ -144,26 +167,46 @@ export function useSyncedSetters({
   // ─── Flush on tab close / navigation ───────────────────────
   useEffect(() => {
     const handleBeforeUnload = () => {
-      // Best-effort DB sync on tab close — these async calls may not complete
-      // localStorage drafts (Tier 1) are the real safety net here
+      // 1. Synchronously mirror every dirty commitment to localStorage. This
+      //    is the real safety net — the debounced draft save may have a
+      //    pending timer that would be killed by unload.
       const cms = commitmentsRef.current;
       dirtySet.current.forEach(name => {
         const cm = cms.find(c => c.person === name);
-        if (cm) {
-          const wc = weekConfigRef.current;
-          const lk = lookupsRef.current;
-          if (wc && lk?.current) {
-            syncCommitmentToDB(
-              { ...cm, _weekId: wc._currentWeekId },
-              lk.current
-            );
-          }
-        }
+        if (cm) saveDraftToLocal(name, cm);
       });
+
+      // 2. Fire the DB sync best-effort. Route through the correct week_id
+      //    when the commitment carries its own weekStart, matching
+      //    syncPersonToDB above.
+      const wc = weekConfigRef.current;
+      const lk = lookupsRef.current;
+      if (wc && lk?.current) {
+        dirtySet.current.forEach(name => {
+          const cm = cms.find(c => c.person === name);
+          if (!cm) return;
+          let weekId = wc._currentWeekId;
+          const weekStart = cm.weekStart ? String(cm.weekStart).slice(0, 10) : null;
+          if (weekStart) {
+            const byStart = lk.current.weekIdByStart || {};
+            if (!byStart[weekStart]) return; // skip — would clobber current week
+            weekId = byStart[weekStart];
+          }
+          syncCommitmentToDB(
+            { ...cm, _weekId: weekId },
+            lk.current
+          );
+        });
+      }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    // pagehide is more reliable than beforeunload on mobile / bfcache.
+    window.addEventListener('pagehide', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handleBeforeUnload);
+    };
   }, []);
 
   // ─── SQUADS ──────────────────────────────────────────────
@@ -396,19 +439,45 @@ export function useSyncedSetters({
     setTimeout(() => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
 
-      // Diff by person key, not array index. Sorting or filtering
-      // commitments shifts indices and would otherwise flag every row as
-      // "changed" and fire DB writes for the wrong person.
-      const prevByPerson = new Map(prev.map(cm => [cm.person, cm]));
+      // Diff by (person, weekStart). Keying on person alone collides when a
+      // carry-forward pushes an additional row for the same person in a
+      // future week. Current-week rows have no weekStart.
+      const rowKey = (cm) => `${cm.person}|${cm.weekStart ? String(cm.weekStart).slice(0, 10) : ''}`;
+      const prevByPerson = new Map(prev.map(cm => [rowKey(cm), cm]));
+
+      // Fields we track for dirty detection. Anything persisted by
+      // syncCommitmentToDB must be here or edits silently get dropped.
+      const persistFields = [
+        'items', 'buffer', 'deselected', 'lockedAt', 'lockedAtTime', 'closedAt',
+        'depriReason', 'bufferProject', 'bufferType', 'bufferStage',
+        'bufferDuration', 'bufferOutcome', 'bufferCarryTo', 'bufferBlockedReason',
+      ];
+      const snap = (cm) => {
+        if (!cm) return '';
+        const out = {};
+        for (const k of persistFields) out[k] = cm[k];
+        return JSON.stringify(out);
+      };
 
       for (const changed of next) {
-        const before = prevByPerson.get(changed.person);
+        const before = prevByPerson.get(rowKey(changed));
         if (before === changed) continue; // same reference, no work
+
+        // Carried-forward rows (have weekStart) don't participate in the
+        // current-week dirty/draft path — drafts are keyed by person alone
+        // and would collide with the current week's draft. They'll land in
+        // the target week once that week becomes current.
+        const isCarriedRow = !!changed.weekStart;
+        if (isCarriedRow) continue;
 
         const wasLocked = before?.lockedAt;
         const nowLocked = changed.lockedAt;
+        const wasClosed = !!before?.closedAt;
+        const nowClosed = !!changed.closedAt;
 
-        // TIER 2: Immediate DB sync on lock/unlock
+        // TIER 2: Immediate DB sync on lock/unlock/close/reopen.
+        // Close Week must always sync — diffs on items alone wouldn't catch
+        // the closedAt flip or carry-row insertions on other persons.
         if (!wasLocked && nowLocked) {
           syncPersonToDB(changed);
           dirtySet.current.delete(changed.person);
@@ -417,7 +486,10 @@ export function useSyncedSetters({
           syncPersonToDB(changed);
           dirtySet.current.delete(changed.person);
           logCommitmentUnlock(changed.person);
-        } else if (!before || JSON.stringify(before.items) !== JSON.stringify(changed.items) || before.lockedAtTime !== changed.lockedAtTime) {
+        } else if (wasClosed !== nowClosed) {
+          syncPersonToDB(changed);
+          dirtySet.current.delete(changed.person);
+        } else if (!before || snap(before) !== snap(changed)) {
           // TIER 1: Save draft to localStorage (debounced per-person)
           dirtySet.current.add(changed.person);
           clearTimeout(draftTimers.current[changed.person]);

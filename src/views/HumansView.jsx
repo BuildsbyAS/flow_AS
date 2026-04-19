@@ -617,6 +617,8 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
     });
     if (setIsLocked) setIsLocked(true);
     setLockSuccess(true);
+    // Leave review mode — the week is locked; no more editing.
+    setReviewMode(false);
   };
   // Commits outcomes + carry-forward + closedAt to the DB. Called from the
   // floating dock's "Confirm Close" CTA in closing phase.
@@ -2540,15 +2542,17 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
         if (!person || activePerson < 0) return null;
         if (isHistorical || isClosed) return null;
         let action = null;
-        if (reviewMode) {
-          action = { label: "Lock Week", variant: "success", disabled: !canLock,
-                     onClick: () => { if (canLock) setConfirmAction("lock"); } };
-        } else if (phase === "closing") {
+        // Phase wins over reviewMode — once locked, the dock advances even
+        // if reviewMode is still true from the previous step.
+        if (phase === "closing") {
           action = { label: "Confirm Close", variant: "success", disabled: !weekComplete,
                      onClick: confirmCloseWeek };
         } else if (phase === "locked") {
           action = { label: "Close Week \u2192", variant: "primary",
                      onClick: () => setClosingMode(true) };
+        } else if (reviewMode) {
+          action = { label: "Lock Week", variant: "success", disabled: !canLock,
+                     onClick: () => { if (canLock) setConfirmAction("lock"); } };
         } else if (allSlotsFilled) {
           action = { label: "Review Plan \u2192", variant: "success",
                      onClick: () => setReviewMode(true) };
