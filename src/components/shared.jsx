@@ -758,7 +758,7 @@ export const SummaryTile = ({ value, label, color, active, onClick, icon, prevVa
 // ══════════════════════════════════════════════════════════════
 export const TableShell = ({ minWidth = 700, separate = false, className, style: s, children }) => (
   <div
-    className={className}
+    className={`flow-table-shell${className ? ` ${className}` : ""}`}
     style={{
       background: c.surface,
       border: `1px solid ${c.border}`,

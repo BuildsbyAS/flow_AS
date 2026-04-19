@@ -1178,6 +1178,7 @@ function TabHelpText({ activeTab, onNavigate }) {
 
   return (
     <span
+      className="flow-context-hint"
       onClick={handleClick}
       style={{
         display: "inline-flex", alignItems: "center", gap: 5,
@@ -1232,7 +1233,7 @@ function DayRhythmPill({ onNavigateToGuide }) {
   }, [open]);
 
   return (
-    <span ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+    <span ref={ref} className="flow-day-rhythm" style={{ position: "relative", flexShrink: 0 }}>
       <span
         onClick={() => setOpen((p) => !p)}
         style={{

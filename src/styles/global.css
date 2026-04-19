@@ -284,6 +284,37 @@ tr.flow-kb-focus::after {
   }
 }
 
+/* ── Global safety net: prevent horizontal page scroll at any width ── */
+html, body { overflow-x: hidden; max-width: 100%; }
+
+/* ── Tablet / narrow-desktop cleanup (1180px) ──
+   QA found nav labels clipping at ~1280px even though the first media
+   query kicks in at 1024px. This mid-tier tightens up the header so
+   labels stay readable without a hamburger menu. */
+@media (max-width: 1180px) {
+  /* Trim hotkey pills earlier — they eat horizontal space before labels */
+  .flow-tab-hotkey { display: none !important; }
+  /* Tighten tab padding so all six labels fit */
+  .flow-header-tab { padding: 0 8px !important; }
+  /* Let the nav rail scroll horizontally if it still overflows */
+  .flow-nav-rail { overflow-x: auto; scrollbar-width: none; }
+  .flow-nav-rail::-webkit-scrollbar { display: none; }
+}
+
+/* ── Tablet (1024px) ──
+   Context bar wraps instead of clipping. Drop the passive "learn more"
+   hint and the day-rhythm chip — both are decorative noise at this width. */
+@media (max-width: 1024px) {
+  .flow-context-bar { flex-wrap: wrap; min-height: 52px !important; height: auto !important; row-gap: 4px; }
+  .flow-context-hint,
+  .flow-day-rhythm { display: none !important; }
+  /* TableShell defaults to overflow: clip to avoid being a sticky ancestor.
+     Below tablet width, clipping hides columns the user needs to reach —
+     switch the outer shell to scroll-x instead. Desktop still clips so
+     sticky table headers keep pinning to the viewport correctly. */
+  .flow-table-shell { overflow-x: auto !important; overflow-y: visible !important; }
+}
+
 /* ── Responsive padding ── */
 @media (max-width: 900px) {
   .flow-header,
