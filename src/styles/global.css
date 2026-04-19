@@ -308,14 +308,16 @@ html, body { overflow-x: clip; max-width: 100%; }
 /* ── Tablet (1024px) ──
    Context bar wraps onto a second line instead of clipping — keeps the
    guide hint and day-rhythm chip visible rather than silently hiding
-   them (earlier revision hid both which regressed QA feedback). */
+   them (earlier revision hid both which regressed QA feedback).
+
+   Note: do NOT flip .flow-table-shell to overflow-x:auto here. Doing so
+   makes the shell a scroll container, which breaks position: sticky on
+   the table header <th>s (they'd anchor to the shell instead of the
+   viewport). We accept column clipping at tablet width in favour of
+   keeping sticky headers working; a card-layout fallback can come as a
+   follow-up QA pass if needed. */
 @media (max-width: 1024px) {
   .flow-context-bar { flex-wrap: wrap; min-height: 52px !important; height: auto !important; row-gap: 4px; }
-  /* TableShell defaults to overflow: clip to avoid being a sticky ancestor.
-     Below tablet width, clipping hides columns the user needs to reach —
-     switch the outer shell to scroll-x instead. Desktop still clips so
-     sticky table headers keep pinning to the viewport correctly. */
-  .flow-table-shell { overflow-x: auto !important; overflow-y: visible !important; }
 }
 
 /* ── Responsive padding ── */

@@ -13,9 +13,14 @@ import { useEffect } from "react";
 export default function useKeyboard(bindings, deps = []) {
   useEffect(() => {
     const handler = (e) => {
-      const tag = e.target.tagName;
-      const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.target.isContentEditable
-        || !!e.target.closest("[data-suppress-shortcuts]");
+      // Synthetic events can have e.target === window; fall back to
+      // document.activeElement so .closest() and .tagName stay safe.
+      const target = (e.target && typeof e.target.closest === "function")
+        ? e.target
+        : (document.activeElement || document.body);
+      const tag = target.tagName;
+      const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable
+        || !!target.closest?.("[data-suppress-shortcuts]");
 
       for (const b of bindings) {
         const keyMatch = e.key === b.key || e.key === b.key?.toLowerCase();
