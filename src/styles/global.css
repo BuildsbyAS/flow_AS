@@ -284,8 +284,12 @@ tr.flow-kb-focus::after {
   }
 }
 
-/* ── Global safety net: prevent horizontal page scroll at any width ── */
-html, body { overflow-x: hidden; max-width: 100%; }
+/* ── Global safety net: prevent horizontal page scroll at any width ──
+   Uses overflow-x: clip instead of hidden — clip prevents overflow
+   WITHOUT creating a scroll container, so position: sticky on table
+   headers still anchors to the viewport (hidden breaks sticky because
+   body becomes its nearest scrolling ancestor). */
+html, body { overflow-x: clip; max-width: 100%; }
 
 /* ── Tablet / narrow-desktop cleanup (1180px) ──
    QA found nav labels clipping at ~1280px even though the first media
@@ -302,12 +306,11 @@ html, body { overflow-x: hidden; max-width: 100%; }
 }
 
 /* ── Tablet (1024px) ──
-   Context bar wraps instead of clipping. Drop the passive "learn more"
-   hint and the day-rhythm chip — both are decorative noise at this width. */
+   Context bar wraps onto a second line instead of clipping — keeps the
+   guide hint and day-rhythm chip visible rather than silently hiding
+   them (earlier revision hid both which regressed QA feedback). */
 @media (max-width: 1024px) {
   .flow-context-bar { flex-wrap: wrap; min-height: 52px !important; height: auto !important; row-gap: 4px; }
-  .flow-context-hint,
-  .flow-day-rhythm { display: none !important; }
   /* TableShell defaults to overflow: clip to avoid being a sticky ancestor.
      Below tablet width, clipping hides columns the user needs to reach —
      switch the outer shell to scroll-x instead. Desktop still clips so
