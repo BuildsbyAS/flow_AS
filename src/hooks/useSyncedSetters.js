@@ -375,10 +375,17 @@ export function useSyncedSetters({
         const added = next.find(p => !prev.some(pp => pp.id === p.id));
         if (added) {
           createProjectInDB(added).then(serverId => {
-            if (serverId && serverId !== added.id) {
-              // Replace the temp/optimistic ID with the server-generated one
-              rawSetProjects(cur => cur.map(p => p.id === added.id ? { ...p, id: serverId } : p));
-            } else if (!serverId) {
+            if (serverId) {
+              if (serverId !== added.id) {
+                // Replace the temp/optimistic ID with the server-generated one
+                rawSetProjects(cur => cur.map(p => p.id === added.id ? { ...p, id: serverId } : p));
+              }
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('flow:project-create-succeeded', {
+                  detail: { name: added.name, id: serverId },
+                }));
+              }
+            } else {
               // Create failed on the server — roll back the optimistic row
               // and notify the app so the UI can surface an error toast.
               rawSetProjects(cur => cur.filter(p => p.id !== added.id));

@@ -237,7 +237,11 @@ function sortList(list, key, dir, metrics, weekLabels, today) {
   return [...list].sort((a, b) => {
     switch (key) {
       case "squad": return d * (a.squad || "").localeCompare(b.squad || "");
-      case "project": return d * (a.name || "").localeCompare(b.name || "");
+      case "project": {
+        const aN = parseInt((a.id || "").replace(/\D/g, ""), 10) || 0;
+        const bN = parseInt((b.id || "").replace(/\D/g, ""), 10) || 0;
+        return d * (aN - bN);
+      }
       case "owner": return d * (a.owner || "").localeCompare(b.owner || "");
       case "status": return d * (a.status || "active").localeCompare(b.status || "active");
       case "phase": return d * (allPhases.indexOf(a.phase) - allPhases.indexOf(b.phase));
@@ -279,6 +283,8 @@ export default function ProjectsView({
   const [search, setSearch] = useState("");
   const [createError, setCreateError] = useState(null);
   const createErrorTimerRef = useRef(null);
+  const [createSuccess, setCreateSuccess] = useState(null);
+  const createSuccessTimerRef = useRef(null);
 
   // Listen for optimistic-create failures from useSyncedSetters.
   // Single timer held in a ref so rapid re-failures don't cut the message short.
@@ -301,12 +307,25 @@ export default function ProjectsView({
         createErrorTimerRef.current = null;
       }, 5000);
     };
+    const successHandler = (e) => {
+      const nm = e?.detail?.name || "project";
+      const id = e?.detail?.id || "";
+      setCreateSuccess({ name: nm, id });
+      if (createSuccessTimerRef.current) clearTimeout(createSuccessTimerRef.current);
+      createSuccessTimerRef.current = setTimeout(() => {
+        setCreateSuccess(null);
+        createSuccessTimerRef.current = null;
+      }, 4500);
+    };
     window.addEventListener('flow:project-create-failed', handler);
     window.addEventListener('flow:project-update-failed', updateHandler);
+    window.addEventListener('flow:project-create-succeeded', successHandler);
     return () => {
       window.removeEventListener('flow:project-create-failed', handler);
       window.removeEventListener('flow:project-update-failed', updateHandler);
+      window.removeEventListener('flow:project-create-succeeded', successHandler);
       if (createErrorTimerRef.current) clearTimeout(createErrorTimerRef.current);
+      if (createSuccessTimerRef.current) clearTimeout(createSuccessTimerRef.current);
     };
   }, []);
   const [sortKey, setSortKey] = useState("squad");
@@ -323,6 +342,7 @@ export default function ProjectsView({
   const ganttAnim = useExitAnimation(ganttFullscreen, 250);
   const boardAnim = useExitAnimation(boardFullscreen, 250);
   const toastAnim = useExitAnimation(!!createError, 150);
+  const successToastAnim = useExitAnimation(!!createSuccess, 200);
   const [boardSearch, setBoardSearch] = useState("");
   const [boardSquads, setBoardSquads] = useState([]);
   const [boardOwners, setBoardOwners] = useState([]);
@@ -581,6 +601,69 @@ export default function ProjectsView({
             ✕
           </button>
         </div>
+        </div>
+      )}
+
+      {successToastAnim.mounted && createSuccess && (
+        <div role="status" aria-live="polite" style={{
+          position: "fixed", bottom: space[5], left: 0, right: 0, zIndex: 201,
+          display: "flex", justifyContent: "center", pointerEvents: "none",
+          animation: `${successToastAnim.visible ? "slideUp" : "slideDownOut"} ${successToastAnim.visible ? motion.slow.duration : motion.fast.duration} ${successToastAnim.visible ? motion.slow.easing : "cubic-bezier(0.4, 0, 1, 1)"} both`,
+        }}>
+          <div style={{
+            background: "#FFFFFF",
+            border: `1.5px solid ${c.green}`,
+            borderLeft: `6px solid ${c.green}`,
+            borderRadius: layout.radiusMd,
+            padding: `${space[3]}px ${space[4]}px`,
+            boxShadow: `0 12px 32px rgba(5,150,105,0.22), 0 4px 12px rgba(15,23,42,0.12)`,
+            display: "flex", alignItems: "center", gap: space[3],
+            pointerEvents: "auto",
+            minWidth: 380, maxWidth: 560,
+          }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%",
+              background: c.green, color: "#FFFFFF",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 20, fontWeight: 800, flexShrink: 0,
+              boxShadow: `0 0 0 4px ${c.greenDim}`,
+            }}>✓</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontFamily: typo.bodyMd.font, fontSize: 15, fontWeight: 700,
+                color: c.text, letterSpacing: "-0.01em", lineHeight: 1.2,
+              }}>
+                Project created
+              </div>
+              <div style={{
+                fontFamily: typo.bodySm.font, fontSize: 13, color: c.textMid,
+                display: "flex", alignItems: "center", gap: space[2], overflow: "hidden",
+              }}>
+                <span style={{
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  fontWeight: 600, color: c.text,
+                }}>{createSuccess.name}</span>
+                {createSuccess.id && (
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                    color: c.amber, background: c.amberDim,
+                    padding: "2px 7px", borderRadius: layout.radiusXs,
+                    letterSpacing: "0.02em", flexShrink: 0,
+                  }}>{createSuccess.id}</span>
+                )}
+              </div>
+            </div>
+            <button onClick={() => { setCreateSuccess(null); if (createSuccessTimerRef.current) clearTimeout(createSuccessTimerRef.current); }}
+              aria-label="Dismiss"
+              style={{
+                background: "transparent", border: "none", color: c.textDim,
+                cursor: "pointer", fontSize: 14, fontWeight: 700,
+                padding: space[1], lineHeight: 1, borderRadius: layout.radiusXs,
+                flexShrink: 0,
+              }}>
+              ✕
+            </button>
+          </div>
         </div>
       )}
 

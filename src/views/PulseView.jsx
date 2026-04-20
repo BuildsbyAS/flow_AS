@@ -1159,7 +1159,10 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
         const sortGroupRows = (arr) => [...arr].sort((a, b) => {
           let va, vb;
           if (sortCol === "person") { va = a.person; vb = b.person; }
-          else if (sortCol === "project") { va = a.project || ""; vb = b.project || ""; }
+          else if (sortCol === "project") {
+            va = parseInt((a.project || "").replace(/\D/g, ""), 10) || 0;
+            vb = parseInt((b.project || "").replace(/\D/g, ""), 10) || 0;
+          }
           else if (sortCol === "type") { va = a.type || ""; vb = b.type || ""; }
           else if (sortCol === "stage") { va = a.stage || ""; vb = b.stage || ""; }
           else if (sortCol === "title") { va = a.title || ""; vb = b.title || ""; }
