@@ -247,6 +247,9 @@ function toSeedCommitments(rows) {
       ...(r.locked_at ? {
         lockedAt: new Date(r.locked_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }),
         lockedAtTime: new Date(r.locked_at).getTime(),
+        // Preserve the canonical ISO so subsequent syncs don't stamp "now"
+        // via the fallback in syncCommitmentToDB.
+        _lockedAtISO: new Date(r.locked_at).toISOString(),
       } : {}),
       // Buffer metadata
       ...(r.buffer_project ? { bufferProject: r.buffer_project } : {}),
@@ -344,6 +347,9 @@ export default function useSupabaseData() {
       lookups.current.roleMap = Object.fromEntries(rolesRaw.map(r => [r.name, r.id]));
       lookups.current.personMap = Object.fromEntries(peopleRaw.map(p => [p.name, p.id]));
       lookups.current.weekMap = Object.fromEntries(weeksRaw.map(w => [w.label, w.id]));
+      // Indexed by start_date (YYYY-MM-DD) so sync can resolve the correct
+      // week_id for carried-forward rows whose weekStart differs from current.
+      lookups.current.weekIdByStart = Object.fromEntries(weeksRaw.map(w => [w.start_date, w.id]));
 
       const wc = toWeekConfig(weeksRaw, historyRaw);
 
