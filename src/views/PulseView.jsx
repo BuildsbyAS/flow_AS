@@ -544,6 +544,10 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
       if (sortCol === "age") { va = a.age; vb = b.age; }
       else if (sortCol === "health") { va = a.health; vb = b.health; }
       else if (sortCol === "churn") { const da = deltaMap[a.id], db = deltaMap[b.id]; va = da ? da.lost + da.gained : 0; vb = db ? db.lost + db.gained : 0; }
+      else if (sortCol === "name") {
+        va = parseInt((a.id || "").replace(/\D/g, ""), 10) || 0;
+        vb = parseInt((b.id || "").replace(/\D/g, ""), 10) || 0;
+      }
       else { va = a[sortCol] || ""; vb = b[sortCol] || ""; }
       if (typeof va === "number") return sortDir === "asc" ? va - vb : vb - va;
       return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
