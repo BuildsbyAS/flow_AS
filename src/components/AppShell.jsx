@@ -1835,10 +1835,14 @@ function AnnouncementsBell() {
   const hasUnread = !!newestDate && newestDate > (lastSeen || "");
 
   const markAllRead = () => {
+    // Stamp the newest announcement's date (or today, whichever is later).
+    // Using "today" alone under-counts future-dated "Coming soon" items —
+    // the dot would never clear until that date arrived.
     try {
-      const now = new Date().toISOString().slice(0, 10);
-      localStorage.setItem(LAST_SEEN_KEY, now);
-      setLastSeen(now);
+      const today = new Date().toISOString().slice(0, 10);
+      const stamp = newestDate && newestDate > today ? newestDate : today;
+      localStorage.setItem(LAST_SEEN_KEY, stamp);
+      setLastSeen(stamp);
     } catch { /* localStorage may be disabled — no-op */ }
   };
 
@@ -1876,10 +1880,17 @@ function AnnouncementsBell() {
           background: c.surfaceAlt,
           cursor: "pointer", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
-          transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+          // Override the browser's default blue focus ring with Flow's
+          // accent. This fires when the Modal restores keyboard focus
+          // to this button on Escape-to-close, matching what other
+          // header buttons (edit pencil, etc.) already do.
+          outline: "none",
+          transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
         }}
         onMouseEnter={e => { e.currentTarget.style.background = c.surface; e.currentTarget.style.borderColor = c.borderMedium || c.border; }}
         onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.borderColor = c.border; }}
+        onFocus={e => { e.currentTarget.style.boxShadow = `0 0 0 2px ${c.accent}`; }}
+        onBlur={e => { e.currentTarget.style.boxShadow = "none"; }}
       >
         {/* Inbox — announcements land here for you to catch up on. */}
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.textMid} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
