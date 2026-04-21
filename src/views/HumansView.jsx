@@ -128,7 +128,7 @@ const makeCarriedWeekRow = (person, weekStart, firstItem) => ({
   closedAt: null,
 });
 
-const HumansView = ({ loading, error, commitments: rawCommitments, setCommitments: rawSetCommitments, projects, people, initialPerson, initialCommitIdx, setDetailLabel, setGoBack, setIsLocked, searchRef, globalFilters = {}, suppressBackRef, isHistorical, selectedWeekKey, weekConfig, onSave }) => {
+const HumansView = ({ loading, error, commitments: rawCommitments, setCommitments: rawSetCommitments, projects, people, personProfile, initialPerson, initialCommitIdx, initialPrefillProject, initialPrefillForce, setDetailLabel, setGoBack, setIsLocked, searchRef, globalFilters = {}, suppressBackRef, isHistorical, selectedWeekKey, weekConfig, onSave }) => {
   const devRef = useDevLabel('HumansView', 'src/views/HumansView.jsx', 'Commit tab — weekly 3-commitment cards per person');
   // Derive current week start from weekConfig
   const currentWeekStart = React.useMemo(() => {
@@ -314,6 +314,44 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commitments.length, initialPerson]);
+
+  // ── Prefill target slot with a project (used by "Add commit" from Projects page).
+  //    Writes items[initialCommitIdx].project once, after the person is opened.
+  //    Skips silently if the slot is already filled, the week is locked, or the
+  //    view is historical — the deeplink is a convenience, not a forced overwrite.
+  const prefilledRef = useRef(false);
+  useEffect(() => {
+    if (prefilledRef.current) return;
+    if (!initialPrefillProject) return;
+    if (isHistorical) { prefilledRef.current = true; return; }
+    if (activePerson < 0) return;
+    const row = commitments[activePerson];
+    if (!row) return;
+    if (row.lockedAtTime || row.lockedAt || row.closedAt) { prefilledRef.current = true; return; }
+    const targetIdx = Number.isInteger(initialCommitIdx) ? initialCommitIdx : 0;
+    const slot = (row.items || [])[targetIdx];
+    // Skip overwriting an existing project unless the caller explicitly asked
+    // to force-replace the slot (e.g. user picked a slot to replace in the
+    // Project-page "Add commit" overflow modal).
+    if (!initialPrefillForce && slot && slot.project) { prefilledRef.current = true; return; }
+    // Default stage to the project's phase if it's a valid commit phase.
+    const proj = projects.find(p => p.id === initialPrefillProject);
+    const defaultStage = proj && commitPhases.includes(proj.phase) ? proj.phase : (slot?.stage || "");
+    setCommitments(prev => {
+      if (activePerson < 0 || activePerson >= prev.length) return prev;
+      const next = [...prev];
+      const p = { ...next[activePerson] };
+      const items = [...(p.items || [])];
+      items[targetIdx] = { ...(items[targetIdx] || {}), project: initialPrefillProject, stage: items[targetIdx]?.stage || defaultStage };
+      p.items = items;
+      next[activePerson] = p;
+      return next;
+    });
+    setDetailFocus(targetIdx);
+    prefilledRef.current = true;
+    triggerAutoSave();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePerson, initialPrefillProject]);
 
   // ── Derived phase ──
   // Use lockedAtTime (numeric) as the source of truth; fall back to lockedAt
@@ -1189,6 +1227,52 @@ const HumansView = ({ loading, error, commitments: rawCommitments, setCommitment
         })()}
         <div style={{ flexShrink: 0, height: space[8] }} />
         </div>{/* end scrollable content */}
+        {/* ── Sticky "+ Add" FAB — opens the logged-in user's week at the first
+               incomplete slot (first slot missing title, project, type, or stage)
+               so declaring your own commitments is one click. Hidden once the
+               week is locked since nothing can be added. */}
+        {(() => {
+          if (isHistorical || !personProfile?.name) return null;
+          const myIdx = commitments.findIndex(cm => cm.person === personProfile.name);
+          if (myIdx < 0) return null;
+          const myRow = commitments[myIdx];
+          const myLocked = !!(myRow.lockedAtTime || myRow.lockedAt || myRow.closedAt);
+          if (myLocked) return null;
+          const items = Array.isArray(myRow.items) ? myRow.items : [];
+          const isComplete = (it) => !!it && (it.title || "").trim() && it.project && it.type && it.stage;
+          const firstIncomplete = [0, 1, 2].find(i => !isComplete(items[i]));
+          const targetIdx = firstIncomplete != null ? firstIncomplete : 0;
+          const label = "Add";
+          return (
+            <button
+              type="button"
+              onClick={() => { openPerson(myIdx); setDetailFocus(targetIdx); }}
+              aria-label="Add a commit to my week"
+              title="Add a commit to my week"
+              onMouseEnter={e => { e.currentTarget.style.filter = "brightness(1.08)"; e.currentTarget.style.transform = "translateY(-1px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.filter = "none"; e.currentTarget.style.transform = "translateY(0)"; }}
+              onMouseDown={e => { e.currentTarget.style.transform = "translateY(0) scale(0.97)"; }}
+              onMouseUp={e => { e.currentTarget.style.transform = "translateY(-1px)"; }}
+              style={{
+                position: "fixed", bottom: space[5], right: space[5], zIndex: 45,
+                display: "flex", alignItems: "center", gap: space[2],
+                padding: `${space[3]}px ${space[4]}px`,
+                borderRadius: layout.radiusLg,
+                background: c.accent, color: "#fff",
+                border: "none", cursor: "pointer",
+                boxShadow: c.shadowElevated,
+                fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: 700,
+                transition: `transform ${motion.fast.duration} ${motion.fast.easing}, filter ${motion.fast.duration} ${motion.fast.easing}`,
+                animation: `fadeIn ${motion.normal.duration} ${motion.normal.easing} both`,
+              }}
+            >
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              {label}
+            </button>
+          );
+        })()}
       </div>
     );
   }

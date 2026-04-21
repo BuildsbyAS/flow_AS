@@ -302,6 +302,15 @@ function FlowDashboard({ auth }) {
   const c = setTheme(darkMode);
   const activeNavItem = NAV.find(n => n.key === activeTab);
 
+  // Logged-in viewer's person row. In dev (auth skipped on localhost) fall back
+  // to the first person in the roster so the "Add commit" CTAs are testable.
+  const viewerProfile = React.useMemo(() => {
+    if (auth.personProfile?.name) return auth.personProfile;
+    const devFallback = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+    if (devFallback && Array.isArray(people) && people.length > 0) return { name: people[0].name };
+    return null;
+  }, [auth.personProfile, people]);
+
   const cycleStage = useMemo(() => getCycleStage(commitments), [commitments]);
   const cycleCfg = getStageConfig(cycleStage);
   const attentionItems = useMemo(() => getAttentionItems(commitments, projects), [commitments, projects]);
@@ -452,8 +461,8 @@ function FlowDashboard({ auth }) {
         <ErrorCatcher key={activeTab}>
           {activeTab === "summary" && <SummaryView loading={loading} error={error} history={history} commitments={effectiveCommitments} projects={projects} people={people} squads={squads} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} isHistorical={isHistorical} onNavigate={handleNavigate} cycleStage={cycleStage} />}
           {activeTab === "pulse" && <PulseView loading={loading} error={error} commitments={effectiveCommitments} projects={projects} people={people} history={history} onNavigate={handleNavigate} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} appSettings={appSettings} />}
-          {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} loading={loading} error={error} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} onSave={flushDirtyToDB} />}
-          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} squads={squads} history={history} weekConfig={weekConfig} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
+          {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} loading={loading} error={error} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} personProfile={viewerProfile} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} initialPrefillProject={navPayload?.prefillProject || null} initialPrefillForce={navPayload?.prefillForce || false} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} onSave={flushDirtyToDB} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} squads={squads} history={history} weekConfig={weekConfig} personProfile={viewerProfile} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
           {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} commitments={effectiveCommitments} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} />}
           {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} commitments={commitments} />}
           {activeTab === "guide" && (

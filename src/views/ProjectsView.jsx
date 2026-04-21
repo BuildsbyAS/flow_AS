@@ -266,7 +266,7 @@ function sortList(list, key, dir, metrics, weekLabels, today) {
    ══════════════════════════════════════════════════════════════════ */
 export default function ProjectsView({
   projects: rawProjects, setProjects, commitments, people, squads, history,
-  weekConfig: weekConfigProp,
+  weekConfig: weekConfigProp, personProfile,
   initialId, onNavigate, setDetailLabel, setGoBack, searchRef, globalFilters = {},
   suppressBackRef,
   isHistorical, selectedWeekKey,
@@ -551,7 +551,7 @@ export default function ProjectsView({
   if (selectedProject) {
     const proj = projects.find(p => p.id === selectedProject);
     if (!proj) return <EmptyState icon="🔍" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
-    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} setProjects={setProjects} people={people} squads={squads} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} weekLabels={WEEK_LABELS} isHistorical={isHistorical} today={today} weekStart={weekConfig.weekStart} leaving={detailLeaving} suppressBackRef={suppressBackRef} />;
+    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} weekLabels={WEEK_LABELS} isHistorical={isHistorical} today={today} weekStart={weekConfig.weekStart} leaving={detailLeaving} suppressBackRef={suppressBackRef} />;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -1560,7 +1560,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
    PROJECT DEEP DIVE — PeopleDeepDive structural model
    De-cluttered: hero → history → ledger → supporting metadata
    ══════════════════════════════════════════════════════════════════ */
-function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, setProjects, people, squads, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, weekLabels: WEEK_LABELS, isHistorical, today, weekStart, leaving = false, suppressBackRef }) {
+function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, setProjects, people, squads, personProfile, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, weekLabels: WEEK_LABELS, isHistorical, today, weekStart, leaving = false, suppressBackRef }) {
   useDevLabel('ProjectDeepDive', 'src/views/ProjectsView.jsx', 'Full project detail view with hero telemetry, timeline, and history');
   const [editing, setEditingRaw] = useState(false);
   const [editName, setEditName] = useState(proj.name);
@@ -1584,6 +1584,10 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
     setEditingRaw(val);
   }, [proj.name, proj.owner, proj.squad, proj.phase, proj.status, proj.startDate, proj.endDate, proj.actualStartDate, proj.actualEndDate]);
   const [depriReasonModal, setDepriReasonModal] = useState(false);
+  // "Add commit" modal state — populated when the Project-page "+ Commit"
+  // button fires but can't just deeplink (week locked, dup project, or all
+  // slots full → let the user pick one to replace).
+  const [addCommitModal, setAddCommitModal] = useState(null);
   const [depriReasonText, setDepriReasonText] = useState("");
   const [reactivateModal, setReactivateModal] = useState(false);
   const [retroDateModal, setRetroDateModal] = useState(false);
@@ -1937,6 +1941,56 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
+              {(() => {
+                if (isHistorical || !personProfile?.name || proj.status === "deprioritized") return null;
+                const myRow = commitments.find(cm => cm.person === personProfile.name);
+                if (!myRow) return null;
+                const items = Array.isArray(myRow.items) ? myRow.items : [];
+                const locked = !!(myRow.lockedAtTime || myRow.lockedAt || myRow.closedAt);
+                const alreadyIdx = items.slice(0, 3).findIndex(it => it && it.project === proj.id);
+                const emptyIdx = [0, 1, 2].find(i => !items[i] || !items[i].project);
+
+                const handleClick = () => {
+                  if (!onNavigate) return;
+                  if (locked) { setAddCommitModal({ kind: "locked" }); return; }
+                  if (alreadyIdx >= 0) { setAddCommitModal({ kind: "already", idx: alreadyIdx }); return; }
+                  if (emptyIdx != null) {
+                    onNavigate("commit", { person: personProfile.name, commitIdx: emptyIdx, prefillProject: proj.id });
+                    return;
+                  }
+                  // All 3 slots have a project — let user pick one to replace.
+                  setAddCommitModal({ kind: "replace", slots: items.slice(0, 3).map((it, i) => ({ idx: i, ...it })) });
+                };
+
+                return (
+                  <button
+                    onClick={handleClick}
+                    aria-label={`Add a weekly commit to ${proj.name}`}
+                    title="Add a weekly commit to this project"
+                    className="flow-btn"
+                    onMouseEnter={e => { e.currentTarget.style.background = c.accent; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = c.accent; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = c.accentDim || c.surface; e.currentTarget.style.color = c.accent; e.currentTarget.style.borderColor = c.accentBorder || c.border; }}
+                    onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
+                    onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
+                    style={{
+                      height: 36, padding: `0 ${space[3]}px`,
+                      borderRadius: layout.radiusSm,
+                      border: `1px solid ${c.accentBorder || c.border}`,
+                      background: c.accentDim || c.surface,
+                      color: c.accent,
+                      cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: space[2],
+                      fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600,
+                      transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                    }}
+                  >
+                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    Commit
+                  </button>
+                );
+              })()}
               {!isHistorical && (
                 <button
                   ref={editBtnRef}
@@ -2347,6 +2401,125 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
 
 
       {/* FAB removed — edit is now the pencil icon in the header; delete lives in the edit panel. */}
+
+      {/* ═══ ADD COMMIT MODAL — handles locked / duplicate / slots-full ═══
+             Appears when the "+ Commit" hero button can't just deeplink. */}
+      {(() => {
+        const m = addCommitModal;
+        if (!m) return null;
+        const close = () => setAddCommitModal(null);
+        const goToMyWeek = (idx = null) => {
+          close();
+          if (onNavigate && personProfile?.name) {
+            onNavigate("commit", { person: personProfile.name, ...(idx != null ? { commitIdx: idx } : {}) });
+          }
+        };
+        const replaceSlot = (idx) => {
+          close();
+          if (onNavigate && personProfile?.name) {
+            onNavigate("commit", { person: personProfile.name, commitIdx: idx, prefillProject: proj.id, prefillForce: true });
+          }
+        };
+        if (m.kind === "locked") {
+          return (
+            <Modal open onClose={close} title="Your week is locked" accent={c.amber}>
+              <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
+                You've locked your commitments for this week, so new ones can't be added. Unlock from your week if you need to make a change, or view your locked plan.
+              </div>
+              <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
+                <Btn variant="ghost" onClick={close}>Close</Btn>
+                <Btn variant="primary" onClick={() => goToMyWeek()}>Go to my week</Btn>
+              </div>
+            </Modal>
+          );
+        }
+        if (m.kind === "already") {
+          const existing = commitments.find(cm => cm.person === personProfile?.name)?.items?.[m.idx] || {};
+          return (
+            <Modal open onClose={close} title="Already committed to this project" accent={c.accent}>
+              <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[3] }}>
+                You already have a commit on <strong style={{ color: c.text }}>{proj.name}</strong> in slot {m.idx + 1} this week:
+              </div>
+              <div style={{
+                padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
+                background: c.surfaceAlt, border: `1px solid ${c.border}`, marginBottom: space[4],
+              }}>
+                <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: c.text }}>
+                  {(existing.title || "").trim() || <span style={{ fontStyle: "italic", color: c.textDim }}>Untitled</span>}
+                </div>
+                <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                  {existing.type || "—"} · {existing.stage || "—"}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
+                <Btn variant="ghost" onClick={close}>Close</Btn>
+                <Btn variant="primary" onClick={() => goToMyWeek(m.idx)}>Open this commit</Btn>
+              </div>
+            </Modal>
+          );
+        }
+        if (m.kind === "replace") {
+          return (
+            <Modal open onClose={close} title="Your 3 slots are full" accent={c.accent} width={520}>
+              <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
+                You've already filled all three slots this week. Pick one to replace with <strong style={{ color: c.text }}>{proj.name}</strong>, or go to your week to edit directly.
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginBottom: space[4] }}>
+                {m.slots.map((slot) => {
+                  const slotProj = projects.find(p => p.id === slot.project);
+                  const slotTitle = (slot.title || "").trim();
+                  return (
+                    <button
+                      key={slot.idx}
+                      type="button"
+                      onClick={() => replaceSlot(slot.idx)}
+                      className="flow-btn"
+                      onMouseEnter={e => { e.currentTarget.style.background = c.accentDim; e.currentTarget.style.borderColor = c.accent; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.borderColor = c.border; }}
+                      style={{
+                        textAlign: "left", padding: `${space[3]}px ${space[4]}px`,
+                        borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                        background: c.surfaceAlt, cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: space[3],
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+                      }}
+                    >
+                      <span style={{
+                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700,
+                        color: c.textDim, minWidth: 24,
+                      }}>
+                        {slot.idx + 1}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {slotTitle || <span style={{ fontStyle: "italic", color: c.textDim }}>Untitled</span>}
+                        </div>
+                        <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginTop: 2, letterSpacing: "0.04em" }}>
+                          <span style={{ color: ec.project, fontWeight: 700 }}>{slot.project || "—"}</span>
+                          {slotProj?.name && <span> · {slotProj.name}</span>}
+                          {slot.type && <span> · {slot.type}</span>}
+                          {slot.stage && <span> · {slot.stage}</span>}
+                        </div>
+                      </div>
+                      <span aria-hidden="true" style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.accent, letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                        Replace →
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: "flex", gap: space[3], justifyContent: "space-between", alignItems: "center" }}>
+                <button type="button" onClick={() => goToMyWeek()} style={{
+                  background: "transparent", border: "none", color: c.textMid, cursor: "pointer",
+                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, padding: 0, textDecoration: "underline",
+                }}>Go to my week instead</button>
+                <Btn variant="ghost" onClick={close}>Cancel</Btn>
+              </div>
+            </Modal>
+          );
+        }
+        return null;
+      })()}
 
       {/* ═══ DEPRIORITIZATION REASON MODAL ═══ */}
       <Modal open={!!depriReasonModal} onClose={() => setDepriReasonModal(false)} title="Why is this being deprioritized?" accent={c.amber}>

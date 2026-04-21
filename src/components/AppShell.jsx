@@ -492,7 +492,7 @@ export function Header({
         <div style={{ flex: 1 }} />
 
         {/* ── Active filter chips (inline) ── */}
-        {globalFilterCount > 0 && (
+        {globalFilterCount > 0 && activeTab !== "guide" && (
           <div style={{ display: "flex", alignItems: "center", gap: space[1] + 2, flexShrink: 0, flexWrap: "wrap" }}>
             {globalFilters.owner.length > 0 && (
               <FilterChip label={`Owner: ${globalFilters.owner.join(", ")}`} onClick={() => removeAppliedFilter("owner")} />
@@ -509,7 +509,8 @@ export function Header({
         {/* ── Day rhythm pill ── */}
         <DayRhythmPill onNavigateToGuide={() => onTabSwitch("guide")} />
 
-        {/* ── Filter trigger button ── */}
+        {/* ── Filter trigger button — hidden on Guide (no filterable content). ── */}
+        {activeTab !== "guide" && (
         <button onClick={openDrawer} className="flow-filter-trigger" style={{
           display: "flex", alignItems: "center", gap: 6,
           padding: `3px ${space[3]}px`, height: 26,
@@ -536,6 +537,7 @@ export function Header({
             </>
           ) : "Filters"}
         </button>
+        )}
       </div>
     )}
     </div>
