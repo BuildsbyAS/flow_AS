@@ -107,13 +107,22 @@ const GuideView = ({ onNavigate }) => {
           fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
           fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
           color: c.accent, marginTop: 0, marginBottom: space[4],
-        }}>Team productivity, finally visible.</p>
+        }}>Flow turns a weekly commitment into a live operating view.</p>
         <p style={{
           fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
           lineHeight: 1.7, color: c.textMid, maxWidth: 580, margin: 0,
         }}>
-          Flow gives engineering leaders a real-time operating view of their team.
-          Each person commits to deliverables weekly, locks them in, and reports outcomes.
+          Each person picks three things to deliver, locks them in, and reports the outcome.
+          Project history accumulates on its own. Bandwidth becomes obvious.
+          Focus sharpens because you only get three. Nothing slips quietly.
+        </p>
+        <p style={{
+          fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+          lineHeight: 1.7, color: c.textMid, maxWidth: 580,
+          marginTop: space[4], marginBottom: 0,
+        }}>
+          The result: the team works on what matters, priorities stay in the open,
+          and everyone knows where the focus is right now.
         </p>
       </div>
 
