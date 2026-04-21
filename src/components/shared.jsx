@@ -56,6 +56,22 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
 
+  // Lock background scroll while the modal is open — otherwise scrolling
+  // the mouse wheel over the backdrop moves the page behind it, which
+  // feels broken when the modal's own list is meant to be the scrollable
+  // surface. Preserves whatever the host page had set.
+  React.useEffect(() => {
+    if (!open) return;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [open]);
+
   // Focus trap
   React.useEffect(() => {
     if (!open || !dialogRef.current) return;

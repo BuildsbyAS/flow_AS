@@ -101,7 +101,18 @@ function FlowDashboard({ auth }) {
     } catch { /* ignore */ }
     return "summary";
   });
-  const [navPayload, setNavPayload] = useState(null);
+  const [navPayload, setNavPayload] = useState(() => {
+    // Honor ?id= (projects) and ?person= (commit/people) on initial load so
+    // deeplinks land directly on the deep-dive view.
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get("id");
+      const person = params.get("person");
+      if (person) return person;
+      if (id) return id;
+    } catch { /* ignore */ }
+    return null;
+  });
   const darkMode = false;
   const [terminalUnlocked, setTerminalUnlocked] = useState(() => sessionStorage.getItem("flow_terminal_unlocked") === "true");
 
@@ -298,6 +309,48 @@ function FlowDashboard({ auth }) {
     setActiveTab(tab);
     window.scrollTo({ top: 0, left: 0, behavior: "instant" });
   }, [flushDirtyToDB]);
+
+  // ── URL sync ─────────────────────────────────────────────────────
+  // Keep the address bar in sync with (activeTab, navPayload) so users can
+  // copy a URL and land back on the same page. Use replaceState — the
+  // popstate trap above relies on a single sentinel entry, so pushing a new
+  // history entry per tab change would break the back-button behavior.
+  // - Terminal-gated views (settings/logs/rant) and transient nav payload
+  //   fields (prefillProject, prefillForce, commitIdx) are intentionally not
+  //   serialized — those are one-shot navigation hints, not shareable state.
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      // App.jsx owns `tab` and `person`. `id` (project) is owned by
+      // ProjectsView's own URL-sync effect; `phase/sort/dir/status/risks/mode`
+      // are owned by PulseView. Don't touch those from here.
+      params.delete("tab");
+      params.delete("person");
+      const hiddenTabs = ["terminal", "settings", "logs", "rant"];
+      if (!hiddenTabs.includes(activeTab)) {
+        params.set("tab", activeTab);
+      }
+      // Clear `id` when we leave the projects tab so the stale project
+      // doesn't dangle in the URL.
+      if (activeTab !== "projects") params.delete("id");
+      // Serialize `person` for people/commit tabs. Objects carry richer
+      // payloads — we only surface the `person` field, since
+      // `commitIdx`/`prefillProject` are one-shot intents not worth URL space.
+      if (navPayload && !hiddenTabs.includes(activeTab)) {
+        if (activeTab === "people" && typeof navPayload === "string") {
+          params.set("person", navPayload);
+        } else if (activeTab === "commit") {
+          const name = typeof navPayload === "string" ? navPayload : navPayload?.person;
+          if (name) params.set("person", name);
+        }
+      }
+      const qs = params.toString();
+      const next = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+      if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+        window.history.replaceState(window.history.state, "", next);
+      }
+    } catch { /* URL updates are best-effort */ }
+  }, [activeTab, navPayload]);
 
   const c = setTheme(darkMode);
   const activeNavItem = NAV.find(n => n.key === activeTab);

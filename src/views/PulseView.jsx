@@ -608,9 +608,14 @@ const PulseView = ({ loading: loadingProp, error: errorProp, commitments, projec
   }, [setSidePanelProj]);
 
 
-  // ── Sync local state → URL ──
+  // ── Sync local Pulse state → URL ──
+  // Preserve app-level params (tab, id, person) that App.jsx owns; only
+  // overwrite the Pulse-specific keys. Previously this wiped the entire
+  // query string, which erased `?tab=pulse` as soon as Pulse rendered.
   useEffect(() => {
-    const p = new URLSearchParams();
+    const p = new URLSearchParams(window.location.search);
+    // Clear the keys Pulse owns so stale values don't linger.
+    ["phase", "sort", "dir", "status", "risks", "mode"].forEach(k => p.delete(k));
     if (filterPhase) p.set("phase", filterPhase);
     if (sortCol !== "squad") p.set("sort", sortCol);
     if (sortDir !== "asc") p.set("dir", sortDir);

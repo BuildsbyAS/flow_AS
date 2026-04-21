@@ -4,7 +4,8 @@
 // Filter drawer slides from right when triggered
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { c, typo, layout, space, motion, mono } from "../styles/theme";
-import { FilterChip, Btn } from "./shared";
+import { FilterChip, Btn, Modal } from "./shared";
+import { ANNOUNCEMENTS } from "../data/announcements";
 import FlowLogo from "./FlowLogo";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
@@ -331,18 +332,32 @@ export function Header({
               return <div key={tab.key} style={{ width: 1, height: 20, alignSelf: "center", background: c.border, margin: `0 ${space[1]}px`, flexShrink: 0 }} />;
             }
             const active = activeTab === tab.key;
+            // Render as an anchor so Chrome's right-click → "Open in new tab"
+            // and Cmd/Ctrl-click both work natively. Left-click is
+            // intercepted to stay inside the SPA; modified clicks (middle,
+            // cmd/ctrl/shift/alt) fall through to the browser.
             return (
-              <button key={tab.key} onClick={() => onTabSwitch(tab.key)} className="flow-header-tab" style={{
-                padding: `0 ${space[3] + 2}px`, borderRadius: 0,
-                border: "none", cursor: "pointer",
-                background: "transparent",
-                fontFamily: typo.bodySm.font, fontSize: 13,
-                fontWeight: 600,
-                color: active ? c.accent : c.textDim,
-                display: "flex", alignItems: "center", gap: 6,
-                position: "relative", flexShrink: 0, whiteSpace: "nowrap",
-                transition: `color ${motion.fast.duration} ${motion.fast.easing}`,
-              }}>
+              <a
+                key={tab.key}
+                href={`?tab=${tab.key}`}
+                onClick={(e) => {
+                  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+                  e.preventDefault();
+                  onTabSwitch(tab.key);
+                }}
+                className="flow-header-tab"
+                style={{
+                  padding: `0 ${space[3] + 2}px`, borderRadius: 0,
+                  border: "none", cursor: "pointer",
+                  background: "transparent",
+                  fontFamily: typo.bodySm.font, fontSize: 13,
+                  fontWeight: 600,
+                  color: active ? c.accent : c.textDim,
+                  textDecoration: "none",
+                  display: "flex", alignItems: "center", gap: 6,
+                  position: "relative", flexShrink: 0, whiteSpace: "nowrap",
+                  transition: `color ${motion.fast.duration} ${motion.fast.easing}`,
+                }}>
                 {tab.label}
                 {/* Numeric shortcut hint — subtle hotkey */}
                 {tab.num && <span className="flow-tab-hotkey" style={{
@@ -365,7 +380,7 @@ export function Header({
                     background: c.accent,
                   }} />
                 )}
-              </button>
+              </a>
             );
           })}
         </nav>
@@ -377,6 +392,9 @@ export function Header({
       {/* ── Utility cluster: search · user ── */}
       <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
         <CompactSearch onClick={onCmdOpen} />
+
+        {/* ── Announcements (What's new) ── */}
+        <AnnouncementsBell />
 
         {/* ── Terminal button (Settings, Logs & Rant) ── */}
         <button
@@ -718,18 +736,28 @@ function MobileBottomNav({ activeTab, onTabSwitch }) {
         {tabs.map(tab => {
           const active = activeTab === tab.key;
           return (
-            <button key={tab.key} type="button" onClick={() => onTabSwitch(tab.key)} aria-label={tab.label} aria-current={active ? "page" : undefined} style={{
-              flex: 1, minWidth: 0, height: "100%",
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
-              background: "none", border: 0, padding: "4px 2px",
-              cursor: "pointer",
-              color: active ? c.accent : c.textMid,
-              fontFamily: typo.bodyXs.font, fontSize: 11, fontWeight: 600,
-              borderTop: `2px solid ${active ? c.accent : "transparent"}`,
-              transition: `color ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
-            }}>
+            <a
+              key={tab.key}
+              href={`?tab=${tab.key}`}
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+                e.preventDefault();
+                onTabSwitch(tab.key);
+              }}
+              aria-label={tab.label}
+              aria-current={active ? "page" : undefined}
+              style={{
+                flex: 1, minWidth: 0, height: "100%",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+                background: "none", border: 0, padding: "4px 2px",
+                cursor: "pointer", textDecoration: "none",
+                color: active ? c.accent : c.textMid,
+                fontFamily: typo.bodyXs.font, fontSize: 11, fontWeight: 600,
+                borderTop: `2px solid ${active ? c.accent : "transparent"}`,
+                transition: `color ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+              }}>
               <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "100%" }}>{tab.label}</span>
-            </button>
+            </a>
           );
         })}
       </div>
@@ -1777,5 +1805,253 @@ function CompactSearch({ onClick }) {
         boxShadow: `0 1px 0 ${c.border}`,
       }}>⌘K</span>
     </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   ANNOUNCEMENTS — megaphone icon + modal
+   ════════════════════════════════════════════════════════════════════
+   Shows an accent-orange dot when the newest announcement's date is
+   later than `flow_announcements_last_seen` in localStorage. Opening
+   the modal stamps the marker and clears the dot.
+   Data source: src/data/announcements.js (static). See that file for
+   schema + how to publish a new entry. */
+const LAST_SEEN_KEY = "flow_announcements_last_seen";
+
+function AnnouncementsBell() {
+  const devRef = useDevLabel('AnnouncementsBell', 'src/components/AppShell.jsx', 'Megaphone button in header; opens a modal with the announcement timeline.');
+  const [open, setOpen] = React.useState(false);
+  const [lastSeen, setLastSeen] = React.useState(() => {
+    try { return localStorage.getItem(LAST_SEEN_KEY) || ""; } catch { return ""; }
+  });
+
+  // Newest-first date. Announcements are already authored newest-first,
+  // but don't trust authoring order — derive from `date`.
+  const newestDate = React.useMemo(() => {
+    if (!ANNOUNCEMENTS.length) return "";
+    return ANNOUNCEMENTS.reduce((acc, a) => (a.date > acc ? a.date : acc), ANNOUNCEMENTS[0].date);
+  }, []);
+  const sorted = React.useMemo(() => [...ANNOUNCEMENTS].sort((a, b) => (a.date < b.date ? 1 : -1)), []);
+  const hasUnread = !!newestDate && newestDate > (lastSeen || "");
+
+  const markAllRead = () => {
+    try {
+      const now = new Date().toISOString().slice(0, 10);
+      localStorage.setItem(LAST_SEEN_KEY, now);
+      setLastSeen(now);
+    } catch { /* localStorage may be disabled — no-op */ }
+  };
+
+  const openPanel = () => { setOpen(true); markAllRead(); };
+  const closePanel = () => setOpen(false);
+
+  const tagStyle = (tag) => {
+    const m = {
+      new:    { bg: c.accentDim, color: c.accent },
+      fix:    { bg: c.greenDim,  color: c.green },
+      update: { bg: c.amberDim,  color: c.amber },
+      soon:   { bg: c.cyanDim || c.surfaceAlt, color: c.cyan || c.textMid },
+    };
+    return m[tag] || { bg: c.surfaceAlt, color: c.textMid };
+  };
+
+  const fmtDate = (iso) => {
+    try {
+      const d = new Date(iso + "T00:00:00");
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+    } catch { return iso; }
+  };
+
+  return (
+    <>
+      <button
+        ref={devRef}
+        type="button"
+        onClick={openPanel}
+        aria-label={hasUnread ? "Announcements — unread updates" : "Announcements"}
+        title="Announcements"
+        style={{
+          width: 34, height: 34, borderRadius: layout.radiusSm,
+          border: `1px solid ${c.border}`,
+          background: c.surfaceAlt,
+          cursor: "pointer", position: "relative",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = c.surface; e.currentTarget.style.borderColor = c.borderMedium || c.border; }}
+        onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.borderColor = c.border; }}
+      >
+        {/* Inbox — announcements land here for you to catch up on. */}
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.textMid} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+          <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" />
+        </svg>
+        {hasUnread && (
+          <span aria-hidden="true" style={{
+            position: "absolute", top: 6, right: 6,
+            width: 8, height: 8, borderRadius: "50%",
+            background: c.accent,
+            boxShadow: `0 0 0 2px ${c.surfaceAlt}`,
+          }} />
+        )}
+      </button>
+
+      <Modal open={open} onClose={closePanel} title="What's new" accent={c.accent} width={560}>
+        {sorted.length === 0 ? (
+          <div style={{
+            padding: `${space[5]}px 0`,
+            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+            color: c.textDim, textAlign: "center",
+          }}>
+            No announcements yet.
+          </div>
+        ) : (
+          // Two top-level sections: "Coming soon" (future-dated) and
+          // "Released" (past). The released section is month-grouped so
+          // a long history still scans cleanly.
+          <div style={{ maxHeight: 520, overflowY: "auto", marginRight: -space[2], paddingRight: space[2] }}>
+            {(() => {
+              const todayIso = new Date().toISOString().slice(0, 10);
+              const upcoming = sorted.filter(a => a.date > todayIso);
+              const released = sorted.filter(a => a.date <= todayIso);
+
+              const renderItem = (a, i, withTopDivider) => {
+                const ts = tagStyle(a.tag);
+                const d = new Date(a.date + "T00:00:00");
+                const dayLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                return (
+                  <div
+                    key={a.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "56px 1fr",
+                      gap: space[3],
+                      padding: `${space[3]}px 0`,
+                      borderTop: withTopDivider ? `1px solid ${c.border}` : "none",
+                    }}
+                  >
+                    <div style={{
+                      fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                      fontWeight: 700, color: c.textMid,
+                      letterSpacing: "0.04em", textTransform: "uppercase",
+                      fontVariantNumeric: "tabular-nums",
+                      paddingTop: 2,
+                    }}>{dayLabel}</div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: 4 }}>
+                        <span style={{
+                          fontFamily: typo.bodyMd.font, fontSize: 15, fontWeight: 700,
+                          color: c.text, lineHeight: 1.3,
+                          flex: 1, minWidth: 0,
+                        }}>{a.title}</span>
+                        {a.tag && (
+                          <span style={{
+                            fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                            letterSpacing: "0.08em", textTransform: "uppercase",
+                            padding: "1px 6px", borderRadius: layout.radiusXs,
+                            background: ts.bg, color: ts.color,
+                            flexShrink: 0,
+                          }}>{a.tag}</span>
+                        )}
+                      </div>
+                      <div style={{
+                        fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                        color: c.textMid, lineHeight: 1.55,
+                      }}>{a.body}</div>
+                      {a.link?.href && (
+                        <a
+                          href={a.link.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-block", marginTop: space[1] + 2,
+                            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                            fontWeight: 600, color: c.accent,
+                            textDecoration: "none",
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.textDecoration = "underline"}
+                          onMouseLeave={e => e.currentTarget.style.textDecoration = "none"}
+                        >
+                          {a.link.label || "Learn more"} →
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              };
+
+              const sectionHeader = (label, accentColor) => (
+                <div style={{
+                  position: "sticky", top: 0, zIndex: 1,
+                  display: "flex", alignItems: "center", gap: space[3],
+                  padding: `${space[2]}px 0`,
+                  background: c.surface,
+                  marginBottom: space[1],
+                }}>
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                    fontWeight: 700, color: accentColor || c.text,
+                    letterSpacing: "0.1em", textTransform: "uppercase",
+                    flexShrink: 0,
+                  }}>{label}</span>
+                  <span aria-hidden="true" style={{ flex: 1, height: 1, background: c.border }} />
+                </div>
+              );
+
+              const monthSubHeader = (label) => (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: space[3],
+                  padding: `${space[2]}px 0 ${space[1]}px`,
+                  marginTop: space[2],
+                }}>
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: 11,
+                    fontWeight: 600, color: c.textDim,
+                    letterSpacing: "0.08em", textTransform: "uppercase",
+                    flexShrink: 0,
+                  }}>{label}</span>
+                </div>
+              );
+
+              // Group released by month (newest first preserved by sort).
+              const releasedGroups = [];
+              released.forEach(a => {
+                const d = new Date(a.date + "T00:00:00");
+                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+                const label = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+                const last = releasedGroups[releasedGroups.length - 1];
+                if (last && last.key === key) last.items.push(a);
+                else releasedGroups.push({ key, label, items: [a] });
+              });
+
+              return (
+                <>
+                  {upcoming.length > 0 && (
+                    <div style={{ marginBottom: released.length > 0 ? space[5] : 0 }}>
+                      {sectionHeader("Coming soon", c.cyan || c.accent)}
+                      {upcoming.map((a, i) => renderItem(a, i, i > 0))}
+                    </div>
+                  )}
+                  {released.length > 0 && (
+                    <div>
+                      {sectionHeader("Released")}
+                      {releasedGroups.map((g, gi) => (
+                        <div key={g.key}>
+                          {releasedGroups.length > 1 && monthSubHeader(g.label)}
+                          {g.items.map((a, i) => renderItem(a, i, i > 0 || (releasedGroups.length > 1)))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: space[4], paddingTop: space[3], borderTop: `1px solid ${c.border}` }}>
+          <Btn variant="ghost" onClick={closePanel}>Close</Btn>
+        </div>
+      </Modal>
+    </>
   );
 }

@@ -279,6 +279,23 @@ export default function ProjectsView({
   const metrics = useMemo(() => deriveProjectMetrics(projects, commitments, history, today), [projects, commitments, history, today]);
 
   const [selectedProject, setSelectedProject] = useState(initialId || null);
+
+  // ── URL sync: mirror selectedProject → ?id= ──
+  // Lets users copy a project deep-dive URL and reopen it directly.
+  // App.jsx owns `?tab=projects`; this effect only touches `id`.
+  React.useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (selectedProject) params.set("id", selectedProject);
+      else params.delete("id");
+      const qs = params.toString();
+      const url = `${window.location.pathname}${qs ? `?${qs}` : ""}${window.location.hash}`;
+      if (url !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+        window.history.replaceState(window.history.state, "", url);
+      }
+    } catch { /* best-effort */ }
+  }, [selectedProject]);
+
   const [activeTab, setActiveTab] = useState("active");
   const [search, setSearch] = useState("");
   const [createError, setCreateError] = useState(null);
