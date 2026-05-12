@@ -10,6 +10,7 @@ import useSupabaseData from "./hooks/useSupabaseData";
 import { useSyncedSetters } from "./hooks/useSyncedSetters";
 import useAuth from "./hooks/useAuth";
 import LoginScreen from "./components/LoginScreen";
+import PendingApprovalScreen from "./components/PendingApprovalScreen";
 import QAReviewView from "./views/QAReviewView";
 import OnboardingScreen from "./components/OnboardingScreen";
 import { Header, NAV, getCycleStage, getStageConfig, getAttentionItems } from "./components/AppShell";
@@ -41,6 +42,8 @@ export default function FlowApp() {
       setSigningIn(false);
     }
   }, [auth.signIn]);
+
+  const loginError = signInError || auth.authError;
 
   // ── Auth gates ──
   if (auth.loading) {
@@ -74,15 +77,36 @@ export default function FlowApp() {
     return <QAReviewView />;
   }
   if (params.has("login")) {
-    return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={signInError} />;
+    return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={loginError} />;
+  }
+  if (params.has("pending")) {
+    return (
+      <PendingApprovalScreen
+        user={{ email: "preview@noon.com", user_metadata: { full_name: "Preview User" } }}
+        personProfile={{ name: "Preview User", status: params.get("pending") === "rejected" ? "rejected" : "pending" }}
+        status={params.get("pending") === "rejected" ? "rejected" : "pending"}
+        onSignOut={() => { /* preview only */ }}
+      />
+    );
   }
 
   if (!isDev && !auth.isAuthenticated) {
-    return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={signInError} />;
+    return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={loginError} />;
   }
 
   if (!isDev && auth.needsOnboarding) {
     return <OnboardingScreen user={auth.user} onComplete={auth.completeOnboarding} />;
+  }
+
+  if (!isDev && auth.isAuthenticated && auth.personProfile && !auth.isApproved) {
+    return (
+      <PendingApprovalScreen
+        user={auth.user}
+        personProfile={auth.personProfile}
+        status={auth.personProfile.status}
+        onSignOut={auth.signOut}
+      />
+    );
   }
 
   return <DevOverlayProvider><FlowDashboard auth={auth} /></DevOverlayProvider>;

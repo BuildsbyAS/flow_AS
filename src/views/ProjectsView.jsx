@@ -736,7 +736,7 @@ export default function ProjectsView({
             label="Shipped"
             value={summary.shipped}
             sub="reached GA"
-            onClick={() => setActiveTab("shipped")}
+            onClick={() => setActiveTab(activeTab === "shipped" ? "active" : "shipped")}
             active={activeTab === "shipped"}
           />
         </KpiGrid>

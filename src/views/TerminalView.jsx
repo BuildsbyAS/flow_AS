@@ -231,7 +231,13 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
           fontSize: 13, lineHeight: 1.8, color: terminal.gold,
           scrollbarWidth: "none", position: "relative", zIndex: 5,
         }}>
-          <AdminSettingsView onBack={() => setActiveModule(null)} appSettings={appSettings} setAppSettings={setAppSettings} />
+          <AdminSettingsView
+            onBack={() => setActiveModule(null)}
+            appSettings={appSettings}
+            setAppSettings={setAppSettings}
+            currentPersonId={auth?.personProfile?.id}
+            isOwner={!!auth?.isOwner}
+          />
         </div>
       </div>
     );

@@ -5,19 +5,44 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { logLogin, logLogout } from "../lib/activityLog";
 
+const ALLOWED_EMAIL_DOMAIN = "noon.com";
+const OWNER_EMAIL = "ajain@noon.com";
+
+function isAllowedEmail(email) {
+  return typeof email === "string" && email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`);
+}
+
 export default function useAuth() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [personProfile, setPersonProfile] = useState(null); // linked people row
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const [authError, setAuthError] = useState(null);
+
+  // Reject non-noon.com sessions: sign out and surface an error
+  // If the session exists but email is missing (e.g. mid-refresh), let it pass —
+  // the next auth event will have the full payload, and RLS still blocks data access.
+  const enforceDomain = useCallback(async (s) => {
+    if (!s?.user) return true;
+    if (!s.user.email) return true;
+    if (isAllowedEmail(s.user.email)) return true;
+    setAuthError(`Flow is restricted to @${ALLOWED_EMAIL_DOMAIN} accounts. ${s.user.email} is not allowed.`);
+    setPersonProfile(null);
+    setSession(null);
+    try { await supabase.auth.signOut(); } catch (e) { console.error("Forced sign-out failed:", e); }
+    setLoading(false);
+    setInitialLoadDone(true);
+    return false;
+  }, []);
 
   // ── Listen for auth state changes ──
   useEffect(() => {
     let hadSessionOnMount = false;
 
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    supabase.auth.getSession().then(async ({ data: { session: s } }) => {
+      if (s && !(await enforceDomain(s))) return;
       hadSessionOnMount = !!s;
       setSession(s);
       if (s) fetchProfile(s.user.id);
@@ -29,7 +54,8 @@ export default function useAuth() {
     });
 
     // Subscribe to changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
+      if (s && !(await enforceDomain(s))) return;
       setSession(s);
       if (s) {
         if (event === "SIGNED_IN") {
@@ -55,7 +81,7 @@ export default function useAuth() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [enforceDomain]);
 
   // ── Check if this auth user has a linked people record ──
   const fetchProfile = useCallback(async (authUserId) => {
@@ -63,7 +89,7 @@ export default function useAuth() {
     try {
       const { data, error } = await supabase
         .from("people")
-        .select("id, name, squad_id, role_id, auth_user_id, squads(name), roles(name)")
+        .select("id, name, squad_id, role_id, auth_user_id, status, is_admin, email, squads(name), roles(name)")
         .eq("auth_user_id", authUserId)
         .maybeSingle();
 
@@ -79,13 +105,33 @@ export default function useAuth() {
     }
   }, []);
 
+  // ── Realtime: listen for own people-row updates (status changes from admin) ──
+  useEffect(() => {
+    if (!personProfile?.id) return;
+    const channel = supabase
+      .channel(`people-self-${personProfile.id}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "people", filter: `id=eq.${personProfile.id}` },
+        (payload) => {
+          if (payload.new) {
+            setPersonProfile((prev) => prev ? { ...prev, ...payload.new } : prev);
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [personProfile?.id]);
+
   // ── Sign in with Google ──
   const signIn = useCallback(async () => {
+    setAuthError(null);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: window.location.origin + window.location.pathname + window.location.search,
+          queryParams: { hd: ALLOWED_EMAIL_DOMAIN },
         },
       });
       if (error) {
@@ -121,8 +167,10 @@ export default function useAuth() {
         squad_id: squadId,
         role_id: roleId,
         auth_user_id: session.user.id,
+        email: session.user.email,
+        status: "pending",
       })
-      .select("id, name, squad_id, role_id, auth_user_id, squads(name), roles(name)")
+      .select("id, name, squad_id, role_id, auth_user_id, status, is_admin, email, squads(name), roles(name)")
       .single();
 
     if (error) return { error: error.message };
@@ -131,16 +179,26 @@ export default function useAuth() {
     return { data };
   }, [session]);
 
+  const isApproved = personProfile?.status === "approved";
+  const isPending = personProfile?.status === "pending";
+  const isRejected = personProfile?.status === "rejected";
+  const isOwner = (session?.user?.email || "").toLowerCase() === OWNER_EMAIL;
+
   return {
     // State
     session,
     user: session?.user || null,
     personProfile,
+    authError,
     loading: initialLoadDone ? false : (loading || checkingProfile),
 
     // Derived
     isAuthenticated: !!session,
     needsOnboarding: !!session && initialLoadDone && !personProfile && !checkingProfile && !loading,
+    isApproved,
+    isPending,
+    isRejected,
+    isOwner,
 
     // Actions
     signIn,

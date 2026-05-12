@@ -44,15 +44,19 @@ export const KpiCard = ({ label, value, sub, delta, deltaLabel, children, onClic
       onKeyDown={handleKey}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
-      className={`flow-kpi-card${onClick ? " clickable" : ""}`}
+      className={`flow-kpi-card${onClick ? " clickable" : ""}${active ? " is-active" : ""}`}
       style={{
         animationDelay: index != null ? `${index * 40}ms` : undefined,
         padding: space[6], borderRadius: layout.radiusLg,
-        background: c.surface,
-        border: `1px solid ${active ? c.accent + "30" : c.border}`,
-        boxShadow: c.shadowCard,
+        // Active state gets a full-strength accent border + a soft accent
+        // ring so it pops against neighbouring cards. The old `accent+30`
+        // hex-alpha read as barely-there at small sizes.
+        background: active ? (c.accentDim || c.surface) : c.surface,
+        border: `1px solid ${active ? c.accent : c.border}`,
+        boxShadow: active ? `${c.shadowCard || ""}, 0 0 0 3px ${c.accentMid || c.accent + "40"}` : c.shadowCard,
         cursor: onClick ? "pointer" : "default",
         display: "flex", flexDirection: "column",
+        transition: "border-color 150ms ease, box-shadow 150ms ease, background 150ms ease",
         ...s,
       }}
     >

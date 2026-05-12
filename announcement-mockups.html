@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Flow — Announcement UI options</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root{
+      --page:#EDEDF0; --surface:#FFFFFF; --alt:#F3F3F6;
+      --text:#1A1A1E; --mid:#4A4A52; --dim:#8A8A94; --ghost:#B5B5BE;
+      --border:#E1E1E6; --border-med:#CECED5;
+      --accent:#E8590C; --accent-dim:#FEEAD9; --accent-mid:#F9B380;
+      --green:#059669; --green-dim:#D1FAE5;
+      --red:#DC2626;   --red-dim:#FEE2E2;
+      --amber:#B45309; --amber-dim:#FEF3C7;
+      --cyan:#0E7490;  --cyan-dim:#CFFAFE;
+      --purple:#6D28D9;--purple-dim:#EDE9FE;
+      --shadow-card:0 1px 2px rgba(20,20,24,.06),0 4px 12px rgba(20,20,24,.06);
+      --shadow-elev:0 2px 6px rgba(20,20,24,.06),0 12px 32px rgba(20,20,24,.12);
+      --mono:"JetBrains Mono",ui-monospace,monospace;
+      --inter:"Inter",system-ui,-apple-system,sans-serif;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--page);color:var(--text);font-family:var(--inter);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+    .page{max-width:1480px;margin:0 auto;padding:32px 24px 96px}
+    .page-title{font-size:22px;font-weight:700;letter-spacing:-0.01em;margin:0 0 4px}
+    .page-sub{color:var(--mid);margin:0 0 24px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+    @media(max-width:960px){.grid{grid-template-columns:1fr}}
+
+    .option{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:clip;box-shadow:var(--shadow-card)}
+    .option-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--alt)}
+    .option-id{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--dim);text-transform:uppercase}
+    .option-name{font-size:15px;font-weight:700;color:var(--text)}
+    .option-why{color:var(--mid);font-size:12px;margin-left:auto;text-align:right}
+
+    /* Icon preview in header */
+    .icon-row{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface)}
+    .icon-row-label{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.08em;color:var(--dim);text-transform:uppercase;margin-right:auto}
+    .icon-btn{
+      width:34px;height:34px;border-radius:8px;border:1px solid var(--border);background:var(--alt);
+      display:inline-flex;align-items:center;justify-content:center;position:relative;
+      color:var(--mid);
+    }
+    .icon-btn::after{
+      content:"";position:absolute;top:6px;right:6px;
+      width:8px;height:8px;border-radius:50%;background:var(--accent);
+      box-shadow:0 0 0 2px var(--alt);
+    }
+    .icon-btn svg{width:16px;height:16px}
+
+    /* Modal shell */
+    .modal{padding:20px 24px}
+    .modal-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .modal-title{font-size:18px;font-weight:700;letter-spacing:-0.01em}
+    .modal-close{font-family:var(--mono);font-size:11px;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase;background:var(--alt);border:1px solid var(--border);padding:3px 8px;border-radius:4px}
+
+    /* Shared tag pill */
+    .tag{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:1px 6px;border-radius:4px;flex-shrink:0}
+    .tag.new{background:var(--accent-dim);color:var(--accent)}
+    .tag.fix{background:var(--green-dim);color:var(--green)}
+    .tag.update{background:var(--amber-dim);color:var(--amber)}
+    .tag.soon{background:var(--cyan-dim);color:var(--cyan)}
+
+    .section-label{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--text);text-transform:uppercase;flex-shrink:0}
+    .section-rule{flex:1;height:1px;background:var(--border)}
+    .section-row{display:flex;align-items:center;gap:12px;padding:8px 0;margin-bottom:6px}
+
+    /* ─────────── Option 1 — Newspaper front-page ─────────── */
+    .opt-newspaper .masthead{
+      border-top:3px double var(--text);border-bottom:3px double var(--text);
+      padding:10px 0;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;
+    }
+    .opt-newspaper .masthead h2{
+      margin:0;font-family:"Playfair Display","Times New Roman",serif;font-style:italic;font-size:26px;font-weight:700;letter-spacing:-0.01em;text-align:center;flex:1;
+    }
+    .opt-newspaper .edition{font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.08em;text-transform:uppercase}
+    .opt-newspaper .item{padding:12px 0;border-bottom:1px dashed var(--border)}
+    .opt-newspaper .item:last-child{border-bottom:none}
+    .opt-newspaper .item-head{display:flex;align-items:baseline;gap:10px;margin-bottom:4px;flex-wrap:wrap}
+    .opt-newspaper .date{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase;min-width:60px}
+    .opt-newspaper .title{font-family:"Playfair Display","Times New Roman",serif;font-size:18px;font-weight:700;color:var(--text);letter-spacing:-0.01em;line-height:1.2;flex:1}
+    .opt-newspaper .body{color:var(--mid);font-size:14px;line-height:1.55;padding-left:70px}
+    .opt-newspaper .section-row{border-top:1px solid var(--border);padding-top:12px;margin-top:14px}
+
+    /* ─────────── Option 2 — Changelog table ─────────── */
+    .opt-changelog .row{display:grid;grid-template-columns:64px 1fr auto;gap:14px;padding:11px 0;border-top:1px solid var(--border);align-items:baseline}
+    .opt-changelog .row:first-of-type{border-top:none}
+    .opt-changelog .day{font-family:var(--mono);font-size:11px;font-weight:700;color:var(--mid);letter-spacing:0.04em;text-transform:uppercase}
+    .opt-changelog .title{font-size:14.5px;font-weight:700;color:var(--text);line-height:1.35}
+    .opt-changelog .body{color:var(--mid);font-size:13px;line-height:1.55;margin-top:2px}
+
+    /* ─────────── Option 3 — Vertical timeline rail ─────────── */
+    .opt-timeline .rail{position:relative;padding-left:24px}
+    .opt-timeline .rail::before{content:"";position:absolute;left:6px;top:8px;bottom:8px;width:2px;background:var(--border)}
+    .opt-timeline .entry{position:relative;padding:10px 0 14px}
+    .opt-timeline .entry::before{
+      content:"";position:absolute;left:-22px;top:14px;width:10px;height:10px;border-radius:50%;
+      background:var(--surface);border:2px solid var(--mid);
+    }
+    .opt-timeline .entry.is-soon::before{border-color:var(--cyan);background:var(--cyan-dim)}
+    .opt-timeline .entry.is-new::before{border-color:var(--accent);background:var(--accent-dim)}
+    .opt-timeline .entry.is-fix::before{border-color:var(--green);background:var(--green-dim)}
+    .opt-timeline .entry.is-update::before{border-color:var(--amber);background:var(--amber-dim)}
+    .opt-timeline .head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:3px}
+    .opt-timeline .date{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--dim)}
+    .opt-timeline .title{font-size:15px;font-weight:700;margin:2px 0 4px;color:var(--text)}
+    .opt-timeline .body{color:var(--mid);font-size:13.5px;line-height:1.55}
+
+    /* ─────────── Option 4 — Digest card grid ─────────── */
+    .opt-digest .sub-label{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--dim);text-transform:uppercase;margin:6px 0 8px;font-weight:700}
+    .opt-digest .cards{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .opt-digest .card{padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--alt);position:relative}
+    .opt-digest .card .tag{position:absolute;top:10px;right:10px}
+    .opt-digest .card .date{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase}
+    .opt-digest .card .title{font-size:14px;font-weight:700;margin:4px 0;color:var(--text);padding-right:48px;line-height:1.3}
+    .opt-digest .card .body{color:var(--mid);font-size:12.5px;line-height:1.5}
+    .opt-digest .card.is-soon{background:var(--cyan-dim);border-color:var(--cyan-dim)}
+
+    /* Footer hint */
+    .finalize{margin-top:40px;padding:20px;border:1px dashed var(--border-med);border-radius:10px;background:var(--surface)}
+    .finalize h3{margin:0 0 8px;font-size:14px;font-weight:700}
+    .finalize p{margin:0;color:var(--mid)}
+    code{font-family:var(--mono);background:var(--alt);padding:1px 6px;border-radius:4px;font-size:12px}
+  </style>
+</head>
+<body>
+<div class="page">
+  <h1 class="page-title">Flow — Announcements UI options</h1>
+  <p class="page-sub">Four layouts + four header icons. Pick one of each (or mix) and tell me the combo, I'll wire it up.</p>
+
+  <div class="grid">
+    <!-- ══════════════════ OPTION 1 — Newspaper ══════════════════ -->
+    <section class="option opt-newspaper">
+      <div class="option-head">
+        <span class="option-id">Option 1</span>
+        <span class="option-name">The Flow Times</span>
+        <span class="option-why">Newspaper front-page · most thematic</span>
+      </div>
+      <div class="icon-row">
+        <span class="icon-row-label">Icon</span>
+        <button class="icon-btn" title="Newspaper">
+          <!-- Newspaper -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+        </button>
+      </div>
+      <div class="modal">
+        <div class="masthead">
+          <span class="edition">Vol. 2 · Issue 06</span>
+          <h2>The Flow Times</h2>
+          <span class="edition">Apr 21, 2026</span>
+        </div>
+
+        <div class="section-row">
+          <span class="section-label" style="color:var(--cyan)">Coming soon</span>
+          <span class="section-rule"></span>
+        </div>
+        <article class="item">
+          <div class="item-head">
+            <span class="date">Apr 24</span>
+            <span class="title">New logo + UI cleanup</span>
+            <span class="tag soon">soon</span>
+          </div>
+          <div class="body">Coming next — a refreshed logo and another pass of UI polish across the app.</div>
+        </article>
+
+        <div class="section-row">
+          <span class="section-label">Released</span>
+          <span class="section-rule"></span>
+        </div>
+        <article class="item">
+          <div class="item-head">
+            <span class="date">Apr 21</span>
+            <span class="title">v2.2 — Commits &amp; Projects fixes</span>
+            <span class="tag fix">fix</span>
+          </div>
+          <div class="body">Bug fixes across the Commits and Projects tabs.</div>
+        </article>
+        <article class="item">
+          <div class="item-head">
+            <span class="date">Apr 20</span>
+            <span class="title">Alpha testing begins</span>
+            <span class="tag new">new</span>
+          </div>
+          <div class="body">Flow is now in alpha with a select product crew. Feedback welcome.</div>
+        </article>
+        <article class="item">
+          <div class="item-head">
+            <span class="date">Apr 15</span>
+            <span class="title">v2.1 — Launch prep</span>
+            <span class="tag fix">fix</span>
+          </div>
+          <div class="body">Bug fixes and backend data sync wired up for launch.</div>
+        </article>
+        <article class="item">
+          <div class="item-head">
+            <span class="date">Apr 10</span>
+            <span class="title">v2 — Light theme, major UI overhaul</span>
+            <span class="tag update">update</span>
+          </div>
+          <div class="body">Flow is now light-mode first (Steel &amp; Orange). Most surfaces have been redesigned.</div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ══════════════════ OPTION 2 — Changelog table ══════════════════ -->
+    <section class="option opt-changelog">
+      <div class="option-head">
+        <span class="option-id">Option 2</span>
+        <span class="option-name">Release log</span>
+        <span class="option-why">Dense · scans fastest · most scalable</span>
+      </div>
+      <div class="icon-row">
+        <span class="icon-row-label">Icon</span>
+        <button class="icon-btn" title="Document with lines">
+          <!-- Document / file-text -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h8"/><path d="M8 9h4"/></svg>
+        </button>
+      </div>
+      <div class="modal">
+        <div class="modal-title-row">
+          <div class="modal-title">What's new</div>
+          <div class="modal-close">ESC</div>
+        </div>
+
+        <div class="section-row">
+          <span class="section-label" style="color:var(--cyan)">Coming soon</span>
+          <span class="section-rule"></span>
+        </div>
+        <div class="row">
+          <div class="day">Apr 24</div>
+          <div>
+            <div class="title">New logo + UI cleanup</div>
+            <div class="body">Coming next — a refreshed logo and another pass of UI polish across the app.</div>
+          </div>
+          <span class="tag soon">soon</span>
+        </div>
+
+        <div class="section-row" style="margin-top:14px">
+          <span class="section-label">Released</span>
+          <span class="section-rule"></span>
+        </div>
+        <div class="row">
+          <div class="day">Apr 21</div>
+          <div>
+            <div class="title">v2.2 — Commits &amp; Projects fixes</div>
+            <div class="body">Bug fixes across the Commits and Projects tabs.</div>
+          </div>
+          <span class="tag fix">fix</span>
+        </div>
+        <div class="row">
+          <div class="day">Apr 20</div>
+          <div>
+            <div class="title">Alpha testing begins</div>
+            <div class="body">Flow is now in alpha with a select product crew. Feedback welcome.</div>
+          </div>
+          <span class="tag new">new</span>
+        </div>
+        <div class="row">
+          <div class="day">Apr 15</div>
+          <div>
+            <div class="title">v2.1 — Launch prep</div>
+            <div class="body">Bug fixes and backend data sync wired up for launch.</div>
+          </div>
+          <span class="tag fix">fix</span>
+        </div>
+        <div class="row">
+          <div class="day">Apr 10</div>
+          <div>
+            <div class="title">v2 — Light theme, major UI overhaul</div>
+            <div class="body">Flow is now light-mode first (Steel &amp; Orange). Most surfaces have been redesigned.</div>
+          </div>
+          <span class="tag update">update</span>
+        </div>
+        <div class="row">
+          <div class="day">Mar 27</div>
+          <div>
+            <div class="title">v1 ready for testing</div>
+            <div class="body">First cut of Flow is ready for testing and final clean-ups.</div>
+          </div>
+          <span class="tag new">new</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════ OPTION 3 — Vertical timeline ══════════════════ -->
+    <section class="option opt-timeline">
+      <div class="option-head">
+        <span class="option-id">Option 3</span>
+        <span class="option-name">Signal timeline</span>
+        <span class="option-why">Visual spine · good for storytelling</span>
+      </div>
+      <div class="icon-row">
+        <span class="icon-row-label">Icon</span>
+        <button class="icon-btn" title="Radio tower">
+          <!-- Radio tower / broadcast -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.9 19.1a10 10 0 0 1 0-14.2"/><path d="M7.8 16.2a6 6 0 0 1 0-8.4"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4"/><path d="M19.1 4.9a10 10 0 0 1 0 14.2"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>
+        </button>
+      </div>
+      <div class="modal">
+        <div class="modal-title-row">
+          <div class="modal-title">What's new</div>
+          <div class="modal-close">ESC</div>
+        </div>
+        <div class="rail">
+          <div class="entry is-soon">
+            <div class="head">
+              <span class="date">Apr 24, 2026</span>
+              <span class="tag soon">soon</span>
+            </div>
+            <div class="title">New logo + UI cleanup</div>
+            <div class="body">Coming next — a refreshed logo and another pass of UI polish across the app.</div>
+          </div>
+          <div class="entry is-fix">
+            <div class="head">
+              <span class="date">Apr 21, 2026</span>
+              <span class="tag fix">fix</span>
+            </div>
+            <div class="title">v2.2 — Commits &amp; Projects fixes</div>
+            <div class="body">Bug fixes across the Commits and Projects tabs.</div>
+          </div>
+          <div class="entry is-new">
+            <div class="head">
+              <span class="date">Apr 20, 2026</span>
+              <span class="tag new">new</span>
+            </div>
+            <div class="title">Alpha testing begins</div>
+            <div class="body">Flow is now in alpha with a select product crew. Feedback welcome.</div>
+          </div>
+          <div class="entry is-fix">
+            <div class="head">
+              <span class="date">Apr 15, 2026</span>
+              <span class="tag fix">fix</span>
+            </div>
+            <div class="title">v2.1 — Launch prep</div>
+            <div class="body">Bug fixes and backend data sync wired up for launch.</div>
+          </div>
+          <div class="entry is-update">
+            <div class="head">
+              <span class="date">Apr 10, 2026</span>
+              <span class="tag update">update</span>
+            </div>
+            <div class="title">v2 — Light theme, major UI overhaul</div>
+            <div class="body">Flow is now light-mode first (Steel &amp; Orange). Most surfaces have been redesigned.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════ OPTION 4 — Digest card grid ══════════════════ -->
+    <section class="option opt-digest">
+      <div class="option-head">
+        <span class="option-id">Option 4</span>
+        <span class="option-name">Digest</span>
+        <span class="option-why">Card grid · skimmable · most visual</span>
+      </div>
+      <div class="icon-row">
+        <span class="icon-row-label">Icon</span>
+        <button class="icon-btn" title="Flag">
+          <!-- Flag -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+        </button>
+      </div>
+      <div class="modal">
+        <div class="modal-title-row">
+          <div class="modal-title">What's new</div>
+          <div class="modal-close">ESC</div>
+        </div>
+
+        <div class="sub-label" style="color:var(--cyan)">Coming soon</div>
+        <div class="cards">
+          <div class="card is-soon" style="grid-column:1/-1">
+            <span class="tag soon">soon</span>
+            <div class="date">Apr 24, 2026</div>
+            <div class="title">New logo + UI cleanup</div>
+            <div class="body">Coming next — a refreshed logo and another pass of UI polish across the app.</div>
+          </div>
+        </div>
+
+        <div class="sub-label" style="margin-top:14px">Released</div>
+        <div class="cards">
+          <div class="card">
+            <span class="tag fix">fix</span>
+            <div class="date">Apr 21, 2026</div>
+            <div class="title">v2.2 — Commits &amp; Projects fixes</div>
+            <div class="body">Bug fixes across the Commits and Projects tabs.</div>
+          </div>
+          <div class="card">
+            <span class="tag new">new</span>
+            <div class="date">Apr 20, 2026</div>
+            <div class="title">Alpha testing begins</div>
+            <div class="body">Flow is now in alpha with a select product crew. Feedback welcome.</div>
+          </div>
+          <div class="card">
+            <span class="tag fix">fix</span>
+            <div class="date">Apr 15, 2026</div>
+            <div class="title">v2.1 — Launch prep</div>
+            <div class="body">Bug fixes and backend data sync wired up for launch.</div>
+          </div>
+          <div class="card">
+            <span class="tag update">update</span>
+            <div class="date">Apr 10, 2026</div>
+            <div class="title">v2 — Light theme, UI overhaul</div>
+            <div class="body">Light-mode first (Steel &amp; Orange). Most surfaces redesigned.</div>
+          </div>
+          <div class="card" style="grid-column:1/-1">
+            <span class="tag new">new</span>
+            <div class="date">Mar 27, 2026</div>
+            <div class="title">v1 ready for testing</div>
+            <div class="body">First cut of Flow is ready for testing and final clean-ups.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ══════════════════ Extra icon candidates row ══════════════════ -->
+  <section class="option" style="margin-top:24px">
+    <div class="option-head">
+      <span class="option-id">Bonus</span>
+      <span class="option-name">Extra icon candidates</span>
+      <span class="option-why">Mix &amp; match with any layout above</span>
+    </div>
+    <div class="modal" style="display:flex;flex-wrap:wrap;gap:24px;align-items:center">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <button class="icon-btn" title="Megaphone"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1Z"/><path d="M15 8a4 4 0 0 1 0 8"/></svg></button>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase">Megaphone</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <button class="icon-btn" title="Bullhorn small"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4z"/><path d="M15.5 12a4 4 0 0 0 0-4"/></svg></button>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase">Bullhorn</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <button class="icon-btn" title="Scroll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2V5c0-1.66-1.34-3-3-3"/><path d="M19 3H5a2 2 0 0 0-2 2v14"/><path d="M10 9h8"/><path d="M10 13h8"/></svg></button>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase">Scroll</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <button class="icon-btn" title="RSS feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="currentColor"/></svg></button>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase">RSS / feed</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <button class="icon-btn" title="Stack of papers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="14" height="16" rx="2"/><path d="M7 4V2"/><path d="M21 8v12a2 2 0 0 1-2 2H7"/></svg></button>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase">Stack</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <button class="icon-btn" title="Inbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/></svg></button>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase">Inbox</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <button class="icon-btn" title="News pin"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12"/><path d="M5 10h14"/><path d="M17 10V3H7v7"/><circle cx="9" cy="6" r="0.8" fill="currentColor"/><circle cx="15" cy="6" r="0.8" fill="currentColor"/></svg></button>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--dim);letter-spacing:0.06em;text-transform:uppercase">Pinboard</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="finalize">
+    <h3>Pick your combo</h3>
+    <p>Reply with the layout option (<code>1</code> · <code>2</code> · <code>3</code> · <code>4</code>) and the header icon label (<code>newspaper</code>, <code>document</code>, <code>broadcast</code>, <code>flag</code>, <code>megaphone</code>, <code>bullhorn</code>, <code>scroll</code>, <code>rss</code>, <code>stack</code>, <code>inbox</code>, <code>pinboard</code>). I'll wire whatever you pick into the live app.</p>
+  </div>
+</div>
+</body>
+</html>

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { c, space, body, terminal, terminalRadius } from "../styles/theme";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
+import AccessRequestsAdmin from "../components/AccessRequestsAdmin";
 
 const MONO = body;
 
@@ -52,7 +53,7 @@ const timeAgo = (ts) => {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 
-export default function AdminSettingsView({ onBack, appSettings = {}, setAppSettings }) {
+export default function AdminSettingsView({ onBack, appSettings = {}, setAppSettings, currentPersonId, isOwner = false }) {
   const devRef = useDevLabel('Admin panel for rant management and activity log audit');
   const [rants, setRants] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -487,6 +488,8 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
           )}
         </div>
       </div>
+
+      {isOwner && <AccessRequestsAdmin currentPersonId={currentPersonId} />}
 
       <div style={{ fontSize: 11, fontWeight: 700, color: c.orange, letterSpacing: "0.1em", marginBottom: space[3] }}>
         ---- RANT ADMIN ----
