@@ -13,10 +13,8 @@ import LoginScreen from "./components/LoginScreen";
 import PendingApprovalScreen from "./components/PendingApprovalScreen";
 import QAReviewView from "./views/QAReviewView";
 import OnboardingScreen from "./components/OnboardingScreen";
-import { Header, NAV, getCycleStage, getStageConfig, getAttentionItems } from "./components/AppShell";
+import { Header, NAV } from "./components/AppShell";
 import SummaryView from "./views/SummaryView";
-import PulseView from "./views/PulseView";
-import HumansView from "./views/HumansView";
 import ProjectsView from "./views/ProjectsView";
 import PeopleDeepDive from "./views/PeopleDeepDive";
 import SettingsView from "./views/SettingsView";
@@ -121,7 +119,6 @@ function FlowDashboard({ auth }) {
       const tab = params.get("tab");
       const validTabs = NAV.filter(n => !n.separator).map(n => n.key);
       if (tab && validTabs.includes(tab)) return tab;
-      if (params.get("mode") === "people" || params.get("mode") === "matrix") return "pulse";
     } catch { /* ignore */ }
     return "summary";
   });
@@ -346,10 +343,12 @@ function FlowDashboard({ auth }) {
     try {
       const params = new URLSearchParams(window.location.search);
       // App.jsx owns `tab` and `person`. `id` (project) is owned by
-      // ProjectsView's own URL-sync effect; `phase/sort/dir/status/risks/mode`
-      // are owned by PulseView. Don't touch those from here.
+      // ProjectsView's own URL-sync effect.
       params.delete("tab");
       params.delete("person");
+      // Drop any legacy params from the retired Pulse/Commit tabs so they
+      // don't dangle in the address bar after this rewrite.
+      ["mode", "phase", "sort", "dir", "status", "risks", "commitIdx", "prefillProject", "prefillForce"].forEach(k => params.delete(k));
       const hiddenTabs = ["terminal", "settings", "logs", "rant"];
       if (!hiddenTabs.includes(activeTab)) {
         params.set("tab", activeTab);
@@ -357,15 +356,11 @@ function FlowDashboard({ auth }) {
       // Clear `id` when we leave the projects tab so the stale project
       // doesn't dangle in the URL.
       if (activeTab !== "projects") params.delete("id");
-      // Serialize `person` for people/commit tabs. Objects carry richer
-      // payloads — we only surface the `person` field, since
-      // `commitIdx`/`prefillProject` are one-shot intents not worth URL space.
+      // Serialize `person` for the people tab. People is the only consumer
+      // now that the Commit tab has been retired.
       if (navPayload && !hiddenTabs.includes(activeTab)) {
         if (activeTab === "people" && typeof navPayload === "string") {
           params.set("person", navPayload);
-        } else if (activeTab === "commit") {
-          const name = typeof navPayload === "string" ? navPayload : navPayload?.person;
-          if (name) params.set("person", name);
         }
       }
       const qs = params.toString();
@@ -384,25 +379,20 @@ function FlowDashboard({ auth }) {
   const viewerProfile = React.useMemo(() => {
     if (auth.personProfile?.name) return auth.personProfile;
     const devFallback = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-    if (devFallback && Array.isArray(people) && people.length > 0) return { name: people[0].name };
+    if (devFallback && Array.isArray(people) && people.length > 0) {
+      const first = people[0];
+      // Include `id` in the dev fallback — comments + members mutations need
+      // a real people-row id, not just a name.
+      return { id: first.id, name: first.name };
+    }
     return null;
   }, [auth.personProfile, people]);
-
-  const cycleStage = useMemo(() => getCycleStage(commitments), [commitments]);
-  const cycleCfg = getStageConfig(cycleStage);
-  const attentionItems = useMemo(() => getAttentionItems(commitments, projects), [commitments, projects]);
-
-  const handlePrimaryAction = useCallback(() => {
-    handleTabSwitch(cycleCfg.targetTab);
-  }, [cycleCfg.targetTab, handleTabSwitch]);
 
   useKeyboard([
     { key: "1", fn: () => handleTabSwitch("summary") },
     { key: "2", fn: () => handleTabSwitch("projects") },
     { key: "3", fn: () => handleTabSwitch("people") },
-    { key: "4", fn: () => handleTabSwitch("pulse") },
-    { key: "5", fn: () => handleTabSwitch("commit") },
-    { key: "6", fn: () => handleTabSwitch("guide") },
+    { key: "4", fn: () => handleTabSwitch("guide") },
     { key: "k", ctrl: true, fn: () => { setCmdOpen(v => !v); tactile.cmdOpen(); }, force: true },
     { key: "k", meta: true, fn: () => { setCmdOpen(v => !v); tactile.cmdOpen(); }, force: true },
     { key: "Escape", fn: () => { if (cmdOpen) { setCmdOpen(false); } else if (suppressBackRef.current) { /* child handled it */ } else if (goBackRef.current) handleBack(); }, force: true },
@@ -536,10 +526,8 @@ function FlowDashboard({ auth }) {
       {activeTab !== "terminal" && (
       <main key={activeTab} className="flow-page" style={{ maxWidth: 1440, margin: "0 auto", padding: `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
         <ErrorCatcher key={activeTab}>
-          {activeTab === "summary" && <SummaryView loading={loading} error={error} history={history} commitments={effectiveCommitments} projects={projects} people={people} squads={squads} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} isHistorical={isHistorical} onNavigate={handleNavigate} cycleStage={cycleStage} />}
-          {activeTab === "pulse" && <PulseView loading={loading} error={error} commitments={effectiveCommitments} projects={projects} people={people} history={history} onNavigate={handleNavigate} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} appSettings={appSettings} />}
-          {activeTab === "commit" && <HumansView key={navPayload?.person || navPayload || "commit"} loading={loading} error={error} commitments={effectiveCommitments} setCommitments={isHistorical ? null : setCommitments} projects={projects} people={people} personProfile={viewerProfile} initialPerson={navPayload?.person || navPayload} initialCommitIdx={navPayload?.commitIdx ?? null} initialPrefillProject={navPayload?.prefillProject || null} initialPrefillForce={navPayload?.prefillForce || false} setDetailLabel={setDetailLabel} setGoBack={setGoBack} setIsLocked={setIsLocked} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} onSave={flushDirtyToDB} />}
-          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} squads={squads} history={history} weekConfig={weekConfig} personProfile={viewerProfile} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
+          {activeTab === "summary" && <SummaryView loading={loading} error={error} history={history} commitments={effectiveCommitments} projects={projects} people={people} squads={squads} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} isHistorical={isHistorical} onNavigate={handleNavigate} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} squads={squads} history={history} weekConfig={weekConfig} personProfile={viewerProfile} isAppOwner={!!auth?.isOwner} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
           {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} commitments={effectiveCommitments} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} />}
           {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} commitments={commitments} />}
           {activeTab === "guide" && (

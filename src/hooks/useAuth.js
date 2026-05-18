@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { logLogin, logLogout } from "../lib/activityLog";
+import { setDevSeedSessionFlag } from "../data/devSeed";
 
 const ALLOWED_EMAIL_DOMAIN = "noon.com";
 const OWNER_EMAIL = "ajain@noon.com";
@@ -44,6 +45,7 @@ export default function useAuth() {
     supabase.auth.getSession().then(async ({ data: { session: s } }) => {
       if (s && !(await enforceDomain(s))) return;
       hadSessionOnMount = !!s;
+      setDevSeedSessionFlag(!!s);
       setSession(s);
       if (s) fetchProfile(s.user.id);
       else setLoading(false);
@@ -56,6 +58,7 @@ export default function useAuth() {
     // Subscribe to changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
       if (s && !(await enforceDomain(s))) return;
+      setDevSeedSessionFlag(!!s);
       setSession(s);
       if (s) {
         if (event === "SIGNED_IN") {

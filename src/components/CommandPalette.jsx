@@ -103,7 +103,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
           section: "People",
           cat: "people",
           icon: initialsOf(p.name),
-          action: () => { if (onNavigate) onNavigate("commit", p.name); onClose(); },
+          action: () => { if (onNavigate) onNavigate("people", p.name); onClose(); },
         });
       });
     }

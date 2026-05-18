@@ -21,10 +21,7 @@ export const NAV = [
   { key: "projects", label: "Projects", num: 2 },
   { key: "people",   label: "People",   num: 3 },
   { key: "sep1",     separator: true },
-  { key: "pulse",    label: "Pulse",    num: 4 },
-  { key: "commit",   label: "Commit",   num: 5 },
-  { key: "sep2",     separator: true },
-  { key: "guide",    label: "Guide",    num: 6 },
+  { key: "guide",    label: "Guide",    num: 4 },
   { key: "settings", label: "Settings", num: null },
   { key: "logs",     label: "Logs",     num: null },
   { key: "rant",     label: "Rant",     num: null },
@@ -43,65 +40,6 @@ const TerminalIcon = ({ size = 18, color = c.textMid }) => (
   </svg>
 );
 
-/* ════════════════════════════════════════════════════════════════════
-   CYCLE STAGE
-   declare → lock → pulse → close
-   ════════════════════════════════════════════════════════════════════ */
-const STAGES = {
-  declare: { label: "Declare", verb: "Open Commit", targetTab: "commit",  color: () => c.purple },
-  lock:    { label: "Lock",    verb: "Run Pulse",  targetTab: "pulse",  color: () => c.orange },
-  pulse:   { label: "Pulse",   verb: "Close Week", targetTab: "pulse",  color: () => c.green  },
-  close:   { label: "Close",   verb: "Outcomes",   targetTab: "pulse",  color: () => c.blue   },
-};
-
-export function getCycleStage(commitments) {
-  // Only count people who have actually declared something. Backfilled empty
-  // commitment rows (one per person in the roster) would otherwise dominate
-  // the ratios and keep the whole team stuck on "declare" forever.
-  const active = commitments.filter(x => x.items?.some(i => i.title && i.title.trim()));
-  const total = active.length;
-  if (total === 0) return "declare";
-  const locked = active.filter(x => x.lockedAt).length;
-  const withOutcomes = active.filter(x => x.items?.some(i => i.outcome)).length;
-
-  // "Close" is a Thu/Fri ritual — a single Tuesday outcome shouldn't flip
-  // the whole team into close stage. Gate by day-of-week OR by ≥50% of the
-  // locked commitments having outcomes.
-  const dow = new Date().getDay(); // 0=Sun..6=Sat
-  const isCloseWindow = dow === 4 || dow === 5; // Thu/Fri
-  const enoughOutcomes = locked > 0 && withOutcomes >= Math.ceil(locked * 0.5);
-  if ((isCloseWindow && withOutcomes > 0) || enoughOutcomes) return "close";
-
-  if (locked >= Math.ceil(total * 0.8)) return "pulse";
-  if (locked > 0) return "lock";
-  return "declare";
-}
-
-export function getStageConfig(stage) { return STAGES[stage]; }
-
-/* ════════════════════════════════════════════════════════════════════
-   ATTENTION ITEMS — derived from data, rendered inline
-   ════════════════════════════════════════════════════════════════════ */
-export function getAttentionItems(commitments, projects) {
-  const items = [];
-  // Match getCycleStage: only count declared commitments, not backfilled empties.
-  const active = commitments.filter(x => x.items?.some(i => i.title && i.title.trim()));
-  const total = active.length;
-  if (total === 0) return items;
-  const unlocked = active.filter(x => !x.lockedAt).length;
-  const blocked = active.filter(x => x.items?.some(i => i.outcome === "blocked")).length;
-  const soon = 14 * 86400000;
-  const atRisk = projects.filter(p =>
-    !["Alpha","Beta","GA"].includes(p.phase) && p.endDate &&
-    (new Date(p.endDate).getTime() - Date.now()) < soon &&
-    (new Date(p.endDate).getTime() - Date.now()) > 0
-  ).length;
-  if (unlocked > 0 && unlocked < total) items.push({ text: `${unlocked} unlocked`, color: c.orange });
-  else if (unlocked === total) items.push({ text: `All ${total} unlocked`, color: c.orange });
-  if (blocked > 0) items.push({ text: `${blocked} blocked`, color: c.red });
-  if (atRisk > 0) items.push({ text: `${atRisk} ending soon`, color: c.orange });
-  return items;
-}
 
 
 /* ════════════════════════════════════════════════════════════════════

@@ -107,22 +107,23 @@ const GuideView = ({ onNavigate }) => {
           fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
           fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking,
           color: c.accent, marginTop: 0, marginBottom: space[4],
-        }}>Flow turns a weekly commitment into a live operating view.</p>
+        }}>Flow is the live record of every project, by the people running it.</p>
         <p style={{
           fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
           lineHeight: 1.7, color: c.textMid, maxWidth: 580, margin: 0,
         }}>
-          Each person picks three things to deliver, locks them in, and reports the outcome.
-          Project history accumulates on its own. Bandwidth becomes obvious.
-          Focus sharpens because you only get three. Nothing slips quietly.
+          Every project has an owner, a small set of members, and an activity feed.
+          Owners post updates. Members chime in. Phase changes, status flips, and
+          new members land in the same timeline. Nothing important lives in a DM
+          or a slide.
         </p>
         <p style={{
           fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
           lineHeight: 1.7, color: c.textMid, maxWidth: 580,
           marginTop: space[4], marginBottom: 0,
         }}>
-          The result: the team works on what matters, priorities stay in the open,
-          and everyone knows where the focus is right now.
+          The result: anyone in the company can open a project and instantly see
+          what's happening, who's on it, and whether it's stalling.
         </p>
       </div>
 
@@ -135,12 +136,11 @@ const GuideView = ({ onNavigate }) => {
           fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
           lineHeight: 1.7, color: c.textMid, textAlign: "center", margin: 0,
         }}>
-          Flow is built around two layers. Navigate with <Kbd>1</Kbd>–<Kbd>6</Kbd>, or press <Kbd>⌘K</Kbd> to search anything.
+          Flow has three surfaces. Navigate with <Kbd>1</Kbd>–<Kbd>4</Kbd>, or press <Kbd>⌘K</Kbd> to search.
         </p>
 
-        {/* Layer cards */}
+        {/* Surface cards — Projects is the centre, Summary + People are lenses on it. */}
         <div style={{ display: "flex", gap: space[3] }}>
-          {/* Execution layer */}
           <div style={{
             flex: 1, padding: `${space[4]}px`, borderRadius: layout.radiusMd,
             background: `${c.accent}06`, border: `1px solid ${c.accent}20`,
@@ -150,32 +150,30 @@ const GuideView = ({ onNavigate }) => {
               fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
               fontWeight: typo.monoSm.weight, letterSpacing: "0.06em",
               color: c.accent, textTransform: "uppercase",
-            }}>The execution layer</div>
+            }}>The work</div>
             <div style={{
               fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
               fontWeight: typo.displaySm.weight, color: c.text, lineHeight: 1.3,
-            }}>What's happening this week</div>
+            }}>Projects</div>
             <div style={{
               fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
               color: c.textMid, lineHeight: 1.5,
             }}>
-              Manage the team's weekly commits in real time.
+              Every project has a deep-dive page with members, an activity feed,
+              and a stale flag when no one's posting.
             </div>
             <div style={{ display: "flex", gap: space[2], marginTop: space[1] }}>
-              {[{ label: "Pulse", num: "4" }, { label: "Commit", num: "5" }].map(t => (
-                <span key={t.num} style={{
-                  fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                  fontWeight: 600, color: c.accent, background: c.accentDim,
-                  padding: `2px ${space[2]}px`, borderRadius: layout.radiusTag,
-                  display: "flex", alignItems: "center", gap: 4,
-                }}>
-                  <span style={{ fontSize: 11, opacity: 0.6 }}>{t.num}</span> {t.label}
-                </span>
-              ))}
+              <span style={{
+                fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                fontWeight: 600, color: c.accent, background: c.accentDim,
+                padding: `2px ${space[2]}px`, borderRadius: layout.radiusTag,
+                display: "flex", alignItems: "center", gap: 4,
+              }}>
+                <span style={{ fontSize: 11, opacity: 0.6 }}>2</span> Projects
+              </span>
             </div>
           </div>
 
-          {/* Deep-dive layer */}
           <div style={{
             flex: 1, padding: `${space[4]}px`, borderRadius: layout.radiusMd,
             background: `${c.cyan}06`, border: `1px solid ${c.cyan}20`,
@@ -185,19 +183,20 @@ const GuideView = ({ onNavigate }) => {
               fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
               fontWeight: typo.monoSm.weight, letterSpacing: "0.06em",
               color: c.cyan, textTransform: "uppercase",
-            }}>The deep-dive layer</div>
+            }}>The lenses</div>
             <div style={{
               fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
               fontWeight: typo.displaySm.weight, color: c.text, lineHeight: 1.3,
-            }}>The full picture across weeks</div>
+            }}>Summary & People</div>
             <div style={{
               fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
               color: c.textMid, lineHeight: 1.5,
             }}>
-              Timelines, trends, momentum, and history.
+              Summary rolls up health across all projects. People shows who owns
+              what and where each person is active.
             </div>
             <div style={{ display: "flex", gap: space[2], marginTop: space[1], flexWrap: "wrap" }}>
-              {[{ label: "Summary", num: "1", color: c.green }, { label: "Projects", num: "2", color: c.cyan }, { label: "People", num: "3", color: c.cyan }].map(t => (
+              {[{ label: "Summary", num: "1", color: c.green }, { label: "People", num: "3", color: c.cyan }].map(t => (
                 <span key={t.num} style={{
                   fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                   fontWeight: 600, color: t.color, background: `${t.color}12`,
@@ -212,192 +211,6 @@ const GuideView = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════
-          SECTION 1: WEEKLY COMMITS
-          ══════════════════════════════════════════════════════════════ */}
-      <div id="guide-pulse" style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-        <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-          <div style={{ width: 4, height: 28, borderRadius: 2, background: c.accent }} />
-          <div>
-            <div style={{ fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size, fontWeight: typo.displayMd.weight, letterSpacing: typo.displayMd.tracking, color: c.text, lineHeight: 1 }}>Weekly Commits</div>
-            <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.accent, textTransform: "uppercase", marginTop: 4 }}>The execution layer</div>
-          </div>
-        </div>
-
-        <p style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid, margin: 0, paddingLeft: space[4] + 4 }}>
-          Pulse and Commit are your weekly operating tools. Toggle between them to see what your team is shipping right now.
-        </p>
-
-        {/* PULSE */}
-        <Surface variant="panel" style={{ padding: `${space[4] + 2}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[3], marginLeft: space[4] + 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-            <div style={{ width: 32, height: 32, borderRadius: layout.radiusSm, background: `${c.accent}12`, border: `1px solid ${c.accent}25`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.accent }}>4</span>
-            </div>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Pulse</div>
-          </div>
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-            Your real-time command center. See every project across all squads — what's active, who's working on it, and the health of each project for the current week.
-          </div>
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-            Switch between the project matrix and the people view. Filter by phase, squad, or status to spot blocked work early. Hover over any project to see a detail panel with commits, owner, and risk indicators.
-          </div>
-          {/* Mini visual: project ID example */}
-          <ExampleCard>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <ProjectId id="X43" />
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text }}>Customer Segmentation</span>
-              <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>Ads</span>
-            </div>
-            <MiniRow items={[
-              { label: "Dev", color: pc.Dev, bg: `${pc.Dev}15` },
-              { label: "Build", color: tc.BUILD.color, bg: tc.BUILD.bg },
-            ]} />
-          </ExampleCard>
-        </Surface>
-
-        {/* COMMIT */}
-        <Surface id="guide-commit" variant="panel" style={{ padding: `${space[4] + 2}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[3], marginLeft: space[4] + 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-            <div style={{ width: 32, height: 32, borderRadius: layout.radiusSm, background: `${c.accent}12`, border: `1px solid ${c.accent}25`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: c.accent }}>5</span>
-            </div>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Commit</div>
-          </div>
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-            Where each person declares what they're shipping this week. Each person gets <strong style={{ color: c.text, fontWeight: 600 }}>3 commit slots</strong> plus <strong style={{ color: c.text, fontWeight: 600 }}>1 optional buffer</strong>.
-          </div>
-
-          {/* ── Planning ── */}
-          <div style={{ marginTop: space[2] }}>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2] }}>Planning (Sunday–Monday)</div>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-              Fill in your 3 commits — each one needs a <strong style={{ color: c.text, fontWeight: 600 }}>project</strong>, a <strong style={{ color: c.text, fontWeight: 600 }}>deliverable description</strong>, a <strong style={{ color: c.text, fontWeight: 600 }}>stage</strong>, and a <strong style={{ color: c.text, fontWeight: 600 }}>type</strong>.
-            </div>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid, marginTop: space[2] }}>
-              You also set a <strong style={{ color: c.text, fontWeight: 600 }}>timeline</strong> (1–4 weeks) for each commit. The planning flow uses dot navigation — one commit at a time.
-            </div>
-          </div>
-
-          {/* ── Stage explainer ── */}
-          <ExampleCard style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size - 1, fontWeight: typo.displaySm.weight, color: c.text, letterSpacing: typo.displaySm.tracking }}>Stage</div>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, lineHeight: 1.5, color: c.textMid }}>
-              What phase of the development lifecycle is this work in?
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[2] }}>
-              {[
-                { stage: "PRD", desc: "Requirements & spec writing" },
-                { stage: "Design", desc: "UI/UX design & prototyping" },
-                { stage: "Dev", desc: "Building & implementation" },
-                { stage: "QA", desc: "Testing & quality assurance" },
-              ].map(s => (
-                <div key={s.stage} style={{ display: "flex", alignItems: "center", gap: space[2], padding: `${space[1] + 2}px ${space[2] + 2}px`, background: `${pc[s.stage] || c.textDim}08`, borderRadius: layout.radiusSm, border: `1px solid ${pc[s.stage] || c.textDim}20` }}>
-                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: pc[s.stage] || c.textDim, minWidth: 48 }}>{s.stage}</span>
-                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>{s.desc}</span>
-                </div>
-              ))}
-            </div>
-          </ExampleCard>
-
-          {/* ── Type explainer ── */}
-          <ExampleCard style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size - 1, fontWeight: typo.displaySm.weight, color: c.text, letterSpacing: typo.displaySm.tracking }}>Type</div>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, lineHeight: 1.5, color: c.textMid }}>
-              What kind of work is this commit?
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[2] }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: space[1], padding: `${space[2] + 2}px ${space[3]}px`, background: `${tc.BUILD.color}08`, borderRadius: layout.radiusSm, border: `1px solid ${tc.BUILD.color}20` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: tc.BUILD.color }}>BUILD</span>
-                </div>
-                <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.4 }}>Structured project work with a clear deliverable — features, fixes, infrastructure.</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: space[1], padding: `${space[2] + 2}px ${space[3]}px`, background: `${tc.JAM.color}08`, borderRadius: layout.radiusSm, border: `1px solid ${tc.JAM.color}20` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                  <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color: tc.JAM.color }}>JAM</span>
-                </div>
-                <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.4 }}>Exploratory or support work — spikes, reviews, planning, cross-team coordination.</span>
-              </div>
-            </div>
-          </ExampleCard>
-
-          {/* Mini dot navigation visual */}
-          <ExampleCard style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: space[3], padding: `${space[3]}px ${space[5]}px` }}>
-            <Dot filled label="1" />
-            <div style={{ width: 20, height: 2, background: c.accent, borderRadius: 1 }} />
-            <Dot filled label="2" />
-            <div style={{ width: 20, height: 2, background: c.border, borderRadius: 1 }} />
-            <Dot filled={false} label="3" />
-            <div style={{ width: 20, height: 2, background: c.border, borderRadius: 1, borderTop: `2px dashed ${c.textDim}` }} />
-            <Dot filled={false} label="B" />
-          </ExampleCard>
-
-          <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, lineHeight: 1.6, color: c.textDim, textAlign: "center" }}>
-            3 commit slots + 1 optional buffer. Fill them, lock the week, deliver.
-          </div>
-
-          {/* ── Locking ── */}
-          <div style={{ marginTop: space[2] }}>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2] }}>Locking</div>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-              Once your 3 commits are filled, lock the week. This signals that you've committed to your plan. Expect to lock by Sunday evening or Monday morning at the latest.
-            </div>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid, marginTop: space[2] }}>
-              After locking, you can still <strong style={{ color: c.orange, fontWeight: 600 }}>deprioritize</strong> one commit if priorities shift. When you deprioritize, the slot is struck through and a buffer slot opens up for a replacement task.
-            </div>
-          </div>
-
-          {/* ── Closing the week ── */}
-          <div style={{ marginTop: space[2] }}>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2] }}>Closing the week (Thursday–Friday)</div>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-              Come back at the end of the week to close your commits. For each item, declare an outcome:
-            </div>
-          </div>
-
-          {/* Outcomes mini card — mirrors outcomeConfig() in theme.js */}
-          <ExampleCard style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.green }}>{"✓"}</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.green }}>Done</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Fully shipped.</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.orange }}>{"◐"}</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.orange }}>Partial</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Some progress, but not complete and not rolling forward.</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.orange }}>{"→"}</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.orange }}>Carried</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Not finished; continues next week. Pick a target week.</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.orange }}>{"✓→"}</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.orange }}>Done + Carried</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— This piece is done; the broader work continues next week.</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.red }}>{"✕"}</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.red }}>Blocked</span>
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>— Could not complete. You'll be asked to explain why.</span>
-            </div>
-          </ExampleCard>
-
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-            Once all commits are resolved, close the week. Carried items automatically appear in the target week.
-          </div>
-
-          {/* ── Buffer ── */}
-          <div style={{ marginTop: space[2] }}>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2] }}>Buffer</div>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-              The buffer is a 4th slot that only activates when you deprioritize one of your 3 main commits. It lets you replace the dropped task with something else without losing the record of what was deprioritized and why.
-            </div>
-          </div>
-        </Surface>
-      </div>
 
       {/* ══════════════════════════════════════════════════════════════
           SECTION 2: PROJECTS & PEOPLE
@@ -710,7 +523,7 @@ const GuideView = ({ onNavigate }) => {
             { day: "Tuesday",   icon: "\u26A1", label: "Sprint day",  desc: "Heads-down building. Maximize output on active commits.", color: c.green },
             { day: "Wednesday", icon: "\u26A1", label: "Sprint day",  desc: "Continue the sprint momentum. Unblock and push through.", color: c.green },
             { day: "Thursday",  icon: "\uD83D\uDE80", label: "Release day", desc: "Ship what's ready. Move work from Dev to QA to Done.", color: c.orange },
-            { day: "Friday",    icon: "\u2713",  label: "Review day",  desc: "Close the week. Review outcomes, update statuses, prep for next week.", color: c.cyan },
+            { day: "Friday",    icon: "\u2713",  label: "Review day",  desc: "Close the week. Update each project's activity feed and flag anything stale.", color: c.cyan },
             { day: "Saturday",  icon: "\uD83D\uDCA4", label: "Rest day",    desc: "Recharge. The system rests so you can come back stronger.", color: c.textDim },
           ].map((r, i) => {
             const isToday = new Date().getDay() === i;
@@ -766,7 +579,7 @@ const GuideView = ({ onNavigate }) => {
         <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Quick Reference</div>
         <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: `${space[2]}px ${space[4]}px`, fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size }}>
           {[
-            ["1 – 6", "Navigate tabs: Summary, Projects, People, Pulse, Commit, Guide"],
+            ["1 – 4", "Navigate tabs: Summary, Projects, People, Guide"],
             ["T", "Open Terminal (gate to Settings, Logs, Rant, Admin)"],
             ["⌘K / Ctrl+K", "Open command palette / universal search"],
             ["/", "Focus in-tab search bar"],
@@ -790,11 +603,11 @@ const GuideView = ({ onNavigate }) => {
           fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
           lineHeight: 1.7, color: c.textMid, maxWidth: 580, margin: "0 auto",
         }}>
-          Start with <strong style={{ color: c.green, fontWeight: 600 }}>Summary</strong> to
-          see the overall health of your team. Then jump
-          to <strong style={{ color: c.accent, fontWeight: 600 }}>Pulse</strong> or <strong style={{ color: c.accent, fontWeight: 600 }}>Commit</strong> to
-          manage this week's commits. Use number keys <Kbd>1</Kbd> through <Kbd>6</Kbd> to
-          navigate instantly, or press <Kbd>?</Kbd> to see all keyboard shortcuts.
+          Open <strong style={{ color: c.accent, fontWeight: 600 }}>Projects</strong> to
+          see every active workstream, who owns it, and whether it's stalling.
+          Click in to read the activity feed or post your own update. Use number keys
+          <Kbd>1</Kbd> through <Kbd>4</Kbd> to navigate instantly, or press <Kbd>?</Kbd> to
+          see all keyboard shortcuts.
         </p>
         <p style={{
           fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
@@ -804,7 +617,7 @@ const GuideView = ({ onNavigate }) => {
         </p>
         <div style={{ marginTop: space[5], display: "flex", gap: space[3], justifyContent: "center" }}>
           <Btn variant="secondary" onClick={() => onNavigate("summary")}>Start with Summary</Btn>
-          <Btn variant="primary" onClick={() => onNavigate("pulse")}>Jump to Pulse →</Btn>
+          <Btn variant="primary" onClick={() => onNavigate("projects")}>Jump to Projects →</Btn>
         </div>
       </div>
 

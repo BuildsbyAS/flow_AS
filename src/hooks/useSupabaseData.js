@@ -4,6 +4,13 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import {
+  isDevSeedMode,
+  seedSquads as devSquads,
+  seedRoles as devRoles,
+  seedPeople as devPeople,
+  getSeedProjects as devGetProjects,
+} from '../data/devSeed';
 
 // ─── Fetch helpers ───────────────────────────────────────────
 async function fetchSquads() {
@@ -145,10 +152,16 @@ function toSeedRoles(rows) {
 }
 
 function toSeedPeople(rows) {
+  // `id` was previously dropped here for view-layer simplicity (everything
+  // keyed off `name`). The new ProjectActivity component links members and
+  // comment authors by `id`, so keep the UUID around.
   return rows.map(r => ({
+    id: r.id,
     name: r.name,
     role: r.roles?.name || '',
     squad: r.squads?.name || '',
+    squad_id: r.squad_id,
+    role_id: r.role_id,
   }));
 }
 
@@ -157,6 +170,7 @@ function toSeedProjects(rows) {
     id: r.id,
     name: r.name,
     owner: r.people?.name || '',
+    owner_id: r.owner_id || null,
     squad: r.squads?.name || '',
     startDate: r.start_date,
     endDate: r.end_date,
@@ -170,6 +184,9 @@ function toSeedProjects(rows) {
     } : {}),
     status: r.status,
     gaEnteredAt: r.ga_entered_at || null,
+    // Surfaces "Updated X ago" + stale chip. Falls back to updated_at so
+    // empty-DB / pre-migration callers still get a sane timestamp.
+    lastActivityAt: r.last_activity_at || r.updated_at || null,
     depriReason: r.depri_reason || (r.status === 'deprioritized' ? ({
       X99: 'Low user demand based on Q4 survey results',
       X100: 'Tech dependency on third-party voice SDK not ready until Q3',
@@ -328,6 +345,29 @@ export default function useSupabaseData() {
       // Only show loading screen on first load, not refreshes
       if (!hasLoadedOnce.current) setLoading(true);
       setError(null);
+
+      // ── Dev seed shortcut ───────────────────────────────────────
+      // On localhost without a real session, RLS would return zero rows
+      // for every table. Route through devSeed so the new UI is clickable.
+      if (isDevSeedMode()) {
+        lookups.current.squadMap  = Object.fromEntries(devSquads.map(s => [s.name, s.id]));
+        lookups.current.roleMap   = Object.fromEntries(devRoles.map(r  => [r.name, r.id]));
+        lookups.current.personMap = Object.fromEntries(devPeople.map(p => [p.name, p.id]));
+        lookups.current.weekMap = {};
+        lookups.current.weekIdByStart = {};
+
+        setSquads(devSquads.map(s => s.name));
+        setRoles(devRoles.map(r => r.name));
+        setPeople(devPeople);
+        setProjects(devGetProjects());
+        setCommitments([]);            // commit cycle is retired
+        setHistory({});
+        setWeekConfigData(toWeekConfig([], []));
+        setAppSettings({});
+        setLoading(false);
+        hasLoadedOnce.current = true;
+        return;
+      }
 
       const [squadsRaw, rolesRaw, peopleRaw, projectsRaw, weeksRawInitial, historyRaw, settingsRaw] = await Promise.all([
         fetchSquads(),

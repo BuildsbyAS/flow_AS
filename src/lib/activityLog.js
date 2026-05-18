@@ -81,6 +81,28 @@ export const logProjectEdit = (projectId, projectName, changes) =>
 export const logProjectCreate = (projectId, projectName) =>
   logActivity("create_project", { entityType: "project", entityId: projectId, entityName: projectName });
 
+// Granular project events — drive the per-project Activity feed.
+export const logProjectCreated = (projectId, projectName) =>
+  logActivity("project_created", { entityType: "project", entityId: projectId, entityName: projectName });
+
+export const logProjectPhaseChange = (projectId, projectName, from, to) =>
+  logActivity("project_phase_changed", { entityType: "project", entityId: projectId, entityName: projectName, details: { from, to } });
+
+export const logProjectStatusChange = (projectId, projectName, from, to) =>
+  logActivity("project_status_changed", { entityType: "project", entityId: projectId, entityName: projectName, details: { from, to } });
+
+export const logProjectOwnerChange = (projectId, projectName, fromName, toName) =>
+  logActivity("project_owner_changed", { entityType: "project", entityId: projectId, entityName: projectName, details: { from: fromName, to: toName } });
+
+export const logProjectSquadChange = (projectId, projectName, fromName, toName) =>
+  logActivity("project_squad_changed", { entityType: "project", entityId: projectId, entityName: projectName, details: { from: fromName, to: toName } });
+
+export const logProjectMemberAdded = (projectId, projectName, personName) =>
+  logActivity("member_added", { entityType: "project", entityId: projectId, entityName: projectName, details: { person_name: personName } });
+
+export const logProjectMemberRemoved = (projectId, projectName, personName) =>
+  logActivity("member_removed", { entityType: "project", entityId: projectId, entityName: projectName, details: { person_name: personName } });
+
 export const logPersonAdd = (personName) =>
   logActivity("add_person", { entityType: "person", entityName: personName });
 

@@ -10,7 +10,10 @@ import useKeyboard from "../hooks/useKeyboard";
 import useExitAnimation from "../hooks/useExitAnimation";
 import GanttChart from "../components/GanttChart";
 import FlowLogo from "../components/FlowLogo";
-import ActivityTimeline from "../components/ActivityTimeline";
+import ProjectActivity from "../components/ProjectActivity";
+import ProjectTimeline from "../components/ProjectTimeline";
+import { isDevSeedMode, devStore } from "../data/devSeed";
+import { timeAgo, isStale, fmtAbsolute } from "../lib/time";
 import { getProjectDependencies, deleteProjectFromDB } from "../lib/mutations";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
@@ -204,7 +207,7 @@ function deriveProjectMetrics(projects, commitments, history, today) {
     if (daysToEnd <= 14 && daysToEnd > 0 && !inShipPhase) m.endingSoon = true;
     if (daysToEnd < 0 && !inShipPhase) m.overdue = true;
 
-    // Health (mirrors PulseView formula)
+    // Health (age-progress vs phase-progress diff)
     const age = daysBetween(proj.startDate, today);
     const planned = daysBetween(proj.startDate, proj.endDate);
     const pctEl = planned > 0 ? age / planned : 0;
@@ -250,9 +253,11 @@ function sortList(list, key, dir, metrics, weekLabels, today) {
       case "thisWk": return d * ((metrics[a.id]?.thisWeekTotal || 0) - (metrics[b.id]?.thisWeekTotal || 0));
       case "people": return d * ((metrics[a.id]?.peopleList.length || 0) - (metrics[b.id]?.peopleList.length || 0));
       case "last": {
-        const order = {};
-        (weekLabels || []).forEach((w, i) => { order[w] = i + 1; });
-        return d * ((order[metrics[a.id]?.lastActivity] || 0) - (order[metrics[b.id]?.lastActivity] || 0));
+        // Sort by the project's actual lastActivityAt timestamp (newest first
+        // when dir=asc=−1). Missing timestamps sort to the end.
+        const aT = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+        const bT = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+        return d * (aT - bT);
       }
       case "timeline": return d * (daysBetween(today, a.endDate) - daysBetween(today, b.endDate));
       case "actualEnd": return d * ((a.actualEndDate || "").localeCompare(b.actualEndDate || ""));
@@ -266,7 +271,7 @@ function sortList(list, key, dir, metrics, weekLabels, today) {
    ══════════════════════════════════════════════════════════════════ */
 export default function ProjectsView({
   projects: rawProjects, setProjects, commitments, people, squads, history,
-  weekConfig: weekConfigProp, personProfile,
+  weekConfig: weekConfigProp, personProfile, isAppOwner = false,
   initialId, onNavigate, setDetailLabel, setGoBack, searchRef, globalFilters = {},
   suppressBackRef,
   isHistorical, selectedWeekKey,
@@ -568,7 +573,7 @@ export default function ProjectsView({
   if (selectedProject) {
     const proj = projects.find(p => p.id === selectedProject);
     if (!proj) return <EmptyState icon="🔍" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
-    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} weekLabels={WEEK_LABELS} isHistorical={isHistorical} today={today} weekStart={weekConfig.weekStart} leaving={detailLeaving} suppressBackRef={suppressBackRef} />;
+    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} isAppOwner={isAppOwner} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} weekLabels={WEEK_LABELS} isHistorical={isHistorical} today={today} weekStart={weekConfig.weekStart} leaving={detailLeaving} suppressBackRef={suppressBackRef} />;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -878,7 +883,7 @@ export default function ProjectsView({
                     <Th col="planDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>Plan Days</Th>
                     <Th col="actualDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>Actual Days</Th>
                   </>}
-                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="last" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Last Active</Th>}
+                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="last" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Updated</Th>}
                   {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="timeline" style={{ minWidth: colWidths.timeline.min, textAlign: "center", }}>Timeline</Th>}
                   {activeTab === "deprioritized" && <Th col="reason" style={{ minWidth: 200, }}>Reason</Th>}
                 </tr>
@@ -1068,15 +1073,24 @@ export default function ProjectsView({
                         })()}
                       </>}
 
-                      {/* Last activity — hidden in Completed and Deprioritized tabs */}
-                      {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
-                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                        borderBottom: cellBorder,
-                        fontFamily: typo.monoMd.font, fontSize: 12,
-                        color: m.lastActivity === "This wk" ? c.cyan : m.lastActivity ? c.textMid : c.textDim,
-                        fontWeight: m.lastActivity === "This wk" ? 700 : 500,
-                        fontVariantNumeric: "tabular-nums",
-                      }}>{m.lastActivity || "—"}</td>}
+                      {/* Updated — most recent comment/event timestamp.
+                          Stale (>14d) gets a red tint so silent projects pop. */}
+                      {activeTab !== "shipped" && activeTab !== "deprioritized" && (() => {
+                        const stale = isStale(proj.lastActivityAt);
+                        return (
+                          <td
+                            title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : "No activity yet"}
+                            style={{
+                              padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
+                              borderBottom: cellBorder,
+                              fontFamily: typo.bodySm.font, fontSize: 12,
+                              color: !proj.lastActivityAt ? c.textDim : stale ? c.red : c.textMid,
+                              fontWeight: 500,
+                              fontVariantNumeric: "tabular-nums",
+                            }}
+                          >{proj.lastActivityAt ? timeAgo(proj.lastActivityAt) : "—"}</td>
+                        );
+                      })()}
 
                       {/* Timeline — hidden in Completed and Deprioritized tabs */}
                       {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
@@ -1577,7 +1591,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
    PROJECT DEEP DIVE — PeopleDeepDive structural model
    De-cluttered: hero → history → ledger → supporting metadata
    ══════════════════════════════════════════════════════════════════ */
-function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, setProjects, people, squads, personProfile, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, weekLabels: WEEK_LABELS, isHistorical, today, weekStart, leaving = false, suppressBackRef }) {
+function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, setProjects, people, squads, personProfile, isAppOwner = false, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, weekLabels: WEEK_LABELS, isHistorical, today, weekStart, leaving = false, suppressBackRef }) {
   useDevLabel('ProjectDeepDive', 'src/views/ProjectsView.jsx', 'Full project detail view with hero telemetry, timeline, and history');
   const [editing, setEditingRaw] = useState(false);
   const [editName, setEditName] = useState(proj.name);
@@ -1629,22 +1643,49 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
   }, [editing, deleteModal, depriReasonModal, reactivateModal, retroDateModal, suppressBackRef]);
 
   // Fetch phase-change history from activity_log for this project.
-  // edit_project rows carry details.phase whenever phase was changed.
+  // Two formats coexist:
+  //   • Legacy `edit_project` with details.phase   (pre-rewrite)
+  //   • New     `project_phase_changed` with details.to  (post-rewrite)
+  // Both get mapped to { at, phase, by } so the timeline component
+  // doesn't need to know which format produced the row. In dev seed
+  // mode we read from the in-memory devStore instead of Supabase.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from("activity_log")
-          .select("created_at, user_name, details")
-          .eq("entity_type", "project")
-          .eq("entity_id", proj.id)
-          .eq("action", "edit_project")
-          .order("created_at", { ascending: true });
-        if (error || cancelled || !data) return;
-        const transitions = data
-          .filter(r => r.details && typeof r.details === "object" && r.details.phase)
-          .map(r => ({ at: r.created_at, phase: r.details.phase, by: r.user_name }));
+        let rows;
+        if (isDevSeedMode()) {
+          rows = devStore.listEvents(proj.id)
+            .slice()
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        } else {
+          const { data, error } = await supabase
+            .from("activity_log")
+            .select("created_at, user_name, action, details")
+            .eq("entity_type", "project")
+            .eq("entity_id", proj.id)
+            .in("action", ["edit_project", "project_phase_changed", "project_created"])
+            .order("created_at", { ascending: true });
+          if (error || cancelled || !data) return;
+          rows = data;
+        }
+        const transitions = (rows || [])
+          .map(r => {
+            const d = r.details || {};
+            if (r.action === "project_phase_changed") {
+              return d.to ? { at: r.created_at, phase: d.to, by: r.user_name } : null;
+            }
+            if (r.action === "edit_project" && d.phase) {
+              return { at: r.created_at, phase: d.phase, by: r.user_name };
+            }
+            if (r.action === "project_created") {
+              // Project starts in PRD by default; use creation timestamp.
+              return { at: r.created_at, phase: "PRD", by: r.user_name };
+            }
+            return null;
+          })
+          .filter(Boolean);
+        if (cancelled) return;
         setPhaseTransitions(transitions);
       } catch {
         /* swallow — transitions are a nice-to-have */
@@ -1955,6 +1996,27 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
                     <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: c.text }}>{proj.squad}</span>
                   </div>
                 )}
+                {/* Freshness — surfaces "Updated 3d ago" right next to owner so
+                    silence is visible at a glance. Red when stale (>14d). */}
+                {(() => {
+                  const stale = isStale(proj.lastActivityAt);
+                  const label = proj.lastActivityAt ? `Updated ${timeAgo(proj.lastActivityAt)}` : "No activity yet";
+                  return (
+                    <div title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : ""}
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: space[1],
+                        padding: `2px 8px`, borderRadius: 999,
+                        background: !proj.lastActivityAt ? c.surfaceAlt : stale ? c.redDim : c.surfaceAlt,
+                        color: !proj.lastActivityAt ? c.textDim : stale ? c.red : c.textMid,
+                        fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                        border: stale ? `1px solid ${c.red}30` : `1px solid ${c.border}`,
+                      }}
+                    >
+                      {stale && proj.lastActivityAt && <span aria-hidden="true">⚠</span>}
+                      {label}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
@@ -2008,35 +2070,6 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
                   </button>
                 );
               })()}
-              {!isHistorical && (
-                <button
-                  ref={editBtnRef}
-                  onClick={enterEdit}
-                  aria-label="Edit project (E)"
-                  title="Edit (E)"
-                  className="flow-btn"
-                  onMouseEnter={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.color = c.text; e.currentTarget.style.borderColor = c.borderMedium; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = c.surface; e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = c.border; }}
-                  onMouseDown={e => { e.currentTarget.style.transform = "scale(0.95)"; }}
-                  onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
-                  onFocus={e => { e.currentTarget.style.outline = `2px solid ${c.accent}`; e.currentTarget.style.outlineOffset = "2px"; }}
-                  onBlur={e => { e.currentTarget.style.outline = "none"; e.currentTarget.style.outlineOffset = "0"; }}
-                  style={{
-                    width: 36, height: 36, padding: 0,
-                    borderRadius: layout.radiusSm,
-                    border: `1px solid ${c.border}`,
-                    background: c.surface,
-                    color: c.textMid,
-                    cursor: "pointer",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
-                  }}
-                >
-                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                </button>
-              )}
               <span style={{
                 fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700,
                 letterSpacing: typo.monoLg.tracking, color: ec.project,
@@ -2144,64 +2177,12 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
         )}
       </div>
 
-      {/* ═══ PHASE PROGRESS — linear tracker through PRD → Design → Dev → QA → Ship.
-             Transition dates from activity_log render below each past/current pill. ═══ */}
-      {(() => {
-        const allP = [...phaseNames, ...shipPhases];
-        const currentIdx = allP.indexOf(proj.phase);
-        if (currentIdx < 0) return null;
-        // First transition per phase (in case of duplicates).
-        const enteredAt = {};
-        phaseTransitions.forEach(t => { if (!enteredAt[t.phase]) enteredAt[t.phase] = t; });
-        return (
-          <div style={{
-            padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-            background: c.inset, border: `1px solid ${c.border}`,
-            display: "flex", alignItems: "flex-start", gap: space[2], flexWrap: "wrap",
-          }}>
-            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase", marginRight: space[2], marginTop: 7 }}>
-              Progress
-            </span>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: space[1], flex: 1, flexWrap: "wrap" }}>
-              {allP.map((ph, idx) => {
-                const isPast = idx < currentIdx;
-                const isCurrent = idx === currentIdx;
-                const color = isCurrent ? (pc[ph] || c.accent) : isPast ? c.textMid : c.textGhost;
-                const bg = isCurrent ? (pcDim[ph] || c.accentDim) : isPast ? c.surfaceAlt : "transparent";
-                const border = isCurrent ? `1px solid ${pc[ph] || c.accent}` : isPast ? `1px solid ${c.border}` : `1px dashed ${c.border}`;
-                const entered = enteredAt[ph];
-                const tooltip = entered
-                  ? `Entered ${ph} on ${fmtShort(entered.at.slice(0, 10))}${entered.by ? ` · by ${entered.by}` : ""}`
-                  : undefined;
-                return (
-                  <React.Fragment key={ph}>
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, minWidth: 52 }}>
-                      <span title={tooltip} style={{
-                        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
-                        letterSpacing: "0.04em", textTransform: "uppercase",
-                        padding: `${space[1]}px ${space[2]}px`, borderRadius: layout.radiusXs,
-                        background: bg, color, border,
-                        cursor: tooltip ? "help" : "default",
-                      }}>{ph}</span>
-                      <span style={{
-                        fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 500,
-                        color: isCurrent ? (pc[ph] || c.textMid) : c.textDim,
-                        letterSpacing: "0.02em",
-                        minHeight: 12,
-                      }}>
-                        {entered ? fmtShort(entered.at.slice(0, 10)) : ""}
-                      </span>
-                    </div>
-                    {idx < allP.length - 1 && (
-                      <span aria-hidden="true" style={{ width: 16, height: 2, background: idx < currentIdx ? c.textMid : c.border, borderRadius: 1, marginTop: 11, flexShrink: 0 }} />
-                    )}
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })()}
+      {/* ═══ TIMELINE — phase ladder, transition dates, plan dates, % elapsed ═══ */}
+      <ProjectTimeline
+        project={proj}
+        phaseTransitions={phaseTransitions}
+        today={today}
+      />
 
       {/* ═══ SCHEDULE — plan vs actual with actual as the primary fact ═══ */}
       {inShip && (proj.actualStartDate || proj.actualEndDate) && (() => {
@@ -2253,168 +2234,59 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
         );
       })()}
 
-      {/* ═══ KPI GRID — 4 cards: Commits / Contributors / Remaining / Health ═══ */}
-      <KpiGrid cols="1fr 1fr 1fr 1fr">
-        <KpiCard
-          label="Total Commits"
-          value={m.totalCommits}
-          sub={(() => {
-            const b = m.typeBreakdown?.BUILD || 0;
-            const j = m.typeBreakdown?.JAM || 0;
-            if (m.totalCommits === 0) return "no activity logged";
-            return `${b} BUILD · ${j} JAM`;
-          })()}
-        />
-        <KpiCard
-          label="Contributors"
-          value={m.peopleList?.length || 0}
-          sub={m.peopleList?.length ? "people involved" : "no contributors yet"}
-        />
-        <KpiCard
-          label={isDepri ? "Plan ended" : "Remaining"}
-          value={remainingValue}
-          sub={`${fmtShort(proj.startDate)} → ${fmtShort(proj.endDate)} · ${elapsedLabel}`}
-        />
-        {healthVal == null ? (
-          <KpiCard label="Health" value="—" sub={healthSub} />
-        ) : (
-          <HealthGauge value={healthVal} label="Health" sub={healthSub} />
-        )}
-      </KpiGrid>
-
-      {/* ═══ WEEKLY COMMITS — roadmap lane ═══ */}
+      {/* ═══ ACTIVITY — composer + comments + auto-events, with a
+             style picker (Stream / Cards / Rail). Choice persists in
+             localStorage so reloads remember it. ═══ */}
       <div>
-        <SectionHead title="Weekly Commits" />
-        <div style={{
-          padding: space[6], borderRadius: layout.radiusLg,
-          background: c.surface, border: `1px solid ${c.border}`, boxShadow: c.shadowCard,
-        }}>
-          <div style={{ overflowX: "auto" }}>
-            <div style={{ display: "grid", gridTemplateColumns: `96px repeat(${WEEK_LABELS.length}, minmax(56px, 1fr))`, gap: space[1], marginBottom: space[2], borderBottom: `1px solid ${c.border}`, paddingBottom: space[1] }}>
-              <span />
-              {WEEK_LABELS.map(w => (
-                <span key={w} style={{
-                  fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-                  color: w === "This wk" ? c.accent : c.textDim, textAlign: "center",
-                  fontWeight: w === "This wk" ? 700 : 500,
-                  fontVariantNumeric: "tabular-nums",
-                }}>{w}</span>
-              ))}
-            </div>
-            {(() => {
-              const canonicalPhases = commitPhases;
-              const anyActivity = canonicalPhases.some(phase => WEEK_LABELS.some(w => (weekPhaseMatrix[w]?.[phase] || []).length > 0)) || hasOtherBucket;
-              if (!anyActivity) {
-                return (
-                  <div style={{ padding: `${space[4]}px 0`, textAlign: "center", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textDim }}>
-                    No commits logged against this project yet.
-                  </div>
-                );
-              }
-              const activePhases = [...canonicalPhases, ...(hasOtherBucket ? ["Other"] : [])];
-              return activePhases.map(phase => {
-              const color = phase === "Other" ? c.textDim : (pc[phase] || c.textDim);
-              const midBg = phase === "Other" ? c.surfaceAlt : (pcMid[phase] || c.surfaceAlt);
-              return (
-                <div key={phase} style={{
-                  display: "grid", gridTemplateColumns: `96px repeat(${WEEK_LABELS.length}, minmax(56px, 1fr))`,
-                  gap: 2, marginBottom: space[1],
-                }}>
-                  <span
-                    title={phase === "Other" ? "Commits with an unrecognized phase (legacy data or migration artifacts)" : undefined}
-                    style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, color, display: "flex", alignItems: "center", cursor: phase === "Other" ? "help" : "default" }}>
-                    {phase}{phase === "Other" && <span aria-hidden="true" style={{ marginLeft: 4, fontSize: 10 }}>ⓘ</span>}
-                  </span>
-                  {WEEK_LABELS.map(w => {
-                    const entries = weekPhaseMatrix[w]?.[phase] || [];
-                    const hasActivity = entries.length > 0;
-                    return (
-                      <div key={w} style={{
-                        height: 32, borderRadius: layout.radiusXs,
-                        background: hasActivity ? midBg : c.surfaceAlt,
-                        borderLeft: hasActivity ? `3px solid ${color}` : "none",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        {hasActivity && (
-                          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{entries.length}</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            });
-            })()}
-          </div>
-        </div>
+        <SectionHead title="Activity" />
+        <ProjectActivity
+          project={proj}
+          people={people}
+          currentPerson={personProfile}
+          isAppOwner={isAppOwner}
+          onPersonNavigate={(name) => onNavigate && onNavigate("people", name)}
+        />
       </div>
 
-      {/* ═══ ACTIVITY TIMELINE — shared across Projects + People deep-dives.
-             See src/components/ActivityTimeline.jsx. ═══ */}
-      <div>
-        <SectionHead title="Activity Timeline" />
-        <div style={{
-          borderRadius: layout.radiusLg,
-          background: c.surface, border: `1px solid ${c.border}`, boxShadow: c.shadowCard,
-          overflow: "clip",
-        }}>
-          <div style={{ maxHeight: 720, overflowY: "auto" }}>
-            <ActivityTimeline
-              subject="project"
-              weeks={m.weeklyData.map(wk => ({
-                week: wk.week,
-                isCurrent: wk.isCurrent,
-                entries: wk.isCurrent ? wk.entries : wk.entries.filter(e => [...phaseNames, ...shipPhases].includes(e.stage || "")),
-              }))}
-              weekLabels={WEEK_LABELS}
-              currentWeekStart={weekStart}
-              onPersonNavigate={(name) => onNavigate && onNavigate("people", name)}
-              titleStripId={proj.id}
-              titleStripName={proj.name}
-              emptyMessage="No activity yet"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* ═══ PEOPLE INVOLVED ═══ */}
-      <div>
-        <SectionHead title="People Involved" />
-        <div style={{
-          padding: space[6], borderRadius: layout.radiusLg,
-          background: c.surface, border: `1px solid ${c.border}`, boxShadow: c.shadowCard,
-        }}>
-          {m.peopleList?.length > 0 ? (
-            <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
-              {m.peopleList.map(name => (
-                <button type="button" key={name}
-                  onClick={() => onNavigate && onNavigate("people", name)}
-                  aria-label={`View ${name}`}
-                  onMouseEnter={e => { e.currentTarget.style.background = c.cyanMid || c.cyan + "30"; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = c.cyanDim; e.currentTarget.style.transform = "scale(1)"; }}
-                  onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
-                  onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
-                  style={{
-                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                    fontWeight: 600, color: c.cyan, cursor: "pointer",
-                    padding: `${space[1]}px ${space[3]}px`,
-                    background: c.cyanDim, border: "none", borderRadius: layout.radiusPill,
-                    transition: `background ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
-                  }}>{name}</button>
-              ))}
-            </div>
-          ) : (
-            <div style={{ textAlign: "center", padding: `${space[3]}px 0`, display: "flex", flexDirection: "column", alignItems: "center", gap: space[2] }}>
-              <svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.87" /><path d="M16 3.13a4 4 0 010 7.75" />
-              </svg>
-              <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, lineHeight: 1.5 }}>
-                No one has committed to this project yet.
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* ═══ FAB — Edit project. Owner / app-owner only. Portaled to
+             document.body because the deep-dive wrapper applies a CSS
+             animation that uses `transform`, which would otherwise
+             trap `position: fixed`. ═══ */}
+      {!isHistorical && !editing && (() => {
+        const ownerPerson = proj.owner_id
+          ? (people || []).find(p => p.id === proj.owner_id)
+          : (people || []).find(p => p?.name && proj.owner && p.name.toLowerCase() === proj.owner.toLowerCase());
+        const viewerId = personProfile?.id;
+        const isProjOwner = !!(viewerId && ownerPerson?.id && viewerId === ownerPerson.id);
+        if (!isProjOwner && !isAppOwner) return null;
+        if (typeof document === "undefined") return null;
+        return createPortal(
+          <button
+            type="button"
+            onClick={enterEdit}
+            aria-label="Edit project"
+            title="Edit project (E)"
+            style={{
+              position: "fixed", right: 28, bottom: 28, zIndex: 40,
+              width: 56, height: 56, borderRadius: "50%",
+              background: c.accent, color: "#fff", border: "none",
+              boxShadow: c.shadowFloat || "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.12)",
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "transform 140ms cubic-bezier(0.22,1,0.36,1), box-shadow 140ms ease",
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.06)"; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
+            onMouseDown={e => { e.currentTarget.style.transform = "scale(0.94)"; }}
+            onMouseUp={e => { e.currentTarget.style.transform = "scale(1.06)"; }}
+          >
+            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          </button>,
+          document.body
+        );
+      })()}
 
 
       {/* FAB removed — edit is now the pencil icon in the header; delete lives in the edit panel. */}

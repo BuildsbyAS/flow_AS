@@ -48,15 +48,16 @@ export const KpiCard = ({ label, value, sub, delta, deltaLabel, children, onClic
       style={{
         animationDelay: index != null ? `${index * 40}ms` : undefined,
         padding: space[6], borderRadius: layout.radiusLg,
-        // Active state gets a full-strength accent border + a soft accent
-        // ring so it pops against neighbouring cards. The old `accent+30`
-        // hex-alpha read as barely-there at small sizes.
-        background: active ? (c.accentDim || c.surface) : c.surface,
+        // Active state: a single accent border, no tint, no ring. The
+        // earlier ring + tinted background read as jarring on light-mode
+        // cards, especially in the KPI grid where multiple cards sit
+        // side by side.
+        background: c.surface,
         border: `1px solid ${active ? c.accent : c.border}`,
-        boxShadow: active ? `${c.shadowCard || ""}, 0 0 0 3px ${c.accentMid || c.accent + "40"}` : c.shadowCard,
+        boxShadow: c.shadowCard,
         cursor: onClick ? "pointer" : "default",
         display: "flex", flexDirection: "column",
-        transition: "border-color 150ms ease, box-shadow 150ms ease, background 150ms ease",
+        transition: "border-color 150ms ease",
         ...s,
       }}
     >

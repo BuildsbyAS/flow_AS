@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, outcomeConfig, entityColors } from "../styles/theme";
 import { Tag, EmptyState, Sel } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
-import ActivityTimeline from "../components/ActivityTimeline";
+import PersonProjects from "../components/PersonProjects";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
 import { initialsOf } from "../lib/names";
@@ -687,63 +687,13 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
       </KpiGrid>
 
 
-      {/* ═══ ACTIVITY TIMELINE — shared across Projects + People deep-dives.
-             See src/components/ActivityTimeline.jsx. ═══ */}
-      <div>
-        <SectionHead
-          title="Activity Timeline"
-          right={
-            <span style={{
-              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
-              letterSpacing: "0.06em", textTransform: "uppercase", color: c.textMid,
-              fontVariantNumeric: "tabular-nums",
-            }}>{activeWeekCount} active week{activeWeekCount !== 1 ? "s" : ""}</span>
-          }
-        />
-        <div style={{
-          background: c.surface, border: `1px solid ${c.border}`,
-          borderRadius: layout.radiusLg, boxShadow: c.shadowCard,
-          overflow: "clip",
-        }}>
-          {activeWeeks.length > 0 ? (
-            <div style={{ maxHeight: 720, overflowY: "auto" }}>
-              <ActivityTimeline
-                subject="person"
-                weeks={activeWeeks.map(w => ({ week: w.week, isCurrent: w.isCurrent, entries: w.items }))}
-                weekLabels={[...(weekConfig?.historyWeeks || []), "This wk"]}
-                currentWeekStart={weekConfig?.weekStart}
-                isHistorical={isHistorical}
-                selectedWeekKey={selectedWeekKey}
-                projects={projects}
-                onProjectNavigate={(id) => onNavigate && onNavigate("projects", id, { tab: "people", id: selectedPerson })}
-                emptyMessage="No activity logged"
-              />
-            </div>
-          ) : (
-            // Empty state per §7.13
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center",
-              textAlign: "center", maxWidth: 360, margin: "0 auto",
-              padding: `${space[6]}px ${space[4]}px`,
-            }}>
-              <div aria-hidden="true" style={{
-                fontSize: 32, lineHeight: 1,
-                color: c.textGhost, marginBottom: space[3],
-              }}>◌</div>
-              <div style={{
-                fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight,
-                color: c.text, letterSpacing: typo.displaySm.tracking, marginBottom: space[1],
-              }}>No activity logged</div>
-              <div style={{
-                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight,
-                color: c.textMid, lineHeight: 1.5,
-              }}>
-                Past-week commitments and outcomes will appear here once {selectedPerson} has cycle history.
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* ═══ PROJECT INVOLVEMENT — owns / member of / recent posts.
+             Replaces the legacy commit-driven ActivityTimeline. ═══ */}
+      <PersonProjects
+        person={personObj}
+        projects={projects}
+        onProjectNavigate={(id) => onNavigate && onNavigate("projects", id, { tab: "people", id: selectedPerson })}
+      />
     </div>
   );
 };

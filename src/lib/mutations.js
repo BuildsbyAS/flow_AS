@@ -6,6 +6,16 @@
  * Errors are logged but don't block the UI.
  */
 import { supabase } from './supabase';
+import {
+  logProjectCreated,
+  logProjectPhaseChange,
+  logProjectStatusChange,
+  logProjectOwnerChange,
+  logProjectSquadChange,
+  logProjectMemberAdded,
+  logProjectMemberRemoved,
+} from './activityLog';
+import { isDevSeedMode, devStore } from '../data/devSeed';
 
 function logError(op, err) {
   console.error(`[Flow DB] ${op} failed:`, err.message || err);
@@ -123,12 +133,27 @@ export async function createProjectInDB(project) {
     end_date: project.endDate || null,
   }).select('id').single();
   if (error) { logError('createProject', error); return null; }
+  if (data?.id) logProjectCreated(data.id, project.name);
   return data?.id || null;
 }
 
 export async function updateProjectInDB(projectId, changes) {
   // changes = { name, owner, squad, phase, status, startDate, endDate, actualStartDate, actualEndDate, depriReason }
   const updates = {};
+
+  // Snapshot the row before update so we can log diffs after. Joins pull the
+  // owner/squad display names too — activity_log entries record names, not
+  // FK ids, so the feed stays readable even if rows are later renamed.
+  const { data: cur } = await supabase
+    .from('projects')
+    .select('id, name, phase, status, owner:owner_id ( name ), squad:squad_id ( name )')
+    .eq('id', projectId)
+    .maybeSingle();
+  const oldName       = cur?.name || projectId;
+  const oldPhase      = cur?.phase || null;
+  const oldStatus     = cur?.status || null;
+  const oldOwnerName  = cur?.owner?.name || null;
+  const oldSquadName  = cur?.squad?.name || null;
 
   if (changes.name !== undefined) updates.name = changes.name;
   if (changes.phase !== undefined) {
@@ -157,6 +182,22 @@ export async function updateProjectInDB(projectId, changes) {
   if (Object.keys(updates).length === 0) return { ok: true };
   const { error } = await supabase.from('projects').update(updates).eq('id', projectId);
   if (error) { logError('updateProject', error); return { ok: false, error }; }
+
+  // ── Emit granular activity_log entries for diffed fields ─────────
+  // Fire-and-forget — we don't want logging failures to block the UI.
+  const newName = changes.name !== undefined ? changes.name : oldName;
+  if (changes.phase !== undefined && changes.phase !== oldPhase) {
+    logProjectPhaseChange(projectId, newName, oldPhase, changes.phase);
+  }
+  if (changes.status !== undefined && changes.status !== oldStatus) {
+    logProjectStatusChange(projectId, newName, oldStatus, changes.status);
+  }
+  if (changes.owner !== undefined && changes.owner !== oldOwnerName) {
+    logProjectOwnerChange(projectId, newName, oldOwnerName, changes.owner);
+  }
+  if (changes.squad !== undefined && changes.squad !== oldSquadName) {
+    logProjectSquadChange(projectId, newName, oldSquadName, changes.squad);
+  }
   return { ok: true };
 }
 
@@ -289,4 +330,100 @@ export async function syncCommitmentToDB(commitment, lookups) {
     logError('syncCommitment', err);
     throw err;
   }
+}
+
+// ─── PROJECT MEMBERS ─────────────────────────────────────────
+//
+// Membership = the set of people other than the project owner who are
+// allowed to post on a project. The owner is NOT stored here — they're
+// derived from projects.owner_id and the RLS helper is_project_owner().
+
+// `personName` and `projectName` are passed in by the caller so we don't
+// need a second round-trip to render the activity-log entry — the caller
+// already has both in hand.
+export async function addProjectMemberToDB(projectId, personId, addedById, { personName, projectName } = {}) {
+  if (isDevSeedMode()) {
+    devStore.addMember(projectId, personId, addedById);
+    if (personName) devStore.logEvent({ projectId, action: 'member_added', details: { person_name: personName } });
+    return { ok: true };
+  }
+  const { data, error } = await supabase
+    .from('project_members')
+    .insert({ project_id: projectId, person_id: personId, added_by: addedById || null })
+    .select('id, person_id, added_at')
+    .single();
+  if (error) {
+    // Unique constraint violation = already a member; surface as success.
+    if (error.code === '23505') return { ok: true, alreadyMember: true };
+    logError('addProjectMember', error);
+    return { ok: false, error };
+  }
+  if (personName) logProjectMemberAdded(projectId, projectName || projectId, personName);
+  return { ok: true, row: data };
+}
+
+export async function removeProjectMemberFromDB(projectId, personId, { personName, projectName } = {}) {
+  if (isDevSeedMode()) {
+    devStore.removeMember(projectId, personId);
+    if (personName) devStore.logEvent({ projectId, action: 'member_removed', details: { person_name: personName } });
+    return { ok: true };
+  }
+  const { error } = await supabase
+    .from('project_members')
+    .delete()
+    .eq('project_id', projectId)
+    .eq('person_id', personId);
+  if (error) { logError('removeProjectMember', error); return { ok: false, error }; }
+  if (personName) logProjectMemberRemoved(projectId, projectName || projectId, personName);
+  return { ok: true };
+}
+
+// ─── PROJECT COMMENTS ────────────────────────────────────────
+
+export async function addProjectCommentToDB(projectId, authorId, body) {
+  const trimmed = (body || '').trim();
+  if (!trimmed) return { ok: false, error: { message: 'Empty body' } };
+  if (isDevSeedMode()) {
+    const row = devStore.addComment(projectId, authorId, trimmed);
+    return { ok: true, row };
+  }
+  const { data, error } = await supabase
+    .from('project_comments')
+    .insert({ project_id: projectId, author_id: authorId, body: trimmed })
+    .select('id, project_id, author_id, body, created_at, edited_at, deleted_at')
+    .single();
+  if (error) { logError('addProjectComment', error); return { ok: false, error }; }
+  return { ok: true, row: data };
+}
+
+export async function editProjectCommentInDB(commentId, body) {
+  const trimmed = (body || '').trim();
+  if (!trimmed) return { ok: false, error: { message: 'Empty body' } };
+  if (isDevSeedMode()) {
+    const row = devStore.editComment(commentId, trimmed);
+    return row ? { ok: true, row } : { ok: false, error: { message: 'Comment not found' } };
+  }
+  const { data, error } = await supabase
+    .from('project_comments')
+    .update({ body: trimmed, edited_at: new Date().toISOString() })
+    .eq('id', commentId)
+    .select('id, body, edited_at')
+    .single();
+  if (error) { logError('editProjectComment', error); return { ok: false, error }; }
+  return { ok: true, row: data };
+}
+
+// Soft delete — we never hard-delete from the app so the timeline still
+// has a placeholder ("deleted by author") for context.
+export async function softDeleteProjectCommentFromDB(commentId) {
+  if (isDevSeedMode()) {
+    devStore.softDeleteComment(commentId);
+    return { ok: true };
+  }
+  const { error } = await supabase
+    .from('project_comments')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', commentId);
+  if (error) { logError('softDeleteProjectComment', error); return { ok: false, error }; }
+  return { ok: true };
 }

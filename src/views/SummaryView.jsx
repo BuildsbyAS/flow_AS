@@ -131,7 +131,7 @@ const SummaryView = ({
   loading, error,
   history, commitments, projects, people, squads,
   selectedWeekKey, weekConfig: weekConfigProp, globalFilters,
-  isHistorical, onNavigate, cycleStage,
+  isHistorical, onNavigate,
 }) => {
   const devRef = useDevLabel('SummaryView', 'src/views/SummaryView.jsx', 'Weekly operating snapshot with charts and KPIs');
   const weekConfig = weekConfigProp || { weeks: [], currentWeek: null, historyWeeks: [], weekOf: "This Week" };
@@ -336,9 +336,9 @@ const SummaryView = ({
   const outcomeProgress = metrics.totalCommits > 0
     ? metrics.outcomeLoggedCount / metrics.totalCommits
     : 0;
-  const awaitingClose = metrics.totalCommits > 0 &&
-    (cycleStage !== "close") &&
-    (outcomeProgress < 0.2);
+  // Commit cycle was retired; Summary stays in the pre-close interpretation
+  // until enough outcomes (≥20%) have been logged.
+  const awaitingClose = metrics.totalCommits > 0 && (outcomeProgress < 0.2);
 
   const doneRateSub = metrics.totalCommits === 0
     ? "no commitments yet"
