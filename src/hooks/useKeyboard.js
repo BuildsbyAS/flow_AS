@@ -29,6 +29,8 @@ export default function useKeyboard(bindings, deps = []) {
         if (b.ctrl && !e.ctrlKey) continue;
         if (b.meta && !e.metaKey) continue;
         if (inInput && !b.force) continue;
+        // Don't hijack Enter/Shift+Enter in textareas — let the component handle it
+        if (e.key === "Enter" && inInput) continue;
 
         e.preventDefault();
         b.fn(e);

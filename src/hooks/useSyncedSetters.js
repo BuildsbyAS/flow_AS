@@ -26,6 +26,7 @@ import {
   logPersonAdd, logSettingsChange,
   logCommitmentLock, logCommitmentUnlock, logCommitmentEdit,
 } from '../lib/activityLog';
+import { isDevSeedMode, devStore } from '../data/devSeed';
 
 // ─── localStorage draft helpers ──────────────────────────────
 const DRAFT_KEY = 'flow_commitment_drafts';
@@ -363,6 +364,13 @@ export function useSyncedSetters({
     }, 0);
   }, [rawSetPeople, rawSetCommitments]);
 
+  // Persist projects to localStorage on every change (dev seed mode)
+  useEffect(() => {
+    if (isDevSeedMode() && projects && projects.length > 0) {
+      devStore.persistProjects(projects);
+    }
+  }, [projects]);
+
   // ─── PROJECTS ────────────────────────────────────────────
   const setProjects = useCallback((updater) => {
     const prev = projectsRef.current;
@@ -374,35 +382,34 @@ export function useSyncedSetters({
       if (next.length > prev.length) {
         const added = next.find(p => !prev.some(pp => pp.id === p.id));
         if (added) {
-          createProjectInDB(added).then(serverId => {
-            if (serverId) {
-              if (serverId !== added.id) {
-                // Replace the temp/optimistic ID with the server-generated one
-                rawSetProjects(cur => cur.map(p => p.id === added.id ? { ...p, id: serverId } : p));
+          if (!isDevSeedMode()) {
+            createProjectInDB(added).then(serverId => {
+              if (serverId) {
+                if (serverId !== added.id) {
+                  rawSetProjects(cur => cur.map(p => p.id === added.id ? { ...p, id: serverId } : p));
+                }
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('flow:project-create-succeeded', {
+                    detail: { name: added.name, id: serverId },
+                  }));
+                }
+              } else {
+                rawSetProjects(cur => cur.filter(p => p.id !== added.id));
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('flow:project-create-failed', {
+                    detail: { name: added.name },
+                  }));
+                }
               }
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('flow:project-create-succeeded', {
-                  detail: { name: added.name, id: serverId },
-                }));
-              }
-            } else {
-              // Create failed on the server — roll back the optimistic row
-              // and notify the app so the UI can surface an error toast.
+            }).catch(err => {
               rawSetProjects(cur => cur.filter(p => p.id !== added.id));
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('flow:project-create-failed', {
-                  detail: { name: added.name },
+                  detail: { name: added.name, error: err?.message },
                 }));
               }
-            }
-          }).catch(err => {
-            rawSetProjects(cur => cur.filter(p => p.id !== added.id));
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('flow:project-create-failed', {
-                detail: { name: added.name, error: err?.message },
-              }));
-            }
-          });
+            });
+          }
           logProjectCreate(added.id, added.name);
         }
       } else {

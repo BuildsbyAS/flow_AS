@@ -1,143 +1,147 @@
-// Flow — Summary View
-// Weekly operating snapshot — the team-lead home. Answers in 30s:
-//   1) where is the team this week? 2) who's stuck? 3) what's shipping?
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import { c, typo, space, layout, motion, colWidths, shipPhases, phaseColors } from "../styles/theme";
-import { Surface, Label, EmptyState } from "../components/shared";
-import { KpiGrid, KpiCard, SectionHead, Pill, PillRow, Sparkline } from "../components/kpi";
-import { MiniBarChart, SparkLine, StackedBarChart } from "../components/chart";
+// Flow — Summary View (Project-centric)
+// Product head dashboard — answers in 30s:
+//   1) Weekly digest 2) Pipeline shape 3) What needs attention?
+import React, { useState, useMemo } from "react";
+import { c, typo, space, layout, motion, shipPhases, phaseColors, allPhases, phaseNames } from "../styles/theme";
+import { Surface, Label, EmptyState, Tag, Badge } from "../components/shared";
+import { KpiGrid, KpiCard, SectionHead, Pill, PillRow } from "../components/kpi";
+import { isDevSeedMode, devStore } from "../data/devSeed";
 import useDevLabel from "../hooks/useDevLabel";
 
+const PRIORITY_COLORS = { P0: c.red, P1: c.orange || c.amber, P2: c.textMid, P3: c.textDim };
+const STALE_DAYS = 14;
+const FROZEN_DAYS = 7;
 
-// ═══════════════════════════════════════════════════════════════
-// COMPUTE METRICS — disjoint outcome slices; done_carry rolls into "done"
-// for completion math, so Done+Partial+Carry+Blocked ≤ 100%.
-// Rollover (carry + done_carry) is tracked separately for "moving to next week".
-// ═══════════════════════════════════════════════════════════════
-function computeWeekMetrics(weekKey, { history, commitments, projects, people }) {
-  const totalProjects = projects.length;
-  const totalPeople = people.length;
-  const allSquads = [...new Set(projects.map(p => p.squad).filter(Boolean))];
+function computeProjectMetrics(projects, phaseDurationDefaults) {
+  const today = new Date();
+  const todayMs = today.getTime();
+  const weekAgo = new Date(todayMs - 7 * 86_400_000);
 
-  const isCurrent = weekKey === "current";
+  const active = projects.filter(p => p.status === "active" && !shipPhases.includes(p.phase));
+  const shipped = projects.filter(p => shipPhases.includes(p.phase) && p.status === "active");
+  const blocked = projects.filter(p => p.isBlocked);
+  const deprioritized = projects.filter(p => p.status === "deprioritized");
 
-  // Normalize items from either source so the rest of the function is shared.
-  let items = [];
-  let projectIdsInWeek = null;
+  const byPhase = {};
+  allPhases.forEach(ph => { byPhase[ph] = 0; });
+  projects.filter(p => p.status === "active").forEach(p => { byPhase[p.phase] = (byPhase[p.phase] || 0) + 1; });
 
-  if (isCurrent) {
-    items = commitments.flatMap(cm =>
-      cm.items.filter((_, idx) => cm.deselected !== idx)
-        .filter(it => it.title || it.project)
-        .map(it => ({ ...it, person: cm.person }))
-    );
-  } else {
-    projectIdsInWeek = new Set();
-    Object.entries(history).forEach(([projId, weeks]) => {
-      const weekData = weeks.find(w => w.week === weekKey);
-      if (!weekData) return;
-      projectIdsInWeek.add(projId);
-      weekData.entries.forEach(e => items.push({ ...e, project: projId }));
-    });
-  }
+  const byPriority = { P0: 0, P1: 0, P2: 0, P3: 0 };
+  active.forEach(p => { byPriority[p.priority || "P2"]++; });
 
-  // Outcome tallies — disjoint. done_carry counts as done; carry is pure-carry.
-  const totalCommits = items.length;
-  const doneCount    = items.filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
-  const carriedCount = items.filter(it => it.outcome === "carry").length;      // pure carry only
-  const blockedCount = items.filter(it => it.outcome === "blocked").length;
-  const partialCount = items.filter(it => it.outcome === "partial").length;
-  const doneCarryCount = items.filter(it => it.outcome === "done_carry").length;
-  const outcomeLoggedCount = items.filter(it => it.outcome).length;
-  const rolloverCount = carriedCount + doneCarryCount; // items continuing next week
-
-  const buildCount = items.filter(it => it.type === "BUILD").length;
-  const jamCount   = items.filter(it => it.type === "JAM").length;
-
-  // Project surfaces
-  const activeProjects = new Set(items.map(it => it.project).filter(Boolean)).size;
-  const histProjectCount = isCurrent ? totalProjects : projectIdsInWeek.size;
-  const depriCount = isCurrent
-    ? projects.filter(p => p.status === "deprioritized").length
-    : projects.filter(p => projectIdsInWeek.has(p.id) && p.status === "deprioritized").length;
-  const noActionProjects = Math.max(0, histProjectCount - depriCount - activeProjects);
-  const shippedCount = isCurrent
-    ? projects.filter(p => shipPhases.includes(p.phase)).length
-    : new Set(items.filter(it => shipPhases.includes(it.stage)).map(it => it.project)).size;
-  const shipPhaseBreakdown = shipPhases.reduce((acc, ph) => {
-    acc[ph] = isCurrent
-      ? projects.filter(p => p.phase === ph).length
-      : new Set(items.filter(it => it.stage === ph).map(it => it.project)).size;
-    return acc;
-  }, {});
-
-  // People coverage
-  const peopleWithTasks = new Set(items.map(it => it.person)).size;
-  const committedPeople = isCurrent
-    ? commitments.filter(cm => cm.items.some(it => it.title || it.project)).length
-    : peopleWithTasks;
-  const blockedPeople = new Set(items.filter(it => it.outcome === "blocked").map(it => it.person)).size;
-
-  // Squad resolution
-  const projSquadMap = {};
-  projects.forEach(p => { projSquadMap[p.id] = p.squad; });
-  const personSquadMap = {};
-  people.forEach(p => { personSquadMap[p.name] = p.squad; });
-  const getItemSquad = (it) => (it.project && projSquadMap[it.project]) || personSquadMap[it.person] || null;
-
-  const squads = {};
-  allSquads.forEach(sq => {
-    const sqAllProjects = projects.filter(p => p.squad === sq);
-    const sqProjects = isCurrent ? sqAllProjects : sqAllProjects.filter(p => projectIdsInWeek.has(p.id));
-    const sqPeople = people.filter(p => p.squad === sq);
-    const sqItems = items.filter(it => getItemSquad(it) === sq);
-    const sqActive = new Set(sqItems.map(it => it.project).filter(Boolean)).size;
-    const sqMembersActive = sqPeople.filter(p => items.some(it => it.person === p.name)).length;
-    const sqDone = sqItems.filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
-    const sqCarried = sqItems.filter(it => it.outcome === "carry").length;
-    const sqBlocked = sqItems.filter(it => it.outcome === "blocked").length;
-    const sqOutcomeLogged = sqItems.filter(it => it.outcome).length;
-    const sqDepri = sqProjects.filter(p => p.status === "deprioritized").length;
-    const sqTotal = isCurrent ? sqProjects.length : (sqProjects.length || sqAllProjects.length);
-    squads[sq] = {
-      commits: sqItems.length, activeProjects: sqActive,
-      noActionProjects: Math.max(0, sqTotal - sqDepri - sqActive), totalProjects: sqTotal,
-      membersActive: sqMembersActive, totalPeople: sqPeople.length,
-      doneCount: sqDone, carriedCount: sqCarried, blockedCount: sqBlocked,
-      outcomeLoggedCount: sqOutcomeLogged,
-      completionRate: sqItems.length > 0 ? Math.round((sqDone / sqItems.length) * 100) : 0,
-      shippedCount: isCurrent
-        ? sqProjects.filter(p => shipPhases.includes(p.phase)).length
-        : new Set(sqItems.filter(it => shipPhases.includes(it.stage)).map(it => it.project)).size,
-    };
+  const stale = active.filter(p => {
+    if (!p.lastActivityAt) return true;
+    const diff = (todayMs - new Date(p.lastActivityAt).getTime()) / 86_400_000;
+    return diff > STALE_DAYS;
   });
 
-  const completionRate = totalCommits > 0 ? Math.round((doneCount / totalCommits) * 100) : 0;
+  const frozen = active.filter(p => {
+    if (!p.lastActivityAt) return true;
+    const diff = (todayMs - new Date(p.lastActivityAt).getTime()) / 86_400_000;
+    return diff > FROZEN_DAYS && diff <= STALE_DAYS;
+  });
+
+  const phaseOverstay = active.filter(p => {
+    const overrides = p.phaseDurationOverrides || {};
+    const threshold = overrides[p.phase] ?? phaseDurationDefaults?.[p.phase];
+    if (!threshold) return false;
+    if (!p.lastActivityAt) return false;
+    const daysInPhase = Math.floor((todayMs - new Date(p.lastActivityAt).getTime()) / 86_400_000);
+    return daysInPhase > threshold;
+  });
+
+  const overdue = active.filter(p => {
+    if (!p.endDate) return false;
+    const end = new Date(p.endDate + "T00:00:00");
+    return end.getTime() < todayMs;
+  });
+
+  const needsAttention = blocked.length + stale.length + frozen.length + phaseOverstay.length + overdue.length;
 
   return {
-    totalCommits, activeProjects, noActionProjects, totalProjects: histProjectCount, shippedCount, shipPhaseBreakdown,
-    peopleWithTasks, totalPeople, committedPeople, blockedPeople,
-    buildCount, jamCount,
-    doneCount, carriedCount, blockedCount, partialCount, doneCarryCount,
-    outcomeLoggedCount, rolloverCount, completionRate, squads,
+    active, shipped, blocked, deprioritized,
+    byPhase, byPriority,
+    stale, frozen, phaseOverstay, overdue,
+    needsAttention,
   };
 }
 
+function generateWeeklyDigest(projects, allEvents) {
+  const now = Date.now();
+  const weekAgo = now - 7 * 86_400_000;
+  const recentEvents = allEvents.filter(e => new Date(e.created_at).getTime() >= weekAgo);
 
-// ═══════════════════════════════════════════════════════════════
-// SUMMARY VIEW
-// ═══════════════════════════════════════════════════════════════
+  const phaseChanges = recentEvents.filter(e => e.action === "project_phase_changed");
+  const newProjects = recentEvents.filter(e => e.action === "project_created");
+  const blockerEvents = recentEvents.filter(e => e.action === "project_blocked");
+
+  const shipEvents = phaseChanges.filter(e => ["Alpha", "Beta", "GA"].includes(e.details?.to));
+  const p0Projects = projects.filter(p => p.priority === "P0" && p.status === "active");
+  const blockedProjects = projects.filter(p => p.isBlocked);
+
+  const squadActivity = {};
+  recentEvents.forEach(e => {
+    const proj = projects.find(p => p.id === e.entity_id);
+    if (proj?.squad) squadActivity[proj.squad] = (squadActivity[proj.squad] || 0) + 1;
+  });
+  const mostActiveSquad = Object.entries(squadActivity).sort((a, b) => b[1] - a[1])[0];
+
+  const lines = [];
+
+  if (p0Projects.length > 0) {
+    const p0Names = p0Projects.map(p => p.name).slice(0, 3);
+    const p0Blocked = p0Projects.filter(p => p.isBlocked);
+    lines.push(`**P0 Watch:** ${p0Projects.length} critical project${p0Projects.length > 1 ? "s" : ""} active — ${p0Names.join(", ")}${p0Projects.length > 3 ? ` +${p0Projects.length - 3} more` : ""}.${p0Blocked.length > 0 ? ` ⚠ ${p0Blocked.length} blocked.` : " All moving."}`);
+  }
+
+  if (phaseChanges.length > 0) {
+    lines.push(`**Phase Movement:** ${phaseChanges.length} phase transition${phaseChanges.length > 1 ? "s" : ""} this week.${shipEvents.length > 0 ? ` ${shipEvents.length} entered shipping phases.` : ""}`);
+  } else {
+    lines.push("**Phase Movement:** No phase transitions this week — review if any projects are stuck.");
+  }
+
+  if (shipEvents.length > 0) {
+    const shipped = shipEvents.map(e => {
+      const proj = projects.find(p => p.id === e.entity_id);
+      return proj ? `${proj.name} → ${e.details.to}` : null;
+    }).filter(Boolean);
+    lines.push(`**Shipping:** ${shipped.join(", ")}.`);
+  }
+
+  if (blockedProjects.length > 0) {
+    lines.push(`**Blockers:** ${blockedProjects.length} project${blockedProjects.length > 1 ? "s" : ""} blocked — ${blockedProjects.map(p => p.name).slice(0, 3).join(", ")}.`);
+  }
+
+  if (newProjects.length > 0) {
+    lines.push(`**New:** ${newProjects.length} project${newProjects.length > 1 ? "s" : ""} created this week.`);
+  }
+
+  if (mostActiveSquad) {
+    lines.push(`**Most Active Squad:** ${mostActiveSquad[0]} with ${mostActiveSquad[1]} events.`);
+  }
+
+  if (lines.length === 0) {
+    lines.push("Quiet week across all squads. No major movements or blockers detected.");
+  }
+
+  return lines;
+}
+
+const TIMELINE_OPTIONS = [
+  { key: "7d", label: "7 days", ms: 7 * 86_400_000 },
+  { key: "30d", label: "30 days", ms: 30 * 86_400_000 },
+  { key: "90d", label: "90 days", ms: 90 * 86_400_000 },
+];
+
+
 const SummaryView = ({
   loading, error,
-  history, commitments, projects, people, squads,
-  selectedWeekKey, weekConfig: weekConfigProp, globalFilters,
-  isHistorical, onNavigate,
+  projects, people, squads,
+  globalFilters, onNavigate,
+  phaseDurationDefaults,
 }) => {
-  const devRef = useDevLabel('SummaryView', 'src/views/SummaryView.jsx', 'Weekly operating snapshot with charts and KPIs');
-  const weekConfig = weekConfigProp || { weeks: [], currentWeek: null, historyWeeks: [], weekOf: "This Week" };
-  const selectedWeek = selectedWeekKey || "current";
+  const devRef = useDevLabel('SummaryView', 'src/views/SummaryView.jsx', 'Project-centric dashboard');
 
-  // Apply global filters
   const gf = globalFilters || {};
   const filteredProjects = useMemo(() => {
     let p = projects;
@@ -145,145 +149,62 @@ const SummaryView = ({
     if (gf.owner?.length) p = p.filter(x => gf.owner.includes(x.owner));
     return p;
   }, [projects, gf.squad, gf.owner]);
-  const filteredPeople = useMemo(() => {
-    let p = people;
-    if (gf.squad?.length) p = p.filter(x => gf.squad.includes(x.squad));
-    if (gf.person?.length) p = p.filter(x => gf.person.includes(x.name));
-    return p;
-  }, [people, gf.squad, gf.person]);
-  const filteredCommitments = useMemo(() => {
-    let result = commitments;
-    if (gf.person?.length || gf.squad?.length) {
-      const personNames = new Set(filteredPeople.map(p => p.name));
-      result = result.filter(cm => personNames.has(cm.person));
-    }
-    if (gf.owner?.length) {
-      const ownerProjectIds = new Set(filteredProjects.map(p => p.id));
-      result = result.map(cm => ({
-        ...cm,
-        items: cm.items.filter(it => !it.project || ownerProjectIds.has(it.project)),
-      })).filter(cm => cm.items.length > 0);
-    }
-    return result;
-  }, [commitments, filteredPeople, filteredProjects, gf.person, gf.squad, gf.owner]);
 
-  // Weeks tab strip — 6 most-recent weeks, newest first
-  const weeks = useMemo(() => {
-    const tabs = [{ key: "current", label: weekConfig.weekOf, isCurrent: true }];
-    const histWeeks = weekConfig.historyWeeks || [];
-    const hist = [...histWeeks].reverse().slice(0, 5);
-    tabs.push(...hist.map(w => ({ key: w, label: w })));
-    return tabs;
-  }, [weekConfig]);
-
-  const dataCtx = useMemo(
-    () => ({ history, commitments: filteredCommitments, projects: filteredProjects, people: filteredPeople }),
-    [history, filteredCommitments, filteredProjects, filteredPeople]
+  const metrics = useMemo(
+    () => computeProjectMetrics(filteredProjects, phaseDurationDefaults),
+    [filteredProjects, phaseDurationDefaults]
   );
 
-  // Chronological (oldest → newest) for charts
-  const allMetrics = useMemo(() => {
-    const chrono = [...weeks].reverse();
-    return chrono.map(w => ({
-      weekKey: w.key, label: w.label, isCurrent: w.isCurrent || false,
-      ...computeWeekMetrics(w.key, dataCtx),
-    }));
-  }, [weeks, dataCtx]);
+  const allSquadNames = useMemo(() =>
+    (squads && squads.length ? [...squads] : [...new Set(filteredProjects.map(p => p.squad).filter(Boolean))]).sort(),
+    [squads, filteredProjects]
+  );
 
-  const rawIdx = allMetrics.findIndex(m => m.weekKey === selectedWeek);
-  const isOutOfRange = rawIdx < 0 && selectedWeek !== "current";
-  const selectedIdx = rawIdx >= 0 ? rawIdx : allMetrics.length - 1;
-  const metrics = allMetrics[selectedIdx];
-  const prev = selectedIdx > 0 ? allMetrics[selectedIdx - 1] : null;
-  const weekLabels = allMetrics.map(m => m.label);
-  // Prefer the canonical squads list from App.jsx so newly-created squads
-  // with no projects yet still appear in the Squad Performance table.
-  const allSquads = squads && squads.length
-    ? [...squads].sort()
-    : [...new Set(filteredProjects.map(p => p.squad).filter(Boolean))].sort();
+  const allEvents = useMemo(() => {
+    if (isDevSeedMode()) return devStore.listAllEvents();
+    return [];
+  }, [filteredProjects]);
+
+  const digest = useMemo(() => generateWeeklyDigest(filteredProjects, allEvents), [filteredProjects, allEvents]);
+
+  const [timelineRange, setTimelineRange] = useState("30d");
   const [sortCol, setSortCol] = useState(null);
   const [sortDir, setSortDir] = useState("desc");
-  // Hide squads with no projects / people / commits by default — they
-  // read as "missing data" and bloat the table. Toggled via footer link.
-  const [showInactive, setShowInactive] = useState(false);
-
-  // Row animation plays only on the first mount per selectedWeek change,
-  // not on every sort / filter re-render (P11).
-  const animKeyRef = useRef(selectedWeek);
-  const [animKey, setAnimKey] = useState(selectedWeek);
-  useEffect(() => {
-    if (animKeyRef.current !== selectedWeek) {
-      animKeyRef.current = selectedWeek;
-      setAnimKey(selectedWeek);
-    }
-  }, [selectedWeek]);
-
-  // BUILD/JAM use hues distinct from Done=green / Blocked=red so they
-  // don't collide semantically with the adjacent outcome stack.
-  const tc = { BUILD: { color: c.purple }, JAM: { color: c.cyan } };
-
-  // ─── Chart data ───
-  const pctDone = allMetrics.map(m => m.completionRate || 0);
-  const pctCarried = allMetrics.map(m => m.totalCommits > 0 ? Math.round((m.carriedCount / m.totalCommits) * 100) : 0);
-
-  // Outcome breakdown — disjoint slices. done_carry is folded into done.
-  // Colors track `outcomeConfig()` in theme.js: carry = orange, blocked = red.
-  const outcomeSeries = [
-    // Partial and Carry would both resolve to amber in Steel & Orange
-    // (c.orange aliases amber), making stack segments indistinguishable.
-    // Partial → blue (neutral in-progress), Carry → amber (rollover warning).
-    { label: "Done",    color: c.green, values: allMetrics.map(m => m.doneCount) },
-    { label: "Partial", color: c.blue,  values: allMetrics.map(m => m.partialCount) },
-    { label: "Carry",   color: c.amber, values: allMetrics.map(m => m.carriedCount) },
-    { label: "Blocked", color: c.red,   values: allMetrics.map(m => m.blockedCount) },
-  ];
-  const commitSeries = [
-    { label: "BUILD", color: tc.BUILD.color, values: allMetrics.map(m => m.buildCount) },
-    { label: "JAM",   color: tc.JAM.color,   values: allMetrics.map(m => m.jamCount) },
-  ];
-
-  // ─── Table helpers ───
-  const thStyle = {
-    padding: `${space[2]}px ${space[3]}px`, textAlign: "left",
-    fontFamily: typo.bodyMd.font, fontSize: 12,
-    fontWeight: 600, letterSpacing: "0.03em", textTransform: "uppercase",
-    color: c.textDim, borderBottom: `1px solid ${c.border}`,
-    background: c.tableHeader,
-    whiteSpace: "nowrap",
-  };
-  const tdBase = {
-    padding: `${space[2]}px ${space[3]}px`,
-    fontFamily: typo.monoMd.font, fontSize: 13,
-    fontWeight: 600, letterSpacing: "0.02em",
-    fontVariantNumeric: "tabular-nums",
-    textAlign: "center", borderBottom: `1px dotted ${c.border}`,
-  };
-  const pctPill = (val, color, muted) => (
-    <span style={{
-      fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
-      fontWeight: 700, letterSpacing: typo.monoMd.tracking,
-      fontVariantNumeric: "tabular-nums",
-      color: muted ? c.textDim : color,
-      background: muted ? "transparent" : `${color}1a`,
-      padding: `${space[1]}px ${space[2]}px`, borderRadius: layout.radiusXs,
-    }}>{val}%</span>
-  );
-
   const handleSortKey = (key) => {
     if (sortCol === key) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortCol(key); setSortDir("desc"); }
   };
 
-  // ─── Guard states ───
+  const timelineMs = TIMELINE_OPTIONS.find(t => t.key === timelineRange)?.ms || 30 * 86_400_000;
+  const timelineCutoff = Date.now() - timelineMs;
+
+  const heatmapData = useMemo(() => {
+    const activeProjs = filteredProjects.filter(p => p.status === "active");
+    const grid = {};
+    let maxCount = 0;
+    allSquadNames.forEach(sq => {
+      grid[sq] = {};
+      allPhases.forEach(ph => {
+        const count = activeProjs.filter(p => p.squad === sq && p.phase === ph).length;
+        grid[sq][ph] = count;
+        if (count > maxCount) maxCount = count;
+      });
+    });
+    return { grid, maxCount };
+  }, [filteredProjects, allSquadNames]);
+
+  const phaseBarData = useMemo(() => {
+    const activeProjs = filteredProjects.filter(p => p.status === "active");
+    const counts = {};
+    allPhases.forEach(ph => { counts[ph] = activeProjs.filter(p => p.phase === ph).length; });
+    return counts;
+  }, [filteredProjects]);
+
   if (loading) {
     return (
-      <div ref={devRef} style={{
-        display: "flex", alignItems: "center", justifyContent: "center",
-        minHeight: "calc(100vh - 240px)", flexDirection: "column", gap: space[3],
-        animation: `fadeIn 200ms ${motion.fast.easing} 200ms both`,
-      }}>
-        <div style={{ width: 32, height: 32, border: `3px solid ${c.borderMedium || c.border}`, borderTopColor: c.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-        <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid }}>Loading summary…</span>
+      <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 240px)", flexDirection: "column", gap: space[3] }}>
+        <div style={{ width: 32, height: 32, border: `3px solid ${c.border}`, borderTopColor: c.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid }}>Loading summary...</span>
       </div>
     );
   }
@@ -291,581 +212,447 @@ const SummaryView = ({
   if (error) {
     return (
       <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 240px)" }}>
-        <EmptyState
-          icon="⚠"
-          title="Failed to load summary"
-          message={typeof error === "string" ? error : "An unexpected error occurred."}
-          action="Retry"
-          onAction={() => window.location.reload()}
-        />
+        <EmptyState icon="!" title="Failed to load summary" message={typeof error === "string" ? error : "An unexpected error occurred."} action="Retry" onAction={() => window.location.reload()} />
       </div>
     );
   }
 
-  const hasGlobalFilter = Boolean(gf.squad?.length || gf.person?.length || gf.owner?.length);
-
-  // No data at all
-  if (!metrics || (filteredProjects.length === 0 && filteredPeople.length === 0)) {
+  if (filteredProjects.length === 0) {
+    const hasFilter = gf.squad?.length || gf.owner?.length;
     return (
       <div ref={devRef} style={{ display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", minHeight: "calc(100vh - 240px)" }}>
         <EmptyState
-          title={hasGlobalFilter ? "No matching data" : "No data yet"}
-          message={hasGlobalFilter
-            ? "No projects or people match the current filters. Try adjusting your filters."
-            : "Add people and projects to see your weekly operating snapshot."}
-          action={!hasGlobalFilter && onNavigate ? "Add people" : null}
-          onAction={!hasGlobalFilter && onNavigate ? () => onNavigate("people") : null}
+          title={hasFilter ? "No matching projects" : "No projects yet"}
+          message={hasFilter ? "No projects match the current filters." : "Add projects to see your dashboard."}
+          action={!hasFilter && onNavigate ? "Go to Projects" : null}
+          onAction={!hasFilter && onNavigate ? () => onNavigate("projects") : null}
         />
       </div>
     );
   }
 
-  // Filtered down to a cohort with no commitments this week
-  const filteredToNoCommits = Boolean(hasGlobalFilter && metrics.totalCommits === 0 && filteredPeople.length > 0);
+  const pc = phaseColors();
 
-  // People in scope without any commitment (attention)
-  const commitPersonSet = new Set(filteredCommitments.filter(cm => cm.items.some(it => it.title || it.project)).map(cm => cm.person));
-  const uncommittedPeople = selectedWeek === "current"
-    ? filteredPeople.filter(p => !commitPersonSet.has(p.name))
-    : [];
+  const thStyle = {
+    padding: `${space[2]}px ${space[3]}px`, textAlign: "left",
+    fontFamily: typo.bodyMd.font, fontSize: 12, fontWeight: 600,
+    letterSpacing: "0.03em", textTransform: "uppercase",
+    color: c.textDim, borderBottom: `1px solid ${c.border}`,
+    background: c.tableHeader, whiteSpace: "nowrap", cursor: "pointer", userSelect: "none",
+  };
+  const tdBase = {
+    padding: `${space[2]}px ${space[3]}px`,
+    fontFamily: typo.monoMd.font, fontSize: 13, fontWeight: 600,
+    letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums",
+    textAlign: "center", borderBottom: `1px dotted ${c.border}`,
+  };
 
-  // "Awaiting close" gating — Done Rate is meaningless until enough
-  // outcomes are logged. Require ≥20% of items logged before we start
-  // showing the rate, so a single Friday-morning close doesn't sink the
-  // card to "3% · at risk". During the close cycle stage, always show it.
-  const outcomeProgress = metrics.totalCommits > 0
-    ? metrics.outcomeLoggedCount / metrics.totalCommits
-    : 0;
-  // Commit cycle was retired; Summary stays in the pre-close interpretation
-  // until enough outcomes (≥20%) have been logged.
-  const awaitingClose = metrics.totalCommits > 0 && (outcomeProgress < 0.2);
-
-  const doneRateSub = metrics.totalCommits === 0
-    ? "no commitments yet"
-    : awaitingClose
-      ? "awaiting Friday close"
-      : metrics.completionRate >= 60
-        ? "on track"
-        : metrics.completionRate >= 40
-          ? "behind pace"
-          : "at risk";
+  const maxPhaseBar = Math.max(1, ...Object.values(phaseBarData));
 
   return (
     <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
-      {/* ── Historical / out-of-range banner ── */}
-      {isHistorical && (
-        <div role="status" className="flow-banner-enter" style={{
-          background: c.orangeDim, border: `1px solid ${c.orange}66`, borderRadius: layout.radiusLg,
-          padding: `${space[3]}px ${space[4]}px`, marginBottom: space[2],
-          display: "flex", alignItems: "center", gap: space[2],
-          fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.orange,
-        }}>
-          <span style={{ fontWeight: 700 }}>Historical view</span>
-          <span style={{ color: c.textMid }}>— viewing {selectedWeek === "current" ? weekConfig.weekOf : selectedWeek} (read-only)</span>
-        </div>
-      )}
-      {isOutOfRange && (
-        <div role="status" className="flow-banner-enter" style={{
-          background: c.redDim, border: `1px solid ${c.red}66`, borderRadius: layout.radiusLg,
-          padding: `${space[3]}px ${space[4]}px`, marginBottom: space[2],
-          fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.red,
-        }}>
-          <span style={{ fontWeight: 700 }}>Out of range</span>
-          <span style={{ color: c.textMid, marginLeft: space[2] }}>
-            — the Summary page only keeps the last 6 weeks. Showing the most recent available week.
+      {/* ═══ WEEKLY DIGEST ═══ */}
+      <div>
+        <SectionHead title="Weekly Digest" right={
+          <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>
+            Auto-generated from project activity
           </span>
-        </div>
-      )}
-
-      {/* ── Filtered-to-empty banner ── */}
-      {filteredToNoCommits && (
-        <div role="status" className="flow-banner-enter" style={{
-          background: c.surfaceAlt, border: `1px dashed ${c.border}`, borderRadius: layout.radiusLg,
-          padding: `${space[3]}px ${space[4]}px`, marginBottom: space[2],
-          fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid,
-        }}>
-          Filters match {filteredPeople.length} {filteredPeople.length === 1 ? "person" : "people"} but no commitments this week.
-        </div>
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════
-          KPI GRID — 4 cards: In Ship Phases · Coverage · Done Rate · Active People
-          ═══════════════════════════════════════════════════════════ */}
-      <KpiGrid>
-        <KpiCard
-          index={0}
-          label="In Ship Phases"
-          value={metrics.shippedCount}
-          sub="projects in Alpha / Beta / GA"
-          delta={prev ? metrics.shippedCount - prev.shippedCount : null}
-          deltaLabel="projects"
-        >
-          <PillRow>
-            {shipPhases.map(ph => (
-              <Pill key={ph} count={metrics.shipPhaseBreakdown[ph] || 0} label={ph} color={phaseColors()[ph]} />
-            ))}
-          </PillRow>
-        </KpiCard>
-        <KpiCard
-          index={1}
-          label="Commit Coverage"
-          value={`${metrics.committedPeople}/${filteredPeople.length}`}
-          sub={filteredPeople.length > 0
-            ? `${Math.round((metrics.committedPeople / filteredPeople.length) * 100)}% committed · ${metrics.totalCommits} items`
-            : "no people in scope"}
-          delta={prev ? metrics.committedPeople - prev.committedPeople : null}
-          deltaLabel="people"
-        >
-          <PillRow>
-            <Pill count={metrics.committedPeople} label="committed" color={c.green} />
-            <Pill count={Math.max(0, filteredPeople.length - metrics.committedPeople)} label="no commit" color={c.textDim} />
-          </PillRow>
-          {metrics.blockedPeople > 0 && (
-            <div style={{ marginTop: space[2] }}>
-              <Pill count={metrics.blockedPeople} label="with blocked items" color={c.red} />
-            </div>
-          )}
-        </KpiCard>
-        <KpiCard
-          index={2}
-          label="Done Rate"
-          value={awaitingClose ? "—" : `${metrics.completionRate}%`}
-          sub={doneRateSub}
-          delta={prev && !awaitingClose ? metrics.completionRate - prev.completionRate : null}
-          deltaLabel="pts"
-        >
-          <Sparkline values={allMetrics.slice(-6).map(m => m.completionRate || 0)} color={c.accent} />
-        </KpiCard>
-        {(() => {
-          const activePct = filteredPeople.length > 0
-            ? Math.round((metrics.peopleWithTasks / filteredPeople.length) * 100)
-            : 0;
-          const prevActivePct = prev && prev.totalPeople > 0
-            ? Math.round((prev.peopleWithTasks / prev.totalPeople) * 100)
-            : null;
-          return (
-            <KpiCard
-              index={3}
-              label="Active People"
-              value={`${activePct}%`}
-              sub={filteredPeople.length > 0
-                ? `${metrics.peopleWithTasks}/${filteredPeople.length} with tasks`
-                : "no people in scope"}
-              delta={prevActivePct != null ? activePct - prevActivePct : null}
-              deltaLabel="pts"
-            >
-              <Sparkline
-                values={allMetrics.slice(-6).map(m =>
-                  m.totalPeople > 0 ? Math.round((m.peopleWithTasks / m.totalPeople) * 100) : 0
-                )}
-                color={c.cyan}
+        } />
+        <Surface variant="data" compact style={{ padding: space[6], borderLeft: `3px solid ${c.accent}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[3] }}>
+            <span style={{ fontSize: 18 }}>📊</span>
+            <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>
+              This Week at a Glance
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+            {digest.map((line, i) => (
+              <div key={i} style={{
+                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                color: c.text, lineHeight: 1.6,
+              }}
+                dangerouslySetInnerHTML={{
+                  __html: line
+                    .replace(/\*\*(.*?)\*\*/g, `<span style="font-weight:700;color:${c.text}">$1</span>`)
+                    .replace(/⚠/g, `<span style="color:${c.red}">⚠</span>`)
+                }}
               />
-            </KpiCard>
-          );
-        })()}
-      </KpiGrid>
-
-      {/* ═══════════════════════════════════════════════════════════
-          SCROLLABLE CONTENT — charts + tables
-          ═══════════════════════════════════════════════════════════ */}
-      <div style={{ position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: space[7] }}>
-
-        {/* ── Projects — bar charts ── */}
-        <div>
-        <SectionHead title="Projects" />
-        <div style={{ padding: `${space[6]}px`, background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
-          {selectedWeek === "current" && metrics.totalCommits === 0 && (
-            <div style={{
-              marginBottom: space[4],
-              padding: `${space[2]}px ${space[3]}px`,
-              background: c.surfaceAlt, border: `1px dashed ${c.border}`,
-              borderRadius: layout.radiusSm,
-              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid,
-            }}>
-              Cycle hasn't started — every project will show as Idle until the team declares commitments.
-            </div>
-          )}
-          <div style={{ display: "flex", gap: space[6], flexWrap: "wrap", fontVariantNumeric: "tabular-nums" }}>
-            <MiniBarChart title="Active" color={c.green}
-              data={allMetrics.map(m => m.activeProjects)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
-            <MiniBarChart title="Idle" color={c.orange}
-              data={allMetrics.map(m => m.noActionProjects)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
-            <MiniBarChart title="In Ship Phases" color={c.green}
-              data={allMetrics.map(m => m.shippedCount)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
-          </div>
-        </div>
-        </div>
-
-        {/* ── People — coverage + attention ── */}
-        <div>
-        <SectionHead title="People" />
-        <div style={{ padding: `${space[6]}px`, background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
-          <div style={{ display: "flex", gap: space[6], flexWrap: "wrap", fontVariantNumeric: "tabular-nums" }}>
-            <MiniBarChart title="Active People" color={c.cyan}
-              data={allMetrics.map(m => m.peopleWithTasks)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
-            <SparkLine title="Committed" color={c.purple}
-              data={allMetrics.map(m => m.committedPeople)} labels={weekLabels}
-              highlightIndex={selectedIdx} />
-          </div>
-        </div>
-        </div>
-
-        {/* ── Commit — input (BUILD/JAM mix) first, then outcomes ── */}
-        <div>
-        <SectionHead title="Commit" />
-        <div style={{ padding: `${space[6]}px`, background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard }}>
-          <div>
-            <Label>Commit Mix (BUILD / JAM)</Label>
-            <div style={{ marginTop: space[3], fontVariantNumeric: "tabular-nums" }}>
-              <StackedBarChart series={commitSeries} weekLabels={weekLabels} highlightIndex={selectedIdx} />
-            </div>
-          </div>
-          <div style={{ marginTop: space[6] }}>
-            <Label>Outcomes</Label>
-            <div style={{ marginTop: space[3], display: "flex", gap: space[6], flexWrap: "wrap", fontVariantNumeric: "tabular-nums" }}>
-              <SparkLine title="Done %" color={c.green} suffix="%"
-                data={pctDone} labels={weekLabels} highlightIndex={selectedIdx} />
-              <SparkLine title="Carried %" color={c.orange} suffix="%"
-                data={pctCarried} labels={weekLabels} highlightIndex={selectedIdx} />
-            </div>
-            <div style={{ marginTop: space[5], fontVariantNumeric: "tabular-nums" }}>
-              <StackedBarChart series={outcomeSeries} weekLabels={weekLabels} highlightIndex={selectedIdx} />
-            </div>
-          </div>
-        </div>
-        </div>
-
-        {/* ═══════════════════════════════════════════════════════════
-            SQUAD BREAKDOWN — data table
-            ═══════════════════════════════════════════════════════════ */}
-        <div style={{ minWidth: 0 }}>
-        <SectionHead title="Squad Performance" />
-        <Surface variant="data" compact style={{ padding: 0, overflow: "hidden", maxWidth: "100%" }}>
-          <div style={{ overflowX: "auto", maxWidth: "100%", borderRadius: layout.radius, WebkitOverflowScrolling: "touch" }}>
-            {allSquads.length === 0 ? (
-              <div style={{ padding: space[7], textAlign: "center", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid }}>
-                No squads defined yet.
-              </div>
-            ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
-              <thead>
-                {/* Group label row — non-sticky; only column-header row sticks so they don't overlap on scroll */}
-                <tr>
-                  <th aria-label="Squad" style={{ ...thStyle, position: "static", borderBottom: `2px solid ${c.border}`, paddingBottom: space[2] }} />
-                  <th colSpan={4} style={{ ...thStyle, position: "static", borderBottom: `2px solid ${c.green}66`, paddingBottom: space[2], textAlign: "center" }}>
-                    <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: c.green }}>Projects</span>
-                  </th>
-                  <th colSpan={2} style={{ ...thStyle, position: "static", borderBottom: `2px solid ${c.cyan}66`, paddingBottom: space[2], textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>
-                    <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: c.cyan }}>People</span>
-                  </th>
-                  <th colSpan={4} style={{ ...thStyle, position: "static", borderBottom: `2px solid ${c.accent}66`, paddingBottom: space[2], textAlign: "center", borderLeft: `1px dotted ${c.border}` }}>
-                    <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: c.accent }}>Commit</span>
-                  </th>
-                </tr>
-                {/* Column header row — sortable, keyboard-accessible */}
-                <tr>
-                  {[
-                    { key: "squad", label: "Squad", align: "left", minW: colWidths.squad.min, tip: "Squad name" },
-                    { key: "active", label: "Active", minW: colWidths.metric.min, tip: "Projects with at least one commitment this week" },
-                    { key: "noAction", label: "Idle", minW: colWidths.metric.min, tip: "Projects with no commitment this week" },
-                    { key: "shipped", label: "Shipped", minW: colWidths.metric.min, tip: "Projects currently in Alpha/Beta/GA" },
-                    { key: "pctActive", label: "% Active", minW: colWidths.pct.min, tip: "Share of squad's projects that have a commitment" },
-                    { key: "pplTotal", label: "Total", minW: colWidths.metric.min, borderL: true, tip: "People in this squad" },
-                    { key: "pctPpl", label: "% Engaged", minW: colWidths.pct.min, tip: "Share of squad actively committing" },
-                    { key: "commits", label: "Total", minW: colWidths.metric.min, borderL: true, tip: "Commitment items in this squad" },
-                    { key: "pctDone", label: "% Done", minW: colWidths.pct.min, tip: "Items with outcome Done (includes Done+Carry)" },
-                    { key: "pctBlocked", label: "% Blocked", minW: colWidths.pct.min, tip: "Items marked Blocked" },
-                    { key: "pctCarried", label: "% Carried", minW: colWidths.pct.min, tip: "Items marked Carry (pure carry, not Done+Carry)" },
-                  ].map(col => {
-                    const isSorted = sortCol === col.key;
-                    // First column (Squad) gets sticky-left so it stays
-                    // visible during horizontal scroll on tablet/mobile.
-                    const isSquadCol = col.key === "squad";
-                    return (
-                      <th
-                        key={col.key}
-                        role="button"
-                        tabIndex={0}
-                        className="flow-sort-th"
-                        aria-sort={isSorted ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
-                        title={col.tip}
-                        onClick={() => handleSortKey(col.key)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            handleSortKey(col.key);
-                          }
-                        }}
-                        style={{
-                          ...thStyle,
-                          textAlign: col.align || "center",
-                          minWidth: col.minW,
-                          cursor: "pointer",
-                          userSelect: "none",
-                          ...(col.borderL ? { borderLeft: `1px dotted ${c.border}` } : {}),
-                          ...(isSorted ? { color: c.accent } : {}),
-                          ...(isSquadCol ? {
-                            position: "sticky", left: 0, zIndex: 2,
-                            background: c.surfaceAlt || c.surface,
-                            boxShadow: `1px 0 0 ${c.border}`,
-                          } : {}),
-                        }}
-                      >
-                        {col.label}
-                        <span aria-hidden="true" style={{ display: "inline-block", width: 10, marginLeft: 4, opacity: isSorted ? 1 : 0.25 }}>
-                          {isSorted ? (sortDir === "asc" ? "↑" : "↓") : "↕"}
-                        </span>
-                      </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody key={animKey}>
-                {(() => {
-                  // Zero-filled fallback so squads with no projects yet (e.g.
-                  // a freshly-created squad) still render as an empty row
-                  // rather than being dropped from the table.
-                  const EMPTY_METRICS = {
-                    activeProjects: 0, noActionProjects: 0, shippedCount: 0,
-                    commits: 0, outcomeLoggedCount: 0, completionRate: 0,
-                    carriedCount: 0, blockedCount: 0,
-                    totalPeople: 0, membersActive: 0,
-                  };
-                  const rowsAll = allSquads.map(sq => {
-                    const d = metrics?.squads?.[sq] || EMPTY_METRICS;
-                    const sqShipped = d.shippedCount || 0;
-                    const projBase = d.activeProjects + d.noActionProjects;
-                    const pA = projBase > 0 ? Math.round((d.activeProjects / projBase) * 100) : 0;
-                    const pPpl = d.totalPeople > 0 ? Math.round((d.membersActive / d.totalPeople) * 100) : 0;
-                    const pD = d.outcomeLoggedCount > 0 ? (d.completionRate || 0) : null;
-                    const pC = d.commits > 0 ? Math.round(((d.carriedCount || 0) / d.commits) * 100) : 0;
-                    const pB = d.commits > 0 ? Math.round(((d.blockedCount || 0) / d.commits) * 100) : 0;
-                    // Inactive = no projects, no commits, no people. These
-                    // squads read as either zero or missing — collapse them
-                    // behind a footer toggle and render '—' in metric cells.
-                    const isInactive = d.activeProjects === 0 && d.noActionProjects === 0 && sqShipped === 0 && d.commits === 0 && d.totalPeople === 0;
-                    return { sq, d, sqShipped, pA, pPpl, pD, pC, pB, isInactive };
-                  });
-                  const inactiveCount = rowsAll.filter(r => r.isInactive).length;
-                  const rows = showInactive ? rowsAll : rowsAll.filter(r => !r.isInactive);
-
-                  if (sortCol) {
-                    const valFor = (r) => {
-                      switch (sortCol) {
-                        case "squad": return r.sq;
-                        case "active": return r.d.activeProjects;
-                        case "noAction": return r.d.noActionProjects;
-                        case "shipped": return r.sqShipped;
-                        case "pctActive": return r.pA;
-                        case "commits": return r.d.commits;
-                        case "pctDone": return r.pD ?? -1;
-                        case "pctBlocked": return r.pB;
-                        case "pctCarried": return r.pC;
-                        case "pplTotal": return r.d.totalPeople;
-                        case "pctPpl": return r.pPpl;
-                        default: return 0;
-                      }
-                    };
-                    rows.sort((a, b) => {
-                      const av = valFor(a), bv = valFor(b);
-                      const cmp = typeof av === "string" ? av.localeCompare(bv) : av - bv;
-                      return sortDir === "asc" ? cmp : -cmp;
-                    });
-                  }
-
-                  if (rows.length === 0) return (
-                    <tr><td colSpan={11} style={{ ...tdBase, textAlign: "center", color: c.textMid, padding: `${space[7]}px`, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, letterSpacing: 0 }}>No squad data for this selection</td></tr>
-                  );
-
-                  // Em-dash placeholder for inactive-row metric cells, with
-                  // a tooltip so hover reveals WHY it's blank.
-                  const emDash = (tip) => (
-                    <span title={tip || "No data this week"} style={{ color: c.textDim }}>—</span>
-                  );
-                  const rendered = rows.map((r, i) => {
-                    const { sq, d, sqShipped, pA, pPpl, pD, pC, pB, isInactive } = r;
-                    const actClr = pA >= 60 ? c.green : pA >= 40 ? c.orange : c.red;
-                    const pplClr = pPpl >= 80 ? c.green : pPpl >= 50 ? c.orange : c.red;
-                    const rowOpacity = isInactive ? 0.55 : 1;
-                    return (
-                      <tr key={sq} className="flow-row" style={{
-                        animation: `rowSlideIn 0.3s ${motion.normal.easing} both`,
-                        animationDelay: `${Math.min(i * 50, 300)}ms`,
-                        opacity: rowOpacity,
-                      }}>
-                        {/* Sticky first column — stays pinned during horizontal
-                            scroll on tablet/mobile where the table overflows. */}
-                        <td title={sq} style={{
-                          ...tdBase, textAlign: "left",
-                          fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                          fontWeight: 600, color: c.text,
-                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200,
-                          position: "sticky", left: 0, background: c.surface, zIndex: 1,
-                          boxShadow: `1px 0 0 ${c.border}`,
-                        }}>{sq}</td>
-                        {isInactive ? (
-                          <>
-                            <td style={{ ...tdBase }}>{emDash("No projects this week")}</td>
-                            <td style={{ ...tdBase }}>{emDash("No projects this week")}</td>
-                            <td style={{ ...tdBase }}>{emDash("No projects this week")}</td>
-                            <td style={{ ...tdBase }}>{emDash("No projects this week")}</td>
-                            <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}` }}>{emDash("No people assigned")}</td>
-                            <td style={{ ...tdBase }}>{emDash("No people assigned")}</td>
-                            <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}` }}>{emDash("No commits this week")}</td>
-                            <td style={{ ...tdBase }}>{emDash("No commits this week")}</td>
-                            <td style={{ ...tdBase }}>{emDash("No commits this week")}</td>
-                            <td style={{ ...tdBase }}>{emDash("No commits this week")}</td>
-                          </>
-                        ) : (
-                          <>
-                            <td style={{ ...tdBase, color: c.green }}>{d.activeProjects}</td>
-                            <td style={{ ...tdBase, color: d.noActionProjects > 0 ? c.orange : c.textDim }}>{d.noActionProjects}</td>
-                            <td style={{ ...tdBase, color: sqShipped > 0 ? c.green : c.textDim }}>{sqShipped}</td>
-                            <td style={{ ...tdBase }}>{pctPill(pA, actClr)}</td>
-                            <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}`, color: c.text }}>{d.totalPeople}</td>
-                            <td style={{ ...tdBase }}>{pctPill(pPpl, pplClr)}</td>
-                            <td style={{ ...tdBase, borderLeft: `1px dotted ${c.border}`, color: c.text }}>{d.commits}</td>
-                            <td style={{ ...tdBase }}>{pD == null ? <span style={{ color: c.textDim }}>—</span> : pctPill(pD, c.green)}</td>
-                            <td style={{ ...tdBase }}>{pB > 0 ? pctPill(pB, c.red) : pctPill(0, c.red, true)}</td>
-                            <td style={{ ...tdBase }}>{pctPill(pC, c.orange, pC === 0)}</td>
-                          </>
-                        )}
-                      </tr>
-                    );
-                  });
-                  // Footer toggle — surfaces hidden-count and lets the user
-                  // expand inactive squads without cluttering the table.
-                  if (inactiveCount > 0 && !showInactive) {
-                    rendered.push(
-                      <tr key="__inactive_toggle__">
-                        <td colSpan={11} style={{
-                          ...tdBase, textAlign: "center",
-                          padding: `${space[3]}px`,
-                          background: c.surfaceAlt || c.surface,
-                          borderTop: `1px solid ${c.border}`,
-                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                          color: c.textDim, fontWeight: 500, letterSpacing: 0,
-                        }}>
-                          {inactiveCount} inactive squad{inactiveCount === 1 ? "" : "s"} hidden ·{" "}
-                          <button
-                            onClick={() => setShowInactive(true)}
-                            style={{
-                              background: "transparent", border: "none", padding: 0,
-                              color: c.accent, textDecoration: "underline", cursor: "pointer",
-                              fontFamily: "inherit", fontSize: "inherit", fontWeight: 600,
-                            }}
-                          >Show all</button>
-                        </td>
-                      </tr>
-                    );
-                  } else if (showInactive && inactiveCount > 0) {
-                    rendered.push(
-                      <tr key="__inactive_toggle__">
-                        <td colSpan={11} style={{
-                          ...tdBase, textAlign: "center",
-                          padding: `${space[3]}px`,
-                          background: c.surfaceAlt || c.surface,
-                          borderTop: `1px solid ${c.border}`,
-                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                          color: c.textDim, fontWeight: 500, letterSpacing: 0,
-                        }}>
-                          <button
-                            onClick={() => setShowInactive(false)}
-                            style={{
-                              background: "transparent", border: "none", padding: 0,
-                              color: c.accent, textDecoration: "underline", cursor: "pointer",
-                              fontFamily: "inherit", fontSize: "inherit", fontWeight: 600,
-                            }}
-                          >Hide inactive squads</button>
-                        </td>
-                      </tr>
-                    );
-                  }
-                  return rendered;
-                })()}
-              </tbody>
-            </table>
-            )}
+            ))}
           </div>
         </Surface>
+      </div>
+
+      {/* ═══ TIMELINE PICKER ═══ */}
+      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={{
+          display: "flex", gap: 2,
+          background: c.surfaceAlt, borderRadius: layout.radiusSm, padding: 3,
+          border: `1px solid ${c.border}`,
+        }}>
+          {TIMELINE_OPTIONS.map(opt => {
+            const active = timelineRange === opt.key;
+            return (
+              <button key={opt.key} onClick={() => setTimelineRange(opt.key)} style={{
+                padding: `${space[1]}px ${space[3]}px`,
+                borderRadius: layout.radiusXs, border: "none", cursor: "pointer",
+                background: active ? c.surface : "transparent",
+                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+                color: active ? c.text : c.textDim,
+                boxShadow: active ? c.shadowSm : "none",
+                outline: "none",
+                transition: `all ${motion.fast.duration} ${motion.fast.easing}`,
+              }}>{opt.label}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ═══ HEATMAP + BAR CHART ROW ═══ */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[4] }}>
+
+        {/* ── Squad × Phase Heatmap ── */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <SectionHead title="Squad × Phase" />
+          <Surface variant="data" compact style={{ padding: 0, overflow: "hidden" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...thStyle, cursor: "default", minWidth: 90 }}>Squad</th>
+                  {allPhases.map(ph => (
+                    <th key={ph} style={{ ...thStyle, textAlign: "center", cursor: "default", fontSize: 10, padding: `${space[1]}px ${space[2]}px` }}>
+                      {ph}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {allSquadNames.map((sq, i) => (
+                  <tr key={sq} style={{ animation: `rowSlideIn 0.3s ${motion.normal.easing} both`, animationDelay: `${Math.min(i * 40, 200)}ms` }}>
+                    <td style={{
+                      padding: `${space[2]}px ${space[3]}px`,
+                      fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600,
+                      color: c.text, borderBottom: `1px dotted ${c.border}`,
+                    }}>{sq}</td>
+                    {allPhases.map(ph => {
+                      const count = heatmapData.grid[sq]?.[ph] || 0;
+                      const intensity = heatmapData.maxCount > 0 ? count / heatmapData.maxCount : 0;
+                      const alpha = count > 0 ? Math.max(0.12, intensity * 0.6) : 0;
+                      const bgColor = count > 0 ? `${pc[ph]}${Math.round(alpha * 255).toString(16).padStart(2, "0")}` : "transparent";
+                      return (
+                        <td key={ph} style={{
+                          ...tdBase,
+                          padding: `${space[2]}px ${space[2]}px`,
+                          fontSize: 12,
+                          background: bgColor,
+                          color: count > 0 ? pc[ph] : c.textGhost,
+                          fontWeight: count > 0 ? 700 : 400,
+                          borderBottom: `1px dotted ${c.border}`,
+                        }}>
+                          {count > 0 ? count : "·"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Surface>
         </div>
 
-        {/* ── Needs Attention — uncommitted is current-only (not knowable historically); blocked works any week ── */}
-        {(uncommittedPeople.length > 0 || metrics.blockedCount > 0) && (
-          <div>
-            <SectionHead title="Needs Attention" />
-            <div style={{ padding: `${space[6]}px`, background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, boxShadow: c.shadowCard, display: "grid", gridTemplateColumns: selectedWeek === "current" ? "repeat(auto-fit, minmax(260px, 1fr))" : "1fr", gap: space[6] }}>
-              {selectedWeek === "current" && (
-              <div>
-                <Label>No Commitments Yet</Label>
-                <div style={{ marginTop: space[3] }}>
-                  {uncommittedPeople.length === 0 ? (
-                    <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid }}>
-                      Everyone has committed.
-                    </span>
-                  ) : (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
-                      {uncommittedPeople.slice(0, 24).map(p => (
-                        <button
-                          key={p.id || p.name}
-                          onClick={() => onNavigate && onNavigate("commit", { person: p.name })}
-                          className="flow-chip-btn"
-                          style={{
-                            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500,
-                            color: c.text, background: c.surfaceAlt,
-                            border: `1px solid ${c.border}`, borderRadius: layout.radiusXs,
-                            padding: `${space[2]}px ${space[3]}px`, cursor: "pointer",
-                          }}
-                          title={`Open ${p.name}'s commitments`}
-                        >{p.name}</button>
-                      ))}
-                      {uncommittedPeople.length > 24 && (
-                        <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, alignSelf: "center" }}>
-                          +{uncommittedPeople.length - 24} more
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-              )}
-              <div>
-                <Label>Blocked This Week</Label>
-                <div style={{ marginTop: space[3] }}>
-                  {metrics.blockedCount === 0 ? (
-                    <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid }}>
-                      Nothing blocked.
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => onNavigate && onNavigate("pulse", { outcome: "blocked" })}
-                      className="flow-chip-btn-danger"
-                      aria-label={`${metrics.blockedCount} blocked ${metrics.blockedCount === 1 ? "item" : "items"}, open Pulse`}
-                      style={{
-                        fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600,
-                        color: c.red, background: c.redDim,
-                        border: `1px solid ${c.red}66`, borderRadius: layout.radiusSm,
-                        padding: `${space[2]}px ${space[4]}px`, cursor: "pointer",
-                      }}
-                    >
-                      {metrics.blockedCount} blocked {metrics.blockedCount === 1 ? "item" : "items"}
-                      {metrics.blockedPeople > 0 && ` · ${metrics.blockedPeople} ${metrics.blockedPeople === 1 ? "person" : "people"}`}
-                      <span style={{ marginLeft: space[2], color: c.textMid, fontWeight: 500 }}>→ Pulse</span>
-                    </button>
-                  )}
-                </div>
-              </div>
+        {/* ── Phase Bar Chart (vertical) ── */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          <SectionHead title="Pipeline Distribution" />
+          <Surface variant="data" compact style={{ padding: space[5], flex: 1, display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 6, flex: 1, minHeight: 120 }}>
+              {allPhases.map(ph => {
+                const count = phaseBarData[ph] || 0;
+                const pct = maxPhaseBar > 0 ? (count / maxPhaseBar) * 100 : 0;
+                const barH = `${Math.max(count > 0 ? 8 : 4, pct)}%`;
+                return (
+                  <div key={ph} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }}>
+                    <span style={{
+                      fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                      color: count > 0 ? pc[ph] : c.textGhost,
+                      fontVariantNumeric: "tabular-nums",
+                    }}>{count}</span>
+                    <div style={{
+                      width: "100%", maxWidth: 48, height: barH,
+                      background: count > 0 ? `${pc[ph]}30` : `${c.textGhost}15`,
+                      borderTop: count > 0 ? `3px solid ${pc[ph]}` : "none",
+                      borderRadius: `${layout.radiusXs}px ${layout.radiusXs}px 0 0`,
+                      transition: `height ${motion.normal.duration} ${motion.normal.easing}`,
+                    }} />
+                    <span style={{
+                      fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                      color: count > 0 ? c.textMid : c.textGhost,
+                      textTransform: "uppercase", letterSpacing: "0.04em",
+                    }}>{ph}</span>
+                  </div>
+                );
+              })}
             </div>
+          </Surface>
+        </div>
+      </div>
+
+      {/* ═══ SCROLLABLE SECTIONS ═══ */}
+      <div style={{ display: "flex", flexDirection: "column", gap: space[7] }}>
+
+        {/* ── Recently Shipped ── */}
+        {metrics.shipped.length > 0 && (
+          <div>
+            <SectionHead title={`Recently Shipped (${metrics.shipped.length})`} />
+            <Surface variant="data" compact style={{ padding: space[5] }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
+                {metrics.shipped.map(p => (
+                  <button key={p.id} className="flow-chip-btn" onClick={() => onNavigate?.("projects", p.id)} style={{
+                    fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500,
+                    color: c.green, background: `${c.green}0d`, border: `1px solid ${c.green}44`,
+                    borderRadius: layout.radiusSm, padding: `${space[2]}px ${space[3]}px`, cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: space[2],
+                  }}>
+                    <span style={{ fontSize: 14 }}>🚀</span>
+                    <span style={{ fontFamily: typo.monoSm.font, marginRight: 2 }}>{p.id}</span>
+                    {p.name}
+                    <span style={{
+                      marginLeft: 4, fontWeight: 600, fontSize: 11,
+                      color: c.green, background: `${c.green}15`,
+                      padding: "1px 6px", borderRadius: layout.radiusXs,
+                    }}>{p.phase}</span>
+                  </button>
+                ))}
+              </div>
+            </Surface>
           </div>
         )}
 
+        {/* ── Needs Attention ── */}
+        {metrics.needsAttention > 0 && (
+          <div>
+            <SectionHead title={`Needs Attention (${metrics.needsAttention})`} />
+            <Surface variant="data" compact style={{ padding: 0, overflow: "hidden" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={{ ...thStyle, textAlign: "left", cursor: "default" }}>Project</th>
+                    <th style={{ ...thStyle, textAlign: "left", cursor: "default" }}>Squad</th>
+                    <th style={{ ...thStyle, textAlign: "center", cursor: "default" }}>Phase</th>
+                    <th style={{ ...thStyle, textAlign: "center", cursor: "default" }}>Issue</th>
+                    <th style={{ ...thStyle, textAlign: "left", cursor: "default" }}>Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Overdue */}
+                  {metrics.overdue.map(p => {
+                    const daysOver = Math.floor((Date.now() - new Date(p.endDate + "T00:00:00").getTime()) / 86_400_000);
+                    return (
+                      <tr key={`overdue-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
+                        <td style={{ ...tdBase, textAlign: "left" }}>
+                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
+                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
+                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+                        <td style={{ ...tdBase }}>
+                          <span style={{
+                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
+                            color: c.red, background: `${c.red}12`,
+                            padding: "2px 8px", borderRadius: layout.radiusXs,
+                          }}>OVERDUE</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.red }}>+{daysOver}d past deadline</td>
+                      </tr>
+                    );
+                  })}
+                  {/* Blocked */}
+                  {metrics.blocked.map(p => {
+                    const days = p.blockedAt ? Math.floor((Date.now() - new Date(p.blockedAt).getTime()) / 86_400_000) : "?";
+                    return (
+                      <tr key={`blocked-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
+                        <td style={{ ...tdBase, textAlign: "left" }}>
+                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
+                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
+                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+                        <td style={{ ...tdBase }}>
+                          <span style={{
+                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
+                            color: "#FFFFFF", background: c.red,
+                            padding: "2px 8px", borderRadius: layout.radiusXs,
+                          }}>BLOCKED</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid, maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {p.blockedReason || "—"} ({days}d)
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Frozen (no update in 7d) */}
+                  {metrics.frozen.map(p => {
+                    const daysSince = p.lastActivityAt ? Math.floor((Date.now() - new Date(p.lastActivityAt).getTime()) / 86_400_000) : "?";
+                    return (
+                      <tr key={`frozen-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
+                        <td style={{ ...tdBase, textAlign: "left" }}>
+                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
+                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
+                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+                        <td style={{ ...tdBase }}>
+                          <span style={{
+                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
+                            color: c.cyan, background: `${c.cyan}12`,
+                            padding: "2px 8px", borderRadius: layout.radiusXs,
+                          }}>FROZEN</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>No update in {daysSince}d</td>
+                      </tr>
+                    );
+                  })}
+                  {/* Sloth / Phase Overstay — shown before stale, takes priority */}
+                  {metrics.phaseOverstay.filter(p => !metrics.blocked.includes(p)).map(p => {
+                    const overrides = p.phaseDurationOverrides || {};
+                    const threshold = overrides[p.phase] ?? phaseDurationDefaults?.[p.phase];
+                    const days = p.lastActivityAt ? Math.floor((Date.now() - new Date(p.lastActivityAt).getTime()) / 86_400_000) : "?";
+                    return (
+                      <tr key={`sloth-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
+                        <td style={{ ...tdBase, textAlign: "left" }}>
+                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
+                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
+                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+                        <td style={{ ...tdBase }}>
+                          <span style={{
+                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
+                            color: c.amber, background: `${c.amber}12`,
+                            padding: "2px 8px", borderRadius: layout.radiusXs,
+                          }}>SLOTH</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{days}d in {p.phase} (threshold: {threshold}d)</td>
+                      </tr>
+                    );
+                  })}
+                  {/* Stale (>14d) — exclude projects already shown as sloth or blocked */}
+                  {metrics.stale.filter(p => !metrics.phaseOverstay.includes(p) && !metrics.blocked.includes(p)).map(p => {
+                    const daysSince = p.lastActivityAt ? Math.floor((Date.now() - new Date(p.lastActivityAt).getTime()) / 86_400_000) : "?";
+                    return (
+                      <tr key={`stale-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
+                        <td style={{ ...tdBase, textAlign: "left" }}>
+                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
+                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
+                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+                        <td style={{ ...tdBase }}>
+                          <span style={{
+                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
+                            color: c.orange, background: `${c.orange}12`,
+                            padding: "2px 8px", borderRadius: layout.radiusXs,
+                          }}>STALE</span>
+                        </td>
+                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>No update in {daysSince}d</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </Surface>
+          </div>
+        )}
+
+        {/* ═══ SQUAD ROLLUP ═══ */}
+        <div>
+          <SectionHead title="Squad Rollup" />
+          <Surface variant="data" compact style={{ padding: 0, overflow: "hidden" }}>
+            <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+              {allSquadNames.length === 0 ? (
+                <div style={{ padding: space[7], textAlign: "center", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid }}>
+                  No squads defined yet.
+                </div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
+                  <thead>
+                    <tr>
+                      {[
+                        { key: "squad", label: "Squad", align: "left" },
+                        { key: "inflight", label: "In Flight" },
+                        { key: "shipped", label: "Shipped" },
+                        { key: "blocked", label: "Blocked" },
+                        { key: "byPhase", label: "Phase Breakdown", align: "left", noSort: true },
+                      ].map(col => {
+                        const isSorted = sortCol === col.key;
+                        return (
+                          <th key={col.key} role={col.noSort ? undefined : "button"} tabIndex={col.noSort ? undefined : 0}
+                            onClick={col.noSort ? undefined : () => handleSortKey(col.key)}
+                            style={{ ...thStyle, textAlign: col.align || "center", ...(isSorted ? { color: c.accent } : {}), ...(col.noSort ? { cursor: "default" } : {}) }}>
+                            {col.label}
+                            {!col.noSort && <span style={{ display: "inline-block", width: 10, marginLeft: 4, opacity: isSorted ? 1 : 0.25 }}>{isSorted ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const rows = allSquadNames.map(sq => {
+                        const sqProjects = filteredProjects.filter(p => p.squad === sq && p.status === "active");
+                        const byPhase = {};
+                        allPhases.forEach(ph => { byPhase[ph] = 0; });
+                        sqProjects.forEach(p => { byPhase[p.phase] = (byPhase[p.phase] || 0) + 1; });
+                        const inflightCount = sqProjects.filter(p => !shipPhases.includes(p.phase)).length;
+                        const shippedCount = sqProjects.filter(p => shipPhases.includes(p.phase)).length;
+                        const blockedCount = sqProjects.filter(p => p.isBlocked).length;
+                        return { sq, inflight: inflightCount, shipped: shippedCount, blockedCount, byPhase };
+                      });
+
+                      if (sortCol) {
+                        const valFor = (r) => {
+                          switch (sortCol) {
+                            case "squad": return r.sq;
+                            case "inflight": return r.inflight;
+                            case "shipped": return r.shipped;
+                            case "blocked": return r.blockedCount;
+                            default: return 0;
+                          }
+                        };
+                        rows.sort((a, b) => {
+                          const av = valFor(a), bv = valFor(b);
+                          const cmp = typeof av === "string" ? av.localeCompare(bv) : av - bv;
+                          return sortDir === "asc" ? cmp : -cmp;
+                        });
+                      }
+
+                      return rows.map((r, i) => (
+                        <tr key={r.sq} className="flow-row" style={{ animation: `rowSlideIn 0.3s ${motion.normal.easing} both`, animationDelay: `${Math.min(i * 50, 300)}ms` }}>
+                          <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, fontWeight: 600, color: c.text }}>{r.sq}</td>
+                          <td style={{ ...tdBase, color: c.text }}>{r.inflight}</td>
+                          <td style={{ ...tdBase, color: r.shipped > 0 ? c.green : c.textDim }}>{r.shipped}</td>
+                          <td style={{ ...tdBase, color: r.blockedCount > 0 ? c.red : c.textDim, fontWeight: r.blockedCount > 0 ? 700 : 500 }}>{r.blockedCount}</td>
+                          <td style={{ ...tdBase, textAlign: "left", padding: `${space[1]}px ${space[2]}px` }}>
+                            <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                              {allPhases.filter(ph => r.byPhase[ph] > 0).map(ph => (
+                                <span key={ph} style={{
+                                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                                  color: pc[ph], background: `${pc[ph]}15`,
+                                  padding: "1px 5px", borderRadius: layout.radiusXs,
+                                  letterSpacing: "0.04em",
+                                }}>{r.byPhase[ph]} {ph}</span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </Surface>
         </div>
+
       </div>
     </div>
   );

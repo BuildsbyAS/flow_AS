@@ -67,18 +67,24 @@ export async function renameRoleInDB(oldName, newName) {
 // ─── PEOPLE ──────────────────────────────────────────────────
 
 export async function addPersonToDB(name, squadName, roleName) {
-  // Look up squad and role IDs
-  const [{ data: squad }, { data: role }] = await Promise.all([
-    supabase.from('squads').select('id').eq('name', squadName).single(),
-    supabase.from('roles').select('id').eq('name', roleName).single(),
-  ]);
-  if (!squad || !role) return logError('addPerson', { message: `Squad or role not found: ${squadName}, ${roleName}` });
+  // Look up squad and role IDs (both optional)
+  let squadId = null;
+  let roleId = null;
 
-  const { data, error } = await supabase.from('people').insert({
-    name,
-    squad_id: squad.id,
-    role_id: role.id,
-  }).select('id').single();
+  if (squadName) {
+    const { data: squad } = await supabase.from('squads').select('id').eq('name', squadName).single();
+    squadId = squad?.id || null;
+  }
+  if (roleName) {
+    const { data: role } = await supabase.from('roles').select('id').eq('name', roleName).single();
+    roleId = role?.id || null;
+  }
+
+  const row = { name };
+  if (squadId) row.squad_id = squadId;
+  if (roleId) row.role_id = roleId;
+
+  const { data, error } = await supabase.from('people').insert(row).select('id').single();
   if (error) { logError('addPerson', error); return null; }
   return data?.id || null;
 }
@@ -131,6 +137,8 @@ export async function createProjectInDB(project) {
     status: project.status || 'active',
     start_date: project.startDate || null,
     end_date: project.endDate || null,
+    priority: project.priority || 'P2',
+    complexity: project.complexity || null,
   }).select('id').single();
   if (error) { logError('createProject', error); return null; }
   if (data?.id) logProjectCreated(data.id, project.name);
@@ -168,6 +176,22 @@ export async function updateProjectInDB(projectId, changes) {
   if (changes.endDate !== undefined) updates.end_date = changes.endDate || null;
   if (changes.actualStartDate !== undefined) updates.actual_start_date = changes.actualStartDate || null;
   if (changes.actualEndDate !== undefined) updates.actual_end_date = changes.actualEndDate || null;
+  if (changes.priority !== undefined) updates.priority = changes.priority;
+  if (changes.complexity !== undefined) updates.complexity = changes.complexity || null;
+  if (changes.isBlocked !== undefined) {
+    updates.is_blocked = changes.isBlocked;
+    if (changes.isBlocked) {
+      updates.blocked_reason = changes.blockedReason || null;
+      updates.blocked_at = changes.blockedAt || new Date().toISOString();
+    } else {
+      updates.blocked_reason = null;
+      updates.blocked_at = null;
+    }
+  }
+  if (changes.blockedReason !== undefined && changes.isBlocked === undefined) {
+    updates.blocked_reason = changes.blockedReason;
+  }
+  if (changes.phaseDurationOverrides !== undefined) updates.phase_duration_overrides = changes.phaseDurationOverrides;
   if (changes.owner !== undefined) {
     const { data: ownerRow } = changes.owner
       ? await supabase.from('people').select('id').eq('name', changes.owner).single()
@@ -411,6 +435,44 @@ export async function editProjectCommentInDB(commentId, body) {
     .single();
   if (error) { logError('editProjectComment', error); return { ok: false, error }; }
   return { ok: true, row: data };
+}
+
+// ─── PROJECT LINKS ──────────────────────────────────────────
+
+export async function addProjectLinkToDB(projectId, type, label, url) {
+  if (isDevSeedMode()) {
+    const row = { id: `link-${Math.random().toString(36).slice(2, 9)}`, project_id: projectId, type, label: label || null, url, created_at: new Date().toISOString() };
+    devStore._addLink?.(row);
+    return { ok: true, row };
+  }
+  const { data, error } = await supabase
+    .from('project_links')
+    .insert({ project_id: projectId, type, label: label || null, url })
+    .select('*')
+    .single();
+  if (error) { logError('addProjectLink', error); return { ok: false, error }; }
+  return { ok: true, row: data };
+}
+
+export async function deleteProjectLinkFromDB(linkId) {
+  if (isDevSeedMode()) {
+    devStore._removeLink?.(linkId);
+    return { ok: true };
+  }
+  const { error } = await supabase.from('project_links').delete().eq('id', linkId);
+  if (error) { logError('deleteProjectLink', error); return { ok: false, error }; }
+  return { ok: true };
+}
+
+export async function updateProjectMemberRoleToDB(projectId, personId, role) {
+  if (isDevSeedMode()) return { ok: true };
+  const { error } = await supabase
+    .from('project_members')
+    .update({ role })
+    .eq('project_id', projectId)
+    .eq('person_id', personId);
+  if (error) { logError('updateProjectMemberRole', error); return { ok: false, error }; }
+  return { ok: true };
 }
 
 // Soft delete — we never hard-delete from the app so the timeline still

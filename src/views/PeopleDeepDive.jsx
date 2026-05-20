@@ -1,160 +1,17 @@
-// Flow — People Deep Dive (Phase 4: Coaching Console, Signal Cards, Terminal Log, Telemetry Hero)
+// Flow — People Deep Dive (Project-centric team visibility)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, outcomeConfig, entityColors } from "../styles/theme";
-import { Tag, EmptyState, Sel } from "../components/shared";
-import { KpiGrid, KpiCard, HealthGauge, SectionHead, Pill, PillRow } from "../components/kpi";
+import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, entityColors, shipPhases } from "../styles/theme";
+import { Tag, EmptyState, Sel, Inp, Btn, Modal, Label } from "../components/shared";
+import { KpiGrid, KpiCard, SectionHead, Pill, PillRow } from "../components/kpi";
 import PersonProjects from "../components/PersonProjects";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
 import { initialsOf } from "../lib/names";
+import { isDevSeedMode, devStore, seedPeople } from "../data/devSeed";
+import { addPersonToDB } from "../lib/mutations";
 
-function parseWeekKey(key) {
-  const m = /^(\d{4})-W(\d{1,2})$/.exec(String(key || ""));
-  if (!m) return null;
-  return [parseInt(m[1], 10), parseInt(m[2], 10)];
-}
-function weekKeyAtOrBefore(candidate, anchor) {
-  const a = parseWeekKey(candidate);
-  const b = parseWeekKey(anchor);
-  if (!a || !b) return String(candidate) <= String(anchor);
-  return a[0] !== b[0] ? a[0] < b[0] : a[1] <= b[1];
-}
-
-/* ── helpers ──────────────────────────────────────────────── */
-
-function computeMomentum(personName, commitments, history, weekConfig) {
-  const cm = commitments.find(x => x.person === personName);
-  const weeks = weekConfig?.historyWeeks || [];
-  const weekItems = weeks.map(w => {
-    const wkItems = [];
-    Object.values(history || {}).forEach(ph =>
-      ph.forEach(wk => {
-        if (wk.week === w) wk.entries.filter(e => e.person === personName).forEach(e => wkItems.push(e));
-      })
-    );
-    return wkItems;
-  });
-  const items = cm ? cm.items.filter((_, idx) => cm.deselected !== idx).filter(it => it.title?.trim() || it.project) : [];
-  const hasCurrentItems = items.length > 0;
-  const firstActiveWk = weekItems.findIndex(wi => wi.length > 0);
-  const hasAnyHistory = firstActiveWk >= 0 || hasCurrentItems;
-  if (!hasAnyHistory) return null;
-  const scores = [];
-  const startIdx = firstActiveWk >= 0 ? firstActiveWk : weekItems.length;
-  for (let wi = startIdx; wi < weekItems.length; wi++) {
-    if (weekItems[wi].length > 0) {
-      const done = weekItems[wi].filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
-      scores.push((done / weekItems[wi].length) * 100);
-    }
-  }
-  if (hasCurrentItems) {
-    const done = items.filter(it => it.outcome === "done" || it.outcome === "done_carry").length;
-    const lockScore = cm?.lockedAt ? 35 : 0;
-    const completionScore = items.length > 0 ? (done / items.length) * 65 : 0;
-    scores.push(lockScore + completionScore);
-  }
-  if (scores.length === 0) return null;
-  return Math.min(100, Math.max(0, Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)));
-}
-
-function computePersonData(person, commitments, projects, history, weekConfig) {
-  const cm = commitments.find(x => x.person === person);
-  const tc = typeConfig();
-  const pc = getPhaseColors();
-  const oc = outcomeConfig();
-  const weeks = weekConfig?.historyWeeks || [];
-
-  const currentItems = cm
-    ? cm.items.slice(0, 3).filter((it, i) => cm.deselected !== i && (it.title?.trim() || it.project)).map(it => ({ ...it, person }))
-    : [];
-
-  const deselectedItems = cm && cm.deselected >= 0
-    ? [{ ...cm.items[cm.deselected], person, deselectedIdx: cm.deselected }]
-    : [];
-
-  const hasBuffer = cm && cm.buffer?.trim();
-
-  const thisWeekTypes = { BUILD: 0, JAM: 0 };
-  currentItems.forEach(it => { if (thisWeekTypes[it.type] !== undefined) thisWeekTypes[it.type]++; });
-
-  const weeklyData = weeks.map(week => {
-    const items = [];
-    Object.entries(history).forEach(([projId, projHist]) => {
-      projHist.forEach(wk => {
-        if (wk.week === week) {
-          wk.entries.filter(e => e.person === person).forEach(e => {
-            const projObj = projects.find(p => p.id === projId);
-            items.push({ ...e, project: projId, projectName: projObj?.name || projId });
-          });
-        }
-      });
-    });
-    const types = { BUILD: 0, JAM: 0 };
-    items.forEach(it => { if (types[it.type] !== undefined) types[it.type]++; });
-    return { week, items, types, total: items.length };
-  });
-
-  weeklyData.push({
-    week: "This wk",
-    items: currentItems,
-    types: thisWeekTypes,
-    total: currentItems.length,
-    isCurrent: true,
-  });
-
-  const projectMap = {};
-  currentItems.forEach(it => {
-    if (!it.project) return;
-    if (!projectMap[it.project]) projectMap[it.project] = [];
-    projectMap[it.project].push({ week: "This wk", type: it.type, stage: it.stage, task: it.title, isCurrent: true });
-  });
-  weeklyData.filter(w => !w.isCurrent).forEach(w => {
-    w.items.forEach(entry => {
-      if (!projectMap[entry.project]) projectMap[entry.project] = [];
-      projectMap[entry.project].push({ week: w.week, type: entry.type, stage: entry.stage, task: entry.task, isCurrent: false });
-    });
-  });
-
-  const projectTimeline = Object.entries(projectMap).sort((a, b) => {
-    const aCurr = a[1].some(e => e.isCurrent);
-    const bCurr = b[1].some(e => e.isCurrent);
-    if (aCurr !== bCurr) return aCurr ? -1 : 1;
-    return b[1].length - a[1].length;
-  });
-
-  const totalHistoryItems = weeklyData.filter(w => !w.isCurrent).reduce((s, w) => s + w.total, 0);
-
-  // Only count weeks from the person's first activity onward
-  const firstActiveIdx = weeklyData.findIndex(w => w.total > 0);
-  const relevantWeeks = firstActiveIdx >= 0 ? weeklyData.slice(firstActiveIdx) : [];
-  const weeksActive = relevantWeeks.filter(w => w.total > 0).length;
-  const weeksEligible = relevantWeeks.length;
-
-  // Delegate to shared helper to keep list-card and detail-view momentum in sync
-  const momentum = computeMomentum(person, commitments, history, weekConfig);
-
-  const scopeChurnEvents = [];
-  if (deselectedItems.length > 0) {
-    deselectedItems.forEach(d => {
-      scopeChurnEvents.push({ type: "deselect", label: `Dropped: ${d.title || d.project}`, week: "This wk" });
-    });
-  }
-  if (hasBuffer) {
-    scopeChurnEvents.push({ type: "buffer", label: `Buffer: ${cm.buffer}`, project: cm.bufferProject, week: "This wk" });
-  }
-
-  return {
-    cm, currentItems, deselectedItems, hasBuffer, thisWeekTypes,
-    weeklyData, projectTimeline, projectMap, totalHistoryItems,
-    weeksActive, weeksEligible, momentum, scopeChurnEvents, tc, pc, oc,
-  };
-}
-
-
-
-/* ═══════════════════════════════════════════════════════════ */
-/*  PEOPLE DEEP DIVE                                         */
-/* ═══════════════════════════════════════════════════════════ */
+const IN_FLIGHT_PHASES = ["PRD", "Design", "Dev", "QA"];
+const SHIPPED_PHASES = ["Alpha", "Beta", "GA"];
 
 const firstGlyph = (name) => {
   if (!name) return "?";
@@ -162,15 +19,16 @@ const firstGlyph = (name) => {
   return arr.length ? arr[0].toUpperCase() : "?";
 };
 
-// initialsOf moved to src/lib/names.js — imported above for shared use.
+/* ═══════════════════════════════════════════════════════════ */
+/*  PEOPLE DEEP DIVE                                         */
+/* ═══════════════════════════════════════════════════════════ */
 
-const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical, selectedWeekKey, weekConfig: weekConfigProp, globalFilters = {}, loading, error }) => {
+const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical = false, selectedWeekKey, weekConfig: weekConfigProp, globalFilters = {}, loading, error }) => {
   const devRef = useDevLabel(
     'PeopleDeepDive',
     'src/views/PeopleDeepDive.jsx',
-    'Person coaching console with telemetry hero, momentum chart, and project timeline'
+    'Person detail view with project involvement and activity'
   );
-  const weekConfig = weekConfigProp || { weeks: [], currentWeek: null, historyWeeks: [] };
   const [selectedPerson, setSelectedPerson] = useState(initialPerson || null);
 
   const [search, setSearch] = useState("");
@@ -179,9 +37,7 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   const [focusIdx, setFocusIdx] = useState(0);
   const [kbActive, setKbActive] = useState(false);
   const localSearchRef = useRef(null);
-
-  const tc = typeConfig();
-  const pc = getPhaseColors();
+  const [showAddMember, setShowAddMember] = useState(false);
 
   const allSquads = [...new Set(people.map(p => p.squad).filter(Boolean))].sort();
   const allRoles = [...new Set(people.map(p => p.role).filter(Boolean))].sort();
@@ -192,15 +48,11 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   const effectiveRole = fRole || "";
   const localFilterCount = [effectiveSquad, effectiveRole, search].filter(Boolean).length;
   const globalFilterCount = gfSquads.length + gfPerson.length;
-  const activeFilters = localFilterCount + globalFilterCount;
 
   const filtered = people.filter(p => {
-    // Local filters
     if (effectiveSquad && (p.squad || "") !== effectiveSquad) return false;
     if (effectiveRole && (p.role || "") !== effectiveRole) return false;
-    // Global squad filter (multi-select)
     if (gfSquads.length > 0 && !gfSquads.includes(p.squad)) return false;
-    // Global person filter
     if (gfPerson.length > 0 && !gfPerson.includes(p.name)) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -225,12 +77,18 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   const flatFiltered = [];
   Object.values(squadsWithPeople).forEach(members => flatFiltered.push(...members));
 
-  // Memoize momentum for all people to avoid recomputing inside render loop
-  const momentumMap = useMemo(() => {
+  // Compute per-person project counts
+  const personProjectCounts = useMemo(() => {
     const map = {};
-    people.forEach(p => { map[p.name] = computeMomentum(p.name, commitments, history, weekConfig); });
+    people.forEach(p => {
+      const count = (projects || []).filter(proj =>
+        proj.owner_id === p.id ||
+        (isDevSeedMode() && devStore.listMembers(proj.id)?.some(m => m.person_id === p.id))
+      ).length;
+      map[p.id] = count;
+    });
     return map;
-  }, [people, commitments, history, weekConfig]);
+  }, [people, projects]);
 
   useEffect(() => {
     if (searchRef) searchRef.current = localSearchRef.current;
@@ -274,6 +132,19 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   }, [flatFiltered.length, focusIdx]);
 
 
+  /* ═══ DETAIL-VIEW MEMOS (must be before early returns) ═══ */
+  const selectedPersonObj = people.find(p => p.name === selectedPerson) || null;
+
+  const activityScore = useMemo(() => {
+    if (!isDevSeedMode() || !selectedPersonObj?.id) return 0;
+    let totalComments = 0;
+    (projects || []).forEach(proj => {
+      const comments = devStore.listComments(proj.id) || [];
+      totalComments += comments.filter(cmt => cmt.author_id === selectedPersonObj.id && !cmt.deleted_at).length;
+    });
+    return totalComments;
+  }, [selectedPersonObj?.id, projects]);
+
   /* ═══ LOADING / ERROR GATE ═══════════════════════════════ */
 
   if (error) {
@@ -303,26 +174,8 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
   if (!selectedPerson) {
     let flatIdx = 0;
 
-    // ─── KPI aggregates (computed from people + commitments) ────
+    // ─── KPI aggregates ────
     const teamSize = people.length;
-    const squadCounts = people.reduce((acc, p) => {
-      const sq = p.squad || "Unassigned";
-      acc[sq] = (acc[sq] || 0) + 1;
-      return acc;
-    }, {});
-    const squadEntries = Object.entries(squadCounts).sort((a, b) => b[1] - a[1]);
-    const topSquads = squadEntries.slice(0, 4);
-    const moreSquads = squadEntries.length - topSquads.length;
-
-    const activeThisWeek = people.filter(p => {
-      const cm = commitments.find(x => x.person === p.name);
-      if (!cm) return false;
-      return cm.items.some((it, idx) => cm.deselected !== idx && (it.title?.trim() || it.project));
-    }).length;
-
-    const uniqueRoles = new Set(people.map(p => p.role).filter(Boolean)).size;
-    // Per-role head-counts for the Team KPI card: top 4 roles by count
-    // plus a "+N more" chip when there's a long tail.
     const roleCounts = people.reduce((acc, p) => {
       const r = (p.role || "").trim();
       if (!r) return acc;
@@ -330,40 +183,35 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
       return acc;
     }, {});
     const roleEntries = Object.entries(roleCounts).sort((a, b) => b[1] - a[1]);
-    // Top 3 (not 4) so the pill row stays on a single line inside the KPI card.
     const topRoles = roleEntries.slice(0, 3);
     const moreRoles = roleEntries.length - topRoles.length;
 
-    // Aggregate team momentum = avg of per-person momentum values (excluding nulls)
-    const momValues = people.map(p => momentumMap[p.name]).filter(v => v != null);
-    const teamHealth = momValues.length
-      ? Math.round(momValues.reduce((a, b) => a + b, 0) / momValues.length)
-      : teamSize > 0 ? Math.round((activeThisWeek / teamSize) * 100) : 0;
+    const realSquads = [...new Set(people.map(p => p.squad).filter(Boolean))];
+    const squadCount = realSquads.length;
+
+    // Average team per project
+    const activeProjects = (projects || []).filter(p => p.status !== "deprioritized");
+    const totalMembers = activeProjects.reduce((sum, proj) => {
+      if (isDevSeedMode()) {
+        const members = devStore.listMembers(proj.id) || [];
+        return sum + members.length;
+      }
+      return sum + 1; // fallback
+    }, 0);
+    const avgTeamPerProject = activeProjects.length > 0
+      ? (totalMembers / activeProjects.length).toFixed(1)
+      : "0";
 
     return (
       <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-
-        {/* ═══════════════════════════════════════════════════════════
-            SCROLLABLE CONTENT — people cards (only this area scrolls)
-            ═══════════════════════════════════════════════════════════ */}
         <div style={{ position: "relative", zIndex: 1, padding: `0 ${space[4]}px`, display: "flex", flexDirection: "column", gap: space[3] }}>
 
-        {/* ═══════════════════════════════════════════════════════════
-            KPI GRID — 4 purpose-built cards per design-directions.html §KPI
-            Card 1 (wide): Team roster + squad PillRow
-            Card 2: Active This Week (people with ≥1 committed item)
-            Card 3: Roles (unique roles across team)
-            Card 4: HealthGauge — avg per-person momentum, falls back to
-                    (active/total) * 100 if no momentum data available
-            ═══════════════════════════════════════════════════════════ */}
-        <KpiGrid>
+        {/* ═══ KPI GRID ═══ */}
+        <KpiGrid cols="1fr 1fr 1fr">
           <KpiCard
             label="Team"
             value={teamSize}
-            sub={(() => {
-              const realSquads = Object.keys(squadCounts).filter(k => k !== "Unassigned");
-              return `${realSquads.length} squad${realSquads.length === 1 ? "" : "s"}`;
-            })()}
+            sub={`${roleEntries.length} role${roleEntries.length === 1 ? "" : "s"}`}
           >
             <PillRow style={{ flexWrap: "nowrap", overflow: "hidden" }}>
               {topRoles.map(([role, count]) => (
@@ -375,26 +223,18 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
             </PillRow>
           </KpiCard>
           <KpiCard
-            label="Active This Week"
-            value={activeThisWeek}
-            sub={teamSize > 0 ? `${Math.round((activeThisWeek / teamSize) * 100)}% of team committed` : "—"}
+            label="Squads"
+            value={squadCount}
+            sub={`${squadCount} active squad${squadCount === 1 ? "" : "s"}`}
           />
           <KpiCard
-            label="Roles"
-            value={uniqueRoles}
-            sub={uniqueRoles === 1 ? "role represented" : "distinct roles across team"}
-          />
-          <HealthGauge
-            value={momValues.length ? teamHealth : 0}
-            label={momValues.length ? "Team Momentum" : "Participation"}
-            sub={momValues.length ? "avg per-person momentum" : "no momentum history yet"}
+            label="Avg Team / Project"
+            value={avgTeamPerProject}
+            sub={`across ${activeProjects.length} active projects`}
           />
         </KpiGrid>
 
-        {/* ═══════════════════════════════════════════════════════════
-            SEARCH ROW — mirrors the Projects tab: full-width plain input.
-            Squad/role filtering lives on the KPI pills instead.
-            ═══════════════════════════════════════════════════════════ */}
+        {/* ═══ SEARCH ROW ═══ */}
         <div style={{ position: "relative" }}>
           <input ref={localSearchRef} value={search} onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
             aria-label="Search people by name, squad, or role"
@@ -423,7 +263,7 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
           )}
         </div>
 
-        {/* People grouped by squad — squad header now doubles as the section head */}
+        {/* People grouped by squad */}
         {Object.entries(squadsWithPeople).map(([squad, members]) => {
           const startIdx = flatIdx;
           flatIdx += members.length;
@@ -436,13 +276,8 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 260px), 1fr))", gap: space[4] }}>
                 {members.map((p, gi) => {
-                  const cm = commitments.find(x => x.person === p.name);
-                  const items = cm ? cm.items.slice(0, 3).filter((it, idx) => cm.deselected !== idx && (it.title?.trim() || it.project)) : [];
-                  const typeCounts = items.reduce((acc, it) => { if (it.type) acc[it.type] = (acc[it.type] || 0) + 1; return acc; }, {});
-                  const projIds = [...new Set(items.map(it => it.project).filter(Boolean))];
-                  const hasDeselect = cm && cm.deselected >= 0;
                   const isFocused = kbActive && (startIdx + gi) === focusIdx;
-                  const momPct = momentumMap[p.name] ?? null;
+                  const projCount = personProjectCounts[p.id] || 0;
 
                   return (
                     <div key={p.name} role="button" tabIndex={0} aria-label={`Open ${p.name}`} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPerson(p.name); } }} className={`flow-row${isFocused ? " flow-kb-focus" : ""}`} onClick={() => openPerson(p.name)} style={{
@@ -461,20 +296,18 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                             <span title={p.name} style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3 }}>{p.name}</span>
-                            {hasDeselect && <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.accent }} title="Scope churn — dropped a committed item this week" aria-label="Scope churn">↩</span>}
                           </div>
                           <div title={p.role || ""} style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: typo.bodySm.weight, color: c.textMid, marginTop: space[1], lineHeight: 1.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                             {p.role || "—"}
                           </div>
                         </div>
                       </div>
-                      {/* Momentum indicator */}
-                      <div role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={momPct ?? 0} aria-label={`Momentum ${momPct === null ? "unknown" : momPct + "%"}`} style={{ textAlign: "right", flexShrink: 0, marginLeft: space[3] }}>
-                        <div className="flow-color-tween" style={{ display: "flex", alignItems: "baseline", justifyContent: "flex-end", gap: space[1], fontFamily: typo.displayHero.font, fontSize: typo.monoLg.size * 1.5, fontWeight: typo.displayHero.weight, color: momPct === null ? c.textMid : momPct >= 80 ? c.green : momPct >= 50 ? c.accent : c.red, lineHeight: 1.1, fontVariantNumeric: "tabular-nums", letterSpacing: typo.displayHero.tracking }}>
-                          <span aria-hidden="true" style={{ fontSize: typo.monoSm.size }}>{momPct === null ? "" : momPct >= 80 ? "▲" : momPct >= 50 ? "●" : "▼"}</span>
-                          <span>{momPct === null ? "—" : `${momPct}%`}</span>
+                      {/* Project count */}
+                      <div style={{ textAlign: "right", flexShrink: 0, marginLeft: space[3] }}>
+                        <div style={{ fontFamily: typo.monoLg.font, fontSize: 22, fontWeight: 700, color: c.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
+                          {projCount}
                         </div>
-                        <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textMid, marginTop: space[1], textTransform: "uppercase" }}>Momentum</div>
+                        <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textMid, marginTop: space[1], textTransform: "uppercase" }}>Project{projCount !== 1 ? "s" : ""}</div>
                       </div>
                     </div>
                   );
@@ -490,17 +323,50 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
             title={people.length === 0 ? "No people yet" : "No people match"}
             message={
               people.length === 0
-                ? "Invite teammates in Settings to see them here."
+                ? "Add team members to see them here."
                 : localFilterCount > 0
                   ? "Try adjusting your filters or search query."
                   : globalFilterCount > 0
-                    ? "No teammates match the global filter at the top of the app. Clear it from the app header to see everyone."
+                    ? "No teammates match the global filter. Clear it from the app header to see everyone."
                     : "No teammates to show."
             }
             action={localFilterCount > 0 ? "Clear filters" : null}
             onAction={() => { setSearch(""); setFSquad(""); setFRole(""); setFocusIdx(0); }}
           />
         )}
+
+        {/* Sticky Add Member FAB */}
+        <button
+          className="flow-btn"
+          onClick={() => setShowAddMember(true)}
+          style={{
+            position: "fixed", bottom: 28, right: 28, zIndex: 100,
+            display: "flex", alignItems: "center", gap: space[2],
+            padding: `${space[3]}px ${space[5]}px`,
+            background: c.accent, color: "#fff",
+            border: "none", borderRadius: layout.radiusLg,
+            fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: 600,
+            cursor: "pointer",
+            boxShadow: `0 4px 16px ${c.accent}50, ${c.shadowElevated}`,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add Member
+        </button>
+
+        {/* Add Member Modal */}
+        <Modal open={showAddMember} title="Add Team Member" onClose={() => setShowAddMember(false)}>
+          <AddMemberForm
+            squads={allSquads}
+            roles={allRoles}
+            projects={projects}
+            setPeople={setPeople}
+            onClose={() => setShowAddMember(false)}
+          />
+        </Modal>
+
       </div>{/* end scrollable content */}
       </div>
     );
@@ -509,7 +375,7 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
 
   /* ═══ DETAIL VIEW ═══════════════════════════════════════ */
 
-  const personObj = people.find(p => p.name === selectedPerson);
+  const personObj = selectedPersonObj;
   if (!personObj) {
     return (
       <EmptyState
@@ -521,54 +387,23 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
       />
     );
   }
-  const data = computePersonData(selectedPerson, commitments, projects, history, weekConfig);
-  const { currentItems, weeklyData, scopeChurnEvents } = data;
 
-  const allPersonProjects = Object.keys(data.projectMap);
-  const momentumPct = data.momentum;
+  // Compute person's projects
+  const personProjects = (projects || []).filter(proj =>
+    proj.owner_id === personObj.id ||
+    (isDevSeedMode() && devStore.listMembers(proj.id)?.some(m => m.person_id === personObj.id))
+  );
+  const inFlightProjects = personProjects.filter(p => IN_FLIGHT_PHASES.includes(p.phase) && p.status !== "deprioritized");
+  const shippedProjects = personProjects.filter(p => SHIPPED_PHASES.includes(p.phase));
 
-  // Timeline: always include this week (even when empty) for continuity,
-  // but only if there's any activity at all (past or current) worth showing.
-  const currentWkData = weeklyData.find(w => w.isCurrent);
-  const pastActiveRaw = [...weeklyData].reverse().filter(w => !w.isCurrent && w.total > 0);
-  // Historical mode — only show weeks at or before the selected week for the
-  // "Last active" KPI. Week keys compared numerically via weekKeyAtOrBefore.
-  const pastActive = isHistorical && selectedWeekKey
-    ? pastActiveRaw.filter(w => weekKeyAtOrBefore(w.week, selectedWeekKey))
-    : pastActiveRaw;
-  const hasAnyActivity = pastActive.length > 0 || (currentWkData && currentWkData.total > 0);
-  const activeWeeks = hasAnyActivity && currentWkData ? [currentWkData, ...pastActive] : pastActive;
-  const activeWeekCount = pastActive.length + (currentWkData && currentWkData.total > 0 ? 1 : 0);
-
-  // Most recent week with activity (skips empty weeks so the KPI is meaningful).
-  const lastActiveWeek = pastActive[0] || null;
-  const lastWeekTotal = lastActiveWeek ? lastActiveWeek.total : 0;
-  const lastWeekLabel = lastActiveWeek ? lastActiveWeek.week : "";
-  const lastWeekDone = lastActiveWeek
-    ? lastActiveWeek.items.filter(it => it.outcome === "done" || it.outcome === "done_carry").length
-    : 0;
-
-  const thisWeekProjCount = new Set(currentItems.map(it => it.project).filter(Boolean)).size;
-
-  // Current-week outcome breakdown — the coaching signal
-  const currentStatus = currentItems.reduce((acc, it) => {
-    const o = it.outcome;
-    if (o === "blocked") acc.blocked++;
-    else if (o === "carry" || o === "done_carry") acc.carrying++;
-    else if (o === "done") acc.done++;
-    else if (o === "partial") acc.partial++;
-    else acc.pending++;
-    return acc;
-  }, { blocked: 0, carrying: 0, done: 0, partial: 0, pending: 0 });
-
-  // Split scope churn by kind — buffer is NOT churn, dropped items are.
-  const droppedEvents = scopeChurnEvents.filter(ev => ev.type === "deselect");
-  const bufferEvents = scopeChurnEvents.filter(ev => ev.type === "buffer");
+  // Weeks active (rough: divide total comments by some weekly average)
+  const weeksActive = Math.max(1, Math.ceil(activityScore / 3));
+  const weeklyAvg = activityScore > 0 ? (activityScore / weeksActive).toFixed(1) : "0";
 
   return (
     <div key={selectedPerson} className="flow-enter-slide" style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
-      {/* ═══ HERO CARD — avatar + identity (Steel & Orange §8.2) ═══ */}
+      {/* ═══ HERO CARD ═══ */}
       <div style={{
         padding: space[6], background: c.surface,
         border: `1px solid ${c.border}`, borderRadius: layout.radiusLg,
@@ -608,87 +443,27 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
         </div>
       </div>
 
-      {/* ═══ KPI GRID — 4 cards: Momentum / This Week / Last Week / Gauge ═══ */}
-      <KpiGrid>
+      {/* ═══ KPI GRID — In Flight / Shipped / Activity ═══ */}
+      <KpiGrid cols="1fr 1fr 1fr">
         <KpiCard
-          index={0}
-          label="Momentum"
-          value={momentumPct === null ? "—" : `${momentumPct}%`}
-          sub={
-            momentumPct === null
-              ? "No activity logged yet"
-              : momentumPct >= 80
-                ? "Strong — shipping consistently"
-                : momentumPct >= 50
-                  ? "Steady — mixed outcomes recent"
-                  : "At risk — low completion rate"
-          }
+          label="In Flight"
+          value={inFlightProjects.length}
+          sub={inFlightProjects.length === 0 ? "No active projects" : `${inFlightProjects.length} project${inFlightProjects.length !== 1 ? "s" : ""} in progress`}
         />
         <KpiCard
-          index={1}
-          label={isHistorical ? (selectedWeekKey || "Selected Week") : "This Week"}
-          value={currentItems.length}
-          sub={
-            currentItems.length === 0
-              ? "No commitments"
-              : `${thisWeekProjCount} project${thisWeekProjCount !== 1 ? "s" : ""}`
-          }
+          label="Shipped"
+          value={shippedProjects.length}
+          sub={shippedProjects.length === 0 ? "No shipped projects" : `${shippedProjects.length} in Alpha/Beta/GA`}
         />
         <KpiCard
-          index={2}
-          label="Last Active"
-          value={lastActiveWeek ? lastWeekTotal : "—"}
-          sub={
-            lastActiveWeek
-              ? `${lastWeekLabel} · ${lastWeekDone} of ${lastWeekTotal} done`
-              : "No activity yet"
-          }
-        />
-        <KpiCard
-          index={3}
-          label="Status"
-          value={
-            currentItems.length === 0
-              ? "—"
-              : (
-                <span style={{ display: "inline-flex", gap: 10, alignItems: "baseline", fontVariantNumeric: "tabular-nums" }}>
-                  {currentStatus.blocked > 0 && (
-                    <span title="Blocked" style={{ color: c.red, fontWeight: 700 }}>{currentStatus.blocked}<span style={{ fontSize: 12, marginLeft: 2, letterSpacing: "0.08em" }}>B</span></span>
-                  )}
-                  {currentStatus.carrying > 0 && (
-                    <span title="Carrying" style={{ color: c.orange, fontWeight: 700 }}>{currentStatus.carrying}<span style={{ fontSize: 12, marginLeft: 2, letterSpacing: "0.08em" }}>C</span></span>
-                  )}
-                  {currentStatus.partial > 0 && (
-                    <span title="Partial" style={{ color: c.orange, fontWeight: 700 }}>{currentStatus.partial}<span style={{ fontSize: 12, marginLeft: 2, letterSpacing: "0.08em" }}>P</span></span>
-                  )}
-                  {currentStatus.done > 0 && (
-                    <span title="Done" style={{ color: c.green, fontWeight: 700 }}>{currentStatus.done}<span style={{ fontSize: 12, marginLeft: 2, letterSpacing: "0.08em" }}>D</span></span>
-                  )}
-                  {currentStatus.blocked + currentStatus.carrying + currentStatus.partial + currentStatus.done === 0 && (
-                    <span title="Pending" style={{ color: c.textDim, fontWeight: 700 }}>{currentStatus.pending}</span>
-                  )}
-                </span>
-              )
-          }
-          sub={
-            currentItems.length === 0
-              ? "Awaiting commitments"
-              : (() => {
-                const parts = [];
-                if (currentStatus.blocked) parts.push(`${currentStatus.blocked} blocked`);
-                if (currentStatus.carrying) parts.push(`${currentStatus.carrying} carrying`);
-                if (currentStatus.partial) parts.push(`${currentStatus.partial} partial`);
-                if (currentStatus.done) parts.push(`${currentStatus.done} done`);
-                if (currentStatus.pending) parts.push(`${currentStatus.pending} pending`);
-                return parts.length ? parts.join(" · ") : "Awaiting close";
-              })()
-          }
+          label="Activity"
+          value={activityScore}
+          sub={activityScore === 0 ? "No comments yet" : `~${weeklyAvg} comments/week`}
         />
       </KpiGrid>
 
 
-      {/* ═══ PROJECT INVOLVEMENT — owns / member of / recent posts.
-             Replaces the legacy commit-driven ActivityTimeline. ═══ */}
+      {/* ═══ PROJECT INVOLVEMENT ═══ */}
       <PersonProjects
         person={personObj}
         projects={projects}
@@ -697,5 +472,134 @@ const PeopleDeepDive = ({ people, commitments, projects, history, onNavigate, in
     </div>
   );
 };
+
+/* ═══ ADD MEMBER FORM ═══════════════════════════════════════ */
+
+function AddMemberForm({ squads, roles, projects, setPeople, onClose }) {
+  const [name, setName] = useState("");
+  const [squad, setSquad] = useState("");
+  const [role, setRole] = useState("");
+  const [selectedProjects, setSelectedProjects] = useState([]);
+
+  const toggleProject = (id) => {
+    setSelectedProjects(prev =>
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    if (isDevSeedMode()) {
+      const newPerson = devStore.addPerson({ name: name.trim(), squad, role });
+      // Add to selected projects as member
+      selectedProjects.forEach(projId => {
+        devStore.addMember(projId, newPerson.id, null);
+      });
+      // Update React state
+      if (setPeople) {
+        setPeople([...seedPeople]);
+      }
+    } else {
+      // Real DB path
+      try {
+        const personId = await addPersonToDB(name.trim(), squad, role);
+        if (personId && setPeople) {
+          setPeople(prev => [...prev, { id: personId, name: name.trim(), squad, role }]);
+        }
+      } catch (err) {
+        console.error("[Flow] Add member failed:", err);
+      }
+    }
+    onClose();
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: space[4], minWidth: 340 }} data-suppress-shortcuts>
+      <div>
+        <label style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid, marginBottom: space[1], display: "block" }}>Name *</label>
+        <input
+          value={name} onChange={e => setName(e.target.value)}
+          placeholder="Full name"
+          autoFocus
+          style={{
+            width: "100%", height: 36, padding: `0 ${space[3]}px`,
+            borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+            background: c.surfaceAlt, color: c.text,
+            fontFamily: typo.bodyMd.font, fontSize: 14, outline: "none", boxSizing: "border-box",
+          }}
+        />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+        <div>
+          <label style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid, marginBottom: space[1], display: "block" }}>Squad</label>
+          <select
+            value={squad} onChange={e => setSquad(e.target.value)}
+            style={{
+              width: "100%", height: 36, padding: `0 ${space[3]}px`,
+              borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+              background: c.surfaceAlt, color: c.text,
+              fontFamily: typo.bodyMd.font, fontSize: 14, outline: "none",
+            }}
+          >
+            <option value="">Select squad</option>
+            {squads.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid, marginBottom: space[1], display: "block" }}>Role</label>
+          <select
+            value={role} onChange={e => setRole(e.target.value)}
+            style={{
+              width: "100%", height: 36, padding: `0 ${space[3]}px`,
+              borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+              background: c.surfaceAlt, color: c.text,
+              fontFamily: typo.bodyMd.font, fontSize: 14, outline: "none",
+            }}
+          >
+            <option value="">Select role</option>
+            {roles.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid, marginBottom: space[2], display: "block" }}>Projects (optional)</label>
+        <div style={{
+          maxHeight: 160, overflowY: "auto", border: `1px solid ${c.border}`,
+          borderRadius: layout.radiusSm, background: c.surfaceAlt,
+        }}>
+          {(projects || []).filter(p => p.status !== "deprioritized").map(proj => (
+            <label key={proj.id} style={{
+              display: "flex", alignItems: "center", gap: space[2],
+              padding: `${space[2]}px ${space[3]}px`, cursor: "pointer",
+              borderBottom: `1px solid ${c.border}10`,
+              background: selectedProjects.includes(proj.id) ? c.accentDim : "transparent",
+            }}>
+              <input
+                type="checkbox"
+                checked={selectedProjects.includes(proj.id)}
+                onChange={() => toggleProject(proj.id)}
+                style={{ accentColor: c.accent }}
+              />
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700, color: c.orange }}>{proj.id}</span>
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{proj.name}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: space[3], marginTop: space[2] }}>
+        <button className="flow-btn" onClick={onClose} style={{
+          padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusSm,
+          border: `1px solid ${c.border}`, background: c.surface, color: c.textMid,
+          fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, cursor: "pointer",
+        }}>Cancel</button>
+        <button className="flow-btn" onClick={handleSubmit} disabled={!name.trim()} style={{
+          padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusSm,
+          border: "none", background: name.trim() ? c.accent : c.border, color: "#fff",
+          fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, cursor: name.trim() ? "pointer" : "not-allowed",
+        }}>Add Member</button>
+      </div>
+    </div>
+  );
+}
 
 export default PeopleDeepDive;

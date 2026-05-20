@@ -6,6 +6,9 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { c, typo, layout, space, motion, mono } from "../styles/theme";
 import { FilterChip, Btn, Modal } from "./shared";
 import { ANNOUNCEMENTS } from "../data/announcements";
+import { isDevSeedMode, devStore } from "../data/devSeed";
+import { addProjectCommentToDB } from "../lib/mutations";
+import { timeAgo, fmtAbsolute } from "../lib/time";
 import FlowLogo from "./FlowLogo";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
@@ -69,7 +72,7 @@ function getDayRhythm() {
    Detail mode:    Layer 1 shows breadcrumb, Layer 2 hidden
    ════════════════════════════════════════════════════════════════════ */
 export function Header({
-  weekLabel, weekOffset, onWeekPrev, onWeekNext, onLogoClick,
+  onLogoClick,
   detailLabel, onBack, breadcrumbLabel,
   activeTab, onTabSwitch,
   onCmdOpen,
@@ -79,6 +82,9 @@ export function Header({
   allOwners, allSquads, allPeople,
   // ── Auth ──
   currentUser,
+  alertCount = 0,
+  // ── Inbox modal data ──
+  projects, people, currentPerson, onNavigate,
 }) {
 
   const devRef = useDevLabel('Header', 'src/components/AppShell.jsx', 'Two-layer app header with nav, week controls, and filters');
@@ -297,6 +303,13 @@ export function Header({
                   transition: `color ${motion.fast.duration} ${motion.fast.easing}`,
                 }}>
                 {tab.label}
+                {tab.key === "summary" && alertCount > 0 && !active && (
+                  <span style={{
+                    width: 8, height: 8, borderRadius: "50%",
+                    background: c.accent, flexShrink: 0,
+                    animation: "flow-accent-pulse 2s ease-in-out infinite",
+                  }} />
+                )}
                 {/* Numeric shortcut hint — subtle hotkey */}
                 {tab.num && <span className="flow-tab-hotkey" style={{
                   fontFamily: typo.monoSm.font, fontSize: 11,
@@ -331,8 +344,16 @@ export function Header({
       <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
         <CompactSearch onClick={onCmdOpen} />
 
+        {/* ── Inbox (mentions) ── */}
+        <InboxBell
+          projects={projects}
+          people={people}
+          currentPerson={currentPerson}
+          onNavigate={onNavigate}
+        />
+
         {/* ── Announcements (What's new) ── */}
-        <AnnouncementsBell />
+        <AnnouncementsBell projects={projects} people={people} currentPerson={currentPerson} onNavigate={onNavigate} />
 
         {/* ── Terminal button (Settings, Logs & Rant) ── */}
         <button
@@ -376,66 +397,18 @@ export function Header({
         position: "relative", zIndex: 1,
       }}>
 
-        {/* ── Week navigator (tactical) ── */}
-        <div className="flow-week-nav" style={{
+        {/* ── Today's date ── */}
+        <div style={{
           display: "flex", alignItems: "center",
           borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
           background: c.surfaceAlt,
-          overflow: "hidden", flexShrink: 0,
+          padding: `2px ${space[2]}px`,
+          flexShrink: 0, gap: 4,
         }}>
-          <button onClick={onWeekPrev} className="flow-btn" style={{
-            padding: `2px ${space[1] + 2}px`, border: "none", background: "transparent",
-            cursor: "pointer", display: "flex", alignItems: "center",
-            color: c.textMid, transition: `color ${motion.interaction.duration}`,
-          }} title="Previous week">
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-              <path d="M10 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-          <div style={{
-            padding: `2px ${space[2]}px`,
-            borderLeft: `1px solid ${c.border}`, borderRight: `1px solid ${c.border}`,
-            display: "flex", alignItems: "center", gap: 4,
-          }}>
-            <span style={{
-              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-              fontWeight: typo.monoSm.weight,
-              color: c.textDim, letterSpacing: typo.monoSm.tracking,
-            }}>WK</span>
-            <span style={{
-              fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, fontWeight: 600,
-              color: weekOffset === 0 ? c.textMid : c.accent,
-              whiteSpace: "nowrap",
-            }}>{weekLabel}</span>
-            {weekOffset !== 0 && (
-              <span style={{
-                fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
-                color: c.accent, padding: "1px 3px", borderRadius: layout.radiusTag,
-                background: `${c.accent}12`, border: `1px solid ${c.accent}25`,
-                letterSpacing: typo.monoSm.tracking, lineHeight: 1,
-              }}>PAST</span>
-            )}
-          </div>
-          <button
-            onClick={weekOffset < 0 ? onWeekNext : undefined}
-            className="flow-btn"
-            disabled={weekOffset >= 0}
-            aria-disabled={weekOffset >= 0}
-            style={{
-              padding: `2px ${space[1] + 2}px`, border: "none", background: "transparent",
-              cursor: weekOffset < 0 ? "pointer" : "not-allowed",
-              display: "flex", alignItems: "center",
-              color: weekOffset < 0 ? c.textMid : c.textGhost || c.textDim,
-              opacity: weekOffset < 0 ? 1 : 0.35,
-              pointerEvents: weekOffset < 0 ? "auto" : "none",
-              transition: `color ${motion.interaction.duration}`,
-            }}
-            title={weekOffset < 0 ? "Next week" : "Already on current week"}
-          >
-            <svg width="10" height="10" viewBox="0 0 16 16" fill="none">
-              <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
+          <span style={{
+            fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, fontWeight: 600,
+            color: c.textMid, whiteSpace: "nowrap",
+          }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
         </div>
 
         {/* ── Separator ── */}
@@ -1747,6 +1720,517 @@ function CompactSearch({ onClick }) {
 }
 
 /* ════════════════════════════════════════════════════════════════════
+   INBOX BELL — @mention inbox in a modal dialog
+   ════════════════════════════════════════════════════════════════════ */
+function extractMentionsFromBody(text) {
+  if (!text) return [];
+  const mentions = new Set();
+  const regex = /@([A-Z]\w*(?:\s[A-Z]\w*)?)/g;
+  const regexLower = /@([a-z]\w*)/g;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    mentions.add(m[1].toLowerCase());
+    const fn = m[1].toLowerCase().split(/\s+/)[0];
+    if (fn !== m[1].toLowerCase()) mentions.add(fn);
+  }
+  while ((m = regexLower.exec(text)) !== null) mentions.add(m[1].toLowerCase());
+  return [...mentions];
+}
+
+function InboxBell({ projects, people, currentPerson, onNavigate }) {
+  const [open, setOpen] = React.useState(false);
+  const [readIds, setReadIds] = React.useState(() => {
+    try { return new Set(JSON.parse(sessionStorage.getItem("flow_inbox_read") || "[]")); }
+    catch (_e) { return new Set(); }
+  });
+  const [replyingTo, setReplyingTo] = React.useState(null);
+  const [replyDraft, setReplyDraft] = React.useState("");
+  const [posting, setPosting] = React.useState(false);
+  const [squadFilter, setSquadFilter] = React.useState(null);
+  const [_evVer, _setEvVer] = React.useState(0);
+  React.useEffect(() => {
+    if (!isDevSeedMode()) return;
+    return devStore.subscribe(() => _setEvVer(v => v + 1));
+  }, []);
+
+  const viewerName = currentPerson?.name;
+  const peopleById = React.useMemo(() => {
+    const m = new Map();
+    (people || []).forEach(p => m.set(p.id, p));
+    return m;
+  }, [people]);
+  const projectsById = React.useMemo(() => {
+    const m = new Map();
+    (projects || []).forEach(p => m.set(p.id, p));
+    return m;
+  }, [projects]);
+
+  const mentions = React.useMemo(() => {
+    if (!viewerName || !isDevSeedMode()) return [];
+    const vn = viewerName.toLowerCase();
+    const firstName = viewerName.split(/\s+/)[0]?.toLowerCase();
+    const allComments = (projects || []).flatMap(proj => {
+      const comments = devStore.listComments(proj.id) || [];
+      return comments.map(cmt => ({ ...cmt, _projectId: proj.id }));
+    });
+    return allComments
+      .filter(cmt => {
+        if (cmt.deleted_at) return false;
+        if (cmt.author_id === currentPerson?.id) return false;
+        const names = extractMentionsFromBody(cmt.body);
+        return names.some(n => n === vn || n === firstName);
+      })
+      .map(cmt => ({
+        comment: cmt,
+        project: projectsById.get(cmt._projectId || cmt.project_id),
+        author: peopleById.get(cmt.author_id),
+      }))
+      .sort((a, b) => new Date(b.comment.created_at) - new Date(a.comment.created_at));
+  }, [projects, people, viewerName, currentPerson?.id, projectsById, peopleById]);
+
+  // Weekly project updates: new projects + phase changes from the last 7 days
+  const weeklyUpdates = React.useMemo(() => {
+    if (!isDevSeedMode()) return [];
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const updates = [];
+    (projects || []).forEach(proj => {
+      const events = devStore.listEvents(proj.id) || [];
+      events.forEach(ev => {
+        const ts = new Date(ev.created_at);
+        if (ts < oneWeekAgo) return;
+        const d = ev.details || {};
+        if (ev.action === "project_created") {
+          updates.push({
+            id: ev.id, icon: "🆕", who: ev.user_name || "Someone",
+            label: "created a new project ",
+            projectName: proj.name, projectId: proj.id,
+            squad: proj.squad, ts: ev.created_at,
+          });
+        } else if (ev.action === "project_phase_changed") {
+          updates.push({
+            id: ev.id, icon: "📦", who: ev.user_name || "Someone",
+            label: "moved ",
+            projectName: proj.name,
+            phaseText: `from ${d.from || "?"} → ${d.to || "?"}`,
+            projectId: proj.id, squad: proj.squad, ts: ev.created_at,
+          });
+        } else if (ev.action === "shoutout") {
+          updates.push({
+            id: ev.id, icon: "👏", who: d.from || ev.user_name || "Someone",
+            label: "gave a shoutout for ",
+            projectName: proj.name, projectId: proj.id,
+            squad: proj.squad, ts: ev.created_at,
+          });
+        } else if (ev.action === "feedback") {
+          updates.push({
+            id: ev.id, icon: "💬", who: d.from || ev.user_name || "Someone",
+            label: "left feedback on ",
+            projectName: proj.name, projectId: proj.id,
+            squad: proj.squad, ts: ev.created_at,
+          });
+        }
+      });
+    });
+    updates.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    return updates;
+  }, [projects, _evVer]);
+
+  const displayUnread = mentions.filter(m => !readIds.has(m.comment.id)).length;
+
+  const markRead = React.useCallback((id) => {
+    setReadIds(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      try { sessionStorage.setItem("flow_inbox_read", JSON.stringify([...next])); } catch (_e) {}
+      return next;
+    });
+  }, []);
+  const markAllRead = React.useCallback(() => {
+    setReadIds(prev => {
+      const next = new Set(prev);
+      mentions.forEach(m => next.add(m.comment.id));
+      try { sessionStorage.setItem("flow_inbox_read", JSON.stringify([...next])); } catch (_e) {}
+      return next;
+    });
+  }, [mentions]);
+
+  const submitReply = React.useCallback(async (projectId) => {
+    if (!replyDraft.trim() || !projectId || !currentPerson?.id) return;
+    setPosting(true);
+    await addProjectCommentToDB(projectId, currentPerson.id, replyDraft.trim());
+    setPosting(false);
+    setReplyDraft("");
+    setReplyingTo(null);
+    window.__flowToast?.("Reply posted");
+  }, [replyDraft, currentPerson?.id]);
+
+  const highlightMention = (text, name) => {
+    if (!text || !name) return text;
+    const parts = [];
+    let lastIdx = 0;
+    const regex = new RegExp(`@(${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
+    let m;
+    while ((m = regex.exec(text)) !== null) {
+      if (m.index > lastIdx) parts.push(text.slice(lastIdx, m.index));
+      parts.push(
+        <span key={m.index} style={{
+          background: c.accentDim, color: c.accent, fontWeight: 600,
+          padding: "1px 5px", borderRadius: 4,
+        }}>@{m[1]}</span>
+      );
+      lastIdx = m.index + m[0].length;
+    }
+    if (lastIdx < text.length) parts.push(text.slice(lastIdx));
+    return parts.length ? parts : text;
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={displayUnread > 0 ? `Inbox — ${displayUnread} unread` : "Inbox"}
+        title="Inbox"
+        style={{
+          width: 34, height: 34, borderRadius: layout.radiusSm,
+          border: `1px solid ${c.border}`,
+          background: c.surfaceAlt,
+          cursor: "pointer", position: "relative",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          outline: "none",
+          transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = c.surface; e.currentTarget.style.borderColor = c.borderMedium || c.border; }}
+        onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.borderColor = c.border; }}
+      >
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.textMid} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2" />
+          <path d="M22 7l-10 7L2 7" />
+        </svg>
+        {displayUnread > 0 && (
+          <span aria-hidden="true" style={{
+            position: "absolute", top: 3, right: 3,
+            minWidth: 16, height: 16, borderRadius: 999,
+            background: c.accent, color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: mono, fontSize: 9, fontWeight: 700,
+            padding: "0 4px", boxSizing: "border-box",
+            boxShadow: `0 0 0 2px ${c.surfaceAlt}`,
+          }}>{displayUnread > 9 ? "9+" : displayUnread}</span>
+        )}
+      </button>
+
+      <Modal open={open} onClose={() => { setOpen(false); setReplyingTo(null); setSquadFilter(null); }} title="Inbox" accent={c.accent} width={580}>
+        <div style={{ height: "min(560px, 65vh)", display: "flex", flexDirection: "column" }}>
+        {/* ── Squad Filter ── */}
+        {(() => {
+          const allSquads = [...new Set((projects || []).map(p => p.squad).filter(Boolean))].sort();
+          if (allSquads.length < 2) return null;
+          return (
+            <div style={{
+              display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap",
+              marginBottom: space[4], paddingBottom: space[3],
+              borderBottom: `1px solid ${c.border}`,
+            }}>
+              <span style={{
+                fontFamily: mono, fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.08em", textTransform: "uppercase", color: c.textDim,
+                marginRight: space[1],
+              }}>Squad</span>
+              {[null, ...allSquads].map(sq => {
+                const active = squadFilter === sq;
+                return (
+                  <button key={sq || "__all"} type="button" onClick={() => setSquadFilter(sq)} style={{
+                    padding: "3px 10px", borderRadius: 999,
+                    background: active ? c.accent : c.surfaceAlt,
+                    color: active ? "#fff" : c.textMid,
+                    border: `1px solid ${active ? c.accent : c.border}`,
+                    fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", transition: `all ${motion.fast.duration} ${motion.fast.easing}`,
+                  }}>{sq || "All"}</button>
+                );
+              })}
+            </div>
+          );
+        })()}
+
+        {/* ── Section 1: Mentions ── */}
+        {(() => {
+          const filtered = squadFilter
+            ? mentions.filter(m => m.project?.squad === squadFilter)
+            : mentions;
+          const filteredUnread = filtered.filter(m => !readIds.has(m.comment.id)).length;
+          return (
+            <div style={{ marginBottom: space[4], flexShrink: 0, maxHeight: "50%", display: "flex", flexDirection: "column" }}>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                marginBottom: space[3], flexShrink: 0,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                  <span style={{
+                    fontFamily: mono, fontSize: 10, fontWeight: 700,
+                    letterSpacing: "0.1em", textTransform: "uppercase", color: c.textDim,
+                  }}>Mentions</span>
+                  {filteredUnread > 0 && (
+                    <span style={{
+                      padding: "1px 7px", borderRadius: 999,
+                      background: c.accentDim, color: c.accent,
+                      fontFamily: mono, fontSize: 10, fontWeight: 700,
+                    }}>{filteredUnread}</span>
+                  )}
+                </div>
+                {filteredUnread > 0 && (
+                  <button type="button" onClick={markAllRead} style={{
+                    padding: `3px 8px`, borderRadius: layout.radiusSm,
+                    background: "transparent", border: `1px solid ${c.border}`,
+                    fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600, color: c.textMid,
+                    cursor: "pointer",
+                  }}>Mark all read</button>
+                )}
+              </div>
+
+              {filtered.length === 0 ? (
+                <div style={{
+                  padding: `${space[4]}px`, textAlign: "center",
+                  background: c.surfaceAlt, borderRadius: layout.radiusSm,
+                  fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textDim,
+                }}>
+                  {squadFilter ? `No mentions in ${squadFilter}.` : "No mentions yet. When someone @-mentions you, it'll appear here."}
+                </div>
+              ) : (
+                <div style={{
+                  flex: 1, minHeight: 0,
+                  overflowY: "auto",
+                  overscrollBehavior: "contain",
+                  display: "flex", flexDirection: "column", gap: space[2],
+                  paddingRight: space[1],
+                }}>
+                  {filtered.map(({ comment, project, author }) => {
+                    const isUnread = !readIds.has(comment.id);
+                    const isReplying = replyingTo === comment.id;
+                    return (
+                      <div key={comment.id} onClick={() => markRead(comment.id)} style={{
+                        padding: `${space[3]}px ${space[4]}px`,
+                        background: isUnread ? c.accentDim + "30" : c.surfaceAlt,
+                        border: `1px solid ${isUnread ? c.accent + "25" : c.border}`,
+                        borderRadius: layout.radiusSm,
+                        cursor: "default",
+                        transition: "background 150ms ease",
+                      }}>
+                        <div style={{
+                          display: "flex", alignItems: "center", justifyContent: "space-between",
+                          marginBottom: space[2],
+                        }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                            {isUnread && (
+                              <span style={{
+                                width: 7, height: 7, borderRadius: "50%", background: c.accent, flexShrink: 0,
+                              }} />
+                            )}
+                            <span style={{
+                              fontFamily: mono, fontSize: 10, fontWeight: 700,
+                              color: c.amber || c.textMid, letterSpacing: "0.03em",
+                            }}>
+                              {project?.id || "?"} · {project?.name || "Unknown"}
+                            </span>
+                          </div>
+                          <span title={fmtAbsolute(comment.created_at)} style={{
+                            fontSize: 11, color: c.textDim, fontFamily: typo.bodySm.font, whiteSpace: "nowrap",
+                          }}>
+                            {timeAgo(comment.created_at)}
+                          </span>
+                        </div>
+                        <div style={{ display: "flex", gap: space[2], alignItems: "flex-start" }}>
+                          <div style={{
+                            width: 26, height: 26, borderRadius: "50%",
+                            background: c.cyanDim, color: c.cyan,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            fontFamily: mono, fontSize: 10, fontWeight: 700, flexShrink: 0,
+                            border: `1px solid ${c.cyan}33`,
+                          }}>
+                            {initialsOf(author?.name)}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                              fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 700, color: c.text,
+                              marginBottom: 2,
+                            }}>{author?.name || "Unknown"}</div>
+                            <div style={{
+                              fontFamily: typo.bodyMd.font, fontSize: 13, lineHeight: 1.5, color: c.text,
+                              whiteSpace: "pre-wrap", wordBreak: "break-word",
+                            }}>
+                              {highlightMention(comment.body, viewerName)}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{
+                          marginTop: space[2], display: "flex", alignItems: "center", gap: space[2],
+                        }}>
+                          <button type="button"
+                            onClick={(e) => { e.stopPropagation(); setReplyingTo(isReplying ? null : comment.id); setReplyDraft(""); }}
+                            style={{
+                              padding: `4px 10px`, borderRadius: layout.radiusSm,
+                              background: isReplying ? c.accentDim : "transparent",
+                              border: `1px solid ${isReplying ? c.accent + "40" : c.border}`,
+                              fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
+                              color: isReplying ? c.accent : c.textMid,
+                              cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                            }}
+                          >
+                            <span style={{ fontSize: 12 }}>↩</span> Reply
+                          </button>
+                          <button type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpen(false);
+                              onNavigate?.("projects", project?.id);
+                            }}
+                            style={{
+                              padding: `4px 10px`, borderRadius: layout.radiusSm,
+                              background: "transparent", border: `1px solid ${c.border}`,
+                              fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600, color: c.textMid,
+                              cursor: "pointer", display: "flex", alignItems: "center", gap: 4,
+                            }}
+                          >
+                            Go to project <span style={{ fontSize: 10 }}>→</span>
+                          </button>
+                        </div>
+                        {isReplying && (
+                          <div style={{ display: "flex", gap: space[2], marginTop: space[2] }}>
+                            <input
+                              type="text"
+                              value={replyDraft}
+                              onChange={(e) => setReplyDraft(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitReply(comment._projectId || comment.project_id); } }}
+                              placeholder="Write a reply…"
+                              disabled={posting}
+                              autoFocus
+                              style={{
+                                flex: 1, padding: `7px 12px`, borderRadius: layout.radiusSm,
+                                background: c.surface, border: `1px solid ${c.border}`,
+                                fontFamily: typo.bodyMd.font, fontSize: 13, color: c.text, outline: "none",
+                              }}
+                            />
+                            <button type="button"
+                              onClick={() => submitReply(comment._projectId || comment.project_id)}
+                              disabled={posting || !replyDraft.trim()}
+                              style={{
+                                padding: `7px 14px`, borderRadius: layout.radiusSm,
+                                background: replyDraft.trim() && !posting ? c.accent : c.surfaceAlt,
+                                color: replyDraft.trim() && !posting ? "#fff" : c.textDim,
+                                border: "none", fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                                cursor: replyDraft.trim() && !posting ? "pointer" : "not-allowed",
+                              }}
+                            >{posting ? "…" : "Reply"}</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ── Section 2: Weekly Project Updates (own scroll) ── */}
+        {(() => {
+          const filtered = squadFilter
+            ? weeklyUpdates.filter(u => u.squad === squadFilter)
+            : weeklyUpdates;
+          return (
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+              <div style={{
+                display: "flex", alignItems: "center", gap: space[2],
+                marginBottom: space[3], paddingTop: space[3],
+                borderTop: `1px solid ${c.border}`, flexShrink: 0,
+              }}>
+                <span style={{
+                  fontFamily: mono, fontSize: 10, fontWeight: 700,
+                  letterSpacing: "0.1em", textTransform: "uppercase", color: c.textDim,
+                }}>Weekly Project Updates</span>
+                {filtered.length > 0 && (
+                  <span style={{
+                    padding: "1px 7px", borderRadius: 999,
+                    background: c.surfaceAlt, border: `1px solid ${c.border}`,
+                    fontFamily: mono, fontSize: 10, fontWeight: 600, color: c.textMid,
+                  }}>{filtered.length}</span>
+                )}
+              </div>
+
+              {filtered.length === 0 ? (
+                <div style={{
+                  padding: `${space[4]}px`, textAlign: "center",
+                  background: c.surfaceAlt, borderRadius: layout.radiusSm,
+                  fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textDim,
+                }}>
+                  {squadFilter ? `No updates in ${squadFilter} this week.` : "No project updates this week."}
+                </div>
+              ) : (
+                <div style={{
+                  flex: 1, minHeight: 0,
+                  overflowY: "auto", overscrollBehavior: "contain",
+                  display: "flex", flexDirection: "column", gap: 1,
+                  paddingRight: space[1],
+                }}>
+                  {filtered.map((upd, i) => (
+                    <div key={upd.id || i} style={{
+                      display: "flex", alignItems: "center", gap: space[3],
+                      padding: `${space[2] + 2}px ${space[3]}px`,
+                      borderRadius: layout.radiusSm,
+                      background: c.surfaceAlt,
+                      border: `1px solid ${c.border}`,
+                      marginBottom: 2,
+                    }}>
+                      <span style={{
+                        width: 28, height: 28, borderRadius: layout.radiusXs,
+                        background: upd.icon === "🆕" ? c.greenDim : upd.icon === "👏" ? c.accentDim || c.amberDim : upd.icon === "💬" ? c.cyanDim || c.surfaceAlt : c.amberDim,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 14, flexShrink: 0,
+                      }}>{upd.icon}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontFamily: typo.bodyMd.font, fontSize: 13, color: c.text, lineHeight: 1.5,
+                        }}>
+                          <span style={{ fontWeight: 600 }}>{upd.who}</span>{" "}
+                          {upd.label}
+                          <button type="button" onClick={() => { setOpen(false); onNavigate?.("projects", upd.projectId); }} style={{
+                            background: "transparent", border: "none", padding: 0, margin: 0,
+                            fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600,
+                            color: c.accent, cursor: "pointer", textDecoration: "underline",
+                            textUnderlineOffset: 2, textDecorationThickness: 1,
+                          }}>{upd.projectName}</button>
+                          {upd.phaseText && (
+                            <span style={{ color: c.textMid }}>{" "}{upd.phaseText}</span>
+                          )}
+                        </div>
+                        {upd.squad && (
+                          <span style={{
+                            display: "inline-block", marginTop: 2,
+                            padding: "1px 6px", borderRadius: 999,
+                            background: c.surface, border: `1px solid ${c.border}`,
+                            fontFamily: mono, fontSize: 9, fontWeight: 600, color: c.textDim,
+                          }}>{upd.squad}</span>
+                        )}
+                      </div>
+                      <span style={{
+                        fontFamily: typo.bodySm.font, fontSize: 11, color: c.textDim,
+                        whiteSpace: "nowrap", flexShrink: 0,
+                      }}>{timeAgo(upd.ts)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════
    ANNOUNCEMENTS — megaphone icon + modal
    ════════════════════════════════════════════════════════════════════
    Shows an accent-orange dot when the newest announcement's date is
@@ -1756,7 +2240,7 @@ function CompactSearch({ onClick }) {
    schema + how to publish a new entry. */
 const LAST_SEEN_KEY = "flow_announcements_last_seen";
 
-function AnnouncementsBell() {
+function AnnouncementsBell({ projects = [], people = [], currentPerson, onNavigate }) {
   const devRef = useDevLabel('AnnouncementsBell', 'src/components/AppShell.jsx', 'Megaphone button in header; opens a modal with the announcement timeline.');
   const [open, setOpen] = React.useState(false);
   const [lastSeen, setLastSeen] = React.useState(() => {
@@ -1782,6 +2266,47 @@ function AnnouncementsBell() {
       localStorage.setItem(LAST_SEEN_KEY, stamp);
       setLastSeen(stamp);
     } catch { /* localStorage may be disabled — no-op */ }
+  };
+
+  const [squadFilter, setSquadFilter] = React.useState("");
+
+  const squads = React.useMemo(
+    () => [...new Set(projects.map(p => p.squad).filter(Boolean))].sort(),
+    [projects]
+  );
+
+  const gaProjects = React.useMemo(() => {
+    return projects
+      .filter(p => p.phase === "GA" && p.gaEnteredAt)
+      .filter(p => !squadFilter || p.squad === squadFilter)
+      .sort((a, b) => (b.gaEnteredAt || "").localeCompare(a.gaEnteredAt || ""));
+  }, [projects, squadFilter]);
+
+  const gaGroupedByMonth = React.useMemo(() => {
+    const groups = [];
+    let currentMonth = null;
+    let currentGroup = null;
+    for (const p of gaProjects) {
+      const mk = p.gaEnteredAt?.slice(0, 7) || "unknown";
+      if (mk !== currentMonth) {
+        currentMonth = mk;
+        const d = new Date(p.gaEnteredAt + "T00:00:00");
+        currentGroup = { month: mk, label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }), items: [] };
+        groups.push(currentGroup);
+      }
+      currentGroup.items.push(p);
+    }
+    return groups;
+  }, [gaProjects]);
+
+  const featureTypeColor = (type) => {
+    const m = {
+      New:         { color: c.green,  bg: "#059669" + "18" },
+      Fix:         { color: c.red,    bg: "#DC2626" + "18" },
+      Enhancement: { color: c.blue,   bg: "#1D4ED8" + "18" },
+      "UI/UX":     { color: c.purple, bg: "#6D28D9" + "18" },
+    };
+    return m[type] || m.New;
   };
 
   const openPanel = () => { setOpen(true); markAllRead(); };
@@ -1830,10 +2355,10 @@ function AnnouncementsBell() {
         onFocus={e => { e.currentTarget.style.boxShadow = `0 0 0 2px ${c.accent}`; }}
         onBlur={e => { e.currentTarget.style.boxShadow = "none"; }}
       >
-        {/* Inbox — announcements land here for you to catch up on. */}
         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.textMid} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
-          <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" />
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          <line x1="12" y1="2" x2="12" y2="4" />
         </svg>
         {hasUnread && (
           <span aria-hidden="true" style={{
@@ -1845,158 +2370,141 @@ function AnnouncementsBell() {
         )}
       </button>
 
-      <Modal open={open} onClose={closePanel} title="What's new" accent={c.accent} width={560}>
-        {sorted.length === 0 ? (
-          <div style={{
-            padding: `${space[5]}px 0`,
-            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-            color: c.textDim, textAlign: "center",
-          }}>
-            No announcements yet.
-          </div>
-        ) : (
-          // Two top-level sections: "Coming soon" (future-dated) and
-          // "Released" (past). The released section is month-grouped so
-          // a long history still scans cleanly.
-          <div style={{ maxHeight: 520, overflowY: "auto", marginRight: -space[2], paddingRight: space[2] }}>
-            {(() => {
-              const todayIso = new Date().toISOString().slice(0, 10);
-              const upcoming = sorted.filter(a => a.date > todayIso);
-              const released = sorted.filter(a => a.date <= todayIso);
+      <Modal open={open} onClose={closePanel} title="What's New" accent={c.accent} width={560}>
+        <div style={{ maxHeight: 520, overflowY: "auto", marginRight: -space[2], paddingRight: space[2] }}>
+          {/* ── Squad filter ── */}
+          {squads.length > 0 && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: space[3] }}>
+              <select
+                value={squadFilter}
+                onChange={e => setSquadFilter(e.target.value)}
+                style={{
+                  height: 28, padding: `0 ${space[2]}px`, borderRadius: layout.radiusXs,
+                  border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text,
+                  fontFamily: typo.monoSm.font, fontSize: 11, cursor: "pointer", outline: "none",
+                }}
+              >
+                <option value="">All squads</option>
+                {squads.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
 
-              const renderItem = (a, i, withTopDivider) => {
-                const ts = tagStyle(a.tag);
-                const d = new Date(a.date + "T00:00:00");
-                const dayLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-                return (
-                  <div
-                    key={a.id}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "56px 1fr",
-                      gap: space[3],
-                      padding: `${space[3]}px 0`,
-                      borderTop: withTopDivider ? `1px solid ${c.border}` : "none",
-                    }}
-                  >
-                    <div style={{
-                      fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                      fontWeight: 700, color: c.textMid,
-                      letterSpacing: "0.04em", textTransform: "uppercase",
-                      fontVariantNumeric: "tabular-nums",
-                      paddingTop: 2,
-                    }}>{dayLabel}</div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: 4 }}>
-                        <span style={{
-                          fontFamily: typo.bodyMd.font, fontSize: 15, fontWeight: 700,
-                          color: c.text, lineHeight: 1.3,
-                          flex: 1, minWidth: 0,
-                        }}>{a.title}</span>
-                        {a.tag && (
-                          <span style={{
-                            fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
-                            letterSpacing: "0.08em", textTransform: "uppercase",
-                            padding: "1px 6px", borderRadius: layout.radiusXs,
-                            background: ts.bg, color: ts.color,
-                            flexShrink: 0,
-                          }}>{a.tag}</span>
-                        )}
-                      </div>
-                      <div style={{
-                        fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                        color: c.textMid, lineHeight: 1.55,
-                      }}>{a.body}</div>
-                      {a.link?.href && (
-                        <a
-                          href={a.link.href}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: "inline-block", marginTop: space[1] + 2,
-                            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                            fontWeight: 600, color: c.accent,
-                            textDecoration: "none",
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.textDecoration = "underline"}
-                          onMouseLeave={e => e.currentTarget.style.textDecoration = "none"}
-                        >
-                          {a.link.label || "Learn more"} →
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                );
-              };
-
-              const sectionHeader = (label, accentColor) => (
+          {gaProjects.length === 0 ? (
+            <div style={{
+              padding: `${space[5]}px`, textAlign: "center",
+              borderRadius: layout.radiusSm, background: c.surfaceAlt,
+            }}>
+              <div style={{ fontSize: 28, marginBottom: space[2] }}>🚀</div>
+              <div style={{ fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textDim }}>
+                No shipped projects yet. When a project reaches GA, it'll appear here.
+              </div>
+            </div>
+          ) : (
+            gaGroupedByMonth.map(group => (
+              <div key={group.month} style={{ marginBottom: space[4] }}>
                 <div style={{
-                  position: "sticky", top: 0, zIndex: 1,
                   display: "flex", alignItems: "center", gap: space[3],
-                  padding: `${space[2]}px 0`,
-                  background: c.surface,
+                  padding: `${space[1]}px 0 ${space[2]}px`,
                   marginBottom: space[1],
                 }}>
                   <span style={{
-                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                    fontWeight: 700, color: accentColor || c.text,
-                    letterSpacing: "0.1em", textTransform: "uppercase",
-                    flexShrink: 0,
-                  }}>{label}</span>
-                  <span aria-hidden="true" style={{ flex: 1, height: 1, background: c.border }} />
-                </div>
-              );
-
-              const monthSubHeader = (label) => (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: space[3],
-                  padding: `${space[2]}px 0 ${space[1]}px`,
-                  marginTop: space[2],
-                }}>
-                  <span style={{
                     fontFamily: typo.monoSm.font, fontSize: 11,
-                    fontWeight: 600, color: c.textDim,
+                    fontWeight: 700, color: c.textDim,
                     letterSpacing: "0.08em", textTransform: "uppercase",
                     flexShrink: 0,
-                  }}>{label}</span>
+                  }}>{group.label}</span>
+                  <span aria-hidden="true" style={{ flex: 1, height: 1, background: c.border }} />
                 </div>
-              );
 
-              // Group released by month (newest first preserved by sort).
-              const releasedGroups = [];
-              released.forEach(a => {
-                const d = new Date(a.date + "T00:00:00");
-                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-                const label = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-                const last = releasedGroups[releasedGroups.length - 1];
-                if (last && last.key === key) last.items.push(a);
-                else releasedGroups.push({ key, label, items: [a] });
-              });
-
-              return (
-                <>
-                  {upcoming.length > 0 && (
-                    <div style={{ marginBottom: released.length > 0 ? space[5] : 0 }}>
-                      {sectionHeader("Coming soon", c.cyan || c.accent)}
-                      {upcoming.map((a, i) => renderItem(a, i, i > 0))}
-                    </div>
-                  )}
-                  {released.length > 0 && (
-                    <div>
-                      {sectionHeader("Released")}
-                      {releasedGroups.map((g, gi) => (
-                        <div key={g.key}>
-                          {releasedGroups.length > 1 && monthSubHeader(g.label)}
-                          {g.items.map((a, i) => renderItem(a, i, i > 0 || (releasedGroups.length > 1)))}
+                {group.items.map((proj, i) => {
+                  const ftc = featureTypeColor(proj.gaFeatureType);
+                  const d = new Date(proj.gaEnteredAt + "T00:00:00");
+                  const dayLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                  return (
+                    <div
+                      key={proj.id}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "60px 1fr",
+                        gap: space[3],
+                        padding: `${space[3]}px 0`,
+                        borderTop: i > 0 ? `1px solid ${c.border}` : "none",
+                      }}
+                    >
+                      <div style={{
+                        fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                        color: c.text,
+                        letterSpacing: "0.04em", textTransform: "uppercase",
+                        fontVariantNumeric: "tabular-nums",
+                        paddingTop: 2,
+                      }}>{dayLabel}</div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: 4 }}>
+                          <span style={{
+                            fontFamily: typo.bodyMd.font, fontSize: 15, fontWeight: 700,
+                            color: c.text, lineHeight: 1.3,
+                            flex: 1, minWidth: 0,
+                          }}>{proj.name}</span>
+                          <span style={{
+                            fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                            letterSpacing: "0.06em", textTransform: "uppercase",
+                            padding: "2px 6px", borderRadius: layout.radiusXs,
+                            background: ftc.bg, color: ftc.color,
+                            flexShrink: 0,
+                          }}>{proj.gaFeatureType || "New"}</span>
                         </div>
-                      ))}
+                        {proj.gaReleaseNote && (
+                          <div style={{
+                            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                            color: c.textMid, lineHeight: 1.55,
+                            marginBottom: space[1],
+                          }}>{proj.gaReleaseNote}</div>
+                        )}
+                        <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: space[2] }}>
+                          <span style={{
+                            fontFamily: typo.bodySm.font, fontSize: 12, color: c.cyan, fontWeight: 600,
+                          }}>{proj.owner}</span>
+                          <span style={{
+                            fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim,
+                            padding: "1px 6px", borderRadius: 999, background: c.surfaceAlt,
+                          }}>{proj.squad}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: space[2] }}>
+                          {[
+                            { label: "Shoutout", icon: "👏", action: () => {
+                              const viewerName = currentPerson?.name || people?.[0]?.name || "AJ";
+                              if (isDevSeedMode()) {
+                                devStore.logEvent({ projectId: proj.id, action: "shoutout", userName: viewerName, details: { from: viewerName, projectName: proj.name } });
+                              }
+                              window.__flowToast?.(`🎉 Shoutout sent for ${proj.name}!`);
+                            }},
+                            { label: "Feedback", icon: "💬", action: () => { closePanel(); sessionStorage.setItem("flow_scroll_to", "feedback"); setTimeout(() => onNavigate?.("projects", proj.id), 100); } },
+                            { label: "View", icon: "→", action: () => { closePanel(); setTimeout(() => onNavigate?.("projects", proj.id), 100); } },
+                          ].map(btn => (
+                            <button key={btn.label} type="button" onClick={btn.action} style={{
+                              display: "inline-flex", alignItems: "center", gap: 4,
+                              padding: "3px 8px", borderRadius: 999,
+                              background: "transparent", border: `1px solid ${c.border}`,
+                              color: c.textMid, fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
+                              cursor: "pointer", transition: "border-color 100ms ease, color 100ms ease",
+                            }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = c.accent; e.currentTarget.style.color = c.accent; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textMid; }}
+                            >
+                              <span style={{ fontSize: 11, lineHeight: 1 }}>{btn.icon}</span>
+                              {btn.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        )}
+                  );
+                })}
+              </div>
+            ))
+          )}
+        </div>
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: space[4], paddingTop: space[3], borderTop: `1px solid ${c.border}` }}>
           <Btn variant="ghost" onClick={closePanel}>Close</Btn>
         </div>

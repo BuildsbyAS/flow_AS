@@ -2,14 +2,9 @@
 // PersonProjects — per-person panel for the People deep-dive.
 //
 // Three sections:
-//   1. Owns         — projects where person.id === project.owner_id
-//   2. Member of    — projects where this person is in project_members
-//                     (excluding any where they're already the owner)
-//   3. Recent posts — comments authored by this person, newest first
-//
-// All data is read via usePersonActivity (real-time aware). Project
-// rows show last activity + a red stale chip so it's obvious which
-// projects this person is letting drift.
+//   1. In Flight    — all projects (owns + member of) in PRD/Design/Dev/QA
+//   2. Shipped      — all projects (owns + member of) in Alpha/Beta/GA
+//   3. Recent Activity — comments authored by this person, newest first
 // ═══════════════════════════════════════════════════════════════════
 import React, { useMemo } from "react";
 import { c, typo, space, layout, body, mono } from "../styles/theme";
@@ -133,6 +128,9 @@ function SectionTitle({ title, count }) {
   );
 }
 
+const IN_FLIGHT_PHASES = new Set(["PRD", "Design", "Dev", "QA"]);
+const SHIPPED_PHASES = new Set(["Alpha", "Beta", "GA"]);
+
 export default function PersonProjects({ person, projects, onProjectNavigate }) {
   const personId = person?.id;
   const { memberships, comments, loading, error } = usePersonActivity(personId);
@@ -143,22 +141,42 @@ export default function PersonProjects({ person, projects, onProjectNavigate }) 
     return m;
   }, [projects]);
 
-  const owns = useMemo(() => {
-    if (!personId) return [];
-    return (projects || [])
-      .filter(p => p.owner_id === personId)
-      .sort((a, b) => new Date(b.lastActivityAt || 0) - new Date(a.lastActivityAt || 0));
-  }, [projects, personId]);
+  // Merge owns + member-of into a single deduplicated list, then split by phase
+  const { inFlight, shipped } = useMemo(() => {
+    if (!personId) return { inFlight: [], shipped: [] };
+    const seen = new Set();
+    const all = [];
 
-  const memberOf = useMemo(() => {
-    if (!personId) return [];
-    const ownIds = new Set(owns.map(p => p.id));
-    return (memberships || [])
-      .map(m => projectsById.get(m.project_id))
-      .filter(Boolean)
-      .filter(p => !ownIds.has(p.id))
-      .sort((a, b) => new Date(b.lastActivityAt || 0) - new Date(a.lastActivityAt || 0));
-  }, [memberships, projectsById, owns, personId]);
+    // Add owned projects
+    (projects || []).forEach(p => {
+      if (p.owner_id === personId && !seen.has(p.id)) {
+        seen.add(p.id);
+        all.push({ ...p, isOwner: true });
+      }
+    });
+
+    // Add member-of projects (not already in owns)
+    (memberships || []).forEach(m => {
+      if (!seen.has(m.project_id)) {
+        const proj = projectsById.get(m.project_id);
+        if (proj) {
+          seen.add(proj.id);
+          all.push({ ...proj, isOwner: false });
+        }
+      }
+    });
+
+    const sortOwnerFirst = (a, b) => {
+      // Owner projects first, then by activity
+      if (a.isOwner !== b.isOwner) return a.isOwner ? -1 : 1;
+      return new Date(b.lastActivityAt || 0) - new Date(a.lastActivityAt || 0);
+    };
+
+    return {
+      inFlight: all.filter(p => IN_FLIGHT_PHASES.has(p.phase)).sort(sortOwnerFirst),
+      shipped: all.filter(p => SHIPPED_PHASES.has(p.phase) || p.status === "complete").sort(sortOwnerFirst),
+    };
+  }, [projects, memberships, projectsById, personId]);
 
   if (!personId) {
     return (
@@ -195,56 +213,56 @@ export default function PersonProjects({ person, projects, onProjectNavigate }) 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[6] }}>
-      {/* ── Owns ───────────────────────────────────────────────── */}
+      {/* ── In Flight Projects ─────────────────────────────────── */}
       <div>
-        <SectionTitle title="Owns" count={owns.length} />
-        {owns.length === 0 ? (
+        <SectionTitle title="In Flight" count={inFlight.length} />
+        {inFlight.length === 0 ? (
           <div style={{
             padding: space[4], borderRadius: layout.radiusSm,
             background: c.surface, border: `1px dashed ${c.border}`,
             color: c.textDim, fontSize: 13, fontFamily: body, textAlign: "center",
           }}>
-            {person?.name || "This person"} doesn't own any projects yet.
+            No in-flight projects right now.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-            {owns.map(p => (
-              <ProjectRow key={p.id} proj={p} onNavigate={onProjectNavigate} label="Owner" />
+            {inFlight.map(p => (
+              <ProjectRow key={p.id} proj={p} onNavigate={onProjectNavigate} label={p.isOwner ? "Owner" : undefined} />
             ))}
           </div>
         )}
       </div>
 
-      {/* ── Member of ──────────────────────────────────────────── */}
+      {/* ── Shipped Projects ───────────────────────────────────── */}
       <div>
-        <SectionTitle title="Member of" count={memberOf.length} />
-        {memberOf.length === 0 ? (
+        <SectionTitle title="Shipped" count={shipped.length} />
+        {shipped.length === 0 ? (
           <div style={{
             padding: space[4], borderRadius: layout.radiusSm,
             background: c.surface, border: `1px dashed ${c.border}`,
             color: c.textDim, fontSize: 13, fontFamily: body, textAlign: "center",
           }}>
-            Not a member of any other projects.
+            No shipped projects yet.
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-            {memberOf.map(p => (
-              <ProjectRow key={p.id} proj={p} onNavigate={onProjectNavigate} />
+            {shipped.map(p => (
+              <ProjectRow key={p.id} proj={p} onNavigate={onProjectNavigate} label={p.isOwner ? "Owner" : undefined} />
             ))}
           </div>
         )}
       </div>
 
-      {/* ── Recent posts ───────────────────────────────────────── */}
+      {/* ── Recent Activity ────────────────────────────────────── */}
       <div>
-        <SectionTitle title="Recent posts" count={comments.length} />
+        <SectionTitle title="Recent Activity" count={comments.length} />
         {comments.length === 0 ? (
           <div style={{
             padding: space[4], borderRadius: layout.radiusSm,
             background: c.surface, border: `1px dashed ${c.border}`,
             color: c.textDim, fontSize: 13, fontFamily: body, textAlign: "center",
           }}>
-            No posts yet. When {person?.name || "this person"} comments on a
+            No activity yet. When {person?.name || "this person"} comments on a
             project, you'll see the latest activity here.
           </div>
         ) : (

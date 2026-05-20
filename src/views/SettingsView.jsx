@@ -20,7 +20,7 @@ const getAuditSeverity = (action) => {
 /*  SETTINGS VIEW                                            */
 /* ═══════════════════════════════════════════════════════════ */
 
-const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, projects, setProjects, commitments }) => {
+const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, projects, setProjects }) => {
   const devRef = useDevLabel('Admin console for managing squads, roles, and people with audit log');
   const [subTab, setSubTab] = useState("people");
   const subTabKeys = ["people", "squads", "roles"];
@@ -51,16 +51,11 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
       const holders = people.filter(p => p.role === name);
       if (holders.length) { deps.push({ text: `${holders.length} people with this role`, items: holders.map(h => h.name) }); blocked = true; }
     } else if (type === "person") {
-      const cms = commitments ? commitments.filter(cm => cm.person === name) : [];
-      if (cms.length) {
-        const hasItems = cms.some(cm => cm.items.some(it => it.title && it.title.trim()));
-        if (hasItems) { deps.push({ text: "Has active commits this week" }); blocked = true; }
-      }
       const ownedProj = projects.filter(p => p.owner === name);
       if (ownedProj.length) { deps.push({ text: `Owns ${ownedProj.length} projects`, items: ownedProj.map(p => p.id) }); blocked = true; }
     } else if (type === "project") {
-      const projItems = commitments ? commitments.flatMap(cm => cm.items.filter(it => it.project === name)) : [];
-      if (projItems.length) { deps.push({ text: `${projItems.length} active commits reference this project` }); blocked = true; }
+      const members = people.filter(p => projects.some(pr => pr.id === name && pr.owner === p.name));
+      if (members.length) { deps.push({ text: `Has assigned owner` }); }
     }
     setConfirmAction({ kind: "delete", type, idx, name, deps, blocked });
   };

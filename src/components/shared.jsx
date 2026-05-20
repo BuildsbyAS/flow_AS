@@ -369,7 +369,7 @@ export const Sel = ({ children, style: s, ...rest }) => (
   <select {...rest} className="flow-input" style={{
     height: 40, padding: `0 ${space[3]}px`,
     borderRadius: layout.radiusSm,
-    border: `1px solid ${c.border}`, background: c.surfaceAlt,
+    border: `1px solid ${c.border}`, background: c.surface,
     color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
     cursor: "pointer", appearance: "auto",
     boxSizing: "border-box",
@@ -442,18 +442,17 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
       <button onClick={() => setOpen(!open)} className="flow-input" style={{
         width: "100%", height: 40, padding: `0 ${space[3]}px`,
         borderRadius: layout.radiusSm,
-        border: `1px solid ${open ? c.accent : c.border}`, background: c.surfaceAlt,
+        border: `1px solid ${open ? c.accent : c.border}`, background: c.surface,
         color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
         cursor: "pointer", textAlign: "left", boxSizing: "border-box",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
       }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || placeholder}</span>
-        <span style={{
-          color: c.textDim, fontSize: typo.monoSm.size, marginLeft: space[2], flexShrink: 0,
-          display: "inline-block", transform: open ? "rotate(180deg)" : "rotate(0deg)",
-          transition: `transform ${motion.fast.duration} ${motion.fast.easing}`,
-        }}>▼</span>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ flexShrink: 0, marginLeft: space[2], transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${motion.fast.duration} ${motion.fast.easing}` }}>
+          <polyline points="4 6 8 10 12 6" />
+        </svg>
       </button>
       {open && ReactDOM.createPortal(
         <div ref={dropdownRef} style={{

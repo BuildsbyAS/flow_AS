@@ -10,6 +10,7 @@ import {
   seedRoles as devRoles,
   seedPeople as devPeople,
   getSeedProjects as devGetProjects,
+  devStore,
 } from '../data/devSeed';
 
 // ─── Fetch helpers ───────────────────────────────────────────
@@ -35,6 +36,12 @@ async function fetchProjects() {
   const { data, error } = await supabase.from('projects').select('*, people!projects_owner_id_fkey(name), squads(name)').order('id');
   if (error) throw error;
   return data;
+}
+
+async function fetchProjectLinks() {
+  const { data, error } = await supabase.from('project_links').select('*').order('created_at');
+  if (error) throw error;
+  return data || [];
 }
 
 async function fetchWeeks() {
@@ -183,6 +190,12 @@ function toSeedProjects(rows) {
       actualEndDate: r.end_date ? (() => { const d = new Date(r.end_date); d.setDate(d.getDate() + 5); return d.toISOString().split('T')[0]; })() : null,
     } : {}),
     status: r.status,
+    priority: r.priority || 'P2',
+    complexity: r.complexity || null,
+    isBlocked: r.is_blocked || false,
+    blockedReason: r.blocked_reason || null,
+    blockedAt: r.blocked_at || null,
+    phaseDurationOverrides: r.phase_duration_overrides || null,
     gaEnteredAt: r.ga_entered_at || null,
     // Surfaces "Updated X ago" + stale chip. Falls back to updated_at so
     // empty-DB / pre-migration callers still get a sane timestamp.
@@ -330,6 +343,7 @@ export default function useSupabaseData() {
   const lookups = useRef({ squadMap: {}, roleMap: {}, personMap: {}, weekMap: {} });
 
   const [appSettings, setAppSettings] = useState({});
+  const [projectLinks, setProjectLinks] = useState([]);
 
   // Dedupe concurrent load() calls (StrictMode double-invoke + auth-gate remounts
   // were causing each Supabase query to fire 4× on initial render).
@@ -359,17 +373,20 @@ export default function useSupabaseData() {
         setSquads(devSquads.map(s => s.name));
         setRoles(devRoles.map(r => r.name));
         setPeople(devPeople);
-        setProjects(devGetProjects());
+        const seedProjs = devGetProjects();
+        setProjects(seedProjs);
+        devStore.persistProjects(seedProjs);
         setCommitments([]);            // commit cycle is retired
         setHistory({});
         setWeekConfigData(toWeekConfig([], []));
-        setAppSettings({});
+        setAppSettings({ phase_duration_defaults: { PRD: 14, Design: 21, Dev: 28, QA: 14, Alpha: 7, Beta: 14, GA: null } });
+        setProjectLinks(devStore.listAllLinks?.() || []);
         setLoading(false);
         hasLoadedOnce.current = true;
         return;
       }
 
-      const [squadsRaw, rolesRaw, peopleRaw, projectsRaw, weeksRawInitial, historyRaw, settingsRaw] = await Promise.all([
+      const [squadsRaw, rolesRaw, peopleRaw, projectsRaw, weeksRawInitial, historyRaw, settingsRaw, projectLinksRaw] = await Promise.all([
         fetchSquads(),
         fetchRoles(),
         fetchPeople(),
@@ -377,6 +394,7 @@ export default function useSupabaseData() {
         fetchWeeks(),
         fetchHistory(),
         fetchSettings(),
+        fetchProjectLinks(),
       ]);
 
       // Auto-provision current week if it doesn't exist yet
@@ -416,6 +434,7 @@ export default function useSupabaseData() {
       setHistory(toSeedHistory(historyRaw));
       setWeekConfigData(wc);
       setAppSettings(settingsRaw);
+      setProjectLinks(projectLinksRaw);
     } catch (err) {
       console.error('Failed to load data from Supabase:', err);
       setError(err.message);
@@ -441,6 +460,12 @@ export default function useSupabaseData() {
     history,
     weekConfig: weekConfigData,
     appSettings, setAppSettings,
+    projectLinks, setProjectLinks,
+    phaseDurationDefaults: appSettings?.phase_duration_defaults
+      ? (typeof appSettings.phase_duration_defaults === 'string'
+        ? JSON.parse(appSettings.phase_duration_defaults)
+        : appSettings.phase_duration_defaults)
+      : { PRD: 14, Design: 21, Dev: 28, QA: 14, Alpha: 7, Beta: 14, GA: null },
     lookups,
     reload: useCallback(() => load(true), [load]),
   };

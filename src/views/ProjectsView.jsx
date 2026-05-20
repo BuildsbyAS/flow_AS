@@ -2,7 +2,7 @@
 // Two states: Registry (Pulse-style table with tabs) → Project Deep Dive (PeopleDeepDive-style)
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, commitPhases, typeConfig, phaseColors as getPhaseColors, phaseMids as getPhaseMids, phaseDims as getPhaseDims, statusColors, entityColors, colWidths, outcomeConfig } from "../styles/theme";
+import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, typeConfig, phaseColors as getPhaseColors, phaseMids as getPhaseMids, phaseDims as getPhaseDims, statusColors, entityColors, colWidths } from "../styles/theme";
 import { Badge, Tag, Modal, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, Th as SharedTh, TableShell, StickyLeftTd } from "../components/shared";
 import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
 import { HealthBar } from "../components/chart";
@@ -13,19 +13,19 @@ import FlowLogo from "../components/FlowLogo";
 import ProjectActivity from "../components/ProjectActivity";
 import ProjectTimeline from "../components/ProjectTimeline";
 import { isDevSeedMode, devStore } from "../data/devSeed";
+import { initialsOf } from "../lib/names";
 import { timeAgo, isStale, fmtAbsolute } from "../lib/time";
-import { getProjectDependencies, deleteProjectFromDB } from "../lib/mutations";
+import { getProjectDependencies, deleteProjectFromDB, updateProjectInDB, addProjectLinkToDB, deleteProjectLinkFromDB } from "../lib/mutations";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
 
-// Today's date — derived fresh per-render via weekConfig.today (no module-level mutable)
 
 // Phase scope for the In Flight vs Shipped tab filter.
 // Kept local to this view — `shipPhases` (Alpha/Beta/GA) in theme.js is
 // unchanged and still correct for metrics, colors, and stage validation
 // (where Alpha/Beta count as "released to users").
-const IN_FLIGHT_PHASES = ["PRD", "Design", "Dev", "QA", "Alpha", "Beta"];
-const SHIPPED_PHASES = ["GA"];
+const IN_FLIGHT_PHASES = ["PRD", "Design", "Dev", "QA"];
+const SHIPPED_PHASES = ["Alpha", "Beta", "GA"];
 
 /* ══════════════════════════════════════════════════════════════════
    HELPERS
@@ -46,7 +46,6 @@ const fmtDate = (d) => {
 
 // statusColors imported from theme.js
 
-// WEEK_LABELS now computed inside components using weekConfig prop
 
 /* ══════════════════════════════════════════════════════════════════
    GANTT MULTI-SELECT FILTER — dropdown with checkboxes
@@ -77,12 +76,10 @@ function GanttMultiFilter({ label, options, selected, onToggle, onClear }) {
         display: "flex", alignItems: "center", gap: 4,
       }}>
         {active ? `${label} (${selected.length})` : `All ${label}`}
-        <span style={{
-          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textGhost,
-          display: "inline-block", lineHeight: 1,
-          transform: open ? "rotate(180deg)" : "rotate(0deg)",
-          transition: `transform ${motion.fast.duration} ${motion.fast.easing}`,
-        }}>▼</span>
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke={active ? c.accent : c.textGhost} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${motion.fast.duration} ${motion.fast.easing}` }}>
+          <polyline points="4 6 8 10 12 6" />
+        </svg>
       </button>
       {anim.mounted && (
         <div style={{
@@ -136,30 +133,42 @@ function GanttMultiFilter({ label, options, selected, onToggle, onClear }) {
   );
 }
 
+// Complexity-based phase thresholds (days). No threshold for Alpha/Beta/GA.
+const COMPLEXITY_THRESHOLDS = {
+  S:  { PRD: 3,  Design: 3,  Dev: 7,  QA: 3 },
+  M:  { PRD: 5,  Design: 10, Dev: 14, QA: 5 },
+  L:  { PRD: 10, Design: 14, Dev: 21, QA: 7 },
+  XL: { PRD: 10, Design: 14, Dev: 21, QA: 7 },
+};
+const DEFAULT_THRESHOLDS = COMPLEXITY_THRESHOLDS.M;
+function getPhaseThreshold(complexity, phase) {
+  const map = COMPLEXITY_THRESHOLDS[complexity] || DEFAULT_THRESHOLDS;
+  return map[phase] ?? null;
+}
+
 /* ══════════════════════════════════════════════════════════════════
    DATA DERIVATION — full-history metrics per project
    ══════════════════════════════════════════════════════════════════ */
-function deriveProjectMetrics(projects, commitments, history, today) {
-  const pc = getPhaseColors();
-  const tc = typeConfig();
+function deriveProjectMetrics(projects, history, today) {
   const map = {};
 
   for (const proj of projects) {
     const id = proj.id;
     const m = {
-      historyTotal: 0, thisWeekTotal: 0, totalCommits: 0,
+      historyTotal: 0,
       phaseBreakdown: { PRD: 0, Design: 0, Dev: 0, QA: 0 },
-      typeBreakdown: { BUILD: 0, JAM: 0 },
       people: new Set(),
       lastActivity: null,
       weeklyData: [],
-      hasBlockedCommit: false,   // derived from actual commit outcomes
+      isBlocked: !!proj.isBlocked,
       endingSoon: false,
       overdue: false,
       atRisk: false,
+      isStale: false,
+      noActivityWeek: false,
+      teamMembers: [], // filled below from devStore
     };
 
-    // History data
     const projHist = history[id] || [];
     for (const wk of projHist) {
       const entries = wk.entries || [];
@@ -171,59 +180,84 @@ function deriveProjectMetrics(projects, commitments, history, today) {
           if (e.person) m.people.add(e.person);
           const stage = e.stage || "PRD";
           if (m.phaseBreakdown[stage] !== undefined) m.phaseBreakdown[stage]++;
-          if (m.typeBreakdown[e.type] !== undefined) m.typeBreakdown[e.type]++;
           weekEntries.push(e);
         }
         m.weeklyData.push({ week: wk.week, entries: weekEntries });
       }
     }
 
-    // Current-week commitments
-    const currentItems = [];
-    (commitments || []).forEach(cm => {
-      cm.items.forEach((it, idx) => {
-        if (cm.deselected !== idx && it.project === id) {
-          currentItems.push({ ...it, person: cm.person });
-          m.people.add(cm.person);
-          m.thisWeekTotal++;
-          const stage = it.stage || "PRD";
-          if (m.phaseBreakdown[stage] !== undefined) m.phaseBreakdown[stage]++;
-          if (m.typeBreakdown[it.type] !== undefined) m.typeBreakdown[it.type]++;
-          if (it.outcome === "blocked") m.hasBlockedCommit = true;
-        }
-      });
-    });
-    if (currentItems.length > 0) {
-      m.lastActivity = "This wk";
-      m.weeklyData.push({ week: "This wk", entries: currentItems, isCurrent: true });
+    m.peopleList = [...m.people];
+
+    // Team members from devStore (includes owner)
+    if (isDevSeedMode()) {
+      const members = devStore.listMembers(proj.id) || [];
+      m.teamMembers = members.map(mem => mem.person_id);
     }
 
-    m.totalCommits = m.historyTotal + m.thisWeekTotal;
-    m.peopleList = [...m.people];
+    // Staleness checks
+    const daysSinceActivity = proj.lastActivityAt
+      ? Math.round((new Date(today + "T00:00:00") - new Date(proj.lastActivityAt)) / 86400000)
+      : 999;
+    m.isStale = daysSinceActivity > 14;
+    m.noActivityWeek = daysSinceActivity > 7;
 
     // Risk flags
     const daysToEnd = daysBetween(today, proj.endDate);
-    const inShipPhase = shipPhases.includes(proj.phase);
+    const inShipPhase = SHIPPED_PHASES.includes(proj.phase);
     if (daysToEnd <= 14 && daysToEnd > 0 && !inShipPhase) m.endingSoon = true;
     if (daysToEnd < 0 && !inShipPhase) m.overdue = true;
 
-    // Health (age-progress vs phase-progress diff)
+    // ── Health calculation ──
+    // Factors: timeline adherence, stage duration vs threshold, activity
+    // frequency, blocked/deprioritized status
     const age = daysBetween(proj.startDate, today);
     const planned = daysBetween(proj.startDate, proj.endDate);
     const pctEl = planned > 0 ? age / planned : 0;
     let health = 100;
-    if (planned > 0) { if (pctEl > 1) health -= 35; else if (pctEl > 0.85) health -= 20; else if (pctEl > 0.65) health -= 10; }
-    if (daysToEnd != null && daysToEnd < 7 && daysToEnd >= 0 && !inShipPhase) health -= 5;
-    if (m.thisWeekTotal === 0 && !inShipPhase) health -= 25;
-    else { if (m.thisWeekTotal > 0 && !m.typeBreakdown.BUILD && m.typeBreakdown.JAM) health -= 10; }
+
+    // 1) Timeline: past end date = big penalty, approaching = moderate
+    if (planned > 0) {
+      if (pctEl > 1) health -= 35;
+      else if (pctEl > 0.85) health -= 20;
+      else if (pctEl > 0.65) health -= 10;
+    }
+
+    // 2) Phase overstay: current phase exceeding threshold (complexity-aware)
+    const overrides = proj.phaseDurationOverrides || {};
+    const threshold = overrides[proj.phase] ?? getPhaseThreshold(proj.complexity, proj.phase);
+    {
+      let daysInPhase = age;
+      if (isDevSeedMode()) {
+        const events = devStore.listEvents(proj.id) || [];
+        const phaseEvents = events
+          .filter(e => e.action === "project_phase_changed" && e.details?.to === proj.phase)
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        if (phaseEvents.length > 0) {
+          daysInPhase = Math.round((new Date(today + "T00:00:00") - new Date(phaseEvents[0].created_at)) / 86400000);
+        }
+      }
+      m.daysInPhase = daysInPhase;
+      m.phaseThreshold = threshold;
+      if (threshold && daysInPhase > threshold * 1.5) health -= 20;
+      else if (threshold && daysInPhase > threshold) health -= 10;
+    }
+
+    // 3) Activity frequency
+    if (daysSinceActivity > 14 && !inShipPhase) health -= 25;
+    else if (daysSinceActivity > 7 && !inShipPhase) health -= 15;
+
+    // 4) No owner
     if (!proj.owner) health -= 20;
-    if (m.hasBlockedCommit) health -= 15;
+
+    // 5) Blocked / deprioritized
+    if (m.isBlocked) health -= 15;
+    if (proj.status === "deprioritized") health -= 10;
+
     m.health = Math.max(0, Math.min(100, health));
 
-    // At risk is derived: overdue, OR past 85% of planned duration without shipping,
-    // OR has a blocked commit this week. Purely proportional — no magic "age > 60".
-    m.atRisk = !inShipPhase && proj.status !== "deprioritized" && (
-      m.overdue || m.hasBlockedCommit || (planned > 0 && pctEl > 0.85)
+    // At Risk: overdue OR no activity in 1 week OR health < 50% OR blocked
+    m.atRisk = proj.status !== "deprioritized" && !inShipPhase && (
+      m.overdue || m.noActivityWeek || m.health < 50 || m.isBlocked
     );
 
     map[id] = m;
@@ -234,7 +268,7 @@ function deriveProjectMetrics(projects, commitments, history, today) {
 /* ══════════════════════════════════════════════════════════════════
    SORT — mirrors Pulse sort pattern
    ══════════════════════════════════════════════════════════════════ */
-function sortList(list, key, dir, metrics, weekLabels, today) {
+function sortList(list, key, dir, metrics, today) {
   if (!key) return [...list].sort((a, b) => (a.squad || "").localeCompare(b.squad || "") || (a.name || "").localeCompare(b.name || ""));
   const d = dir === "asc" ? 1 : -1;
   return [...list].sort((a, b) => {
@@ -249,9 +283,12 @@ function sortList(list, key, dir, metrics, weekLabels, today) {
       case "status": return d * (a.status || "active").localeCompare(b.status || "active");
       case "phase": return d * (allPhases.indexOf(a.phase) - allPhases.indexOf(b.phase));
       case "health": return d * ((metrics[a.id]?.health ?? 0) - (metrics[b.id]?.health ?? 0));
-      case "total": return d * ((metrics[a.id]?.totalCommits || 0) - (metrics[b.id]?.totalCommits || 0));
-      case "thisWk": return d * ((metrics[a.id]?.thisWeekTotal || 0) - (metrics[b.id]?.thisWeekTotal || 0));
-      case "people": return d * ((metrics[a.id]?.peopleList.length || 0) - (metrics[b.id]?.peopleList.length || 0));
+      case "total": return d * ((metrics[a.id]?.historyTotal || 0) - (metrics[b.id]?.historyTotal || 0));
+      case "priority": {
+        const order = { P0: 0, P1: 1, P2: 2, P3: 3 };
+        return d * ((order[a.priority] ?? 2) - (order[b.priority] ?? 2));
+      }
+      case "people": return d * ((metrics[a.id]?.teamMembers.length || 0) - (metrics[b.id]?.teamMembers.length || 0));
       case "last": {
         // Sort by the project's actual lastActivityAt timestamp (newest first
         // when dir=asc=−1). Missing timestamps sort to the end.
@@ -259,6 +296,7 @@ function sortList(list, key, dir, metrics, weekLabels, today) {
         const bT = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
         return d * (aT - bT);
       }
+      case "daysInPhase": return d * ((metrics[a.id]?.daysInPhase ?? 0) - (metrics[b.id]?.daysInPhase ?? 0));
       case "timeline": return d * (daysBetween(today, a.endDate) - daysBetween(today, b.endDate));
       case "actualEnd": return d * ((a.actualEndDate || "").localeCompare(b.actualEndDate || ""));
       default: return 0;
@@ -270,18 +308,16 @@ function sortList(list, key, dir, metrics, weekLabels, today) {
    MAIN EXPORT
    ══════════════════════════════════════════════════════════════════ */
 export default function ProjectsView({
-  projects: rawProjects, setProjects, commitments, people, squads, history,
-  weekConfig: weekConfigProp, personProfile, isAppOwner = false,
+  projects: rawProjects, setProjects, people, squads, history,
+  personProfile, isAppOwner = false,
   initialId, onNavigate, setDetailLabel, setGoBack, searchRef, globalFilters = {},
   suppressBackRef,
-  isHistorical, selectedWeekKey,
+  projectLinks, setProjectLinks, phaseDurationDefaults,
 }) {
   const devRef = useDevLabel('ProjectsView', 'src/views/ProjectsView.jsx', 'Project registry table with deep dive and Gantt chart');
-  const weekConfig = weekConfigProp || { weeks: [], currentWeek: null };
-  const WEEK_LABELS = useMemo(() => [...(weekConfig.historyWeeks || []), "This wk"], [weekConfig]);
   const projects = useMemo(() => rawProjects.map(ensureStatus), [rawProjects]);
-  const today = weekConfig.today || new Date().toISOString().split('T')[0];
-  const metrics = useMemo(() => deriveProjectMetrics(projects, commitments, history, today), [projects, commitments, history, today]);
+  const today = new Date().toISOString().split('T')[0];
+  const metrics = useMemo(() => deriveProjectMetrics(projects, history, today), [projects, history, today]);
 
   const [selectedProject, setSelectedProject] = useState(initialId || null);
 
@@ -301,7 +337,7 @@ export default function ProjectsView({
     } catch { /* best-effort */ }
   }, [selectedProject]);
 
-  const [activeTab, setActiveTab] = useState("active");
+  const [activeTab, setActiveTab] = useState("all");
   const [search, setSearch] = useState("");
   const [createError, setCreateError] = useState(null);
   const createErrorTimerRef = useRef(null);
@@ -365,6 +401,21 @@ export default function ProjectsView({
   const boardAnim = useExitAnimation(boardFullscreen, 250);
   const toastAnim = useExitAnimation(!!createError, 150);
   const successToastAnim = useExitAnimation(!!createSuccess, 200);
+  const [listSquadFilter, setListSquadFilter] = useState("");
+  const [pinnedIds, setPinnedIds] = useState(() => {
+    try { return new Set(JSON.parse(sessionStorage.getItem("flow_pinned_projects") || "[]")); }
+    catch { return new Set(); }
+  });
+  const togglePin = useCallback((id, e) => {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    setPinnedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      sessionStorage.setItem("flow_pinned_projects", JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
+  const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
   const [boardSearch, setBoardSearch] = useState("");
   const [boardSquads, setBoardSquads] = useState([]);
   const [boardOwners, setBoardOwners] = useState([]);
@@ -377,6 +428,11 @@ export default function ProjectsView({
   const toggleFilter = (setter, val) => setter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   const ganttSearchRef = useRef(null);
   const localSearchRef = useRef(null);
+  // Drag-and-drop state for board view (must be at component level, not inside conditional IIFE)
+  const colRefs = useRef({});
+  const [dragOverPhase, setDragOverPhaseRaw] = useState(null);
+  const [draggingId, setDraggingId] = useState(null);
+  const dragOverRef = useRef(null);
 
   // Wire searchRef
   useEffect(() => {
@@ -387,9 +443,9 @@ export default function ProjectsView({
   // the default squad sort when re-entered from Shipped.
   useEffect(() => {
     if (activeTab === "shipped") {
-      setSortKey("actualEnd");
+      setSortKey("timeline");
       setSortDir("desc");
-    } else if (sortKey === "actualEnd") {
+    } else if (sortKey === "timeline" && activeTab !== "all") {
       setSortKey("squad");
       setSortDir("asc");
     }
@@ -442,11 +498,12 @@ export default function ProjectsView({
     }
     if ((globalFilters.owner || []).length > 0) list = list.filter(p => globalFilters.owner.includes(p.owner));
     if ((globalFilters.squad || []).length > 0) list = list.filter(p => globalFilters.squad.includes(p.squad));
+    if (listSquadFilter) list = list.filter(p => p.squad === listSquadFilter);
     if ((globalFilters.person || []).length > 0) {
       list = list.filter(p => globalFilters.person.some(fp => metrics[p.id]?.people.has(fp)));
     }
     return list;
-  }, [projects, search, globalFilters, metrics]);
+  }, [projects, search, globalFilters, metrics, listSquadFilter]);
 
   // ── Tab splits ──
   // When a search query is active, bypass the tab filter so results surface
@@ -460,14 +517,21 @@ export default function ProjectsView({
       switch (activeTab) {
         case "active": list = filtered.filter(p => p.status === "active" && IN_FLIGHT_PHASES.includes(p.phase)); break;
         case "at_risk": list = filtered.filter(p => metrics[p.id]?.atRisk); break;
-        case "overdue": list = filtered.filter(p => IN_FLIGHT_PHASES.includes(p.phase) && p.status !== "deprioritized" && metrics[p.id]?.overdue); break;
         case "shipped": list = filtered.filter(p => SHIPPED_PHASES.includes(p.phase)); break;
+        case "blocked": list = filtered.filter(p => metrics[p.id]?.isBlocked); break;
         case "deprioritized": list = filtered.filter(p => p.status === "deprioritized"); break;
+        case "overdue": list = filtered.filter(p => IN_FLIGHT_PHASES.includes(p.phase) && p.status !== "deprioritized" && metrics[p.id]?.overdue); break;
         default: list = filtered;
       }
     }
-    return sortList(list, sortKey, sortDir, metrics, WEEK_LABELS, today);
-  }, [filtered, activeTab, sortKey, sortDir, metrics, WEEK_LABELS, today, search]);
+    if (showWatchlistOnly) list = list.filter(p => pinnedIds.has(p.id));
+    const sorted = sortList(list, sortKey, sortDir, metrics, today);
+    const pinned = sorted.filter(p => pinnedIds.has(p.id));
+    const shipped = sorted.filter(p => !pinnedIds.has(p.id) && SHIPPED_PHASES.includes(p.phase) && p.status !== "deprioritized");
+    const regular = sorted.filter(p => !pinnedIds.has(p.id) && !SHIPPED_PHASES.includes(p.phase) && p.status !== "deprioritized");
+    const depri = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "deprioritized");
+    return [...pinned, ...shipped, ...regular, ...depri];
+  }, [filtered, activeTab, sortKey, sortDir, metrics, today, search, showWatchlistOnly, pinnedIds]);
 
   // ── KPI summary (from filtered data) ──
   // Health and risk are computed once in `deriveProjectMetrics`; this section
@@ -476,19 +540,23 @@ export default function ProjectsView({
     const active = filtered.filter(p => p.status === "active" && IN_FLIGHT_PHASES.includes(p.phase));
     const shipped = filtered.filter(p => SHIPPED_PHASES.includes(p.phase));
     const depri = filtered.filter(p => p.status === "deprioritized");
-    const blockedCount = filtered.filter(p => metrics[p.id]?.hasBlockedCommit).length;
-    const totalCommits = filtered.reduce((s, p) => s + (metrics[p.id]?.totalCommits || 0), 0);
-    const overdueCount = active.filter(p => metrics[p.id]?.overdue).length;
+    const blockedCount = filtered.filter(p => metrics[p.id]?.isBlocked).length;
     const atRiskCount = filtered.filter(p => metrics[p.id]?.atRisk).length;
     const avgHealth = active.length > 0
       ? Math.round(active.reduce((s, p) => s + (metrics[p.id]?.health ?? 100), 0) / active.length)
       : 0;
+    // In-flight phase distribution
     const phaseCounts = {};
     ["PRD", "Design", "Dev", "QA"].forEach(ph => {
       phaseCounts[ph] = active.filter(p => p.phase === ph).length;
     });
-    phaseCounts.Ship = active.filter(p => p.phase === "Alpha" || p.phase === "Beta").length;
-    return { active: active.length, shipped: shipped.length, depri: depri.length, all: filtered.length, blockedCount, totalCommits, avgHealth, atRiskCount, overdueCount, phaseCounts };
+    // Shipped phase distribution
+    const shipPhaseCounts = {};
+    ["Alpha", "Beta", "GA"].forEach(ph => {
+      shipPhaseCounts[ph] = shipped.filter(p => p.phase === ph).length;
+    });
+    const overdueCount = active.filter(p => metrics[p.id]?.overdue).length;
+    return { active: active.length, shipped: shipped.length, depri: depri.length, blocked: blockedCount, overdue: overdueCount, all: filtered.length, avgHealth, atRiskCount, phaseCounts, shipPhaseCounts };
   }, [filtered, metrics, today]);
 
   // ── Gantt-specific filter (separate from registry filters) ──
@@ -538,7 +606,7 @@ export default function ProjectsView({
 
   // ── Keyboard ──
   useKeyboard([
-    { key: "Escape", fn: () => { if (suppressBackRef?.current) return; if (boardFullscreen) { setBoardFullscreen(false); setViewMode("registry"); } else if (ganttFullscreen) { if (document.activeElement === ganttSearchRef.current) { ganttSearchRef.current.blur(); } else { setGanttFullscreen(false); setViewMode("registry"); } } else if (selectedProject) goBackToList(); else if (search) { setSearch(""); setFocusIdx(0); localSearchRef.current?.blur(); setKbActive(false); } else if (document.activeElement === localSearchRef.current) { localSearchRef.current.blur(); setKbActive(false); } else if (kbActive) { setKbActive(false); } }, force: true },
+    { key: "Escape", fn: () => { if (suppressBackRef?.current) return; if (ganttFullscreen) { if (document.activeElement === ganttSearchRef.current) { ganttSearchRef.current.blur(); } else { setGanttFullscreen(false); setViewMode("registry"); } } else if (viewMode === "board") { setViewMode("registry"); } else if (selectedProject) goBackToList(); else if (search) { setSearch(""); setFocusIdx(0); localSearchRef.current?.blur(); setKbActive(false); } else if (document.activeElement === localSearchRef.current) { localSearchRef.current.blur(); setKbActive(false); } else if (kbActive) { setKbActive(false); } }, force: true },
     // First arrow press activates kb-focus mode WITHOUT moving, so the highlight
     // lands on the current focusIdx (row 0 on fresh load). Subsequent presses
     // step through rows.
@@ -552,7 +620,7 @@ export default function ProjectsView({
     // which is what we want: typing 'f' in the create-project Name field or
     // any other overlay input should go to the input, not hijack to Gantt.
     { key: "f", fn: (e) => { if (ganttFullscreen) { e.preventDefault(); ganttSearchRef.current?.focus(); } } },
-  ], [selectedProject, goBackToList, tabProjects.length, focusIdx, kbActive, ganttFullscreen, boardFullscreen, suppressBackRef]);
+  ], [selectedProject, goBackToList, tabProjects.length, focusIdx, kbActive, ganttFullscreen, viewMode, suppressBackRef]);
 
   useEffect(() => {
     if (focusIdx >= tabProjects.length && tabProjects.length > 0) setFocusIdx(tabProjects.length - 1);
@@ -567,13 +635,74 @@ export default function ProjectsView({
   const tc = typeConfig();
   const ec = entityColors();
 
+  // People lookup for team column
+  const peopleById = useMemo(() => {
+    const m = new Map();
+    (people || []).forEach(p => m.set(p.id, p));
+    return m;
+  }, [people]);
+
+  // Precompute latest activity (comment or event) per project for list hover tooltip
+  const latestActivity = useMemo(() => {
+    const map = {};
+    const actionLabel = (ev) => {
+      const d = ev.details || {};
+      const who = ev.user_name || "Someone";
+      switch (ev.action) {
+        case "project_created":         return `${who} created this project`;
+        case "project_phase_changed": {
+          const to = d.to || "?";
+          if (["Alpha", "Beta", "GA"].includes(to)) return `🚀 ${who} shipped the project in ${to} phase`;
+          return `${who} moved phase ${d.from || "?"} → ${to}`;
+        }
+        case "project_status_changed": {
+          if (d.to === "deprioritized") return `${who} marked project as deprioritized`;
+          if (d.from === "deprioritized") return `${who} moved project back to active`;
+          return `${who} changed status to ${d.to || "?"}`;
+        }
+        case "project_blocked":         return `${who} marked project as blocked${d.reason ? ` — ${d.reason}` : ""}`;
+        case "project_unblocked":       return `${who} unblocked the project`;
+        case "project_updated":         return `${who} updated the project`;
+        case "edit_project":            return `${who} edited project details`;
+        case "project_owner_changed":   return `${who} set owner to ${d.to || "—"}`;
+        case "project_squad_changed":   return `${who} moved squad to ${d.to || "—"}`;
+        case "member_added":            return `${who} added ${d.person_name || "a member"}`;
+        case "member_removed":          return `${who} removed ${d.person_name || "a member"}`;
+        case "resource_added":          return `${who} added ${d.label || "a resource"}`;
+        case "resource_removed":        return `${who} removed a resource`;
+        default:                        return `${who} · ${ev.action}`;
+      }
+    };
+    if (isDevSeedMode()) {
+      for (const proj of projects) {
+        const comments = devStore.listComments(proj.id);
+        const events = devStore.listEvents(proj.id);
+        // Merge into a single feed sorted by time descending, pick the latest
+        const items = [];
+        (comments || []).forEach(cmt => {
+          if (!cmt.deleted_at) {
+            const author = peopleById.get(cmt.author_id);
+            items.push({ kind: "comment", ts: cmt.created_at, body: cmt.body, author: author?.name || "Unknown" });
+          }
+        });
+        (events || []).forEach(ev => {
+          if (ev.action === "shoutout" || ev.action === "feedback" || ev.action === "project_shipped") return;
+          items.push({ kind: "event", ts: ev.created_at, body: actionLabel(ev) });
+        });
+        items.sort((a, b) => new Date(b.ts) - new Date(a.ts));
+        if (items.length > 0) map[proj.id] = items[0];
+      }
+    }
+    return map;
+  }, [projects, peopleById]);
+
   // ═══════════════════════════════════════════════════════════
   // DETAIL STATE — Project Deep Dive
   // ═══════════════════════════════════════════════════════════
   if (selectedProject) {
     const proj = projects.find(p => p.id === selectedProject);
     if (!proj) return <EmptyState icon="🔍" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
-    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} commitments={commitments} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} isAppOwner={isAppOwner} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} weekLabels={WEEK_LABELS} isHistorical={isHistorical} today={today} weekStart={weekConfig.weekStart} leaving={detailLeaving} suppressBackRef={suppressBackRef} />;
+    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} isAppOwner={isAppOwner} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} today={today} leaving={detailLeaving} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} />;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -581,18 +710,16 @@ export default function ProjectsView({
   // ═══════════════════════════════════════════════════════════
 
   const TABS = [
-    { key: "active", label: "In Flight", count: summary.active, color: c.cyan },
-    { key: "shipped", label: "Shipped", count: summary.shipped, color: c.green },
-    { key: "deprioritized", label: "Deprioritized", count: summary.depri, color: c.textDim },
-    { key: "all", label: "All", count: summary.all, color: c.text },
+    { key: "all", label: "All", count: summary.all },
+    { key: "active", label: "In Flight", count: summary.active },
+    { key: "shipped", label: "Shipped", count: summary.shipped },
+    { key: "blocked", label: "Blocked", count: summary.blocked },
+    { key: "deprioritized", label: "Deprioritized", count: summary.depri },
+    { key: "overdue", label: "Overdue", count: summary.overdue },
   ];
 
-  // Synthetic-tab label map for empty-state copy + current-tab chip
-  const tabLabelMap = { at_risk: "at risk", overdue: "overdue", active: "in flight", shipped: "shipped", deprioritized: "deprioritized", all: "" };
-  // Synthetic tabs narrow the table to a scope not directly represented in the
-  // KPI row (at-risk, overdue, deprioritized). Show the "Showing: X" chip so the
-  // user understands the KPIs above still reflect the project universe.
-  const isSyntheticTab = activeTab === "at_risk" || activeTab === "overdue" || activeTab === "deprioritized";
+  const tabLabelMap = { at_risk: "at risk", active: "in flight", shipped: "shipped", blocked: "blocked", deprioritized: "deprioritized", overdue: "overdue", all: "" };
+  const isSyntheticTab = activeTab === "at_risk";
 
   // ── Shared Th wrapper ──
   const Th = ({ col, children, style: s }) => (
@@ -700,51 +827,56 @@ export default function ProjectsView({
             KPI GRID — 4 cards (Active / At Risk / Overdue / Shipped)
             Steel & Orange pattern per design-directions.html §KPI CARDS
             ═══════════════════════════════════════════════════════════ */}
-        <KpiGrid>
+        {viewMode !== "board" && viewMode !== "gantt" && <KpiGrid cols="1fr 1fr 1fr">
           <KpiCard
             index={0}
             label="In Flight"
             value={summary.active}
-            sub="across all squads"
             onClick={() => setActiveTab("active")}
             active={activeTab === "active"}
           >
             <PillRow>
-              {["PRD", "Design", "Dev", "QA", "Ship"].map(ph => (
+              {["PRD", "Design", "Dev", "QA"].map(ph => (
                 <Pill
                   key={ph}
                   count={summary.phaseCounts[ph] || 0}
                   label={ph}
-                  color={ph === "Ship" ? c.green : (pc[ph] || c.textDim)}
+                  color={pc[ph] || c.textDim}
                 />
               ))}
             </PillRow>
           </KpiCard>
           <KpiCard
             index={1}
-            label="At Risk"
-            value={summary.atRiskCount}
-            sub={summary.atRiskCount > 0 ? "need attention" : "all clear"}
-            onClick={() => setActiveTab(activeTab === "at_risk" ? "active" : "at_risk")}
-            active={activeTab === "at_risk"}
-          />
-          <KpiCard
-            index={2}
-            label="Overdue"
-            value={summary.overdueCount}
-            sub={summary.overdueCount > 0 ? "past end date" : "on schedule"}
-            onClick={() => setActiveTab(activeTab === "overdue" ? "active" : "overdue")}
-            active={activeTab === "overdue"}
-          />
-          <KpiCard
-            index={3}
             label="Shipped"
             value={summary.shipped}
-            sub="reached GA"
-            onClick={() => setActiveTab(activeTab === "shipped" ? "active" : "shipped")}
+            onClick={() => setActiveTab(activeTab === "shipped" ? "all" : "shipped")}
             active={activeTab === "shipped"}
-          />
-        </KpiGrid>
+          >
+            <PillRow>
+              {["Alpha", "Beta", "GA"].map(ph => (
+                <Pill
+                  key={ph}
+                  count={summary.shipPhaseCounts[ph] || 0}
+                  label={ph}
+                  color={ph === "GA" ? c.green : pc[ph] || c.textMid}
+                />
+              ))}
+            </PillRow>
+          </KpiCard>
+          <KpiCard
+            index={2}
+            label="At Risk"
+            value={summary.atRiskCount}
+            onClick={() => setActiveTab(activeTab === "blocked" ? "all" : "blocked")}
+            active={activeTab === "blocked"}
+          >
+            <PillRow>
+              <Pill count={summary.blocked} label="Blocked" color={c.red} />
+              <Pill count={summary.overdue} label="Overdue" color={c.amber} />
+            </PillRow>
+          </KpiCard>
+        </KpiGrid>}
 
         {/* VIEW-SCOPE PILLS + view-mode toggle — replaces the old "Projects" section head.
             Left: 4 canonical scopes (In Flight / Shipped / Deprioritized / All) plus
@@ -752,21 +884,14 @@ export default function ProjectsView({
             Right: Table / Board / Gantt. */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[3], flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: space[2], alignItems: "center", flexWrap: "wrap" }}>
-            {[
-              { key: "active", label: "In Flight", count: summary.active },
-              { key: "shipped", label: "Shipped", count: summary.shipped },
-              { key: "deprioritized", label: "Deprioritized", count: summary.depri },
-              { key: "all", label: "All", count: summary.all },
-            ].map(opt => {
-              // At Risk / Overdue are sub-filters of In Flight — surface that
-              // parent scope visually so a pill is always highlighted.
-              const parentScope = (activeTab === "at_risk" || activeTab === "overdue") ? "active" : activeTab;
+            {TABS.map(opt => {
+              const parentScope = activeTab === "at_risk" ? "active" : activeTab;
               const isActive = parentScope === opt.key;
               return (
                 <button
                   key={opt.key}
                   className="flow-btn"
-                  onClick={() => setActiveTab(isActive && opt.key !== "active" ? "active" : opt.key)}
+                  onClick={() => setActiveTab(opt.key)}
                   style={{
                     padding: `6px ${space[3]}px`,
                     borderRadius: layout.radiusSm,
@@ -786,18 +911,41 @@ export default function ProjectsView({
                 </button>
               );
             })}
+            {pinnedIds.size > 0 && (
+              <button
+                className="flow-btn"
+                onClick={() => setShowWatchlistOnly(v => !v)}
+                style={{
+                  padding: `6px ${space[3]}px`,
+                  borderRadius: layout.radiusSm,
+                  border: `1px solid ${showWatchlistOnly ? c.accentMid : c.border}`,
+                  background: showWatchlistOnly ? c.accentDim : c.surface,
+                  color: showWatchlistOnly ? c.accent : c.textDim,
+                  fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", gap: 6,
+                }}
+              >
+                📌 Watchlist
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                }}>{pinnedIds.size}</span>
+              </button>
+            )}
           </div>
           <SegmentedToggle
             options={[
-              { key: "registry", label: "Table" },
-              { key: "board", label: "Board" },
-              { key: "gantt", label: "Gantt" },
+              { key: "registry", label: <span style={{ display: "flex", alignItems: "center", gap: 5 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>List</span> },
+              { key: "board", label: <span style={{ display: "flex", alignItems: "center", gap: 5 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Board</span> },
+              { key: "gantt", label: <span style={{ display: "flex", alignItems: "center", gap: 5 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="12" height="3" rx="1"/><rect x="7" y="10" width="14" height="3" rx="1"/><rect x="5" y="16" width="10" height="3" rx="1"/></svg>Timeline</span> },
             ]}
-            value={boardFullscreen ? "board" : ganttFullscreen ? "gantt" : "registry"}
+            value={viewMode}
             onChange={(k) => {
-              if (k === "registry") { setViewMode("registry"); setBoardFullscreen(false); setGanttFullscreen(false); }
-              else if (k === "board") { setBoardFullscreen(true); }
-              else if (k === "gantt") { setGanttFullscreen(true); }
+              setViewMode(k);
+              if (k === "registry") { setBoardFullscreen(false); setGanttFullscreen(false); }
+              else if (k === "board") { setBoardFullscreen(false); setGanttFullscreen(false); }
+              else if (k === "gantt") { /* inline now, no fullscreen */ }
             }}
           />
         </div>
@@ -842,13 +990,298 @@ export default function ProjectsView({
           SCROLLABLE CONTENT
           ═══════════════════════════════════════════════════════════ */}
       <div style={{ position: "relative", zIndex: 1 }}>
-      {tabProjects.length === 0 ? (() => {
+
+      {/* ── INLINE BOARD VIEW ── */}
+      {viewMode === "board" ? (() => {
+        const PASTEL_BG = {
+          PRD: "#F5EEFF",     // very soft purple
+          Design: "#EDF5FF",  // very soft blue
+          Dev: "#FFF8E1",     // very soft amber
+          QA: "#E8F6F8",      // very soft teal
+          Alpha: "#EEF9FF",   // very soft sky
+          Beta: "#FFF5E6",    // very soft warm
+          GA: "#EAFFF0",      // very soft emerald
+        };
+        const PASTEL_BORDER = {
+          PRD: "#D8B4FE",
+          Design: "#A5C8FF",
+          Dev: "#FDE68A",
+          QA: "#99D5DB",
+          Alpha: "#A5D8FF",
+          Beta: "#FCD34D",
+          GA: "#A7F3D0",
+        };
+
+        const columns = allPhases;
+        const columnProjects = {};
+        columns.forEach(ph => { columnProjects[ph] = []; });
+        tabProjects.forEach(proj => {
+          const ph = proj.phase || "PRD";
+          if (columnProjects[ph]) columnProjects[ph].push(proj);
+        });
+
+        // Drag-over helper (refs + state are at component level)
+        const setDragOverPhase = (ph) => { dragOverRef.current = ph; setDragOverPhaseRaw(ph); };
+
+        const handleDragStart = (e, projId) => {
+          e.dataTransfer.setData("text/plain", projId);
+          e.dataTransfer.effectAllowed = "move";
+          setDraggingId(projId);
+          // After browser captures ghost image, collapse original card
+          requestAnimationFrame(() => {
+            e.target.style.opacity = "0.3";
+            e.target.style.pointerEvents = "none";
+          });
+        };
+        const handleDragEnd = (e) => {
+          e.currentTarget.style.opacity = "1";
+          e.currentTarget.style.pointerEvents = "auto";
+          setDraggingId(null);
+          setDragOverPhase(null);
+        };
+        const handleDragOver = (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          // Determine which column the mouse is actually over using refs
+          const mouseX = e.clientX;
+          for (const [ph, el] of Object.entries(colRefs.current)) {
+            if (!el) continue;
+            const rect = el.getBoundingClientRect();
+            if (mouseX >= rect.left && mouseX <= rect.right) {
+              if (dragOverRef.current !== ph) setDragOverPhase(ph);
+              return;
+            }
+          }
+        };
+        const handleDrop = (e, targetPhase) => {
+          e.preventDefault();
+          // Use the tracked dragOverPhase as the real target
+          const actualTarget = dragOverRef.current || targetPhase;
+          setDragOverPhase(null);
+          setDraggingId(null);
+          const projId = e.dataTransfer.getData("text/plain");
+          if (!projId) return;
+          const proj = projects.find(p => p.id === projId);
+          if (!proj || proj.phase === actualTarget) return;
+          const oldPhase = proj.phase;
+          setProjects(prev => prev.map(p => p.id === projId ? { ...p, phase: actualTarget, lastActivityAt: new Date().toISOString() } : p));
+          updateProjectInDB(projId, { phase: actualTarget });
+          if (isDevSeedMode()) {
+            devStore.logEvent({ projectId: projId, action: "project_phase_changed", details: { from: oldPhase, to: actualTarget } });
+          }
+          window.__flowToast?.(`${proj.name} moved to ${actualTarget}`);
+        };
+
+        return (
+          <div style={{
+            display: "flex", gap: space[3],
+            minWidth: columns.length * 180, minHeight: 500,
+            padding: `${space[2]}px 0`,
+          }}>
+            {columns.map(phase => {
+              const phColor = pc[phase] || c.textDim;
+              const cards = columnProjects[phase] || [];
+              const isOver = dragOverPhase === phase;
+              return (
+                <div key={phase}
+                  ref={el => { colRefs.current[phase] = el; }}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, phase)}
+                  style={{
+                    flex: 1, minWidth: 180, display: "flex", flexDirection: "column",
+                    borderRadius: layout.radiusLg,
+                    background: isOver ? `${c.accent}12` : c.surface,
+                    border: `1px solid ${isOver ? c.accent : c.border}`,
+                    boxShadow: isOver ? `inset 0 0 0 2px ${c.accent}40, 0 0 16px ${c.accent}15` : "none",
+                    transform: isOver ? "scale(1.02)" : "scale(1)",
+                    transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                  }}
+                >
+                  {/* Column header */}
+                  <div style={{
+                    padding: `${space[3]}px ${space[4]}px`,
+                    borderBottom: `1px solid ${c.border}`,
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: phColor }} />
+                      <span style={{
+                        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                        fontWeight: 700, letterSpacing: "0.06em",
+                        color: phColor, textTransform: "uppercase",
+                      }}>{phase}</span>
+                    </div>
+                    <span style={{
+                      fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                      fontWeight: 700, color: c.textMid,
+                      background: c.surfaceAlt, padding: "2px 8px",
+                      borderRadius: layout.radiusPill, border: `1px solid ${c.border}`,
+                    }}>{cards.length}</span>
+                  </div>
+
+                  {/* Cards */}
+                  <div style={{
+                    flex: 1, overflowY: "auto", padding: space[3],
+                    display: "flex", flexDirection: "column", gap: space[2],
+                    scrollbarWidth: "thin", scrollbarColor: `${c.textDim}20 transparent`,
+                    minHeight: 80,
+                  }}>
+                    {cards.length === 0 && (
+                      <div style={{
+                        padding: `${space[6]}px ${space[3]}px`,
+                        textAlign: "center",
+                        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                        color: c.textGhost,
+                        border: `2px dashed ${c.border}`, borderRadius: layout.radiusMd,
+                        pointerEvents: "none",
+                      }}>Drop here</div>
+                    )}
+                    {cards.map(proj => {
+                      const m = metrics[proj.id] || {};
+                      const pastelBg = PASTEL_BG[phase] || "#F9FAFB";
+                      const pastelBorder = PASTEL_BORDER[phase] || c.border;
+
+                      // Team members for bubbles
+                      const ownerPerson = (people || []).find(p => p.id === proj.owner_id);
+                      const memberIds = m.teamMembers || [];
+                      const allTeam = [];
+                      if (ownerPerson) allTeam.push(ownerPerson);
+                      memberIds.forEach(mid => {
+                        if (mid !== proj.owner_id) {
+                          const p = peopleById.get(mid);
+                          if (p) allTeam.push(p);
+                        }
+                      });
+                      const showTeam = allTeam.slice(0, 3);
+                      const BUBBLE_COLORS = ["#0E7490", "#B45309", "#6D28D9", "#059669", "#DC2626", "#E8590C"];
+
+                      return (
+                        <div
+                          key={proj.id}
+                          role="button"
+                          tabIndex={0}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, proj.id)}
+                          onDragEnd={handleDragEnd}
+                          onClick={() => openProject(proj.id)}
+                          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProject(proj.id); } }}
+                          onMouseEnter={e => { const el = e.currentTarget; el.style.transform = "translateY(-2px) rotate(-0.5deg) scale(1.02)"; el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)"; }}
+                          onMouseLeave={e => { const el = e.currentTarget; el.style.transform = "translateY(0) rotate(0deg) scale(1)"; el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}
+                          style={{
+                            padding: 14,
+                            borderRadius: layout.radiusMd,
+                            background: pastelBg,
+                            border: `1px solid ${pastelBorder}60`,
+                            borderLeft: `4px solid ${pastelBorder}`,
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                            cursor: "grab",
+                            display: "flex", flexDirection: "column", gap: space[2],
+                            transition: `box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                          }}
+                        >
+                          {/* ID + priority + blocked */}
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                              <span style={{
+                                fontFamily: typo.monoMd.font, fontSize: 11,
+                                fontWeight: 700, letterSpacing: "0.02em",
+                                color: ec.project,
+                              }}>{proj.id}</span>
+                              {proj.priority && (() => {
+                                const pColors = { P0: c.red, P1: c.amber, P2: c.textDim, P3: c.textGhost };
+                                const pBg = { P0: c.redDim, P1: c.amberDim, P2: c.surfaceAlt, P3: c.surfaceAlt };
+                                return <Tag color={pColors[proj.priority] || c.textDim} bg={pBg[proj.priority] || c.surfaceAlt} style={{ fontSize: 9, padding: "1px 5px" }}>{proj.priority}</Tag>;
+                              })()}
+                            </div>
+                            {m.overdue && <span title="Overdue" style={{ fontSize: 11, lineHeight: 1 }}>⚠️</span>}
+                            {m.isBlocked && <Tag color="#fff" bg={c.red} style={{ fontSize: 9, padding: "1px 5px", fontWeight: 700 }}>BLOCKED</Tag>}
+                          </div>
+
+                          {/* Name */}
+                          <div style={{
+                            fontFamily: typo.bodySm.font, fontSize: 13,
+                            fontWeight: 600, color: c.text, lineHeight: 1.4,
+                          }}>{proj.name}</div>
+
+                          {/* Owner + squad */}
+                          <div style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            fontFamily: typo.bodySm.font, fontSize: 11, color: c.textMid,
+                          }}>
+                            <span style={{ fontWeight: 500 }}>{proj.owner || "—"}</span>
+                            <span style={{
+                              padding: "1px 6px", borderRadius: 999,
+                              background: "rgba(255,255,255,0.6)", border: `1px solid ${pastelBorder}40`,
+                              fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: c.textDim,
+                            }}>{proj.squad}</span>
+                          </div>
+
+                          {/* Team bubbles + updated */}
+                          <div style={{
+                            display: "flex", alignItems: "center", justifyContent: "space-between",
+                            borderTop: `1px solid ${pastelBorder}40`,
+                            paddingTop: space[2], marginTop: 2,
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center" }}>
+                              {showTeam.map((person, idx) => (
+                                <div key={person.id} title={person.name} style={{
+                                  width: 26, height: 26, borderRadius: 7,
+                                  background: BUBBLE_COLORS[idx % BUBBLE_COLORS.length],
+                                  color: "#fff", fontSize: 9, fontWeight: 700,
+                                  fontFamily: typo.monoSm.font,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  border: `2px solid ${pastelBg}`,
+                                  marginLeft: idx > 0 ? -4 : 0,
+                                  position: "relative", zIndex: idx + 1,
+                                }}>{initialsOf(person.name)}</div>
+                              ))}
+                              {allTeam.length > 3 && (
+                                <div style={{
+                                  width: 26, height: 26, borderRadius: 7,
+                                  background: c.surfaceAlt, color: c.textMid,
+                                  fontSize: 9, fontWeight: 700, fontFamily: typo.monoSm.font,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  border: `2px solid ${pastelBg}`,
+                                  marginLeft: -4, position: "relative", zIndex: showTeam.length + 1,
+                                }}>+{allTeam.length - 3}</div>
+                              )}
+                              {allTeam.length === 0 && <span style={{ fontSize: 10, color: c.textGhost }}>—</span>}
+                            </div>
+                            <span style={{
+                              fontFamily: typo.monoSm.font, fontSize: 9,
+                              color: c.textDim, whiteSpace: "nowrap",
+                            }}>{proj.lastActivityAt ? timeAgo(proj.lastActivityAt) : "—"}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })() :
+
+      /* ── INLINE TIMELINE VIEW ── */
+      viewMode === "gantt" ? (
+        <div style={{ minHeight: 500, border: `1px solid ${c.border}`, borderRadius: layout.radiusLg, overflow: "hidden" }}>
+          <GanttChart
+            projects={tabProjects}
+            today={today}
+            onProjectClick={(id) => openProject(id)}
+          />
+        </div>
+      ) :
+
+      /* ── LIST VIEW ── */
+      tabProjects.length === 0 ? (() => {
         const hasGlobalFilter = (globalFilters.owner?.length || globalFilters.squad?.length || globalFilters.person?.length);
         const tabWord = tabLabelMap[activeTab] || "";
         let title = "No projects";
         let message = `No ${tabWord ? tabWord + " " : ""}projects found.`;
         // "Add project" never resolves synthetic-tab filters — hide it there.
-        let action = !isHistorical && !isSyntheticTab ? "Add project" : (isSyntheticTab ? "Back to Active" : null);
+        let action = !isSyntheticTab ? "Add project" : (isSyntheticTab ? "Back to Active" : null);
         let onAction = isSyntheticTab ? () => setActiveTab("active") : () => setShowCreate(true);
         if (search) {
           title = "No matches";
@@ -867,65 +1300,91 @@ export default function ProjectsView({
             <thead>
                 <tr>
                   <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
-                  <Th col="project" style={{ minWidth: colWidths.identity.min, }}>Project</Th>
-                  <Th col="owner" style={{ minWidth: colWidths.owner.min, }}>Owner</Th>
-                  {activeTab === "all" && <Th col="status" style={{ minWidth: colWidths.status.min, textAlign: "center", }}>Status</Th>}
-                  {activeTab !== "shipped" && <Th col="phase" style={{ minWidth: colWidths.phase.min, textAlign: "center", }}>Phase</Th>}
-                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="health" style={{ minWidth: 90, textAlign: "center", }}>Health</Th>}
-                  <Th col="total" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>Total</Th>
-                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="thisWk" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>{isHistorical ? selectedWeekKey : "This Wk"}</Th>}
-                  {activeTab !== "deprioritized" && <Th col="people" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>People</Th>}
-                  {activeTab === "shipped" && <>
-                    <Th col="planStart" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Plan Start</Th>
-                    <Th col="planEnd" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Plan End</Th>
-                    <Th col="actualStart" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Actual Start</Th>
-                    <Th col="actualEnd" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Actual End</Th>
-                    <Th col="planDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>Plan Days</Th>
-                    <Th col="actualDays" style={{ minWidth: colWidths.metric.min, textAlign: "center", }}>Actual Days</Th>
-                  </>}
-                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="last" style={{ minWidth: colWidths.date.min, textAlign: "center", }}>Updated</Th>}
-                  {activeTab !== "shipped" && activeTab !== "deprioritized" && <Th col="timeline" style={{ minWidth: colWidths.timeline.min, textAlign: "center", }}>Timeline</Th>}
-                  {activeTab === "deprioritized" && <Th col="reason" style={{ minWidth: 200, }}>Reason</Th>}
+                  <Th col="project" style={{ minWidth: 200 }}>Project</Th>
+                  <Th col="priority" style={{ minWidth: 60, textAlign: "center" }}>Priority</Th>
+                  <Th col="complexity" style={{ minWidth: 60, textAlign: "center" }}>Complexity</Th>
+                  <Th col="owner" style={{ minWidth: colWidths.owner.min }}>Owner</Th>
+                  <Th col="phase" style={{ minWidth: colWidths.phase.min, textAlign: "center" }}>Phase</Th>
+                  <Th col="health" style={{ minWidth: 90, textAlign: "center" }}>Health</Th>
+                  <Th col="people" style={{ minWidth: 100, textAlign: "center" }}>Team</Th>
+                  <Th col="last" style={{ minWidth: colWidths.date.min, textAlign: "center" }}>Updated</Th>
+                  <Th col="timeline" style={{ minWidth: colWidths.timeline?.min || 130, textAlign: "center" }}>Timeline</Th>
                 </tr>
               </thead>
               <tbody>
                 {tabProjects.map((proj, fi) => {
                   const m = metrics[proj.id] || {};
-                  const sCfg = sc[proj.status] || sc.active;
-                  const allocated = daysBetween(proj.startDate, proj.endDate);
-                  const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, weekConfig.today), allocated));
-                  const pct = allocated > 0 ? Math.round((elapsed / allocated) * 100) : 0;
                   const isFocused = kbActive && fi === focusIdx;
                   const isHovered = hoveredProject === proj.id;
-                  const isDimmed = activeTab === "all" && (proj.phase === "GA" || proj.status === "deprioritized");
+                  const isDimmed = proj.status === "deprioritized";
+                  const isPinned = pinnedIds.has(proj.id);
+                  const isShipped = SHIPPED_PHASES.includes(proj.phase);
+                  const isBlockedOrOverdue = m.isBlocked || m.overdue;
+                  const leftBarColor = isShipped ? c.green : isBlockedOrOverdue ? c.red : null;
 
                   const cellBorder = "1px solid rgba(0,0,0,0.03)";
                   const rowBg = isFocused ? `${c.accent}10` : isHovered ? "rgba(0,0,0,0.012)" : c.surface;
+
+                  // Build team members list: owner + members
+                  const ownerPerson = (people || []).find(p => p.id === proj.owner_id);
+                  const memberIds = m.teamMembers || [];
+                  const allTeam = [];
+                  if (ownerPerson) allTeam.push(ownerPerson);
+                  memberIds.forEach(mid => {
+                    if (mid !== proj.owner_id) {
+                      const p = peopleById.get(mid);
+                      if (p) allTeam.push(p);
+                    }
+                  });
+                  const showTeam = allTeam.slice(0, 3);
+                  const extraCount = allTeam.length;
+
+                  const lastActivity = latestActivity[proj.id];
+
                   return (
-                    <tr key={proj.id}
+                    <React.Fragment key={proj.id}>
+                    <tr
+                      ref={el => { if (el) el.__projId = proj.id; }}
                       className={isFocused ? "flow-kb-focus" : undefined}
-                      onMouseEnter={() => setHoveredProject(proj.id)}
-                      onMouseLeave={() => setHoveredProject(null)}
+                      onMouseEnter={(e) => { setHoveredProject(proj.id); e.currentTarget.style.transform = "scale(1.008)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.07)"; e.currentTarget.style.zIndex = "2"; e.currentTarget.style.position = "relative"; }}
+                      onMouseLeave={(e) => { setHoveredProject(null); e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.zIndex = "auto"; e.currentTarget.style.position = "static"; }}
                       onClick={() => openProject(proj.id)}
                       style={{
                         cursor: "pointer",
                         background: rowBg,
-                        opacity: isDimmed ? 0.65 : 1,
-                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}`,
+                        opacity: isDimmed ? 0.5 : 1,
+                        filter: isDimmed ? "grayscale(0.6)" : "none",
+                        borderLeft: leftBarColor ? `4px solid ${leftBarColor}` : "4px solid transparent",
+                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
                       }}
                     >
-                      {/* Squad — sticky left (Pulse pattern) */}
+                      {/* Squad — sticky left + pin */}
                       <td style={{
                         padding: `${space[3]}px ${space[4]}px`,
                         fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                        fontWeight: 500, color: c.textMid,
+                        fontWeight: 500, color: isDimmed ? c.textGhost : c.textMid,
                         borderBottom: cellBorder,
                         position: "sticky", left: 0, background: rowBg, zIndex: 1,
-                        fontVariantNumeric: "tabular-nums",
                         transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
-                      }}>{proj.squad}</td>
+                      }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <button
+                            type="button"
+                            title={isPinned ? "Unpin from watchlist" : "Pin to watchlist"}
+                            onClick={(e) => togglePin(proj.id, e)}
+                            style={{
+                              background: "none", border: "none", padding: 0, cursor: "pointer",
+                              fontSize: 12, lineHeight: 1, flexShrink: 0,
+                              opacity: isPinned ? 1 : isHovered ? 0.5 : 0,
+                              color: isPinned ? c.accent : c.textDim,
+                              transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
+                            }}
+                          >{isPinned ? "📌" : "📌"}</button>
+                          {proj.squad}
+                        </div>
+                      </td>
 
-                      {/* Project — ID + Name compound (Pulse pattern) */}
+                      {/* Project — ID + Name + status/phase labels */}
                       <td style={{
                         padding: `${space[3]}px ${space[4]}px`,
                         borderBottom: cellBorder,
@@ -940,21 +1399,42 @@ export default function ProjectsView({
                             fontFamily: typo.bodyMd.font, fontSize: 14,
                             fontWeight: 600, color: c.text,
                             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                            transition: `color ${motion.fast.duration} ${motion.fast.easing}`,
                           }}>{proj.name}</span>
-                          {m.hasBlockedCommit && <Tag color={c.red} bg={c.redDim} style={{ flexShrink: 0 }}>BLOCKED</Tag>}
-                          {!m.hasBlockedCommit && m.endingSoon && (() => {
-                            const d = daysBetween(today, proj.endDate);
-                            return <Tag color={c.amber} bg={c.amberDim} style={{ flexShrink: 0 }} title={`Ends in ${d} day${d === 1 ? "" : "s"} (${fmtDate(proj.endDate)})`}>ENDING SOON</Tag>;
-                          })()}
-                          {weekConfig.weekStart && proj.startDate && proj.startDate >= weekConfig.weekStart && !shipPhases.includes(proj.phase) && (
-                            <Tag color={c.cyan} bg={c.cyanDim} style={{ flexShrink: 0 }} title={`Started ${fmtDate(proj.startDate)} — new this cycle`}>NEW</Tag>
-                          )}
-                          {shipPhases.includes(proj.phase) && <Tag color={c.green} bg={c.greenDim} style={{ flexShrink: 0 }} title={proj.phase}>SHIPPED</Tag>}
+                          {m.overdue && <span title={`Overdue by ${Math.abs(daysBetween(today, proj.endDate))}d`} style={{ flexShrink: 0, fontSize: 13, lineHeight: 1 }}>⚠️</span>}
+                          {m.isBlocked && <Tag color={c.red} bg={c.redDim} style={{ flexShrink: 0 }}>BLOCKED</Tag>}
+                          {proj.status === "deprioritized" && <Tag color={c.textDim} bg={c.surfaceAlt} style={{ flexShrink: 0 }}>DEPRIORITIZED</Tag>}
+                          {SHIPPED_PHASES.includes(proj.phase) && <Tag color={c.green} bg={c.greenDim} style={{ flexShrink: 0 }}>SHIPPED</Tag>}
                         </div>
                       </td>
 
-                      {/* Owner — person entity = cyan */}
+                      {/* Priority */}
+                      <td style={{
+                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
+                        borderBottom: cellBorder,
+                      }}>
+                        {(() => {
+                          const pri = proj.priority || "P2";
+                          const pColors = { P0: c.red, P1: c.amber, P2: c.textMid, P3: c.textGhost };
+                          const pBg = { P0: c.redDim, P1: c.amberDim, P2: c.surfaceAlt, P3: c.surfaceAlt };
+                          return <Tag color={pColors[pri]} bg={pBg[pri]} style={{ fontSize: 10, padding: "2px 7px" }}>{pri}</Tag>;
+                        })()}
+                      </td>
+
+                      {/* Complexity */}
+                      <td style={{
+                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
+                        borderBottom: cellBorder,
+                      }}>
+                        {proj.complexity ? (() => {
+                          const cLabels = { S: "Low", M: "Med", L: "High", XL: "High" };
+                          return <span style={{
+                            fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600,
+                            color: c.textMid, letterSpacing: "0.04em",
+                          }}>{cLabels[proj.complexity]}</span>;
+                        })() : <span style={{ color: c.textDim, fontSize: 11 }}>—</span>}
+                      </td>
+
+                      {/* Owner */}
                       <td style={{
                         padding: `${space[3]}px ${space[4]}px`,
                         borderBottom: cellBorder,
@@ -963,119 +1443,89 @@ export default function ProjectsView({
                         whiteSpace: "nowrap",
                       }}>{proj.owner || "Unassigned"}</td>
 
-                      {/* Status — only in "All" tab */}
-                      {activeTab === "all" && <td style={{
-                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                        borderBottom: cellBorder,
-                      }}>
-                        <span style={{
-                          display: "inline-block", padding: `3px 10px`,
-                          borderRadius: layout.radiusXs,
-                          background: sCfg.bg, color: sCfg.color,
-                          fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 700,
-                        }}>{sCfg.label}</span>
-                      </td>}
-
-                      {/* Phase — hidden in Completed tab */}
-                      {activeTab !== "shipped" && <td style={{
+                      {/* Phase + days in phase */}
+                      <td style={{
                         padding: `${space[3]}px ${space[4]}px`,
                         textAlign: "center",
                         borderBottom: cellBorder,
                       }}>
-                        <span style={{
-                          display: "inline-block", padding: `3px 10px`,
-                          borderRadius: layout.radiusXs,
-                          background: pcMid[proj.phase] || c.surfaceAlt,
-                          color: pc[proj.phase] || c.textDim,
-                          fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 700,
-                        }}>{proj.phase}</span>
-                      </td>}
+                        {(() => {
+                          const days = m.daysInPhase;
+                          const thresh = m.phaseThreshold;
+                          const overThreshold = thresh && days > thresh;
+                          return (
+                            <span style={{
+                              display: "inline-flex", alignItems: "center", gap: 5,
+                              padding: `3px 10px`,
+                              borderRadius: layout.radiusXs,
+                              background: pcMid[proj.phase] || c.surfaceAlt,
+                              color: pc[proj.phase] || c.textDim,
+                              fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 700,
+                            }}>
+                              {proj.phase}
+                              {days != null && (
+                                <span style={{
+                                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600,
+                                  color: overThreshold ? c.red : c.textDim,
+                                  fontVariantNumeric: "tabular-nums",
+                                }}>
+                                  · {days}d
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()}
+                      </td>
 
-                      {/* Health — hidden on shipped + deprioritized tabs */}
-                      {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
+                      {/* Health */}
+                      <td style={{
                         padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
                         borderBottom: cellBorder,
                       }}>
                         <div style={{ display: "inline-flex", justifyContent: "center" }}>
                           <HealthBar value={m.health ?? 100} compact />
                         </div>
-                      </td>}
+                      </td>
 
-                      {/* Total commits */}
+                      {/* Team — solid filled avatar bubbles */}
                       <td style={{
                         padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
                         borderBottom: cellBorder,
-                        fontFamily: typo.monoMd.font, fontSize: 13,
-                        color: m.totalCommits > 0 ? c.text : c.textDim, fontWeight: 700,
-                        fontVariantNumeric: "tabular-nums",
-                      }}>{m.totalCommits || "—"}</td>
-
-                      {/* This week — hidden in Completed and Deprioritized tabs */}
-                      {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
-                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                        borderBottom: cellBorder,
-                        fontFamily: typo.monoMd.font, fontSize: 13, fontWeight: 700,
-                        color: m.thisWeekTotal > 0 ? c.cyan : c.textDim,
-                        fontVariantNumeric: "tabular-nums",
-                      }}>{m.thisWeekTotal || "—"}</td>}
-
-                      {/* People — hidden in Deprioritized tab */}
-                      {activeTab !== "deprioritized" && <td style={{
-                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                        borderBottom: cellBorder,
-                        fontFamily: typo.monoMd.font, fontSize: 13, fontWeight: 700,
-                        color: m.peopleList?.length > 0 ? c.text : c.textDim,
-                        fontVariantNumeric: "tabular-nums",
-                      }}>{m.peopleList?.length || "—"}</td>}
-
-                      {/* Shipped tab — plan/actual columns */}
-                      {activeTab === "shipped" && <>
-                        <td style={{
-                          padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                          borderBottom: cellBorder,
-                          fontFamily: typo.monoMd.font, fontSize: 12, color: c.textMid,
-                          fontVariantNumeric: "tabular-nums",
-                        }}>{fmtDate(proj.startDate)}</td>
-                        <td style={{
-                          padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                          borderBottom: cellBorder,
-                          fontFamily: typo.monoMd.font, fontSize: 12, color: c.textMid,
-                          fontVariantNumeric: "tabular-nums",
-                        }}>{fmtDate(proj.endDate)}</td>
-                        <td style={{
-                          padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                          borderBottom: cellBorder,
-                          fontFamily: typo.monoMd.font, fontSize: 12, color: c.textMid,
-                          fontVariantNumeric: "tabular-nums",
-                        }}>{fmtDate(proj.actualStartDate)}</td>
-                        <td style={{
-                          padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                          borderBottom: cellBorder,
-                          fontFamily: typo.monoMd.font, fontSize: 12, color: c.textMid,
-                          fontVariantNumeric: "tabular-nums",
-                        }}>{fmtDate(proj.actualEndDate)}</td>
-                        <td style={{
-                          padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                          borderBottom: cellBorder,
-                          fontFamily: typo.monoMd.font, fontSize: 13, color: c.text, fontWeight: 700,
-                          fontVariantNumeric: "tabular-nums",
-                        }}>{allocated}</td>
+                      }}>
                         {(() => {
-                          const actualDays = proj.actualStartDate && proj.actualEndDate ? daysBetween(proj.actualStartDate, proj.actualEndDate) : 0;
-                          const overPlan = actualDays > allocated;
-                          return <td style={{
-                            padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                            borderBottom: cellBorder,
-                            fontFamily: typo.monoMd.font, fontSize: 13, fontWeight: 700,
-                            color: overPlan ? c.amber : c.green,
-                            fontVariantNumeric: "tabular-nums",
-                          }}>{actualDays}</td>;
+                          const SOLID_COLORS = ["#0E7490", "#B45309", "#6D28D9", "#059669", "#DC2626", "#E8590C"];
+                          return (
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              {showTeam.map((person, idx) => (
+                                  <div key={person.id} title={person.name} style={{
+                                    width: 28, height: 28, borderRadius: 8,
+                                    background: SOLID_COLORS[idx % SOLID_COLORS.length], color: "#fff",
+                                    display: "flex", alignItems: "center", justifyContent: "center",
+                                    fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+                                    border: `2px solid ${c.surface}`,
+                                    marginLeft: idx > 0 ? -4 : 0,
+                                    position: "relative", zIndex: idx + 1,
+                                  }}>{initialsOf(person.name)}</div>
+                              ))}
+                              {extraCount > 0 && (
+                                <div style={{
+                                  width: 28, height: 28, borderRadius: 8,
+                                  background: c.surfaceAlt, color: c.textMid,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                                  border: `2px solid ${c.surface}`,
+                                  marginLeft: showTeam.length > 0 ? -4 : 0,
+                                  position: "relative", zIndex: showTeam.length + 1,
+                                }}>{extraCount}</div>
+                              )}
+                              {allTeam.length === 0 && <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: c.textDim }}>—</span>}
+                            </div>
+                          );
                         })()}
-                      </>}
+                      </td>
 
-                      {/* Updated — most recent comment/event timestamp.
-                          Stale (>14d) gets a red tint so silent projects pop. */}
-                      {activeTab !== "shipped" && activeTab !== "deprioritized" && (() => {
+                      {/* Updated */}
+                      {(() => {
                         const stale = isStale(proj.lastActivityAt);
                         return (
                           <td
@@ -1092,40 +1542,71 @@ export default function ProjectsView({
                         );
                       })()}
 
-                      {/* Timeline — hidden in Completed and Deprioritized tabs */}
-                      {activeTab !== "shipped" && activeTab !== "deprioritized" && <td style={{
+                      {/* Timeline — start→end with progress bar */}
+                      <td style={{
                         padding: `${space[3]}px ${space[4]}px`,
                         borderBottom: cellBorder,
                       }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums" }}>
-                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
-                              {fmtDate(proj.startDate)}
-                            </span>
-                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>→</span>
-                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
-                              {fmtDate(proj.endDate)}
-                            </span>
-                          </div>
-                          <div style={{ height: 3, borderRadius: 2, background: c.border, overflow: "hidden", width: "100%" }}>
-                            <div style={{
-                              height: "100%", borderRadius: 2, width: `${Math.min(pct, 100)}%`,
-                              background: m.overdue ? c.red : pct > 85 ? c.amber : c.green,
-                              transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
-                            }} />
-                          </div>
-                        </div>
-                      </td>}
-
-                      {/* Reason — Deprioritized tab only */}
-                      {activeTab === "deprioritized" && <td style={{
-                        padding: `${space[3]}px ${space[4]}px`,
-                        borderBottom: cellBorder,
-                        fontFamily: typo.bodySm.font, fontSize: 13,
-                        color: proj.depriReason ? c.textMid : c.textDim,
-                        maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }} title={proj.depriReason || ""}>{proj.depriReason || "—"}</td>}
+                        {(() => {
+                          const allocated = daysBetween(proj.startDate, proj.endDate);
+                          const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, today), allocated));
+                          const pct = allocated > 0 ? Math.round((elapsed / allocated) * 100) : 0;
+                          return (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums" }}>
+                                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
+                                  {fmtDate(proj.startDate)}
+                                </span>
+                                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>→</span>
+                                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
+                                  {fmtDate(proj.endDate)}
+                                </span>
+                              </div>
+                              <div style={{ height: 3, borderRadius: 2, background: c.border, overflow: "hidden", width: "100%" }}>
+                                <div style={{
+                                  height: "100%", borderRadius: 2, width: `${Math.min(pct, 100)}%`,
+                                  background: m.overdue ? c.red : pct > 85 ? c.amber : c.green,
+                                  transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
+                                }} />
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </td>
                     </tr>
+                    {isHovered && lastActivity && (
+                      <tr style={{ pointerEvents: "none" }}>
+                        <td colSpan={10} style={{
+                          padding: `${space[2]}px ${space[4]}px ${space[3]}px`,
+                          background: c.surfaceAlt,
+                          borderBottom: cellBorder,
+                        }}>
+                          <div style={{
+                            display: "flex", alignItems: "center", gap: space[2],
+                            maxWidth: 700,
+                          }}>
+                            <span style={{ fontSize: 12, flexShrink: 0 }}>{lastActivity.kind === "comment" ? "💬" : "⚡"}</span>
+                            {lastActivity.kind === "comment" && (
+                              <span style={{
+                                fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                                color: c.text, flexShrink: 0,
+                              }}>{lastActivity.author}</span>
+                            )}
+                            <span style={{
+                              fontFamily: typo.bodySm.font, fontSize: 12,
+                              color: lastActivity.kind === "comment" ? c.textMid : c.textDim,
+                              fontStyle: lastActivity.kind === "event" ? "italic" : "normal",
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1,
+                            }}>{lastActivity.body}</span>
+                            <span style={{
+                              fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim,
+                              flexShrink: 0,
+                            }}>{timeAgo(lastActivity.ts)}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -1135,7 +1616,7 @@ export default function ProjectsView({
       </div>
 
       {/* FAB — Add Project (hidden in historical mode) */}
-      {!isHistorical && <button className="flow-btn" onClick={() => setShowCreate(true)} aria-label="Add project" style={{
+      {<button className="flow-btn" onClick={() => setShowCreate(true)} aria-label="Add project" style={{
         position: "fixed", bottom: space[7], right: space[7], zIndex: 50,
         height: 40, padding: `0 ${space[5]}px`, borderRadius: layout.radiusSm,
         border: "none", cursor: "pointer",
@@ -1155,304 +1636,7 @@ export default function ProjectsView({
         onClose={() => setShowCreate(false)}
       />}
 
-      {/* ═══════════════════════════════════════════════════════════
-          GANTT FULLSCREEN OVERLAY
-          ═══════════════════════════════════════════════════════════ */}
-      {ganttAnim.mounted && createPortal(
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 300,
-          background: c.bg, display: "flex", flexDirection: "column",
-          animation: `${ganttAnim.visible ? "fadeIn" : "fadeOut"} ${motion.normal.duration} ${motion.normal.easing} both`,
-        }}>
-          {/* Top bar */}
-          <div style={{
-            height: 56, flexShrink: 0, display: "flex", alignItems: "center",
-            justifyContent: "space-between", padding: `0 ${space[5]}px`,
-            borderBottom: `1px solid ${c.border}`, background: c.bg,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-              <FlowLogo size={28} />
-              <span style={{ fontSize: typo.bodyLg.size, fontWeight: 700, color: c.text, letterSpacing: "-0.02em" }}>Flow</span>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-              {/* Unified search + filters bar */}
-              <div style={{
-                display: "flex", alignItems: "center", gap: space[2],
-                background: c.surfaceAlt, borderRadius: layout.radiusMd,
-                padding: `${space[1] + 1}px ${space[3]}px`,
-                border: `1px solid ${c.border}`,
-              }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
-                </svg>
-                <input
-                  ref={ganttSearchRef}
-                  value={ganttSearch} onChange={e => setGanttSearch(e.target.value)}
-                  placeholder="Search…"
-                  style={{
-                    width: 140, padding: `4px ${space[1]}px`,
-                    border: "none", background: "transparent", color: c.text,
-                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, outline: "none",
-                  }}
-                />
-                <div style={{ width: 1, height: 20, background: c.border, flexShrink: 0 }} />
-                <GanttMultiFilter label="Squads" options={allSquads} selected={ganttSquads}
-                  onToggle={val => toggleFilter(setGanttSquads, val)} onClear={() => setGanttSquads([])} />
-                <GanttMultiFilter label="Owners" options={allOwners} selected={ganttOwners}
-                  onToggle={val => toggleFilter(setGanttOwners, val)} onClear={() => setGanttOwners([])} />
-                <GanttMultiFilter label="Phase" options={allPhases} selected={ganttPhases}
-                  onToggle={val => toggleFilter(setGanttPhases, val)} onClear={() => setGanttPhases([])} />
-                {(ganttSearch || ganttSquads.length > 0 || ganttOwners.length > 0 || ganttPhases.length > 0) && (
-                  <button className="flow-btn" onClick={() => { setGanttSearch(""); setGanttSquads([]); setGanttOwners([]); setGanttPhases([]); }} style={{
-                    padding: `3px ${space[2]}px`, borderRadius: layout.radiusSm,
-                    border: `1px solid ${c.border}`,
-                    background: c.surfaceAlt, color: c.textMid,
-                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, cursor: "pointer",
-                  }}>Clear</button>
-                )}
-              </div>
-
-              {/* Close button */}
-              <button onClick={() => { setGanttFullscreen(false); setViewMode("registry"); }} aria-label="Close Gantt view" style={{
-                width: 44, height: 44, borderRadius: layout.radiusSm,
-                border: `1px solid ${c.border}`, background: c.surfaceAlt,
-                color: c.textDim, fontSize: 18, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = c.border; e.currentTarget.style.color = c.text; }}
-              onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.color = c.textDim; }}
-              onFocus={e => { e.currentTarget.style.boxShadow = `0 0 0 2px ${c.accentMid}`; }}
-              onBlur={e => { e.currentTarget.style.boxShadow = "none"; }}
-              title="Close (Esc)"
-              >✕</button>
-            </div>
-          </div>
-
-          {/* Gantt fills rest of screen */}
-          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
-            <GanttChart
-              projects={ganttProjects}
-              weekConfig={weekConfig}
-              onProjectClick={(id) => { setGanttFullscreen(false); openProject(id); }}
-            />
-          </div>
-
-          {/* Search/filters moved to top bar */}
-        </div>,
-        document.body
-      )}
-
-      {/* ═══════════════════════════════════════════════════════════
-          BOARD FULLSCREEN OVERLAY
-          ═══════════════════════════════════════════════════════════ */}
-      {boardAnim.mounted && createPortal(
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 300,
-          background: c.bg, display: "flex", flexDirection: "column",
-          animation: `${boardAnim.visible ? "fadeIn" : "fadeOut"} ${motion.normal.duration} ${motion.normal.easing} both`,
-        }}>
-          {/* Top bar */}
-          <div style={{
-            height: 56, flexShrink: 0, display: "flex", alignItems: "center",
-            justifyContent: "space-between", padding: `0 ${space[5]}px`,
-            borderBottom: `1px solid ${c.border}`, background: c.bg,
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-              <FlowLogo size={28} />
-              <span style={{ fontSize: typo.bodyLg.size, fontWeight: 700, color: c.text, letterSpacing: "-0.02em" }}>Flow</span>
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-              {/* Unified search + filters bar */}
-              <div style={{
-                display: "flex", alignItems: "center", gap: space[2],
-                background: c.surfaceAlt, borderRadius: layout.radiusMd,
-                padding: `${space[1] + 1}px ${space[3]}px`,
-                border: `1px solid ${c.border}`,
-              }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                  <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
-                </svg>
-                <input
-                  ref={boardSearchRef}
-                  value={boardSearch} onChange={e => setBoardSearch(e.target.value)}
-                  placeholder="Search…"
-                  style={{
-                    width: 140, padding: `4px ${space[1]}px`,
-                    border: "none", background: "transparent", color: c.text,
-                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, outline: "none",
-                  }}
-                />
-                <div style={{ width: 1, height: 20, background: c.border, flexShrink: 0 }} />
-                <GanttMultiFilter label="Squads" options={allSquads} selected={boardSquads}
-                  onToggle={val => toggleFilter(setBoardSquads, val)} onClear={() => setBoardSquads([])} />
-                <GanttMultiFilter label="Owners" options={allOwners} selected={boardOwners}
-                  onToggle={val => toggleFilter(setBoardOwners, val)} onClear={() => setBoardOwners([])} />
-                <GanttMultiFilter label="Phase" options={allPhases} selected={boardPhases}
-                  onToggle={val => toggleFilter(setBoardPhases, val)} onClear={() => setBoardPhases([])} />
-                {(boardSearch || boardSquads.length > 0 || boardOwners.length > 0 || boardPhases.length > 0) && (
-                  <button className="flow-btn" onClick={() => { setBoardSearch(""); setBoardSquads([]); setBoardOwners([]); setBoardPhases([]); }} style={{
-                    padding: `3px ${space[2]}px`, borderRadius: layout.radiusSm,
-                    border: `1px solid ${c.border}`,
-                    background: c.surfaceAlt, color: c.textMid,
-                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, cursor: "pointer",
-                  }}>Clear</button>
-                )}
-              </div>
-
-              {/* Close button */}
-              <button onClick={() => { setBoardFullscreen(false); setViewMode("registry"); }} aria-label="Close Board view" style={{
-                width: 44, height: 44, borderRadius: layout.radiusSm,
-                border: `1px solid ${c.border}`, background: c.surfaceAlt,
-                color: c.textDim, fontSize: 18, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = c.border; e.currentTarget.style.color = c.text; }}
-              onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.color = c.textDim; }}
-              onFocus={e => { e.currentTarget.style.boxShadow = `0 0 0 2px ${c.accentMid}`; }}
-              onBlur={e => { e.currentTarget.style.boxShadow = "none"; }}
-              title="Close (Esc)"
-              >✕</button>
-            </div>
-          </div>
-
-          {/* Board columns */}
-          <div style={{ flex: 1, minHeight: 0, overflowX: "auto", overflowY: "hidden", padding: `${space[4]}px ${space[5]}px` }}>
-            {(() => {
-              const columns = allPhases;
-              const columnProjects = {};
-              columns.forEach(ph => { columnProjects[ph] = []; });
-              boardProjects.forEach(proj => {
-                const ph = proj.phase || "PRD";
-                if (columnProjects[ph]) columnProjects[ph].push(proj);
-              });
-
-              return (
-                <div style={{
-                  display: "flex", gap: space[3],
-                  minWidth: columns.length * 180, height: "100%",
-                }}>
-                  {columns.map(phase => {
-                    const phColor = pc[phase] || c.textDim;
-                    const cards = columnProjects[phase] || [];
-                    return (
-                      <div key={phase} style={{
-                        flex: 1, minWidth: 180, display: "flex", flexDirection: "column",
-                        borderRadius: layout.radiusLg,
-                        background: c.surface,
-                        border: `1px solid ${c.border}`,
-                        boxShadow: c.shadowCard,
-                      }}>
-                        {/* Column header */}
-                        <div style={{
-                          padding: `${space[3]}px ${space[4]}px`,
-                          borderBottom: `1px solid ${c.border}`,
-                          display: "flex", alignItems: "center", justifyContent: "space-between",
-                        }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: phColor }} />
-                            <span style={{
-                              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                              fontWeight: 700, letterSpacing: "0.06em",
-                              color: phColor, textTransform: "uppercase",
-                            }}>{phase}</span>
-                          </div>
-                          <span style={{
-                            fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                            fontWeight: 700, color: c.textMid,
-                            background: c.surfaceAlt, padding: "2px 8px",
-                            borderRadius: layout.radiusPill, border: `1px solid ${c.border}`,
-                          }}>{cards.length}</span>
-                        </div>
-
-                        {/* Cards */}
-                        <div style={{
-                          flex: 1, overflowY: "auto", padding: space[3],
-                          display: "flex", flexDirection: "column", gap: space[2],
-                          scrollbarWidth: "thin", scrollbarColor: `${c.textDim}20 transparent`,
-                        }}>
-                          {cards.length === 0 && (
-                            <div style={{
-                              padding: `${space[6]}px ${space[3]}px`,
-                              textAlign: "center",
-                              fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                              color: c.textGhost,
-                            }}>No projects</div>
-                          )}
-                          {cards.map(proj => {
-                            const m = metrics[proj.id] || {};
-                            const health = m.health ?? 0;
-                            return (
-                              <div
-                                key={proj.id}
-                                role="button"
-                                tabIndex={0}
-                                onClick={() => { setBoardFullscreen(false); openProject(proj.id); }}
-                                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBoardFullscreen(false); openProject(proj.id); } }}
-                                onMouseEnter={e => { const el = e.currentTarget; el.style.willChange = "transform, box-shadow"; el.style.transform = "translateY(-2px) scale(1.01)"; el.style.boxShadow = c.shadowElevated; }}
-                                onMouseLeave={e => { const el = e.currentTarget; el.style.transform = "translateY(0) scale(1)"; el.style.boxShadow = c.shadowCard; setTimeout(() => { if (el) el.style.willChange = "auto"; }, 160); }}
-                                onMouseDown={e => { e.currentTarget.style.transform = "translateY(0) scale(0.99)"; }}
-                                onMouseUp={e => { e.currentTarget.style.transform = "translateY(-2px) scale(1.01)"; }}
-                                style={{
-                                  padding: 16,
-                                  borderRadius: layout.radiusLg,
-                                  background: c.surface,
-                                  border: `1px solid ${c.border}`,
-                                  boxShadow: c.shadowCard,
-                                  cursor: "pointer",
-                                  display: "flex", flexDirection: "column", gap: space[2],
-                                  transition: `box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
-                                }}
-                              >
-                                {/* ID + health bar */}
-                                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                                  <span style={{
-                                    fontFamily: typo.monoMd.font, fontSize: 12,
-                                    fontWeight: 700, letterSpacing: "0.02em",
-                                    color: ec.project,
-                                  }}>{proj.id}</span>
-                                  <HealthBar value={health} compact />
-                                </div>
-
-                                {/* Name */}
-                                <div style={{
-                                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                                  fontWeight: 600, color: c.text, lineHeight: typo.bodySm.lineHeight,
-                                }}>{proj.name}</div>
-
-                                {/* Owner + squad */}
-                                <div style={{
-                                  display: "flex", alignItems: "center", gap: space[1],
-                                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim,
-                                }}>
-                                  <span>{proj.owner || "—"}</span>
-                                  <span style={{ color: c.textGhost }}>·</span>
-                                  <span>{proj.squad}</span>
-                                </div>
-
-                                {/* Commits this week */}
-                                <span style={{
-                                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                                  fontWeight: 500,
-                                  color: (m.thisWeekTotal || 0) > 0 ? c.cyan : c.textDim,
-                                }}>{(m.thisWeekTotal || 0)} {(m.thisWeekTotal || 0) === 1 ? "commit" : "commits"} this week</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
-        </div>,
-        document.body
-      )}
+      {/* Board and Gantt fullscreen overlays removed — both are now inline */}
     </div>
   );
 }
@@ -1464,11 +1648,14 @@ export default function ProjectsView({
 function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }) {
   useDevLabel('CreateProjectOverlay', 'src/views/ProjectsView.jsx', 'Modal overlay form for creating new projects with all field inputs');
   const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
   const [owner, setOwner] = useState("");
   const [squad, setSquad] = useState("");
   const [phase, setPhase] = useState("PRD");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [priority, setPriority] = useState("P2");
+  const [complexity, setComplexity] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Prefer the canonical squads list from App.jsx so newly-created squads
@@ -1490,12 +1677,17 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
   const handleCreate = () => {
     if (!canSave || saving) return;
     setSaving(true);
-    // Use a temp ID for optimistic UI; server will assign the real one
-    const tempId = `_tmp_${Date.now()}`;
-    setProjects(prev => [...prev, {
-      id: tempId, name: name.trim(), owner, squad, phase,
-      startDate, endDate, status: "active",
-    }]);
+    const tempId = previewId;
+    const now = new Date().toISOString();
+    const newProj = {
+      id: tempId, name: name.trim(), description: description.trim() || null,
+      owner, squad, phase, startDate, endDate, status: "active",
+      priority, complexity: complexity || null,
+      isBlocked: false, blockedReason: null, blockedAt: null,
+      lastActivityAt: now, createdAt: now,
+      phaseDurationOverrides: null,
+    };
+    setProjects(prev => [...prev, newProj]);
     onClose();
   };
 
@@ -1507,11 +1699,55 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
     outline: "none", boxSizing: "border-box",
   };
 
-
   const fieldLabel = { fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 600, color: c.textMid, marginBottom: space[1], letterSpacing: 0 };
 
+  // Pill selector helper
+  const PillSelector = ({ options, value, onChange }) => (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: space[1] }}>
+      {options.map(opt => {
+        const selected = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            onClick={() => onChange(opt.value)}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 999,
+              fontFamily: typo.bodySm.font,
+              fontSize: 13,
+              fontWeight: 600,
+              border: `1px solid ${selected ? opt.color : c.border}`,
+              background: selected ? opt.color : c.surfaceAlt,
+              color: selected ? "#fff" : c.textMid,
+              cursor: "pointer",
+              transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+              lineHeight: 1,
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const phaseOpts = allPhases.map(p => ({ value: p, label: p, color: getPhaseColors()[p] }));
+
+  const priorityOpts = [
+    { value: "P0", label: "Critical", color: c.red },
+    { value: "P1", label: "P1", color: c.amber },
+    { value: "P2", label: "P2", color: c.textMid },
+    { value: "P3", label: "P3", color: c.textDim },
+  ];
+
+  const complexityOpts = [
+    { value: "S", label: "Low", color: c.green },
+    { value: "M", label: "Med", color: c.amber },
+    { value: "L", label: "High", color: c.red },
+  ];
+
   return (
-    <Modal open onClose={onClose} blur={8} width={520} title="New project">
+    <Modal open onClose={onClose} blur={8} width={540} title="New project">
       <div data-suppress-shortcuts style={{ width: "100%" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: space[4] }}>
           <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.textMid }}>
@@ -1535,6 +1771,30 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
             <Inp value={name} onChange={e => { if (e.target.value.length <= 100) setName(e.target.value); }} placeholder="e.g. Checkout Redesign" style={{ width: "100%" }} autoFocus maxLength={100} />
           </div>
 
+          {/* Description */}
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <div style={fieldLabel}>Description <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: description.length > 280 ? c.red : c.textDim, fontVariantNumeric: "tabular-nums" }}>{description.length}/300</span>
+            </div>
+            <textarea
+              value={description}
+              onChange={e => { if (e.target.value.length <= 300) setDescription(e.target.value); }}
+              placeholder="Brief project description..."
+              maxLength={300}
+              rows={3}
+              style={{
+                width: "100%", padding: `${space[2]}px ${space[3]}px`,
+                borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                background: c.surfaceAlt, color: c.text,
+                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                outline: "none", boxSizing: "border-box",
+                resize: "vertical", minHeight: 72,
+                lineHeight: 1.5,
+              }}
+            />
+          </div>
+
           {/* Owner + Squad */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
             <div>
@@ -1547,12 +1807,22 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
             </div>
           </div>
 
-          {/* Phase */}
+          {/* Phase pills */}
           <div>
             <div style={fieldLabel}>Phase</div>
-            <Sel value={phase} onChange={e => setPhase(e.target.value)} style={{ width: "100%" }}>
-              {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
-            </Sel>
+            <PillSelector options={phaseOpts} value={phase} onChange={setPhase} />
+          </div>
+
+          {/* Priority + Complexity side by side */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+            <div>
+              <div style={fieldLabel}>Priority</div>
+              <PillSelector options={priorityOpts} value={priority} onChange={setPriority} />
+            </div>
+            <div>
+              <div style={fieldLabel}>Complexity <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
+              <PillSelector options={complexityOpts} value={complexity} onChange={v => setComplexity(prev => prev === v ? "" : v)} />
+            </div>
           </div>
 
           {/* Duration — start → end inline */}
@@ -1591,7 +1861,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
    PROJECT DEEP DIVE — PeopleDeepDive structural model
    De-cluttered: hero → history → ledger → supporting metadata
    ══════════════════════════════════════════════════════════════════ */
-function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, setProjects, people, squads, personProfile, isAppOwner = false, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, weekLabels: WEEK_LABELS, isHistorical, today, weekStart, leaving = false, suppressBackRef }) {
+function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, people, squads, personProfile, isAppOwner = false, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, today, leaving = false, suppressBackRef, projectLinks = [], setProjectLinks, phaseDurationDefaults }) {
   useDevLabel('ProjectDeepDive', 'src/views/ProjectsView.jsx', 'Full project detail view with hero telemetry, timeline, and history');
   const [editing, setEditingRaw] = useState(false);
   const [editName, setEditName] = useState(proj.name);
@@ -1603,7 +1873,9 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
   const [editEnd, setEditEnd] = useState(proj.endDate || "");
   const [editActualStart, setEditActualStart] = useState(proj.actualStartDate || "");
   const [editActualEnd, setEditActualEnd] = useState(proj.actualEndDate || "");
-  // Reset edit state from fresh proj data when entering edit mode
+  const [editPriority, setEditPriority] = useState(proj.priority || "P2");
+  const [editComplexity, setEditComplexity] = useState(proj.complexity || "");
+  const [editPhaseOverrides, setEditPhaseOverrides] = useState(proj.phaseDurationOverrides || {});
   const setEditing = useCallback((val) => {
     if (val) {
       setEditName(proj.name);
@@ -1611,36 +1883,94 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
       setEditPhase(proj.phase); setEditStatus(proj.status || "active");
       setEditStart(proj.startDate || ""); setEditEnd(proj.endDate || "");
       setEditActualStart(proj.actualStartDate || ""); setEditActualEnd(proj.actualEndDate || "");
+      setEditPriority(proj.priority || "P2"); setEditComplexity(proj.complexity || "");
     }
     setEditingRaw(val);
-  }, [proj.name, proj.owner, proj.squad, proj.phase, proj.status, proj.startDate, proj.endDate, proj.actualStartDate, proj.actualEndDate]);
+  }, [proj.name, proj.owner, proj.squad, proj.phase, proj.status, proj.startDate, proj.endDate, proj.actualStartDate, proj.actualEndDate, proj.priority, proj.complexity]);
   const [depriReasonModal, setDepriReasonModal] = useState(false);
-  // "Add commit" modal state — populated when the Project-page "+ Commit"
-  // button fires but can't just deeplink (week locked, dup project, or all
-  // slots full → let the user pick one to replace).
-  const [addCommitModal, setAddCommitModal] = useState(null);
   const [depriReasonText, setDepriReasonText] = useState("");
+  const [blockedReasonModal, setBlockedReasonModal] = useState(false);
+  const [blockedReasonText, setBlockedReasonText] = useState("");
+  const [showOverrides, setShowOverrides] = useState(false);
+  const [stagePickerOpen, setStagePickerOpen] = useState(false);
+  // Ship-phase modals: Alpha/Beta note + GA release note
+  const [shipPhaseModal, setShipPhaseModal] = useState(null); // { phase, from }
+  const [shipNote, setShipNote] = useState("");
+  const [shipPct, setShipPct] = useState("");
+  const [gaReleaseNote, setGaReleaseNote] = useState("");
+  const [gaFeatureType, setGaFeatureType] = useState("New");
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  // Helper: log an event to activity feed, update lastActivityAt, show toast
+  const recordAction = useCallback((action, details, toastMsg) => {
+    const now = new Date().toISOString();
+    // Update lastActivityAt
+    setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, lastActivityAt: now } : p));
+    // Log to activity feed
+    if (isDevSeedMode()) {
+      devStore.logEvent({ projectId: proj.id, action, details });
+    }
+    // Show toast
+    if (toastMsg) window.__flowToast?.(toastMsg);
+  }, [proj.id, setProjects]);
   const [reactivateModal, setReactivateModal] = useState(false);
   const [retroDateModal, setRetroDateModal] = useState(false);
   const [pendingSave, setPendingSave] = useState(null); // cached overrides when a retro-date confirmation is open
   const [deleteModal, setDeleteModal] = useState(false);
-  const [deleteDeps, setDeleteDeps] = useState(null); // { commitmentCount, peopleNames }
+  const [deleteDeps, setDeleteDeps] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [depsLoading, setDepsLoading] = useState(false);
   const [depsError, setDepsError] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [phaseTransitions, setPhaseTransitions] = useState([]);
+  // Resources IIFE states — hoisted to component level to avoid conditional hook ordering
+  const [resAdding, setResAdding] = useState(false);
+  const [resNewType, setResNewType] = useState("prd");
+  const [resNewLabel, setResNewLabel] = useState("");
+  const [resNewUrl, setResNewUrl] = useState("");
+  const [resTypeDropOpen, setResTypeDropOpen] = useState(false);
+  const resTypeDropRef = useRef(null);
   const editBtnRef = useRef(null);
   const nameInpRef = useRef(null);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const feedbackFileRef = useRef(null);
+  const [feedbackFileName, setFeedbackFileName] = useState("");
+  const [shoutouts, setShoutouts] = useState([]);
+  const [feedbackEvents, setFeedbackEvents] = useState([]);
+  const feedbackSectionRef = useRef(null);
+
+  useEffect(() => {
+    const target = sessionStorage.getItem("flow_scroll_to");
+    if (target === "feedback" && feedbackSectionRef.current) {
+      sessionStorage.removeItem("flow_scroll_to");
+      setTimeout(() => feedbackSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isDevSeedMode() || proj.phase !== "GA") return;
+    const refresh = () => {
+      const events = devStore.listEvents(proj.id) || [];
+      setShoutouts(events.filter(e => e.action === "shoutout"));
+      setFeedbackEvents(events.filter(e => e.action === "feedback"));
+    };
+    refresh();
+    const unsub = devStore.subscribe((change) => {
+      if (change.type === "events" && change.projectId === proj.id) refresh();
+    });
+    return unsub;
+  }, [proj.id, proj.phase]);
+
 
   // Tell App.jsx's global Escape handler to stand down whenever this deep-dive
   // is in edit mode or has a modal open — otherwise pressing Escape to close
   // the edit form would also navigate back to the project list.
   useEffect(() => {
     if (!suppressBackRef) return;
-    suppressBackRef.current = !!(editing || deleteModal || depriReasonModal || reactivateModal || retroDateModal);
+    suppressBackRef.current = !!(editing || deleteModal || depriReasonModal || blockedReasonModal || reactivateModal || retroDateModal || shipPhaseModal);
     return () => { if (suppressBackRef) suppressBackRef.current = false; };
-  }, [editing, deleteModal, depriReasonModal, reactivateModal, retroDateModal, suppressBackRef]);
+  }, [editing, deleteModal, depriReasonModal, blockedReasonModal, reactivateModal, retroDateModal, shipPhaseModal, suppressBackRef]);
 
   // Fetch phase-change history from activity_log for this project.
   // Two formats coexist:
@@ -1696,7 +2026,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
 
   // Safe default so missing metrics don't crash the view (e.g. first-render
   // race or brand-new project with no commits yet).
-  if (!m) m = { totalCommits: 0, peopleList: [], weeklyData: [], typeBreakdown: {}, health: null, overdue: false, atRisk: false, hasBlockedCommit: false };
+  if (!m) m = { historyTotal: 0, peopleList: [], weeklyData: [], health: null, overdue: false, atRisk: false, isBlocked: false, isStale: false };
 
   const [justSaved, setJustSaved] = useState(false);
   const justSavedTimerRef = useRef(null);
@@ -1704,16 +2034,14 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
 
   // Enter edit mode: scroll to top + focus Name input
   const enterEdit = useCallback(() => {
-    if (isHistorical) return;
     setEditing(true);
     const reduce = typeof window !== "undefined" && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
-    // Wait for form mount before focusing the name input
     requestAnimationFrame(() => requestAnimationFrame(() => {
       try { nameInpRef.current?.focus({ preventScroll: true }); } catch { nameInpRef.current?.focus(); }
       nameInpRef.current?.select?.();
     }));
-  }, [isHistorical, setEditing]);
+  }, [setEditing]);
 
   // Exit edit mode: return focus to the Edit FAB (screen-reader / keyboard users)
   const exitEdit = useCallback(() => {
@@ -1736,7 +2064,6 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
   const allOwners = useMemo(() => (people ? people.map(p => p.name).sort() : [...new Set(projects.map(p => p.owner).filter(Boolean))].sort()), [people, projects]);
 
   const doSave = (overrides = {}) => {
-    if (isHistorical) return;
     const finalStatus = overrides.status ?? editStatus;
     const finalReason = overrides.depriReason !== undefined ? overrides.depriReason : proj.depriReason;
     const name = (editName || "").trim() || proj.name;
@@ -1749,11 +2076,17 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
       startDate: editStart || null, endDate: editEnd || null,
       actualStartDate: shipPhases.includes(editPhase) ? (editActualStart || null) : null,
       actualEndDate: shipPhases.includes(editPhase) ? (editActualEnd || null) : null,
+      priority: editPriority, complexity: editComplexity || null,
+      phaseDurationOverrides: Object.keys(editPhaseOverrides).length ? editPhaseOverrides : null,
     } : p));
     exitEdit();
     setJustSaved(true);
     if (justSavedTimerRef.current) clearTimeout(justSavedTimerRef.current);
     justSavedTimerRef.current = setTimeout(() => setJustSaved(false), 900);
+    // Log edit save to activity + toast (unless a more specific action already fired one)
+    if (!overrides.status) {
+      recordAction("project_updated", { fields: "details" }, "Project updated");
+    }
   };
 
   // Dates must be set together (can't have start without end or vice versa),
@@ -1772,9 +2105,8 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
   // alters health/overdue calculations for those frozen weeks.
   const pastHistoryWeekCount = useMemo(() => {
     const projHist = history[proj.id] || [];
-    if (!weekStart) return projHist.filter(w => w.entries?.length > 0).length;
-    return projHist.filter(w => w.entries?.length > 0 && w.week && w.week < weekStart).length;
-  }, [history, proj.id, weekStart]);
+    return projHist.filter(w => w.entries?.length > 0).length;
+  }, [history, proj.id]);
   const datesChanged = (editStart !== (proj.startDate || "")) || (editEnd !== (proj.endDate || ""));
 
   const saveEdits = () => {
@@ -1806,6 +2138,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
     setEditOwner(proj.owner); setEditSquad(proj.squad); setEditPhase(proj.phase); setEditStatus(proj.status || "active");
     setEditStart(proj.startDate || ""); setEditEnd(proj.endDate || "");
     setEditActualStart(proj.actualStartDate || ""); setEditActualEnd(proj.actualEndDate || "");
+    setEditPriority(proj.priority || "P2"); setEditComplexity(proj.complexity || "");
     exitEdit();
   };
 
@@ -1851,11 +2184,9 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
   // Entries with an unrecognized stage fall into an "Other" bucket so they're
   // still visible — previously they were silently dropped.
   const { weekPhaseMatrix, hasOtherBucket } = useMemo(() => {
-    const allWeeks = WEEK_LABELS;
-    // Commits carry work-function stages only (PRD/Design/Dev/QA). Alpha/Beta/GA
-    // are project lifecycle states shown by the PROGRESS bar, not commit stages.
-    // Any legacy/seed commits with those stages fall into the "Other" bucket.
-    const knownPhases = commitPhases;
+    const projHist = history[proj.id] || [];
+    const allWeeks = projHist.map(wk => wk.week);
+    const knownPhases = ["PRD", "Design", "Dev", "QA"];
     const matrix = {};
     for (const w of allWeeks) {
       matrix[w] = {};
@@ -1873,19 +2204,11 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
         otherSeen = true;
       }
     };
-    const projHist = history[proj.id] || [];
     for (const wk of projHist) {
       for (const e of wk.entries) place(wk.week, e);
     }
-    commitments.forEach(cm => {
-      cm.items.forEach((it, idx) => {
-        if (cm.deselected !== idx && it.project === proj.id) {
-          place("This wk", { ...it, person: cm.person });
-        }
-      });
-    });
     return { weekPhaseMatrix: matrix, hasOtherBucket: otherSeen };
-  }, [proj.id, history, commitments, WEEK_LABELS]);
+  }, [proj.id, history]);
 
   // ── Derived metrics for hero KPI grid ──
   const remaining = proj.endDate ? daysBetween(today, proj.endDate) : null;
@@ -1915,7 +2238,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
   // ── Risk tier (critical/warning/healthy) derived from metrics ──
   return (
     <div style={{
-      display: "flex", flexDirection: "column", gap: space[4], paddingBottom: 96,
+      display: "flex", flexDirection: "column", gap: space[3], paddingBottom: 96,
       animation: leaving
         ? `fadeScaleOut ${motion.fast.duration} cubic-bezier(0.4, 0, 1, 1) both`
         : `viewMorphIn ${motion.normal.duration} ${motion.normal.easing} both`,
@@ -1923,162 +2246,286 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
     }}>
 
       {/* ═══ STATE BANNERS — historical / deprioritized / blocked ═══ */}
-      {isHistorical && (
-        <div style={{
-          padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-          background: c.surfaceAlt, border: `1px solid ${c.border}`,
-          fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid,
-          display: "flex", alignItems: "center", gap: space[2],
-        }}>
-          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Historical week
-          </span>
-          <span>— viewing read-only. Edits are disabled.</span>
-        </div>
-      )}
       {proj.status === "deprioritized" && (
         <div style={{
           padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
           background: c.amberDim, border: `1px solid ${c.amberBorder}`,
-          display: "flex", alignItems: "flex-start", gap: space[3],
+          display: "flex", alignItems: "center", gap: space[3],
         }}>
-          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.amber, letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0, paddingTop: 2 }}>
+          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.amber, letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0 }}>
             Deprioritized
           </span>
           <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.5, flex: 1 }}>
             {proj.depriReason || <span style={{ color: c.textDim, fontStyle: "italic" }}>No reason provided.</span>}
           </div>
+          <button type="button" onClick={() => {
+            setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: "active", depriReason: null } : p));
+            updateProjectInDB(proj.id, { status: "active", depriReason: null });
+            recordAction("project_status_changed", { from: "deprioritized", to: "active" }, "Project moved back to active");
+          }} style={{
+            padding: `4px 12px`, borderRadius: 999, flexShrink: 0,
+            background: "transparent", border: `1px solid ${c.amber}`,
+            color: c.amber, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+            cursor: "pointer",
+          }}>Move to active</button>
         </div>
       )}
-      {m.hasBlockedCommit && proj.status !== "deprioritized" && (
+      {proj.isBlocked && proj.status !== "deprioritized" && (
         <div style={{
           padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
           background: c.redDim, border: `1px solid ${c.redBorder}`,
-          fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.red,
-          display: "flex", alignItems: "center", gap: space[2],
+          display: "flex", alignItems: "center", gap: space[3],
         }}>
-          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.red, letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0 }}>
             Blocked
           </span>
-          <span style={{ color: c.textMid }}>— at least one commitment is blocked this week.</span>
+          <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, flex: 1 }}>
+            {proj.blockedReason || <span style={{ color: c.textDim, fontStyle: "italic" }}>No reason provided.</span>}
+          </span>
+          <button type="button" onClick={() => {
+            setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, isBlocked: false, blockedReason: null, blockedAt: null } : p));
+            updateProjectInDB(proj.id, { isBlocked: false, blockedReason: null, blockedAt: null });
+            recordAction("project_unblocked", { reason: proj.blockedReason }, "Project unblocked");
+          }} style={{
+            padding: `4px 12px`, borderRadius: 999, flexShrink: 0,
+            background: "transparent", border: `1px solid ${c.red}`,
+            color: c.red, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+            cursor: "pointer",
+          }}>Unblock</button>
         </div>
       )}
 
-      {/* ═══ IDENTITY HEADER — project id + name + phase badge ═══ */}
+      {/* ═══ GA RELEASE NOTE — above hero card ═══ */}
+      {proj.phase === "GA" && proj.gaReleaseNote && (
+        <div style={{
+          padding: `${space[4]}px ${space[5]}px`,
+          borderRadius: layout.radiusSm, background: c.greenDim,
+          border: `1px solid ${c.green}20`,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[2] }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>🚀</span>
+            <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, color: c.green, letterSpacing: "0.08em", textTransform: "uppercase" }}>Release Note</span>
+            {proj.gaFeatureType && (
+              <Tag color={c.green} bg={c.surface} style={{ fontSize: 9, marginLeft: "auto" }}>{proj.gaFeatureType}</Tag>
+            )}
+          </div>
+          <div style={{ fontFamily: typo.bodyMd.font, fontSize: 14, color: c.textMid, lineHeight: 1.55 }}>
+            {proj.gaReleaseNote}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ IDENTITY HEADER — project id + name + owner|squad + status + freshness ═══ */}
       <div style={{
-        padding: space[6], borderRadius: layout.radiusLg,
+        padding: `${space[5]}px ${space[6]}px`, borderRadius: layout.radiusLg,
         background: c.surface,
         border: `1px solid ${justSaved ? c.green : c.border}`,
         boxShadow: justSaved ? `${c.shadowCard || ""}, 0 0 0 3px ${c.greenDim}` : c.shadowCard,
         transition: `border-color ${motion.normal.duration} ${motion.normal.easing}, box-shadow ${motion.normal.duration} ${motion.normal.easing}`,
+        position: "relative", zIndex: 10,
       }}>
         {!editing ? (
           <div key="read" style={{
-            display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[4],
             animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both`,
           }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", alignItems: "baseline", gap: space[3], flexWrap: "wrap" }}>
+            {/* Row 1: ID + Priority · Updated */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[3] }}>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                 <span style={{
-                  fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size,
-                  fontWeight: typo.displayLg.weight, color: c.text,
-                  letterSpacing: typo.displayLg.tracking, lineHeight: 1.15,
-                }}>{proj.name}</span>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: space[3], marginTop: space[2], flexWrap: "wrap" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: space[1] }}>
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase" }}>Owner</span>
-                  <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: proj.owner ? c.text : c.textMid, fontStyle: proj.owner ? "normal" : "italic" }}>{proj.owner || "Unassigned"}</span>
-                </div>
-                {proj.squad && (
-                  <div style={{ display: "flex", alignItems: "center", gap: space[1] }}>
-                    <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase" }}>Squad</span>
-                    <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: c.text }}>{proj.squad}</span>
-                  </div>
-                )}
-                {/* Freshness — surfaces "Updated 3d ago" right next to owner so
-                    silence is visible at a glance. Red when stale (>14d). */}
-                {(() => {
-                  const stale = isStale(proj.lastActivityAt);
-                  const label = proj.lastActivityAt ? `Updated ${timeAgo(proj.lastActivityAt)}` : "No activity yet";
-                  return (
-                    <div title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : ""}
-                      style={{
-                        display: "inline-flex", alignItems: "center", gap: space[1],
-                        padding: `2px 8px`, borderRadius: 999,
-                        background: !proj.lastActivityAt ? c.surfaceAlt : stale ? c.redDim : c.surfaceAlt,
-                        color: !proj.lastActivityAt ? c.textDim : stale ? c.red : c.textMid,
-                        fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-                        border: stale ? `1px solid ${c.red}30` : `1px solid ${c.border}`,
-                      }}
-                    >
-                      {stale && proj.lastActivityAt && <span aria-hidden="true">⚠</span>}
-                      {label}
-                    </div>
-                  );
+                  fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                  letterSpacing: "0.06em", color: ec.project,
+                  padding: `2px 6px`, borderRadius: layout.radiusXs,
+                  background: c.amberDim,
+                }}>{proj.id}</span>
+                {proj.priority && (() => {
+                  const pColors = { P0: c.red, P1: c.amber, P2: c.textDim, P3: c.textGhost };
+                  const pBg = { P0: c.redDim, P1: c.amberDim, P2: c.surfaceAlt, P3: c.surfaceAlt };
+                  return <Tag color={pColors[proj.priority] || c.textDim} bg={pBg[proj.priority] || c.surfaceAlt}>{proj.priority === "P0" ? "Critical" : proj.priority}</Tag>;
+                })()}
+                {proj.complexity && (() => {
+                  const cLabels = { S: "Low", M: "Med", L: "High", XL: "High" };
+                  return <Tag color={c.textMid} bg={c.surfaceAlt}>{cLabels[proj.complexity] || proj.complexity}</Tag>;
                 })()}
               </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
               {(() => {
-                if (isHistorical || !personProfile?.name || proj.status === "deprioritized") return null;
-                const myRow = commitments.find(cm => cm.person === personProfile.name);
-                if (!myRow) return null;
-                const items = Array.isArray(myRow.items) ? myRow.items : [];
-                const locked = !!(myRow.lockedAtTime || myRow.lockedAt || myRow.closedAt);
-                const alreadyIdx = items.slice(0, 3).findIndex(it => it && it.project === proj.id);
-                const emptyIdx = [0, 1, 2].find(i => !items[i] || !items[i].project);
-
-                const handleClick = () => {
-                  if (!onNavigate) return;
-                  if (locked) { setAddCommitModal({ kind: "locked" }); return; }
-                  if (alreadyIdx >= 0) { setAddCommitModal({ kind: "already", idx: alreadyIdx }); return; }
-                  if (emptyIdx != null) {
-                    onNavigate("commit", { person: personProfile.name, commitIdx: emptyIdx, prefillProject: proj.id });
-                    return;
-                  }
-                  // All 3 slots have a project — let user pick one to replace.
-                  setAddCommitModal({ kind: "replace", slots: items.slice(0, 3).map((it, i) => ({ idx: i, ...it })) });
-                };
-
+                const stale = isStale(proj.lastActivityAt);
+                const label = proj.lastActivityAt ? `Updated ${timeAgo(proj.lastActivityAt)}` : "No activity yet";
                 return (
-                  <button
-                    onClick={handleClick}
-                    aria-label={`Add a weekly commit to ${proj.name}`}
-                    title="Add a weekly commit to this project"
-                    className="flow-btn"
-                    onMouseEnter={e => { e.currentTarget.style.background = c.accent; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = c.accent; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = c.accentDim || c.surface; e.currentTarget.style.color = c.accent; e.currentTarget.style.borderColor = c.accentBorder || c.border; }}
-                    onMouseDown={e => { e.currentTarget.style.transform = "scale(0.97)"; }}
-                    onMouseUp={e => { e.currentTarget.style.transform = "scale(1)"; }}
+                  <span title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : ""}
                     style={{
-                      height: 36, padding: `0 ${space[3]}px`,
-                      borderRadius: layout.radiusSm,
-                      border: `1px solid ${c.accentBorder || c.border}`,
-                      background: c.accentDim || c.surface,
-                      color: c.accent,
-                      cursor: "pointer",
-                      display: "flex", alignItems: "center", gap: space[2],
-                      fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600,
-                      transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                      fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 500,
+                      color: stale ? c.red : c.textDim,
                     }}
                   >
-                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    Commit
-                  </button>
+                    {stale && proj.lastActivityAt && "⚠ "}{label}
+                  </span>
                 );
               })()}
-              <span style={{
-                fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: 700,
-                letterSpacing: typo.monoLg.tracking, color: ec.project,
-                fontVariantNumeric: "tabular-nums",
-                padding: `${space[2]}px ${space[3]}px`,
-                background: c.amberDim,
-                borderRadius: layout.radiusSm,
-              }}>{proj.id}</span>
             </div>
+
+            {/* Row 2: Project Name */}
+            <div style={{
+              fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size,
+              fontWeight: typo.displayLg.weight, color: c.text,
+              letterSpacing: typo.displayLg.tracking, lineHeight: 1.15,
+              marginTop: space[2],
+            }}>{proj.name}</div>
+
+            {/* Row 3: Owner | Squad */}
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2] }}>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600, color: c.textDim, textTransform: "uppercase", letterSpacing: "0.08em" }}>Owner</span>
+              <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: proj.owner ? c.text : c.textMid, fontStyle: proj.owner ? "normal" : "italic" }}>{proj.owner || "Unassigned"}</span>
+              {proj.squad && (
+                <>
+                  <span style={{ color: c.border, fontSize: 11, margin: `0 ${space[1]}px` }}>|</span>
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600, color: c.textDim, textTransform: "uppercase", letterSpacing: "0.08em" }}>Squad</span>
+                  <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, color: c.textMid }}>{proj.squad}</span>
+                </>
+              )}
+            </div>
+
+            {/* Row 4: Stage (clickable picker) + quick-actions */}
+            <div style={{ marginTop: space[4], display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: space[3] }}>
+              <div style={{ position: "relative" }} ref={el => { if (el) el.__stagePickerEl = el; }}>
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                  letterSpacing: "0.1em", textTransform: "uppercase", color: c.textDim,
+                  display: "block", marginBottom: space[1],
+                }}>Stage</span>
+                <button id="stage-picker-btn" type="button" onClick={() => setStagePickerOpen(v => !v)} style={{
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                  padding: `5px 12px 5px 16px`, borderRadius: 999,
+                  fontFamily: typo.monoSm.font, fontSize: 13, fontWeight: 700,
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  background: sCfg.bg || c.surfaceAlt, color: sCfg.color || c.textMid,
+                  border: `1px solid ${(sCfg.color || c.textMid) + "30"}`,
+                  cursor: "pointer", transition: "box-shadow 120ms ease",
+                }}>
+                  {proj.status === "deprioritized" ? "Deprioritized" : proj.phase}
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5 }}>
+                    <path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                {stagePickerOpen && createPortal(
+                  <>
+                    <div style={{ position: "fixed", inset: 0, zIndex: 99999 }} onClick={() => setStagePickerOpen(false)} />
+                    <div style={{
+                      position: "fixed", zIndex: 100000,
+                      top: (() => { const btn = document.getElementById("stage-picker-btn"); return btn ? btn.getBoundingClientRect().bottom + 4 : 0; })(),
+                      left: (() => { const btn = document.getElementById("stage-picker-btn"); return btn ? btn.getBoundingClientRect().left : 0; })(),
+                      background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusSm,
+                      boxShadow: c.shadowElevated, padding: space[1], minWidth: 140,
+                      display: "flex", flexDirection: "column",
+                    }}>
+                      {allPhases.map(ph => {
+                        const isCurrent = ph === proj.phase;
+                        const phColor = getPhaseColors()[ph] || c.textMid;
+                        return (
+                          <button key={ph} type="button" onClick={() => {
+                            if (ph !== proj.phase) {
+                              if (ph === "Alpha" || ph === "Beta") {
+                                setShipNote(""); setShipPct("");
+                                setShipPhaseModal({ phase: ph, from: proj.phase });
+                                setStagePickerOpen(false);
+                                return;
+                              }
+                              if (ph === "GA") {
+                                setGaReleaseNote(""); setGaFeatureType("New");
+                                setShipPhaseModal({ phase: "GA", from: proj.phase });
+                                setStagePickerOpen(false);
+                                return;
+                              }
+                              const oldPhase = proj.phase;
+                              setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, phase: ph } : p));
+                              updateProjectInDB(proj.id, { phase: ph });
+                              recordAction("project_phase_changed", { from: oldPhase, to: ph }, `Stage updated to ${ph}`);
+                            }
+                            setStagePickerOpen(false);
+                          }} style={{
+                            padding: `6px 12px`, borderRadius: layout.radiusXs,
+                            background: isCurrent ? c.surfaceAlt : "transparent",
+                            border: "none", cursor: "pointer", textAlign: "left",
+                            fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: isCurrent ? 700 : 500,
+                            color: isCurrent ? phColor : c.text,
+                            display: "flex", alignItems: "center", gap: space[2],
+                            transition: "background 80ms ease",
+                          }}
+                            onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = c.surfaceAlt; }}
+                            onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}
+                          >
+                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: phColor, flexShrink: 0 }} />
+                            {ph}
+                            {isCurrent && <span style={{ marginLeft: "auto", fontSize: 11, color: c.textDim }}>current</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>,
+                  document.body
+                )}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                {!proj.isBlocked && proj.status !== "deprioritized" && (
+                  <button type="button" onClick={() => { setBlockedReasonText(""); setBlockedReasonModal(true); }} style={{
+                    padding: `4px 10px`, borderRadius: 999,
+                    background: "transparent", border: `1px solid ${c.border}`,
+                    color: c.textDim, fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", transition: "border-color 120ms ease, color 120ms ease",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = c.red; e.currentTarget.style.color = c.red; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textDim; }}
+                  >Mark blocked</button>
+                )}
+                {proj.status !== "deprioritized" && (
+                  <button type="button" onClick={() => { setDepriReasonText(""); setDepriReasonModal(true); }} style={{
+                    padding: `4px 10px`, borderRadius: 999,
+                    background: "transparent", border: `1px solid ${c.border}`,
+                    color: c.textDim, fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", transition: "border-color 120ms ease, color 120ms ease",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = c.amber; e.currentTarget.style.color = c.amber; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textDim; }}
+                  >Deprioritize</button>
+                )}
+              </div>
+            </div>
+
+            {/* Ship note + rollout % for Alpha/Beta */}
+            {(proj.phase === "Alpha" || proj.phase === "Beta") && (proj.shipNote || proj.shipPct) && (
+              <div style={{
+                marginTop: space[3], padding: `${space[3]}px ${space[4]}px`,
+                borderRadius: layout.radiusSm, background: c.greenDim,
+                border: `1px solid ${c.green}20`,
+                display: "flex", alignItems: "center", gap: space[3],
+              }}>
+                <div style={{ flex: 1 }}>
+                  {proj.shipNote && (
+                    <div style={{ fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textMid, lineHeight: 1.45 }}>
+                      {proj.shipNote}
+                    </div>
+                  )}
+                </div>
+                {proj.shipPct != null && (
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                    color: c.green, background: c.surface, padding: `2px 8px`,
+                    borderRadius: layout.radiusXs, border: `1px solid ${c.green}30`,
+                    flexShrink: 0,
+                  }}>{proj.shipPct}% rollout</span>
+                )}
+                <button type="button" onClick={() => {
+                  setShipNote(proj.shipNote || "");
+                  setShipPct(proj.shipPct != null ? String(proj.shipPct) : "");
+                  setShipPhaseModal({ phase: proj.phase, from: proj.phase });
+                }} style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  color: c.textDim, fontSize: 11, fontWeight: 600,
+                  fontFamily: typo.bodySm.font, textDecoration: "underline",
+                  flexShrink: 0,
+                }}>Edit</button>
+              </div>
+            )}
+
           </div>
         ) : (
           <div key="edit" data-suppress-shortcuts style={{
@@ -2089,26 +2536,34 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
               <Label style={{ marginBottom: space[1] }}>Name</Label>
               <Inp ref={nameInpRef} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Project name" style={{ width: "100%" }} maxLength={100} />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: space[3] }}>
-              <div style={{ position: "relative", zIndex: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+              <div style={{ position: "relative", zIndex: 6 }}>
                 <Label style={{ marginBottom: space[1] }}>Owner</Label>
                 <SearchSelect value={editOwner} onChange={setEditOwner} options={allOwners} placeholder="Search people..." />
               </div>
-              <div style={{ position: "relative", zIndex: 3 }}>
+              <div style={{ position: "relative", zIndex: 5 }}>
                 <Label style={{ marginBottom: space[1] }}>Squad</Label>
                 <SearchSelect value={editSquad} onChange={setEditSquad} options={allSquads} placeholder="Search squads..." />
               </div>
-              <div style={{ position: "relative", zIndex: 2 }}>
-                <Label style={{ marginBottom: space[1] }}>Phase</Label>
-                <Sel value={editPhase} onChange={e => setEditPhase(e.target.value)} style={{ width: "100%" }}>
-                  {allPhases.map(p => <option key={p} value={p}>{p}</option>)}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+              <div style={{ position: "relative", zIndex: 4 }}>
+                <Label style={{ marginBottom: space[1] }}>Priority</Label>
+                <Sel value={editPriority} onChange={e => setEditPriority(e.target.value)} style={{ width: "100%" }}>
+                  <option value="P0">P0 — Critical</option>
+                  <option value="P1">P1 — High</option>
+                  <option value="P2">P2 — Medium</option>
+                  <option value="P3">P3 — Low</option>
                 </Sel>
               </div>
-              <div style={{ position: "relative", zIndex: 1 }}>
-                <Label style={{ marginBottom: space[1] }}>Status</Label>
-                <Sel value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ width: "100%" }}>
-                  <option value="active">Active</option>
-                  <option value="deprioritized">Deprioritized</option>
+              <div>
+                <Label style={{ marginBottom: space[1] }}>Complexity</Label>
+                <Sel value={editComplexity} onChange={e => setEditComplexity(e.target.value)} style={{ width: "100%" }}>
+                  <option value="">Not set</option>
+                  <option value="S">Low</option>
+                  <option value="M">Medium</option>
+                  <option value="L">High</option>
+                  <option value="XL">Very High</option>
                 </Sel>
               </div>
             </div>
@@ -2166,23 +2621,485 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
                 </div>
               </div>
             )}
+            {/* Per-project phase threshold overrides */}
+            {(() => {
+              const existingCount = Object.keys(proj.phaseDurationOverrides || {}).length;
+              const updateOverride = (phase, val) => {
+                const v = val === "" ? undefined : parseInt(val, 10);
+                setEditPhaseOverrides(prev => {
+                  const next = { ...prev };
+                  if (v === undefined || isNaN(v)) delete next[phase];
+                  else next[phase] = v;
+                  return next;
+                });
+              };
+              return (
+                <div style={{ marginTop: space[2] }}>
+                  <button className="flow-btn" onClick={() => setShowOverrides(!showOverrides)} style={{
+                    padding: `${space[1]}px ${space[2]}px`, borderRadius: layout.radiusXs,
+                    border: `1px solid ${c.border}`, background: "transparent",
+                    color: c.textMid, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 4,
+                  }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    Phase thresholds
+                    {existingCount > 0 && <span style={{ color: c.accent, fontFamily: typo.monoSm.font }}>{existingCount}</span>}
+                  </button>
+                  {showOverrides && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: space[2], marginTop: space[2] }}>
+                      {["PRD", "Design", "Dev", "QA"].map(phase => {
+                        const complexityDefault = getPhaseThreshold(editComplexity || proj.complexity, phase);
+                        return (
+                          <div key={phase} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <Label style={{ fontSize: 10 }}>{phase}</Label>
+                            <input type="number" min="0" max="365"
+                              value={editPhaseOverrides[phase] ?? ""}
+                              placeholder={complexityDefault != null ? String(complexityDefault) : "—"}
+                              onChange={e => updateOverride(phase, e.target.value)}
+                              style={{
+                                width: "100%", height: 32, padding: `0 ${space[2]}px`,
+                                borderRadius: layout.radiusXs, border: `1px solid ${c.border}`,
+                                background: c.surfaceAlt, color: c.text,
+                                fontFamily: typo.monoSm.font, fontSize: 12,
+                                textAlign: "center", outline: "none", boxSizing: "border-box",
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: space[2], marginTop: space[2] }}>
               <div style={{ display: "flex", gap: space[2] }}>
                 <Btn variant="command" size="sm" onClick={saveEdits} disabled={!canSaveEdits} style={{ borderColor: canSaveEdits ? c.greenBorder : c.border, color: canSaveEdits ? c.green : c.textDim, opacity: canSaveEdits ? 1 : 0.6, cursor: canSaveEdits ? "pointer" : "not-allowed" }}>Save</Btn>
                 <Btn variant="secondary" size="sm" onClick={cancelEdits}>Cancel</Btn>
               </div>
-              <Btn variant="secondary" size="sm" onClick={handleDeleteClick} style={{ borderColor: c.redBorder, color: c.red }}>Delete</Btn>
+              <Btn variant="secondary" size="sm" onClick={handleDeleteClick} style={{ borderColor: c.redBorder, color: c.red }}>Delete project</Btn>
             </div>
           </div>
         )}
+
+        {/* ═══ RESOURCES — pill-format links subsection inside header card ═══ */}
+        {(() => {
+          const links = (projectLinks || []).filter(l => l.project_id === proj.id);
+          const adding = resAdding, setAdding = setResAdding;
+          const newType = resNewType, setNewType = setResNewType;
+          const newLabel = resNewLabel, setNewLabel = setResNewLabel;
+          const newUrl = resNewUrl, setNewUrl = setResNewUrl;
+          const typeIcons = { prd: "📄", figma: "🎨", qa_testcases: "✅", gchat: "💬", jira: "🎫", custom: "🔗" };
+          const typeLabels = { prd: "PRD", figma: "Figma", qa_testcases: "QA", gchat: "GChat Space", jira: "Jira Board", custom: "Custom" };
+          const addLink = async () => {
+            if (!newUrl.trim()) return;
+            const result = await addProjectLinkToDB(proj.id, newType, newType === "custom" ? newLabel : null, newUrl.trim());
+            if (result.ok && result.row && setProjectLinks) {
+              setProjectLinks(prev => [...prev, result.row]);
+            }
+            const label = newType === "custom" && newLabel ? newLabel : typeLabels[newType] || newType;
+            recordAction("resource_added", { type: newType, label, url: newUrl.trim() }, `${label} resource added`);
+            setNewType("prd"); setNewLabel(""); setNewUrl(""); setAdding(false);
+          };
+          const removeLink = async (linkId) => {
+            const link = links.find(l => l.id === linkId);
+            const result = await deleteProjectLinkFromDB(linkId);
+            if (result.ok && setProjectLinks) {
+              setProjectLinks(prev => prev.filter(l => l.id !== linkId));
+            }
+            recordAction("resource_removed", { type: link?.type }, "Resource removed");
+          };
+          if (editing) return null;
+          return (
+            <div style={{ marginTop: space[4], paddingTop: space[3], borderTop: `1px solid ${c.border}` }}>
+              <span style={{
+                fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                letterSpacing: "0.1em", textTransform: "uppercase", color: c.textDim,
+                display: "block", marginBottom: space[2],
+              }}>Resources</span>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: space[2], alignItems: "center" }}>
+                {links.map(link => (
+                  <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: `6px 12px 6px 8px`, borderRadius: 12,
+                      background: c.surfaceAlt, border: `1px solid ${c.border}`,
+                      textDecoration: "none", cursor: "pointer",
+                      transition: "border-color 120ms ease",
+                      position: "relative",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = c.textMid; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; }}
+                  >
+                    <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{typeIcons[link.type] || "🔗"}</span>
+                    <span style={{ fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: "nowrap" }}>
+                      {link.label || typeLabels[link.type] || link.type}
+                    </span>
+                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); removeLink(link.id); }}
+                      style={{ background: "none", border: "none", cursor: "pointer", color: c.textGhost, padding: 0, fontSize: 11, lineHeight: 1, marginLeft: 2 }}
+                      title="Remove"
+                    >✕</button>
+                  </a>
+                ))}
+                {!adding && (
+                  <button onClick={() => setAdding(true)} style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: `6px 12px`, borderRadius: 12,
+                    background: "transparent", border: `1px dashed ${c.border}`,
+                    cursor: "pointer", color: c.textDim,
+                    fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                    transition: "border-color 120ms ease, color 120ms ease",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = c.accent; e.currentTarget.style.color = c.accent; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textDim; }}
+                  >
+                    <span style={{ fontSize: 13, lineHeight: 1 }}>+</span> Add link
+                  </button>
+                )}
+              </div>
+              {adding && (
+                <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2], flexWrap: "wrap" }}>
+                  {/* Custom styled type selector */}
+                  {(() => {
+                    const TYPE_OPTIONS = [
+                      { value: "prd", label: "PRD", icon: "📄" },
+                      { value: "figma", label: "Figma", icon: "🎨" },
+                      { value: "qa_testcases", label: "QA Testcases", icon: "✅" },
+                      { value: "gchat", label: "GChat Space", icon: "💬" },
+                      { value: "jira", label: "Jira Board", icon: "🎫" },
+                      { value: "custom", label: "Custom", icon: "🔗" },
+                    ];
+                    const selected = TYPE_OPTIONS.find(o => o.value === newType) || TYPE_OPTIONS[0];
+                    return (
+                      <div ref={resTypeDropRef} style={{ position: "relative" }}>
+                        <button id="res-type-picker-btn" type="button" onClick={() => setResTypeDropOpen(o => !o)} style={{
+                          height: 32, padding: `0 ${space[2]}px 0 ${space[2]}px`,
+                          borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                          background: c.surface, color: c.text, cursor: "pointer",
+                          fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+                          display: "flex", alignItems: "center", gap: 6, minWidth: 140,
+                          transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = c.textMid; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; }}
+                        >
+                          <span style={{ fontSize: 13, lineHeight: 1 }}>{selected.icon}</span>
+                          <span style={{ flex: 1, textAlign: "left" }}>{selected.label}</span>
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                            style={{ flexShrink: 0, transform: resTypeDropOpen ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${motion.fast.duration} ${motion.fast.easing}` }}>
+                            <polyline points="4 6 8 10 12 6" />
+                          </svg>
+                        </button>
+                        {resTypeDropOpen && createPortal(
+                          <>
+                            <div style={{ position: "fixed", inset: 0, zIndex: 99999 }} onClick={() => setResTypeDropOpen(false)} />
+                            <div style={{
+                              position: "fixed", zIndex: 100000,
+                              top: (() => { const btn = document.getElementById("res-type-picker-btn"); return btn ? btn.getBoundingClientRect().bottom + 4 : 0; })(),
+                              left: (() => { const btn = document.getElementById("res-type-picker-btn"); return btn ? btn.getBoundingClientRect().left : 0; })(),
+                              minWidth: 170, background: c.surface, border: `1px solid ${c.border}`,
+                              borderRadius: layout.radiusMd, boxShadow: c.shadowFloat,
+                              padding: `${space[1]}px 0`, overflow: "hidden",
+                            }}>
+                              {TYPE_OPTIONS.map(opt => (
+                                <button key={opt.value} type="button" onClick={() => { setNewType(opt.value); setResTypeDropOpen(false); }} style={{
+                                  display: "flex", alignItems: "center", gap: 8, width: "100%",
+                                  padding: `${space[2]}px ${space[3]}px`, border: "none",
+                                  background: opt.value === newType ? c.accentDim : "transparent",
+                                  color: opt.value === newType ? c.accent : c.text, cursor: "pointer",
+                                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 500,
+                                  textAlign: "left",
+                                  transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
+                                }}
+                                onMouseEnter={e => { if (opt.value !== newType) e.currentTarget.style.background = c.surfaceAlt; }}
+                                onMouseLeave={e => { if (opt.value !== newType) e.currentTarget.style.background = "transparent"; }}
+                                >
+                                  <span style={{ fontSize: 13, lineHeight: 1, width: 18, textAlign: "center" }}>{opt.icon}</span>
+                                  {opt.label}
+                                </button>
+                              ))}
+                            </div>
+                          </>,
+                          document.body
+                        )}
+                      </div>
+                    );
+                  })()}
+                  {newType === "custom" && <Inp value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="Label" style={{ width: 120, height: 32 }} />}
+                  <Inp value={newUrl} onChange={e => setNewUrl(e.target.value)} placeholder="URL" style={{ flex: 1, minWidth: 200, height: 32 }} />
+                  <Btn variant="command" size="sm" onClick={addLink} disabled={!newUrl.trim()}>Add</Btn>
+                  <Btn variant="ghost" size="sm" onClick={() => { setAdding(false); setNewUrl(""); setNewLabel(""); }}>Cancel</Btn>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
+      {/* ═══ TEAM — standalone member pills section ═══ */}
+      <div>
+        <SectionHead title="Team" />
+        <ProjectActivity
+          project={proj}
+          people={people}
+          currentPerson={personProfile}
+          isAppOwner={isAppOwner}
+          onPersonNavigate={(name) => onNavigate && onNavigate("people", name)}
+          membersOnly
+        />
+      </div>
+
+      {/* ═══ SHOUTOUTS — displayed for all GA projects ═══ */}
+      {proj.phase === "GA" && shoutouts.length > 0 && (
+          <div>
+            <SectionHead title="Shoutouts" />
+            <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
+              {shoutouts.map(s => (
+                <div key={s.id} style={{
+                  display: "flex", alignItems: "center", gap: space[3],
+                  padding: `${space[2] + 2}px ${space[3]}px`,
+                  borderRadius: layout.radiusSm,
+                  background: c.surfaceAlt, border: `1px solid ${c.border}`,
+                }}>
+                  <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>👏</span>
+                  <div style={{ flex: 1, fontFamily: typo.bodyMd.font, fontSize: 13, color: c.text }}>
+                    <span style={{ fontWeight: 600 }}>{s.details?.from || s.user_name || "Someone"}</span>
+                    {" gave a shoutout!"}
+                  </div>
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: 11, color: c.textDim, flexShrink: 0,
+                  }}>{(() => {
+                    const d = new Date(s.created_at);
+                    const diff = Date.now() - d.getTime();
+                    if (diff < 60000) return "just now";
+                    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                    return `${Math.floor(diff / 86400000)}d ago`;
+                  })()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+      )}
+
+      {/* ═══ FEEDBACK — GA projects only ═══ */}
+      {proj.phase === "GA" && (
+        <div ref={feedbackSectionRef}>
+          <SectionHead title="Feedback" />
+          <div style={{
+            padding: `${space[4]}px`,
+            borderRadius: layout.radiusSm,
+            background: c.surface, border: `1px solid ${c.border}`,
+          }}>
+            <textarea
+              value={feedbackText}
+              onChange={e => setFeedbackText(e.target.value)}
+              placeholder="Share your feedback on this shipped project..."
+              rows={3}
+              style={{
+                width: "100%", padding: `${space[3]}px`,
+                borderRadius: layout.radiusSm,
+                border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                color: c.text, fontFamily: typo.bodyMd.font, fontSize: 13,
+                resize: "vertical", outline: "none", boxSizing: "border-box",
+                lineHeight: 1.5,
+              }}
+              onFocus={e => e.currentTarget.style.borderColor = c.accent}
+              onBlur={e => e.currentTarget.style.borderColor = c.border}
+            />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: space[2] }}>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                <input ref={feedbackFileRef} type="file" style={{ display: "none" }} onChange={e => {
+                  const f = e.target.files?.[0];
+                  setFeedbackFileName(f ? f.name : "");
+                }} />
+                <button type="button" onClick={() => feedbackFileRef.current?.click()} style={{
+                  display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: `4px 10px`, borderRadius: layout.radiusXs,
+                  background: "transparent", border: `1px solid ${c.border}`,
+                  color: c.textMid, fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
+                  cursor: "pointer",
+                }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                  </svg>
+                  Attach file
+                </button>
+                {feedbackFileName && (
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: 11, color: c.textMid,
+                    maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}>{feedbackFileName}
+                    <button type="button" onClick={() => { setFeedbackFileName(""); if (feedbackFileRef.current) feedbackFileRef.current.value = ""; }} style={{
+                      background: "transparent", border: "none", color: c.textDim, cursor: "pointer",
+                      fontFamily: typo.monoSm.font, fontSize: 11, padding: "0 4px",
+                    }}>✕</button>
+                  </span>
+                )}
+              </div>
+              <button type="button" disabled={!feedbackText.trim() || feedbackSubmitting}
+                onClick={() => {
+                  if (!feedbackText.trim()) return;
+                  setFeedbackSubmitting(true);
+                  if (isDevSeedMode()) {
+                    devStore.addComment(proj.id, "viewer", feedbackText.trim());
+                    const viewerName = personProfile?.name || "AJ";
+                    devStore.logEvent({
+                      projectId: proj.id, action: "feedback",
+                      userName: viewerName,
+                      details: { from: viewerName, projectName: proj.name, comment: feedbackText.trim(), attachment: feedbackFileName || null },
+                    });
+                  }
+                  window.__flowToast?.("Feedback submitted!");
+                  setFeedbackText(""); setFeedbackFileName("");
+                  if (feedbackFileRef.current) feedbackFileRef.current.value = "";
+                  setFeedbackSubmitting(false);
+                }}
+                style={{
+                  padding: `6px 16px`, borderRadius: layout.radiusSm,
+                  background: feedbackText.trim() && !feedbackSubmitting ? c.accent : c.surfaceAlt,
+                  color: feedbackText.trim() && !feedbackSubmitting ? "#fff" : c.textDim,
+                  border: "none", fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                  cursor: feedbackText.trim() && !feedbackSubmitting ? "pointer" : "not-allowed",
+                  transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
+                }}
+              >Submit feedback</button>
+            </div>
+
+            {/* Previous feedback */}
+            {feedbackEvents.length > 0 && (
+                <div style={{ marginTop: space[3], paddingTop: space[3], borderTop: `1px solid ${c.border}` }}>
+                  {feedbackEvents.map(fb => (
+                    <div key={fb.id} style={{
+                      display: "flex", alignItems: "flex-start", gap: space[3],
+                      padding: `${space[2]}px 0`,
+                      borderBottom: `1px solid ${c.border}`,
+                    }}>
+                      <span style={{
+                        width: 28, height: 28, borderRadius: "50%",
+                        background: c.cyanDim || c.surfaceAlt,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 12, fontWeight: 700, color: c.cyan, flexShrink: 0,
+                        fontFamily: typo.monoSm.font,
+                      }}>{(fb.details?.from || fb.user_name || "?")[0]}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: typo.bodyMd.font, fontSize: 13, color: c.text }}>
+                          <span style={{ fontWeight: 600 }}>{fb.details?.from || fb.user_name || "Someone"}</span>
+                          <span style={{ color: c.textDim, fontSize: 11, marginLeft: space[2] }}>
+                            {(() => {
+                              const d = new Date(fb.created_at);
+                              const diff = Date.now() - d.getTime();
+                              if (diff < 60000) return "just now";
+                              if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+                              if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+                              return `${Math.floor(diff / 86400000)}d ago`;
+                            })()}
+                          </span>
+                        </div>
+                        <div style={{ fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textMid, lineHeight: 1.5, marginTop: 2 }}>
+                          {fb.details?.comment}
+                        </div>
+                        {fb.details?.attachment && (
+                          <div style={{
+                            marginTop: space[1], fontFamily: typo.monoSm.font, fontSize: 11, color: c.accent,
+                            display: "flex", alignItems: "center", gap: 4,
+                          }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                            </svg>
+                            {fb.details.attachment}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ═══ TIMELINE — phase ladder, transition dates, plan dates, % elapsed ═══ */}
-      <ProjectTimeline
-        project={proj}
-        phaseTransitions={phaseTransitions}
-        today={today}
-      />
+      <div>
+        <SectionHead title="Timeline" />
+
+        {/* ── Phase overstay + overdue alerts ── */}
+        {(() => {
+          const projOverrides = proj.phaseDurationOverrides || {};
+          const alerts = [];
+
+          // Phase overstay: compute duration of each phase segment from transitions
+          if (phaseTransitions.length > 0) {
+            for (let i = 0; i < phaseTransitions.length; i++) {
+              const seg = phaseTransitions[i];
+              const nextAt = i < phaseTransitions.length - 1
+                ? phaseTransitions[i + 1].at
+                : new Date().toISOString();
+              const days = Math.round(
+                (new Date(nextAt) - new Date(seg.at)) / 86400000
+              );
+              const threshold = projOverrides[seg.phase] ?? getPhaseThreshold(proj.complexity, seg.phase);
+              if (threshold && days > threshold) {
+                const isCurrentPhase = i === phaseTransitions.length - 1;
+                alerts.push({
+                  type: "overstay",
+                  message: isCurrentPhase
+                    ? `${seg.phase} phase has gone beyond the ${threshold}-day threshold (${days}d). Needs attention!`
+                    : `${seg.phase} phase took ${days}d — more than the ${threshold}-day standard threshold.`,
+                });
+              }
+            }
+          }
+
+          // Overdue: end date passed and project not in a shipped phase
+          const inShipPhase = SHIPPED_PHASES.includes(proj.phase);
+          if (proj.endDate && !inShipPhase) {
+            const overdueDays = Math.round(
+              (new Date(today + "T00:00:00") - new Date(proj.endDate + "T00:00:00")) / 86400000
+            );
+            if (overdueDays > 0) {
+              alerts.push({
+                type: "overdue",
+                message: `The project is overdue by ${overdueDays} day${overdueDays === 1 ? "" : "s"}. Health is deteriorating. Take action!`,
+              });
+            }
+          }
+
+          if (alerts.length === 0) return null;
+
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginBottom: space[3] }}>
+              {alerts.map((a, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex", alignItems: "flex-start", gap: space[2],
+                    padding: `${space[2]}px ${space[3]}px`,
+                    borderRadius: layout.radiusSm,
+                    background: a.type === "overdue" ? c.redDim : c.amberDim,
+                    border: `1px solid ${a.type === "overdue" ? c.red : c.amber}25`,
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                    color: a.type === "overdue" ? c.red : c.amber,
+                    fontWeight: 600, lineHeight: 1.45,
+                  }}
+                >
+                  <span style={{ flexShrink: 0, fontSize: 13, lineHeight: 1.3 }}>⚠️</span>
+                  <span>{a.message}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
+        <ProjectTimeline
+          project={proj}
+          phaseTransitions={phaseTransitions}
+          today={today}
+          phaseDurationDefaults={phaseDurationDefaults}
+        />
+      </div>
 
       {/* ═══ SCHEDULE — plan vs actual with actual as the primary fact ═══ */}
       {inShip && (proj.actualStartDate || proj.actualEndDate) && (() => {
@@ -2234,9 +3151,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
         );
       })()}
 
-      {/* ═══ ACTIVITY — composer + comments + auto-events, with a
-             style picker (Stream / Cards / Rail). Choice persists in
-             localStorage so reloads remember it. ═══ */}
+      {/* ═══ ACTIVITY — composer + comments + auto-events ═══ */}
       <div>
         <SectionHead title="Activity" />
         <ProjectActivity
@@ -2245,44 +3160,44 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
           currentPerson={personProfile}
           isAppOwner={isAppOwner}
           onPersonNavigate={(name) => onNavigate && onNavigate("people", name)}
+          hideMembers
         />
       </div>
 
-      {/* ═══ FAB — Edit project. Owner / app-owner only. Portaled to
-             document.body because the deep-dive wrapper applies a CSS
-             animation that uses `transform`, which would otherwise
-             trap `position: fixed`. ═══ */}
-      {!isHistorical && !editing && (() => {
+      {/* ═══ Edit Project pill — matches "Add project" style. Owner / app-owner only. ═══ */}
+      {!editing && (() => {
+        const devMode = isDevSeedMode();
         const ownerPerson = proj.owner_id
           ? (people || []).find(p => p.id === proj.owner_id)
           : (people || []).find(p => p?.name && proj.owner && p.name.toLowerCase() === proj.owner.toLowerCase());
         const viewerId = personProfile?.id;
         const isProjOwner = !!(viewerId && ownerPerson?.id && viewerId === ownerPerson.id);
-        if (!isProjOwner && !isAppOwner) return null;
+        if (!devMode && !isProjOwner && !isAppOwner) return null;
         if (typeof document === "undefined") return null;
         return createPortal(
           <button
             type="button"
+            className="flow-btn"
             onClick={enterEdit}
             aria-label="Edit project"
             title="Edit project (E)"
             style={{
-              position: "fixed", right: 28, bottom: 28, zIndex: 40,
-              width: 56, height: 56, borderRadius: "50%",
-              background: c.accent, color: "#fff", border: "none",
-              boxShadow: c.shadowFloat || "0 8px 24px rgba(0,0,0,0.18), 0 2px 6px rgba(0,0,0,0.12)",
+              position: "fixed", right: space[7], bottom: space[7], zIndex: 40,
+              height: 40, padding: `0 ${space[5]}px`, borderRadius: layout.radiusSm,
+              background: c.accent, color: c.textOnAccent, border: "none",
+              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600,
+              boxShadow: c.shadowFloat,
               cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              transition: "transform 140ms cubic-bezier(0.22,1,0.36,1), box-shadow 140ms ease",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: space[2],
+              transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
             }}
-            onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.06)"; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
-            onMouseDown={e => { e.currentTarget.style.transform = "scale(0.94)"; }}
-            onMouseUp={e => { e.currentTarget.style.transform = "scale(1.06)"; }}
+            onMouseEnter={e => { e.currentTarget.style.background = c.accentHover; }}
+            onMouseLeave={e => { e.currentTarget.style.background = c.accent; }}
           >
-            <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
             </svg>
+            Edit project
           </button>,
           document.body
         );
@@ -2290,125 +3205,6 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
 
 
       {/* FAB removed — edit is now the pencil icon in the header; delete lives in the edit panel. */}
-
-      {/* ═══ ADD COMMIT MODAL — handles locked / duplicate / slots-full ═══
-             Appears when the "+ Commit" hero button can't just deeplink. */}
-      {(() => {
-        const m = addCommitModal;
-        if (!m) return null;
-        const close = () => setAddCommitModal(null);
-        const goToMyWeek = (idx = null) => {
-          close();
-          if (onNavigate && personProfile?.name) {
-            onNavigate("commit", { person: personProfile.name, ...(idx != null ? { commitIdx: idx } : {}) });
-          }
-        };
-        const replaceSlot = (idx) => {
-          close();
-          if (onNavigate && personProfile?.name) {
-            onNavigate("commit", { person: personProfile.name, commitIdx: idx, prefillProject: proj.id, prefillForce: true });
-          }
-        };
-        if (m.kind === "locked") {
-          return (
-            <Modal open onClose={close} title="Your week is locked" accent={c.amber}>
-              <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
-                You've locked your commitments for this week, so new ones can't be added. Unlock from your week if you need to make a change, or view your locked plan.
-              </div>
-              <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
-                <Btn variant="ghost" onClick={close}>Close</Btn>
-                <Btn variant="primary" onClick={() => goToMyWeek()}>Go to my week</Btn>
-              </div>
-            </Modal>
-          );
-        }
-        if (m.kind === "already") {
-          const existing = commitments.find(cm => cm.person === personProfile?.name)?.items?.[m.idx] || {};
-          return (
-            <Modal open onClose={close} title="Already committed to this project" accent={c.accent}>
-              <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[3] }}>
-                You already have a commit on <strong style={{ color: c.text }}>{proj.name}</strong> in slot {m.idx + 1} this week:
-              </div>
-              <div style={{
-                padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-                background: c.surfaceAlt, border: `1px solid ${c.border}`, marginBottom: space[4],
-              }}>
-                <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: c.text }}>
-                  {(existing.title || "").trim() || <span style={{ fontStyle: "italic", color: c.textDim }}>Untitled</span>}
-                </div>
-                <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginTop: 4, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                  {existing.type || "—"} · {existing.stage || "—"}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
-                <Btn variant="ghost" onClick={close}>Close</Btn>
-                <Btn variant="primary" onClick={() => goToMyWeek(m.idx)}>Open this commit</Btn>
-              </div>
-            </Modal>
-          );
-        }
-        if (m.kind === "replace") {
-          return (
-            <Modal open onClose={close} title="Your 3 slots are full" accent={c.accent} width={520}>
-              <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
-                You've already filled all three slots this week. Pick one to replace with <strong style={{ color: c.text }}>{proj.name}</strong>, or go to your week to edit directly.
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginBottom: space[4] }}>
-                {m.slots.map((slot) => {
-                  const slotProj = projects.find(p => p.id === slot.project);
-                  const slotTitle = (slot.title || "").trim();
-                  return (
-                    <button
-                      key={slot.idx}
-                      type="button"
-                      onClick={() => replaceSlot(slot.idx)}
-                      className="flow-btn"
-                      onMouseEnter={e => { e.currentTarget.style.background = c.accentDim; e.currentTarget.style.borderColor = c.accent; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.borderColor = c.border; }}
-                      style={{
-                        textAlign: "left", padding: `${space[3]}px ${space[4]}px`,
-                        borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-                        background: c.surfaceAlt, cursor: "pointer",
-                        display: "flex", alignItems: "center", gap: space[3],
-                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
-                      }}
-                    >
-                      <span style={{
-                        fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: 700,
-                        color: c.textDim, minWidth: 24,
-                      }}>
-                        {slot.idx + 1}
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {slotTitle || <span style={{ fontStyle: "italic", color: c.textDim }}>Untitled</span>}
-                        </div>
-                        <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, marginTop: 2, letterSpacing: "0.04em" }}>
-                          <span style={{ color: ec.project, fontWeight: 700 }}>{slot.project || "—"}</span>
-                          {slotProj?.name && <span> · {slotProj.name}</span>}
-                          {slot.type && <span> · {slot.type}</span>}
-                          {slot.stage && <span> · {slot.stage}</span>}
-                        </div>
-                      </div>
-                      <span aria-hidden="true" style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.accent, letterSpacing: "0.04em", textTransform: "uppercase" }}>
-                        Replace →
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div style={{ display: "flex", gap: space[3], justifyContent: "space-between", alignItems: "center" }}>
-                <button type="button" onClick={() => goToMyWeek()} style={{
-                  background: "transparent", border: "none", color: c.textMid, cursor: "pointer",
-                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, padding: 0, textDecoration: "underline",
-                }}>Go to my week instead</button>
-                <Btn variant="ghost" onClick={close}>Cancel</Btn>
-              </div>
-            </Modal>
-          );
-        }
-        return null;
-      })()}
 
       {/* ═══ DEPRIORITIZATION REASON MODAL ═══ */}
       <Modal open={!!depriReasonModal} onClose={() => setDepriReasonModal(false)} title="Why is this being deprioritized?" accent={c.amber}>
@@ -2445,6 +3241,7 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
             onClick={() => {
               const overrides = { status: "deprioritized", depriReason: depriReasonText.trim() };
               setDepriReasonModal(false);
+              recordAction("project_status_changed", { from: "active", to: "deprioritized", reason: depriReasonText.trim() }, "Project deprioritized");
               if (datesChanged && pastHistoryWeekCount > 0) {
                 setPendingSave(overrides);
                 setRetroDateModal(true);
@@ -2457,81 +3254,74 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
         </div>
       </Modal>
 
+      {/* ═══ BLOCKED REASON MODAL ═══ */}
+      <Modal open={!!blockedReasonModal} onClose={() => setBlockedReasonModal(false)} title="Why is this project blocked?" accent={c.red}>
+        <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 400, color: c.textMid, lineHeight: 1.6, marginBottom: space[3] }}>
+          Describe what's blocking <strong style={{ color: c.text }}>{proj.name}</strong> so your team knows what needs to be resolved.
+        </div>
+        <div style={{ marginBottom: space[3] }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: space[1] }}>
+            <TelemetryLabel color={c.red}>Reason</TelemetryLabel>
+            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, fontVariantNumeric: "tabular-nums" }}>
+              {blockedReasonText.length}/200
+            </span>
+          </div>
+          <textarea
+            data-autofocus
+            value={blockedReasonText}
+            onChange={e => setBlockedReasonText(e.target.value.slice(0, 200))}
+            placeholder="e.g. Waiting on API access from partner team..."
+            rows={3}
+            maxLength={200}
+            style={{
+              width: "100%", padding: `${space[2]}px ${space[3]}px`,
+              borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+              background: c.surfaceAlt, color: c.text, resize: "vertical",
+              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+              outline: "none", boxSizing: "border-box",
+            }}
+          />
+        </div>
+        <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
+          <Btn variant="ghost" onClick={() => setBlockedReasonModal(false)}>Cancel</Btn>
+          <Btn variant="secondary" style={{ borderColor: c.redBorder, color: c.red }}
+            disabled={!blockedReasonText.trim()}
+            onClick={() => {
+              const now = new Date().toISOString();
+              const changes = { isBlocked: true, blockedReason: blockedReasonText.trim(), blockedAt: now };
+              setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, ...changes } : p));
+              updateProjectInDB(proj.id, changes);
+              recordAction("project_blocked", { reason: blockedReasonText.trim() }, "Project marked as blocked");
+              setBlockedReasonModal(false);
+            }}>
+            Mark blocked
+          </Btn>
+        </div>
+      </Modal>
+
       {/* ═══ DELETE CONFIRMATION MODAL ═══ */}
       <Modal open={deleteModal} onClose={() => {
         if (deleting) return;
         setDeleteModal(false);
-        setDeleteConfirmText("");
-        setDeleteDeps(null);
-        setDepsError(null);
-      }} title="Delete project?" accent={c.red} width={480}>
-        {depsLoading ? (
-          <div style={{ padding: `${space[4]}px 0`, textAlign: "center", color: c.textDim, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size }}>
-            Checking dependencies…
-          </div>
-        ) : (
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
-            This will permanently delete <strong style={{ color: c.text }}>{proj.id} — {proj.name}</strong> and all its history data. This cannot be undone.
-          </div>
-        )}
-        {deleteDeps && deleteDeps.commitmentCount > 0 && (
-          <div style={{
-            padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-            background: c.redDim, border: `1px solid ${c.redBorder}`, marginBottom: space[4],
-          }}>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: c.red, marginBottom: space[1] }}>
-              {deleteDeps.commitmentCount} active commitment{deleteDeps.commitmentCount !== 1 ? "s" : ""} reference this project
-            </div>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.5 }}>
-              {deleteDeps.peopleNames.length > 0
-                ? `Affected: ${deleteDeps.peopleNames.join(", ")}. Their commitment items will have the project link removed.`
-                : "Commitment items will have their project link removed."}
-            </div>
-          </div>
-        )}
-        {deleteDeps && deleteDeps.commitmentCount === 0 && (
-          <div style={{
-            padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-            background: c.greenDim, border: `1px solid ${c.greenBorder}`, marginBottom: space[4],
-            fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid,
-          }}>
-            No active commitments reference this project. Safe to delete.
-          </div>
-        )}
+      }} title="Delete project?" accent={c.red} width={420}>
+        <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
+          Are you sure you want to delete <strong style={{ color: c.text }}>{proj.id} — {proj.name}</strong>? This action cannot be undone.
+        </div>
         {depsError && (
           <div style={{
             padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
             background: c.redDim, border: `1px solid ${c.redBorder}`, marginBottom: space[4],
             fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.red,
-            display: "flex", justifyContent: "space-between", alignItems: "center", gap: space[3],
           }}>
-            <span>{depsError}</span>
-            <Btn variant="ghost" size="sm" onClick={handleDeleteClick}>Retry</Btn>
-          </div>
-        )}
-        {!depsLoading && !depsError && deleteDeps && (
-          <div style={{ marginBottom: space[4] }}>
-            <Label style={{ marginBottom: space[1] }}>
-              Type <span style={{ fontFamily: typo.monoSm.font, color: c.red }}>{proj.id}</span> to confirm
-            </Label>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginBottom: space[1] }}>
-              Case-insensitive.
-            </div>
-            <Inp
-              value={deleteConfirmText}
-              onChange={e => setDeleteConfirmText(e.target.value)}
-              placeholder={proj.id}
-              style={{ width: "100%", fontFamily: typo.monoMd.font }}
-              disabled={deleting}
-            />
+            {depsError}
           </div>
         )}
         <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
           <Btn variant="ghost" size="sm" onClick={() => setDeleteModal(false)} disabled={deleting}>Cancel</Btn>
           <Btn variant="danger" size="sm"
             onClick={confirmDelete}
-            disabled={deleting || depsLoading || !deleteDeps || deleteConfirmText.trim().toLowerCase() !== (proj.id || "").toLowerCase()}>
-            {deleting ? "Deleting..." : "Delete permanently"}
+            disabled={deleting}>
+            {deleting ? "Deleting..." : "Delete project"}
           </Btn>
         </div>
       </Modal>
@@ -2599,6 +3389,166 @@ function ProjectDeepDive({ proj, metrics: m, history, commitments, projects, set
           </Btn>
         </div>
       </Modal>
+
+      {/* ═══ ALPHA / BETA — note + optional rollout % ═══ */}
+      <Modal open={!!shipPhaseModal && shipPhaseModal.phase !== "GA"} onClose={() => setShipPhaseModal(null)} title={`Move to ${shipPhaseModal?.phase || ""}`} accent={c.green}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+          <div>
+            <Label style={{ marginBottom: space[1] }}>Note</Label>
+            <textarea
+              value={shipNote}
+              onChange={e => setShipNote(e.target.value)}
+              placeholder={`What's going into ${shipPhaseModal?.phase || "this phase"}?`}
+              rows={3}
+              style={{
+                width: "100%", padding: `${space[2]}px ${space[3]}px`,
+                borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                background: c.surfaceAlt, color: c.text, resize: "vertical",
+                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div>
+            <Label style={{ marginBottom: space[1] }}>Rollout % <span style={{ color: c.textDim, fontWeight: 400 }}>(optional)</span></Label>
+            <Inp
+              type="number" min="0" max="100"
+              value={shipPct}
+              onChange={e => setShipPct(e.target.value)}
+              placeholder="e.g. 10"
+              style={{ width: "100%" }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
+            <Btn variant="secondary" size="sm" onClick={() => setShipPhaseModal(null)}>Cancel</Btn>
+            <Btn variant="command" size="sm" style={{ borderColor: c.greenBorder, color: c.green }} onClick={() => {
+              const ph = shipPhaseModal.phase;
+              const oldPhase = shipPhaseModal.from;
+              const now = new Date().toISOString();
+              setProjects(prev => prev.map(p => p.id === proj.id ? {
+                ...p, phase: ph, lastActivityAt: now,
+                shipNote: shipNote.trim() || null,
+                shipPct: shipPct ? Number(shipPct) : null,
+              } : p));
+              updateProjectInDB(proj.id, { phase: ph });
+              recordAction("project_phase_changed", { from: oldPhase, to: ph, note: shipNote.trim() || null, rolloutPct: shipPct || null }, `Stage updated to ${ph}`);
+              setShipPhaseModal(null);
+            }}>
+              Move to {shipPhaseModal?.phase}
+            </Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ═══ GA — release note + feature type + confetti ═══ */}
+      <Modal open={!!shipPhaseModal && shipPhaseModal?.phase === "GA"} onClose={() => setShipPhaseModal(null)} title="Ship to GA 🚀" accent={c.green}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+          <div>
+            <Label style={{ marginBottom: space[1] }}>Release note</Label>
+            <textarea
+              value={gaReleaseNote}
+              onChange={e => setGaReleaseNote(e.target.value)}
+              placeholder="What shipped? Write a brief release note..."
+              rows={3}
+              style={{
+                width: "100%", padding: `${space[2]}px ${space[3]}px`,
+                borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                background: c.surfaceAlt, color: c.text, resize: "vertical",
+                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div>
+            <Label style={{ marginBottom: space[1] }}>Feature type</Label>
+            <Sel value={gaFeatureType} onChange={e => setGaFeatureType(e.target.value)} style={{ width: "100%" }}>
+              <option value="New">New Feature</option>
+              <option value="Fix">Bug Fix</option>
+              <option value="Enhancement">Enhancement</option>
+              <option value="UI/UX">UI/UX Improvement</option>
+            </Sel>
+          </div>
+          <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
+            <Btn variant="secondary" size="sm" onClick={() => setShipPhaseModal(null)}>Cancel</Btn>
+            <Btn variant="command" size="sm" style={{ borderColor: c.greenBorder, color: c.green }} onClick={() => {
+              const oldPhase = shipPhaseModal.from;
+              const now = new Date().toISOString();
+              setProjects(prev => prev.map(p => p.id === proj.id ? {
+                ...p, phase: "GA", lastActivityAt: now,
+                gaEnteredAt: now.split("T")[0],
+                gaReleaseNote: gaReleaseNote.trim() || null,
+                gaFeatureType: gaFeatureType,
+              } : p));
+              updateProjectInDB(proj.id, { phase: "GA" });
+              recordAction("project_phase_changed", {
+                from: oldPhase, to: "GA",
+                releaseNote: gaReleaseNote.trim() || null,
+                featureType: gaFeatureType,
+              }, `🚀 ${proj.name} shipped to GA!`);
+              setShipPhaseModal(null);
+              setShowConfetti(true);
+              setTimeout(() => setShowConfetti(false), 4000);
+            }}>
+              Ship it!
+            </Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ═══ CONFETTI + CELEBRATION TOAST ═══ */}
+      {showConfetti && createPortal(
+        <div style={{ position: "fixed", inset: 0, zIndex: 999999, pointerEvents: "none", overflow: "hidden" }}>
+          <style>{`
+            @keyframes confetti-fall {
+              0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+              100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+            }
+            @keyframes celebration-in {
+              0% { transform: translate(-50%, -50%) scale(0.7); opacity: 0; }
+              100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            }
+            @keyframes celebration-out {
+              0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+              100% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+            }
+          `}</style>
+          {Array.from({ length: 40 }, (_, i) => (
+            <div key={i} style={{
+              position: "absolute",
+              top: -10,
+              left: `${Math.random() * 100}%`,
+              width: Math.random() * 8 + 4,
+              height: Math.random() * 8 + 4,
+              borderRadius: Math.random() > 0.5 ? "50%" : "2px",
+              background: ["#E8590C", "#059669", "#1D4ED8", "#6D28D9", "#B45309", "#DC2626", "#0E7490", "#F59E0B"][i % 8],
+              animation: `confetti-fall ${1.5 + Math.random() * 2}s ease-in ${Math.random() * 0.8}s both`,
+            }} />
+          ))}
+          <div style={{
+            position: "fixed", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: c.surface, borderRadius: layout.radiusLg,
+            boxShadow: "0 24px 80px rgba(0,0,0,0.2)", border: `2px solid ${c.green}`,
+            padding: `${space[6]}px ${space[7]}px`, textAlign: "center",
+            maxWidth: 420, width: "90%",
+            animation: "celebration-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both, celebration-out 0.4s cubic-bezier(0.4, 0, 1, 1) 3s both",
+            pointerEvents: "auto",
+          }}>
+            <div style={{ fontSize: 48, marginBottom: space[3] }}>🚀</div>
+            <div style={{
+              fontFamily: typo.displayLg.font, fontSize: 22, fontWeight: 700,
+              color: c.text, marginBottom: space[2],
+            }}>Amazing! Congrats on shipping!</div>
+            <div style={{
+              fontFamily: typo.bodyMd.font, fontSize: 14, color: c.textMid,
+              lineHeight: 1.5,
+            }}>
+              <strong>{proj.name}</strong> is now live. Keep an eye out for feedback from others on this.
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

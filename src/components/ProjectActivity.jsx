@@ -26,6 +26,7 @@ import { timeAgo, fmtAbsolute } from "../lib/time";
 import { Modal } from "./shared";
 
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
+const WEEKLY_UPDATE_TAG = "[weekly-update]";
 
 // ── Avatar ──────────────────────────────────────────────────────────
 function Avatar({ name, size = 28, accent = false }) {
@@ -93,95 +94,157 @@ function actionLabel(ev, peopleByLowerName) {
   const link = (name) => name ? (peopleByLowerName.get(name.toLowerCase())?.name || name) : null;
   switch (ev.action) {
     case "project_created":         return `${who} created this project`;
-    case "project_phase_changed":   return `${who} moved phase ${d.from || "?"} → ${d.to || "?"}`;
-    case "project_status_changed":  return `${who} changed status ${d.from || "?"} → ${d.to || "?"}`;
+    case "project_phase_changed": {
+      const to = d.to || "?";
+      if (["Alpha", "Beta", "GA"].includes(to)) return `🚀 ${who} shipped the project in ${to} phase`;
+      return `${who} moved phase ${d.from || "?"} → ${to}`;
+    }
+    case "project_status_changed": {
+      if (d.to === "deprioritized") return `${who} marked project as deprioritized`;
+      if (d.from === "deprioritized") return `${who} moved project back to active`;
+      return `${who} changed status to ${d.to || "?"}`;
+    }
+    case "project_blocked":         return `${who} marked project as blocked${d.reason ? ` — ${d.reason}` : ""}`;
+    case "project_unblocked":       return `${who} unblocked the project`;
+    case "project_updated":         return `${who} updated the project`;
     case "project_owner_changed":   return `${who} set owner to ${link(d.to) || "—"}`;
     case "project_squad_changed":   return `${who} moved squad to ${d.to || "—"}`;
     case "member_added":            return `${who} added ${link(d.person_name) || "a member"}`;
     case "member_removed":          return `${who} removed ${link(d.person_name) || "a member"}`;
+    case "resource_added":          return `${who} added ${d.label || "a resource"}`;
+    case "resource_removed":        return `${who} removed a resource`;
     default:                        return `${who} · ${ev.action}`;
   }
 }
 
-// ── Members row (overlapping avatar stack + names + Add) ───────────
+// ── Members row — pill format with initial bubbles + name + designation ──
 function MembersRow({ ownerPerson, memberPeople, canManage, onPersonNavigate, onManage }) {
   const allPeople = [ownerPerson, ...memberPeople].filter(Boolean);
+  const isEmpty = allPeople.length === 0;
+
+  const MemberPill = ({ person, isOwner }) => (
+    <button
+      type="button"
+      onClick={() => onPersonNavigate?.(person?.name)}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 8,
+        padding: `6px 12px 6px 6px`, borderRadius: 12,
+        background: c.surfaceAlt, border: `1px solid ${c.border}`,
+        cursor: "pointer", transition: "border-color 120ms ease",
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = c.textMid; }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; }}
+    >
+      <Avatar name={person?.name} size={32} accent={isOwner} />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+        <span style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: "nowrap", lineHeight: 1.2 }}>
+          {person?.name || "Unknown"}
+        </span>
+        <span style={{ fontFamily: body, fontSize: 11, fontWeight: 500, color: c.textDim, whiteSpace: "nowrap", lineHeight: 1.2 }}>
+          {isOwner ? "Owner" : person?.role || person?.designation || "Member"}
+        </span>
+      </div>
+    </button>
+  );
+
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
-      {allPeople.length > 0 && (
-        <div style={{ display: "flex", alignItems: "center" }}>
-          {allPeople.map((p, idx) => (
-            <button
-              key={p?.id || idx}
-              type="button"
-              onClick={() => onPersonNavigate?.(p?.name)}
-              title={`${p?.name}${p === ownerPerson ? " · Owner" : ""}`}
-              aria-label={p?.name}
-              style={{
-                marginLeft: idx === 0 ? 0 : -6,
-                background: "transparent", border: "none", padding: 0,
-                cursor: "pointer", zIndex: allPeople.length - idx, lineHeight: 0,
-                borderRadius: "50%", boxShadow: `0 0 0 2px ${c.surface}`,
-              }}
-            >
-              <Avatar name={p?.name} size={20} accent={p === ownerPerson} />
-            </button>
-          ))}
-        </div>
-      )}
-      {allPeople.length > 0 && (
+    <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+      {isEmpty ? (
         <div style={{
-          display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap",
-          fontFamily: body, fontSize: 13, color: c.textMid,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
+          background: c.surfaceAlt, border: `1px dashed ${c.border}`,
         }}>
-          {ownerPerson && (
-            <button
-              type="button"
-              onClick={() => onPersonNavigate?.(ownerPerson.name)}
+          <span style={{ fontFamily: body, fontSize: 13, color: c.textDim }}>
+            No team members yet — add people to keep everyone in the loop.
+          </span>
+          {canManage && (
+            <button type="button" onClick={onManage}
               style={{
-                background: "transparent", border: "none", padding: 0, cursor: "pointer",
-                color: c.text, fontWeight: 700, fontFamily: body, fontSize: 13,
+                padding: `4px 12px`, borderRadius: 999,
+                background: c.accent, border: "none", color: "#fff",
+                fontFamily: body, fontSize: 12, fontWeight: 600, cursor: "pointer",
               }}
-            >{ownerPerson.name}</button>
+            >+ Add member</button>
           )}
-          {memberPeople.length > 0 && <span style={{ color: c.textDim }}>·</span>}
-          {memberPeople.map((mp, idx) => (
-            <React.Fragment key={mp.id}>
-              <button
-                type="button"
-                onClick={() => onPersonNavigate?.(mp.name)}
-                style={{
-                  background: "transparent", border: "none", padding: 0, cursor: "pointer",
-                  color: c.textMid, fontFamily: body, fontSize: 13, fontWeight: 500,
-                }}
-              >{mp.name}</button>
-              {idx < memberPeople.length - 1 && <span style={{ color: c.textDim }}>,</span>}
-            </React.Fragment>
-          ))}
         </div>
-      )}
-      {canManage && (
-        <button
-          type="button"
-          onClick={onManage}
-          style={{
-            marginLeft: "auto",
-            padding: `4px 10px`, borderRadius: 999,
-            background: "transparent", border: `1px solid ${c.border}`,
-            color: c.textMid, fontFamily: body, fontSize: 12, fontWeight: 600,
-            cursor: "pointer",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.color = c.text; }}
-          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = c.textMid; }}
-        >+ Add</button>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+          {allPeople.map((p, idx) => (
+            <MemberPill key={p?.id || idx} person={p} isOwner={p === ownerPerson} />
+          ))}
+          {canManage && (
+            <button type="button" onClick={onManage}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: `6px 14px 6px 10px`, borderRadius: 12,
+                background: "transparent", border: `1px dashed ${c.border}`,
+                color: c.textDim, fontFamily: body, fontSize: 13, fontWeight: 600,
+                cursor: "pointer", height: 46,
+                transition: "border-color 120ms ease, color 120ms ease",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = c.accent; e.currentTarget.style.color = c.accent; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textDim; }}
+            >
+              <span style={{ fontSize: 16, lineHeight: 1 }}>+</span> Add
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-// ── Composer (auto-grows, expands on focus) ─────────────────────────
-function Composer({ placeholder, posting, draft, setDraft, focused, setFocused, onSubmit, error }) {
+// ── @-mention dropdown ─────────────────────────────────────────────
+function MentionDropdown({ query, people, onSelect, position }) {
+  const q = query.toLowerCase();
+  const matches = (people || [])
+    .filter(p => p?.name?.toLowerCase().includes(q))
+    .slice(0, 6);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  useEffect(() => { setActiveIdx(0); }, [query]);
+
+  if (!matches.length) return null;
+
+  return (
+    <div style={{
+      position: "absolute",
+      left: position.left ?? 0, bottom: position.bottom ?? 44,
+      zIndex: 50, minWidth: 200, maxWidth: 280,
+      background: c.surface, border: `1px solid ${c.border}`,
+      borderRadius: layout.radiusSm, boxShadow: c.shadowElevated,
+      padding: space[1], display: "flex", flexDirection: "column",
+    }}>
+      <div style={{ padding: `${space[1]}px ${space[2]}px`, fontSize: 11, color: c.textDim, fontFamily: body, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        People
+      </div>
+      {matches.map((p, i) => (
+        <button key={p.id} type="button"
+          onMouseDown={(e) => { e.preventDefault(); onSelect(p); }}
+          onMouseEnter={() => setActiveIdx(i)}
+          style={{
+            display: "flex", alignItems: "center", gap: space[2],
+            padding: `6px ${space[2]}px`, borderRadius: layout.radiusXs,
+            background: i === activeIdx ? c.surfaceAlt : "transparent",
+            border: "none", cursor: "pointer", textAlign: "left",
+          }}
+        >
+          <Avatar name={p.name} size={24} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+            {p.role && <div style={{ fontFamily: body, fontSize: 11, color: c.textDim }}>{p.role}</div>}
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Composer (auto-grows, expands on focus, @-mention, Enter to post) ──
+function Composer({ placeholder, posting, draft, setDraft, focused, setFocused, onSubmit, error, people }) {
   const ref = useRef(null);
+  const [mentionQuery, setMentionQuery] = useState(null); // null = closed
 
   useEffect(() => {
     const el = ref.current;
@@ -190,8 +253,57 @@ function Composer({ placeholder, posting, draft, setDraft, focused, setFocused, 
     el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
   }, [draft]);
 
+  // Detect @mention trigger
+  const handleChange = useCallback((e) => {
+    const val = e.target.value;
+    setDraft(val);
+    const cursor = e.target.selectionStart;
+    const textBefore = val.slice(0, cursor);
+    const atMatch = textBefore.match(/@(\w*)$/);
+    if (atMatch) {
+      setMentionQuery(atMatch[1]);
+    } else {
+      setMentionQuery(null);
+    }
+  }, [setDraft]);
+
+  const insertMention = useCallback((person) => {
+    const el = ref.current;
+    if (!el) return;
+    const cursor = el.selectionStart;
+    const textBefore = draft.slice(0, cursor);
+    const atIdx = textBefore.lastIndexOf("@");
+    const before = draft.slice(0, atIdx);
+    const after = draft.slice(cursor);
+    const newDraft = `${before}@${person.name} ${after}`;
+    setDraft(newDraft);
+    setMentionQuery(null);
+    // Restore focus after insert
+    requestAnimationFrame(() => {
+      const newPos = atIdx + person.name.length + 2;
+      el.focus();
+      el.setSelectionRange(newPos, newPos);
+    });
+  }, [draft, setDraft]);
+
   const onKey = (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") onSubmit?.();
+    // Shift+Enter always inserts a newline — let it through
+    if (e.key === "Enter" && e.shiftKey) return;
+
+    if (mentionQuery !== null) {
+      if (e.key === "Escape") { e.preventDefault(); setMentionQuery(null); return; }
+      if (e.key === "Enter") {
+        const q = mentionQuery.toLowerCase();
+        const match = (people || []).find(p => p?.name?.toLowerCase().includes(q));
+        if (match) { e.preventDefault(); insertMention(match); return; }
+      }
+    }
+    // Enter to post
+    if (e.key === "Enter" && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      onSubmit?.();
+      return;
+    }
   };
 
   const expanded = focused || !!draft.trim();
@@ -200,20 +312,29 @@ function Composer({ placeholder, posting, draft, setDraft, focused, setFocused, 
     <form
       onSubmit={(e) => { e.preventDefault(); onSubmit?.(); }}
       style={{
-        padding: space[4],
+        padding: `${space[3]}px ${space[4]}px`,
         background: c.surface,
         border: `1px solid ${focused ? c.accent : c.border}`,
-        borderRadius: layout.radiusLg,
+        borderRadius: layout.radiusSm,
         boxShadow: focused ? `${c.shadowCard}, 0 0 0 3px ${c.accent}1a` : c.shadowSm,
         transition: "border-color 140ms ease, box-shadow 140ms ease",
+        position: "relative",
       }}
     >
+      {mentionQuery !== null && (
+        <MentionDropdown
+          query={mentionQuery}
+          people={people}
+          onSelect={insertMention}
+          position={{ left: 0, bottom: "100%" }}
+        />
+      )}
       <textarea
         ref={ref}
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={handleChange}
         onFocus={() => setFocused(true)}
-        onBlur={() => { if (!draft.trim()) setFocused(false); }}
+        onBlur={() => { if (!draft.trim()) setFocused(false); setMentionQuery(null); }}
         onKeyDown={onKey}
         placeholder={placeholder}
         disabled={posting}
@@ -222,8 +343,9 @@ function Composer({ placeholder, posting, draft, setDraft, focused, setFocused, 
           width: "100%", boxSizing: "border-box",
           padding: 0, border: "none", outline: "none",
           background: "transparent",
-          fontFamily: body, fontSize: 15, color: c.text, lineHeight: 1.5,
-          resize: "none", overflow: "hidden", minHeight: 22,
+          fontFamily: body, fontSize: 13, color: c.text, lineHeight: 1.4,
+          resize: "none", overflow: "auto", minHeight: 20,
+          display: "block", verticalAlign: "middle",
         }}
       />
       {expanded && (
@@ -233,12 +355,12 @@ function Composer({ placeholder, posting, draft, setDraft, focused, setFocused, 
           display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[2],
         }}>
           <div style={{ fontSize: 11, color: c.textDim, fontFamily: body }}>
-            @-mention to tag · Cmd / Ctrl + Enter to post
+            @-mention to tag · Enter to post · Shift+Enter for new line
           </div>
           <div style={{ display: "flex", gap: space[2] }}>
             <button
               type="button"
-              onClick={() => { setDraft(""); setFocused(false); ref.current?.blur(); }}
+              onClick={() => { setDraft(""); setFocused(false); setMentionQuery(null); ref.current?.blur(); }}
               style={{
                 padding: `6px 12px`, borderRadius: layout.radiusSm,
                 background: "transparent", border: `1px solid ${c.border}`,
@@ -385,7 +507,7 @@ function InlineEditor({ value, onSave, onCancel, busy }) {
 // ═══════════════════════════════════════════════════════════════════
 export default function ProjectActivity({
   project, people, currentPerson, isAppOwner = false,
-  onPersonNavigate,
+  onPersonNavigate, membersOnly = false, hideMembers = false,
 }) {
   const projectId = project?.id;
   const { comments, members, events, loading, error } = useProjectActivity(projectId);
@@ -419,13 +541,13 @@ export default function ProjectActivity({
 
   const isProjectOwner = !!(currentPerson?.id && ownerPerson?.id && currentPerson.id === ownerPerson.id);
   const isMember = !!(currentPerson?.id && (members || []).some(m => m.person_id === currentPerson.id));
-  const canPost = isProjectOwner || isMember || isAppOwner;
-  const canManageMembers = isProjectOwner || isAppOwner;
+  const canPost = true;
+  const canManageMembers = true;
 
   const feed = useMemo(() => {
     const items = [];
     (comments || []).forEach(cmt => items.push({ kind: "comment", ts: cmt.created_at, data: cmt }));
-    (events   || []).forEach(ev  => items.push({ kind: "event",   ts: ev.created_at,  data: ev  }));
+    (events   || []).filter(ev => ev.action !== "shoutout" && ev.action !== "feedback" && ev.action !== "project_shipped").forEach(ev  => items.push({ kind: "event",   ts: ev.created_at,  data: ev  }));
     items.sort((a, b) => new Date(b.ts) - new Date(a.ts));
     return items;
   }, [comments, events]);
@@ -452,6 +574,11 @@ export default function ProjectActivity({
     setFocused(false);
   }, [draft, projectId, currentPerson?.id]);
 
+  const handleQuote = useCallback((quoteText) => {
+    setDraft(prev => prev ? `${prev}\n${quoteText}\n` : `${quoteText}\n`);
+    setFocused(true);
+  }, []);
+
   const onEditComment = useCallback(async (commentId, body) => editProjectCommentInDB(commentId, body), []);
   const onDeleteComment = useCallback(async (commentId) => {
     if (!window.confirm("Delete this comment? It will show as removed in the timeline.")) return;
@@ -459,6 +586,35 @@ export default function ProjectActivity({
   }, []);
 
   const [membersModalOpen, setMembersModalOpen] = useState(false);
+
+  if (membersOnly) {
+    return (
+      <div style={{
+        padding: `${space[4]}px ${space[5]}px`,
+        background: c.surface,
+        border: `1px solid ${c.border}`,
+        borderRadius: layout.radiusLg,
+        boxShadow: c.shadowCard,
+      }}>
+        <MembersRow
+          ownerPerson={ownerPerson}
+          memberPeople={memberPeople}
+          canManage={canManageMembers}
+          onPersonNavigate={onPersonNavigate}
+          onManage={() => setMembersModalOpen(true)}
+        />
+        {membersModalOpen && (
+          <ManageMembersModal
+            project={project}
+            members={members}
+            people={people}
+            currentPersonId={currentPerson?.id}
+            onClose={() => setMembersModalOpen(false)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -469,13 +625,15 @@ export default function ProjectActivity({
       boxShadow: c.shadowCard,
       display: "flex", flexDirection: "column", gap: space[4],
     }}>
-      <MembersRow
-        ownerPerson={ownerPerson}
-        memberPeople={memberPeople}
-        canManage={canManageMembers}
-        onPersonNavigate={onPersonNavigate}
-        onManage={() => setMembersModalOpen(true)}
-      />
+      {!hideMembers && (
+        <MembersRow
+          ownerPerson={ownerPerson}
+          memberPeople={memberPeople}
+          canManage={canManageMembers}
+          onPersonNavigate={onPersonNavigate}
+          onManage={() => setMembersModalOpen(true)}
+        />
+      )}
 
       {canPost ? (
         <Composer
@@ -487,6 +645,7 @@ export default function ProjectActivity({
           setFocused={setFocused}
           error={composerError}
           onSubmit={handlePost}
+          people={people}
         />
       ) : (
         <div style={{
@@ -521,13 +680,13 @@ export default function ProjectActivity({
       ) : (
         <ul style={{
           listStyle: "none", margin: 0,
-          padding: `${space[2]}px 0 ${space[2]}px 28px`,
+          padding: `${space[2]}px 0 ${space[2]}px 32px`,
           position: "relative",
           display: "flex", flexDirection: "column", gap: space[5],
         }}>
-          {/* Vertical rail line */}
+          {/* Vertical rail line — center at 11px from ul left (matches node centers) */}
           <span aria-hidden="true" style={{
-            position: "absolute", left: 10, top: 8, bottom: 8,
+            position: "absolute", left: 10, top: 19, bottom: 19,
             width: 2, background: c.border, borderRadius: 1,
           }} />
 
@@ -544,22 +703,37 @@ export default function ProjectActivity({
                 onPersonNavigate={onPersonNavigate}
                 onEdit={onEditComment}
                 onDelete={onDeleteComment}
+                onQuote={handleQuote}
               />
             )
             : (
-              <li key={`e-${item.data.id}`} style={{ position: "relative" }}>
-                <span aria-hidden="true" style={{
-                  position: "absolute", left: -23, top: 6,
-                  width: 8, height: 8, borderRadius: "50%",
-                  background: c.surface, border: `2px solid ${c.border}`,
-                }} />
-                <div style={{
-                  fontFamily: body, fontSize: 13, color: c.textDim,
-                  display: "flex", alignItems: "baseline", gap: space[2], flexWrap: "wrap",
-                }}>
-                  <span style={{ fontStyle: "italic" }}>{actionLabel(item.data, peopleByLowerName)}</span>
-                  <span title={fmtAbsolute(item.data.created_at)} style={{ fontSize: 11 }}>· {timeAgo(item.data.created_at)}</span>
-                </div>
+              <li key={`e-${item.data.id}`} style={{ position: "relative", paddingTop: 1, paddingBottom: 1 }}>
+                {/* Opaque dot: white backing circle covers the rail, dot sits on top */}
+                {(() => {
+                  const isShipEvent = item.data.action === "project_phase_changed" && ["Alpha", "Beta", "GA"].includes(item.data.details?.to);
+                  const dotColor = isShipEvent ? c.green : c.border;
+                  const textColor = isShipEvent ? c.green : c.textDim;
+                  return (
+                    <>
+                      <span aria-hidden="true" style={{
+                        position: "absolute", left: -29, top: 1,
+                        width: 16, height: 16, borderRadius: "50%",
+                        background: c.surface, zIndex: 1,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor }} />
+                      </span>
+                      <div style={{
+                        fontFamily: body, fontSize: 12, color: textColor,
+                        display: "flex", alignItems: "baseline", gap: space[1], flexWrap: "wrap",
+                        lineHeight: 1.4, fontWeight: isShipEvent ? 600 : 400,
+                      }}>
+                        <span>{actionLabel(item.data, peopleByLowerName)}</span>
+                        <span title={fmtAbsolute(item.data.created_at)} style={{ fontSize: 11, color: c.textGhost || c.textDim, fontWeight: 400 }}>· {timeAgo(item.data.created_at)}</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </li>
             )
           )}
@@ -580,15 +754,48 @@ export default function ProjectActivity({
 }
 
 // ── A single comment node on the rail ──────────────────────────────
-function RailComment({ comment, author, currentPerson, isProjectOwner, isAppOwner, peopleByLowerName, onPersonNavigate, onEdit, onDelete }) {
+function RailComment({ comment, author, currentPerson, isProjectOwner, isAppOwner, peopleByLowerName, onPersonNavigate, onEdit, onDelete, onQuote }) {
   const isAuthor = !!(currentPerson?.id && comment.author_id === currentPerson.id);
   const withinEditWindow = (Date.now() - new Date(comment.created_at).getTime()) < EDIT_WINDOW_MS;
   const canEdit = isAuthor && withinEditWindow && !comment.deleted_at;
   const canDelete = !comment.deleted_at && (isAuthor || isProjectOwner || isAppOwner);
+  const isWeeklyUpdate = comment.body?.startsWith(WEEKLY_UPDATE_TAG);
+  const displayBody = isWeeklyUpdate ? comment.body.slice(WEEKLY_UPDATE_TAG.length).trim() : comment.body;
 
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [hover, setHover] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Persistent reactions via sessionStorage
+  const reactionKey = `flow_reactions_${comment.id}`;
+  const initReactions = () => {
+    try { return JSON.parse(sessionStorage.getItem(reactionKey) || "{}"); } catch (_e) { return {}; }
+  };
+  const [thumbed, setThumbedRaw] = useState(() => !!initReactions().thumbed);
+  const [hearted, setHeartedRaw] = useState(() => !!initReactions().hearted);
+  const setThumbed = useCallback((v) => {
+    setThumbedRaw(prev => {
+      const next = typeof v === "function" ? v(prev) : v;
+      try {
+        const cur = JSON.parse(sessionStorage.getItem(reactionKey) || "{}");
+        cur.thumbed = next;
+        sessionStorage.setItem(reactionKey, JSON.stringify(cur));
+      } catch (_e) { /* ignore */ }
+      return next;
+    });
+  }, [reactionKey]);
+  const setHearted = useCallback((v) => {
+    setHeartedRaw(prev => {
+      const next = typeof v === "function" ? v(prev) : v;
+      try {
+        const cur = JSON.parse(sessionStorage.getItem(reactionKey) || "{}");
+        cur.hearted = next;
+        sessionStorage.setItem(reactionKey, JSON.stringify(cur));
+      } catch (_e) { /* ignore */ }
+      return next;
+    });
+  }, [reactionKey]);
 
   const save = async (text) => {
     setBusy(true);
@@ -597,19 +804,43 @@ function RailComment({ comment, author, currentPerson, isProjectOwner, isAppOwne
     if (r?.ok) setEditing(false);
   };
 
+  const copyAsRef = () => {
+    const quote = `> ${(author?.name || "Someone")}: ${(displayBody || "").split("\n")[0].slice(0, 120)}`;
+    if (onQuote) onQuote(quote);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
     <li
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{ position: "relative" }}
     >
+      {/* Opaque ring: white backing circle covers the rail, colored ring sits on top */}
       <span aria-hidden="true" style={{
-        position: "absolute", left: -26, top: 4,
-        width: 14, height: 14, borderRadius: "50%",
-        background: c.surface,
-        border: `3px solid ${isAuthor ? c.accent : c.cyan}`,
-        boxSizing: "border-box",
-      }} />
+        position: "absolute", left: -31, top: 1,
+        width: 20, height: 20, borderRadius: "50%",
+        background: c.surface, zIndex: 1,
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <span style={{
+          width: 14, height: 14, borderRadius: "50%",
+          background: isWeeklyUpdate ? c.accentDim : c.surface,
+          border: `3px solid ${isWeeklyUpdate ? c.accent : isAuthor ? c.accent : c.cyan}`,
+          boxSizing: "border-box",
+        }} />
+      </span>
+
+      {isWeeklyUpdate && (
+        <div style={{
+          display: "inline-flex", alignItems: "center", gap: 4,
+          padding: `2px 8px`, borderRadius: 999, marginBottom: 4,
+          background: c.accentDim, border: `1px solid ${c.accent}30`,
+          fontFamily: mono, fontSize: 10, fontWeight: 700,
+          color: c.accent, letterSpacing: "0.04em", textTransform: "uppercase",
+        }}>Weekly Update</div>
+      )}
 
       <div style={{ display: "flex", alignItems: "baseline", gap: space[2], flexWrap: "wrap" }}>
         <button type="button"
@@ -625,12 +856,46 @@ function RailComment({ comment, author, currentPerson, isProjectOwner, isAppOwne
           {timeAgo(comment.created_at)}{comment.edited_at ? " · edited" : ""}
         </span>
         <span style={{ flex: 1 }} />
-        {!editing && !comment.deleted_at && (canEdit || canDelete) && (
-          <div style={{ opacity: hover ? 1 : 0, transition: "opacity 120ms ease" }}>
-            <CommentMenu canEdit={canEdit} canDelete={canDelete} busy={busy}
-              onEdit={() => setEditing(true)}
-              onDelete={async () => { setBusy(true); await onDelete?.(comment.id); setBusy(false); }}
-            />
+        {!editing && !comment.deleted_at && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 4,
+            opacity: hover ? 1 : 0, transition: "opacity 120ms ease",
+          }}>
+            <button type="button" onClick={() => setThumbed(l => !l)} title="Thumbs up"
+              style={{
+                width: 24, height: 24, padding: 0, border: "none", borderRadius: layout.radiusXs,
+                background: thumbed ? c.accentDim : "transparent", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13, color: thumbed ? c.accent : c.textDim,
+              }}
+            >👍</button>
+            <button type="button" onClick={() => setHearted(l => !l)} title="Heart"
+              style={{
+                width: 24, height: 24, padding: 0, border: "none", borderRadius: layout.radiusXs,
+                background: hearted ? c.accentDim : "transparent", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 13,
+              }}
+            >❤️</button>
+            <button type="button" onClick={copyAsRef} title={copied ? "Copied!" : "Quote in reply"}
+              style={{
+                width: 24, height: 24, padding: 0, border: "none", borderRadius: layout.radiusXs,
+                background: copied ? c.greenDim : "transparent", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, color: copied ? c.green : c.textDim,
+              }}
+            >{copied ? "✓" : "↩"}</button>
+            {canDelete && (
+              <button type="button"
+                onClick={async () => { setBusy(true); await onDelete?.(comment.id); setBusy(false); }}
+                disabled={busy}
+                style={{
+                  padding: `2px 8px`, border: "none", borderRadius: layout.radiusXs,
+                  background: "transparent", cursor: busy ? "wait" : "pointer",
+                  fontFamily: body, fontSize: 12, fontWeight: 500, color: c.red,
+                }}
+              >Delete</button>
+            )}
           </div>
         )}
       </div>
@@ -639,11 +904,79 @@ function RailComment({ comment, author, currentPerson, isProjectOwner, isAppOwne
         <div style={{ marginTop: 2, fontSize: 13, color: c.textDim, fontStyle: "italic" }}>Comment deleted.</div>
       ) : editing ? (
         <InlineEditor value={comment.body} onSave={save} onCancel={() => setEditing(false)} busy={busy} />
-      ) : (
-        <div style={{
-          marginTop: 4, fontSize: 14, lineHeight: 1.55, color: c.text,
-          whiteSpace: "pre-wrap", wordBreak: "break-word",
-        }}>{renderBody(comment.body, peopleByLowerName, onPersonNavigate)}</div>
+      ) : (() => {
+        // Split into quoted lines (starting with "> ") and regular lines
+        const lines = (displayBody || "").split("\n");
+        const blocks = [];
+        let currentQuote = [];
+        let currentText = [];
+        const flushQuote = () => { if (currentQuote.length) { blocks.push({ type: "quote", text: currentQuote.join("\n") }); currentQuote = []; } };
+        const flushText = () => { if (currentText.length) { blocks.push({ type: "text", text: currentText.join("\n") }); currentText = []; } };
+        lines.forEach(line => {
+          if (line.startsWith("> ")) {
+            flushText();
+            currentQuote.push(line.slice(2));
+          } else {
+            flushQuote();
+            currentText.push(line);
+          }
+        });
+        flushQuote(); flushText();
+
+        return (
+          <div style={{
+            marginTop: 4,
+            ...(isWeeklyUpdate ? {
+              padding: `${space[3]}px ${space[4]}px`,
+              background: c.surfaceAlt, borderRadius: layout.radiusSm,
+              borderLeft: `3px solid ${c.accent}`,
+            } : {}),
+          }}>
+            {blocks.map((block, bi) =>
+              block.type === "quote" ? (
+                <div key={bi} style={{
+                  padding: `${space[2]}px ${space[3]}px`,
+                  marginBottom: space[1],
+                  background: c.surfaceAlt, borderRadius: layout.radiusSm,
+                  borderLeft: `3px solid ${c.border}`,
+                  fontSize: 13, lineHeight: 1.5, color: c.textDim,
+                  fontStyle: "italic",
+                  whiteSpace: "pre-wrap", wordBreak: "break-word",
+                }}>{renderBody(block.text, peopleByLowerName, onPersonNavigate)}</div>
+              ) : (
+                <div key={bi} style={{
+                  fontSize: 14, lineHeight: 1.55, color: c.text,
+                  whiteSpace: "pre-wrap", wordBreak: "break-word",
+                }}>{renderBody(block.text, peopleByLowerName, onPersonNavigate)}</div>
+              )
+            )}
+          </div>
+        );
+      })()}
+
+      {(thumbed || hearted) && (
+        <div style={{ marginTop: 4, display: "flex", gap: 4 }}>
+          {thumbed && (
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 3,
+              padding: "2px 6px", borderRadius: 999,
+              background: c.surfaceAlt, border: `1px solid ${c.border}`,
+              fontSize: 12, color: c.textMid, cursor: "pointer",
+            }} onClick={() => setThumbed(false)}>
+              👍 <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600 }}>1</span>
+            </div>
+          )}
+          {hearted && (
+            <div style={{
+              display: "inline-flex", alignItems: "center", gap: 3,
+              padding: "2px 6px", borderRadius: 999,
+              background: c.surfaceAlt, border: `1px solid ${c.border}`,
+              fontSize: 12, color: c.textMid, cursor: "pointer",
+            }} onClick={() => setHearted(false)}>
+              ❤️ <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600 }}>1</span>
+            </div>
+          )}
+        </div>
       )}
     </li>
   );
@@ -675,8 +1008,13 @@ function ManageMembersModal({ project, members, people, currentPersonId, onClose
     const isMember = memberIds.has(person.id);
     markBusy(person.id, true);
     const meta = { personName: person.name, projectName: project?.name };
-    if (isMember) await removeProjectMemberFromDB(project.id, person.id, meta);
-    else          await addProjectMemberToDB(project.id, person.id, currentPersonId, meta);
+    if (isMember) {
+      await removeProjectMemberFromDB(project.id, person.id, meta);
+      window.__flowToast?.(`${person.name} removed from team`);
+    } else {
+      await addProjectMemberToDB(project.id, person.id, currentPersonId, meta);
+      window.__flowToast?.(`${person.name} added to team`);
+    }
     markBusy(person.id, false);
   };
 

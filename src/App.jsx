@@ -9,6 +9,7 @@ import { tactile } from "./hooks/useTactile";
 import useSupabaseData from "./hooks/useSupabaseData";
 import { useSyncedSetters } from "./hooks/useSyncedSetters";
 import useAuth from "./hooks/useAuth";
+import useAlerts from "./hooks/useAlerts";
 import LoginScreen from "./components/LoginScreen";
 import PendingApprovalScreen from "./components/PendingApprovalScreen";
 import QAReviewView from "./views/QAReviewView";
@@ -23,6 +24,7 @@ import LogsView from "./views/LogsView";
 import TerminalView from "./views/TerminalView";
 import FlowLogo from "./components/FlowLogo";
 import SyncToast from "./components/SyncToast";
+import ActionToast from "./components/ActionToast";
 import DevOverlayProvider from "./components/DevOverlay";
 
 export default function FlowApp() {
@@ -148,19 +150,15 @@ function FlowDashboard({ auth }) {
     history: supabaseHistory,
     weekConfig: supabaseWeekConfig,
     appSettings, setAppSettings,
+    projectLinks, setProjectLinks,
+    phaseDurationDefaults,
     lookups,
   } = useSupabaseData();
 
+  const { alerts, unreadCount: alertCount, markRead: markAlertRead, markAllRead: markAllAlertsRead } = useAlerts(projects, phaseDurationDefaults);
+
   // Use Supabase data directly — no seed fallbacks
   const history = supabaseHistory && Object.keys(supabaseHistory).length > 0 ? supabaseHistory : {};
-  const weekConfig = supabaseWeekConfig || (() => {
-    // Fallback: compute Monday of current week so week navigation math works correctly
-    const now = new Date(); const day = now.getDay();
-    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(now.getFullYear(), now.getMonth(), diff);
-    const ws = monday.toISOString().split('T')[0];
-    return { weeks: [], currentWeek: null, historyWeeks: [], weekStart: ws, weekOf: "", today: new Date().toISOString().split('T')[0] };
-  })();
 
   // ── Synced setters: optimistic UI + background Supabase writes ──
   const {
@@ -182,46 +180,6 @@ function FlowDashboard({ auth }) {
   const suppressBackRef = useRef(false);
   const searchRef = useRef(null);
   const [showHints, setShowHints] = useState(false);
-
-  // ── Week navigation ──
-  const [weekOffset, setWeekOffset] = useState(0);
-  const currentWeekLabel = useMemo(() => {
-    const base = new Date(weekConfig.weekStart + "T00:00:00");
-    base.setDate(base.getDate() + weekOffset * 7);
-    return base.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  }, [weekOffset, weekConfig]);
-  const handleWeekPrev = useCallback(() => setWeekOffset(w => Math.max(w - 1, -weekConfig.historyWeeks.length)), [weekConfig]);
-  const handleWeekNext = useCallback(() => setWeekOffset(w => Math.min(w + 1, 0)), []);
-
-  const selectedWeekKey = useMemo(() => {
-    if (weekOffset === 0) return "current";
-    const idx = weekConfig.historyWeeks.length + weekOffset;
-    return weekConfig.historyWeeks[idx] || "current";
-  }, [weekOffset, weekConfig]);
-  const isHistorical = weekOffset < 0;
-
-  // Derive commitments-like data from history for past weeks
-  const effectiveCommitments = useMemo(() => {
-    if (weekOffset === 0) return commitments;
-    const personMap = {};
-    Object.entries(history).forEach(([projId, weeks]) => {
-      const wk = weeks.find(w => w.week === selectedWeekKey);
-      if (wk) {
-        wk.entries.forEach(e => {
-          if (!personMap[e.person]) personMap[e.person] = [];
-          personMap[e.person].push({
-            type: e.type, project: projId, stage: e.stage,
-            title: e.task || "", outcome: e.outcome || null,
-          });
-        });
-      }
-    });
-    const emptyItem = { title: "", type: "", project: "", stage: "" };
-    return Object.entries(personMap).map(([person, items]) => {
-      while (items.length < 3) items.push({ ...emptyItem });
-      return { person, items, buffer: "", deselected: -1, lockedAt: "historical" };
-    });
-  }, [weekOffset, selectedWeekKey, commitments]);
 
   // ── Global filters (header bar) ──
   const [globalFilters, setGlobalFilters] = useState({ owner: [], squad: [], person: [] });
@@ -489,10 +447,6 @@ function FlowDashboard({ auth }) {
       {/* ═══ SINGLE HEADER ═══ (hidden for dark-themed Terminal view) */}
       {activeTab !== "terminal" && (
       <Header
-        weekLabel={currentWeekLabel}
-        weekOffset={weekOffset}
-        onWeekPrev={handleWeekPrev}
-        onWeekNext={handleWeekNext}
         onLogoClick={() => {
           handleTabSwitch("pulse");
           // Smooth-scroll to the top — without this, clicking the logo mid-page
@@ -516,6 +470,11 @@ function FlowDashboard({ auth }) {
         allSquads={allSquads}
         allPeople={allPeople}
         currentUser={auth}
+        alertCount={alertCount}
+        projects={projects}
+        people={people}
+        currentPerson={viewerProfile}
+        onNavigate={handleNavigate}
       />
       )}
 
@@ -526,10 +485,11 @@ function FlowDashboard({ auth }) {
       {activeTab !== "terminal" && (
       <main key={activeTab} className="flow-page" style={{ maxWidth: 1440, margin: "0 auto", padding: `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
         <ErrorCatcher key={activeTab}>
-          {activeTab === "summary" && <SummaryView loading={loading} error={error} history={history} commitments={effectiveCommitments} projects={projects} people={people} squads={squads} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} globalFilters={globalFilters} isHistorical={isHistorical} onNavigate={handleNavigate} />}
-          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} commitments={effectiveCommitments} people={people} squads={squads} history={history} weekConfig={weekConfig} personProfile={viewerProfile} isAppOwner={!!auth?.isOwner} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} />}
-          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} commitments={effectiveCommitments} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} isHistorical={isHistorical} selectedWeekKey={selectedWeekKey} weekConfig={weekConfig} />}
-          {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} commitments={commitments} />}
+          {activeTab === "summary" && <SummaryView loading={loading} error={error} projects={projects} people={people} squads={squads} globalFilters={globalFilters} onNavigate={handleNavigate} phaseDurationDefaults={phaseDurationDefaults} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAppOwner={!!auth?.isOwner} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} />}
+
+          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} />}
+          {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} />}
           {activeTab === "guide" && (
             <React.Suspense fallback={<div style={{ padding: 40, color: c.textDim, fontFamily: body, fontSize: 16, textAlign: "center" }}>Loading...</div>}>
               <GuideView onNavigate={handleTabSwitch} />
@@ -554,6 +514,7 @@ function FlowDashboard({ auth }) {
 
       {/* Sync toast — terminal-style notification */}
       <SyncToast />
+      <ActionToast />
     </div>
   );
 }
