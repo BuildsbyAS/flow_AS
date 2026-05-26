@@ -365,13 +365,15 @@ export const ChoiceGroup = ({ options, value, onChange, mono = false, label }) =
 // ══════════════════════════════════════════════════════════════
 // Sel — select dropdown (matches Inp height)
 // ══════════════════════════════════════════════════════════════
+const selChevron = `url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 16 16' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='4 6 8 10 12 6' stroke='%237E7E8A' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`;
+export { selChevron };
 export const Sel = ({ children, style: s, ...rest }) => (
   <select {...rest} className="flow-input" style={{
-    height: 40, padding: `0 ${space[3]}px`,
+    height: 40, padding: `0 ${space[3] + 20}px 0 ${space[3]}px`,
     borderRadius: layout.radiusSm,
-    border: `1px solid ${c.border}`, background: c.surface,
+    border: `1px solid ${c.border}`, background: `${c.surface} ${selChevron} no-repeat right ${space[3]}px center / 12px 12px`,
     color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-    cursor: "pointer", appearance: "auto",
+    cursor: "pointer", appearance: "none", WebkitAppearance: "none",
     boxSizing: "border-box",
     transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
     ...s,

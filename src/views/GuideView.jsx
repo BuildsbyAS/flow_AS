@@ -113,7 +113,7 @@ const GuideView = ({ onNavigate }) => {
           lineHeight: 1.7, color: c.textMid, maxWidth: 580, margin: 0,
         }}>
           Every project has an owner, a small set of members, and an activity feed.
-          Owners post updates. Members chime in. Phase changes, status flips, and
+          Owners post updates. Members chime in. Track changes, status flips, and
           new members land in the same timeline. Nothing important lives in a DM
           or a slide.
         </p>
@@ -192,7 +192,7 @@ const GuideView = ({ onNavigate }) => {
               fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
               color: c.textMid, lineHeight: 1.5,
             }}>
-              Summary rolls up health across all projects. People shows who owns
+              Summary rolls up status across all projects. People shows who owns
               what and where each person is active.
             </div>
             <div style={{ display: "flex", gap: space[2], marginTop: space[1], flexWrap: "wrap" }}>
@@ -237,7 +237,7 @@ const GuideView = ({ onNavigate }) => {
             <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>Projects</div>
           </div>
           <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-            Registry of every project — active, completed, or deprioritized. See owner, phase, health, timeline, and headcount at a glance.
+            Registry of every project — active, upcoming, completed, or deprioritized. Upcoming projects are registered but not yet started; click "Start Now" to begin.
           </div>
           <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
             Click into any project for a deep-dive: week-by-week activity, who worked on it, phase changes, and total investment.
@@ -246,7 +246,7 @@ const GuideView = ({ onNavigate }) => {
             Three view modes: <strong style={{ color: c.text, fontWeight: 600 }}>Table</strong> for dense sortable data, <strong style={{ color: c.text, fontWeight: 600 }}>Board</strong> to see work grouped by phase, and <strong style={{ color: c.text, fontWeight: 600 }}>Gantt</strong> for a timeline with squad and phase filters.
           </div>
           <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid }}>
-            Scope chips at the top filter by <strong style={{ color: c.text, fontWeight: 600 }}>In Flight</strong>, <strong style={{ color: c.text, fontWeight: 600 }}>Shipped</strong> (reached GA), <strong style={{ color: c.text, fontWeight: 600 }}>Deprioritized</strong>, or <strong style={{ color: c.text, fontWeight: 600 }}>All</strong>. The KPI cards above surface <strong style={{ color: c.orange, fontWeight: 600 }}>At Risk</strong> and <strong style={{ color: c.red, fontWeight: 600 }}>Overdue</strong> as sub-filters of In Flight.
+            Scope chips at the top filter by <strong style={{ color: c.text, fontWeight: 600 }}>In Flight</strong>, <strong style={{ color: c.text, fontWeight: 600 }}>Shipped</strong>, <strong style={{ color: c.text, fontWeight: 600 }}>Blocked</strong>, <strong style={{ color: c.text, fontWeight: 600 }}>Deprioritized</strong>, or <strong style={{ color: c.text, fontWeight: 600 }}>All</strong>. The KPI cards above surface <strong style={{ color: c.orange, fontWeight: 600 }}>At Risk</strong> and <strong style={{ color: c.red, fontWeight: 600 }}>Overdue</strong> as sub-filters of In Flight.
           </div>
           {/* Mini visual: project timeline */}
           <ExampleCard>
@@ -268,9 +268,12 @@ const GuideView = ({ onNavigate }) => {
             </div>
           </ExampleCard>
 
-          {/* ── Project Phases ── */}
+          {/* ── Project Tracks ── */}
           <div style={{ marginTop: space[3] }}>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2] }}>Project Phases</div>
+            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2] }}>Project Tracks</div>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, marginBottom: space[2] }}>
+              Tracks run in parallel. A project can have PRD and Dev active simultaneously.
+            </div>
             <ExampleCard style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
               {[
                 { phase: "PRD", color: pc.PRD, desc: "Product requirements being defined" },
@@ -279,7 +282,6 @@ const GuideView = ({ onNavigate }) => {
                 { phase: "QA", color: pc.QA, desc: "Quality assurance and testing" },
                 { phase: "Alpha", color: pc.Alpha, desc: "Internal testing with the team" },
                 { phase: "Beta", color: pc.Beta, desc: "Real-user testing and A/B experiments" },
-                { phase: "GA", color: pc.GA, desc: "Generally available to 100% of users" },
               ].map((p, i) => (
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                   <span style={{
@@ -295,35 +297,6 @@ const GuideView = ({ onNavigate }) => {
             </ExampleCard>
           </div>
 
-          {/* ── Project Health Scoring ── */}
-          <div id="guide-health" style={{ marginTop: space[3] }}>
-            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2] }}>Project Health Scoring</div>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, lineHeight: 1.7, color: c.textMid, marginBottom: space[3] }}>
-              Every project gets a health score out of 100, calculated each week:
-            </div>
-            <ExampleCard style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-              <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text }}>
-                Base score: <span style={{ color: c.green }}>100</span>
-              </div>
-              <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, textTransform: "uppercase", marginTop: space[1] }}>Deductions</div>
-              <div style={{ paddingLeft: space[3], display: "flex", flexDirection: "column", gap: 2 }}>
-                <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.5 }}>
-                  <span style={{ color: c.red }}>−20</span> if the project is overdue
-                </div>
-                <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.5 }}>
-                  <span style={{ color: c.red }}>−15</span> if any commits are blocked
-                </div>
-                <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.5 }}>
-                  <span style={{ color: c.orange }}>−10</span> if the project is older than 60 days (<span style={{ color: c.orange }}>−5</span> if older than 30 days)
-                </div>
-              </div>
-              <div style={{ borderTop: `1px solid ${c.border}`, paddingTop: space[2], marginTop: space[1], display: "flex", gap: space[4], fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size }}>
-                <span><span style={{ color: c.green }}>80+</span> <span style={{ color: c.textDim }}>= On Track</span></span>
-                <span><span style={{ color: c.orange }}>50–79</span> <span style={{ color: c.textDim }}>= At Risk</span></span>
-                <span><span style={{ color: c.red }}>&lt;50</span> <span style={{ color: c.textDim }}>= Critical</span></span>
-              </div>
-            </ExampleCard>
-          </div>
         </Surface>
 
         {/* PEOPLE */}

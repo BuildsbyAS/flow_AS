@@ -1,7 +1,7 @@
 // Flow — People Deep Dive (Project-centric team visibility)
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, entityColors, shipPhases } from "../styles/theme";
-import { Tag, EmptyState, Sel, Inp, Btn, Modal, Label } from "../components/shared";
+import { c, motion, layout, typo, space, typeConfig, phaseColors as getPhaseColors, entityColors } from "../styles/theme";
+import { Tag, EmptyState, Sel, Inp, Btn, Modal, Label, selChevron } from "../components/shared";
 import { KpiGrid, KpiCard, SectionHead, Pill, PillRow } from "../components/kpi";
 import PersonProjects from "../components/PersonProjects";
 import useKeyboard from "../hooks/useKeyboard";
@@ -10,8 +10,6 @@ import { initialsOf } from "../lib/names";
 import { isDevSeedMode, devStore, seedPeople } from "../data/devSeed";
 import { addPersonToDB } from "../lib/mutations";
 
-const IN_FLIGHT_PHASES = ["PRD", "Design", "Dev", "QA"];
-const SHIPPED_PHASES = ["Alpha", "Beta", "GA"];
 
 const firstGlyph = (name) => {
   if (!name) return "?";
@@ -393,8 +391,8 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
     proj.owner_id === personObj.id ||
     (isDevSeedMode() && devStore.listMembers(proj.id)?.some(m => m.person_id === personObj.id))
   );
-  const inFlightProjects = personProjects.filter(p => IN_FLIGHT_PHASES.includes(p.phase) && p.status !== "deprioritized");
-  const shippedProjects = personProjects.filter(p => SHIPPED_PHASES.includes(p.phase));
+  const inFlightProjects = personProjects.filter(p => p.status === "in_flight" || p.status === "blocked");
+  const shippedProjects = personProjects.filter(p => p.status === "shipped");
 
   // Weeks active (rough: divide total comments by some weekly average)
   const weeksActive = Math.max(1, Math.ceil(activityScore / 3));
@@ -535,10 +533,11 @@ function AddMemberForm({ squads, roles, projects, setPeople, onClose }) {
           <select
             value={squad} onChange={e => setSquad(e.target.value)}
             style={{
-              width: "100%", height: 36, padding: `0 ${space[3]}px`,
+              width: "100%", height: 36, padding: `0 ${space[3] + 20}px 0 ${space[3]}px`,
               borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-              background: c.surfaceAlt, color: c.text,
+              background: `${c.surface} ${selChevron} no-repeat right ${space[3]}px center / 12px 12px`, color: c.text,
               fontFamily: typo.bodyMd.font, fontSize: 14, outline: "none",
+              appearance: "none", WebkitAppearance: "none", cursor: "pointer",
             }}
           >
             <option value="">Select squad</option>
@@ -550,10 +549,11 @@ function AddMemberForm({ squads, roles, projects, setPeople, onClose }) {
           <select
             value={role} onChange={e => setRole(e.target.value)}
             style={{
-              width: "100%", height: 36, padding: `0 ${space[3]}px`,
+              width: "100%", height: 36, padding: `0 ${space[3] + 20}px 0 ${space[3]}px`,
               borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-              background: c.surfaceAlt, color: c.text,
+              background: `${c.surface} ${selChevron} no-repeat right ${space[3]}px center / 12px 12px`, color: c.text,
               fontFamily: typo.bodyMd.font, fontSize: 14, outline: "none",
+              appearance: "none", WebkitAppearance: "none", cursor: "pointer",
             }}
           >
             <option value="">Select role</option>

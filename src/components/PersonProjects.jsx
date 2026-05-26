@@ -7,7 +7,8 @@
 //   3. Recent Activity — comments authored by this person, newest first
 // ═══════════════════════════════════════════════════════════════════
 import React, { useMemo } from "react";
-import { c, typo, space, layout, body, mono } from "../styles/theme";
+import { c, typo, space, layout, body, mono, phaseColors as getPhaseColors } from "../styles/theme";
+import { getActiveTracks } from "../lib/tracks";
 import usePersonActivity from "../hooks/usePersonActivity";
 import { timeAgo, isStale, fmtAbsolute } from "../lib/time";
 
@@ -37,12 +38,24 @@ function ProjectRow({ proj, onNavigate, label }) {
         fontFamily: body, fontSize: 14, fontWeight: 600, color: c.text,
         flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
       }}>{proj.name}</span>
-      {proj.phase && (
-        <span style={{
-          fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
-          color: c.textMid, textTransform: "uppercase",
-        }}>{proj.phase}</span>
-      )}
+      {(() => {
+        const active = getActiveTracks(proj);
+        const pc = getPhaseColors();
+        if (proj.status === "shipped") return (
+          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: c.green, textTransform: "uppercase" }}>Shipped</span>
+        );
+        if (active.length > 0) return (
+          <span style={{ display: "flex", gap: 4 }}>
+            {active.map(t => (
+              <span key={t} style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: pc[t] || c.textMid, textTransform: "uppercase" }}>{t}</span>
+            ))}
+          </span>
+        );
+        if (proj.phase) return (
+          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: c.textMid, textTransform: "uppercase" }}>{proj.phase}</span>
+        );
+        return null;
+      })()}
       <span
         title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : "No activity yet"}
         style={{
@@ -128,8 +141,6 @@ function SectionTitle({ title, count }) {
   );
 }
 
-const IN_FLIGHT_PHASES = new Set(["PRD", "Design", "Dev", "QA"]);
-const SHIPPED_PHASES = new Set(["Alpha", "Beta", "GA"]);
 
 export default function PersonProjects({ person, projects, onProjectNavigate }) {
   const personId = person?.id;
@@ -173,8 +184,8 @@ export default function PersonProjects({ person, projects, onProjectNavigate }) 
     };
 
     return {
-      inFlight: all.filter(p => IN_FLIGHT_PHASES.has(p.phase)).sort(sortOwnerFirst),
-      shipped: all.filter(p => SHIPPED_PHASES.has(p.phase) || p.status === "complete").sort(sortOwnerFirst),
+      inFlight: all.filter(p => p.status === "in_flight" || p.status === "blocked").sort(sortOwnerFirst),
+      shipped: all.filter(p => p.status === "shipped").sort(sortOwnerFirst),
     };
   }, [projects, memberships, projectsById, personId]);
 

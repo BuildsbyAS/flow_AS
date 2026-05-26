@@ -94,25 +94,32 @@ function actionLabel(ev, peopleByLowerName) {
   const link = (name) => name ? (peopleByLowerName.get(name.toLowerCase())?.name || name) : null;
   switch (ev.action) {
     case "project_created":         return `${who} created this project`;
+    case "project_started":         return `${who} started the project in ${d.phase || "?"} phase`;
     case "project_phase_changed": {
       const to = d.to || "?";
-      if (["Alpha", "Beta", "GA"].includes(to)) return `🚀 ${who} shipped the project in ${to} phase`;
-      return `${who} moved phase ${d.from || "?"} → ${to}`;
+      if (["Alpha", "Beta", "GA"].includes(to)) return `${who} shipped the project to ${to}`;
+      return `${who} moved the project from ${d.from || "?"} to ${to}`;
     }
     case "project_status_changed": {
-      if (d.to === "deprioritized") return `${who} marked project as deprioritized`;
-      if (d.from === "deprioritized") return `${who} moved project back to active`;
-      return `${who} changed status to ${d.to || "?"}`;
+      if (d.to === "deprioritized") return `${who} deprioritized the project`;
+      if (d.from === "deprioritized") return `${who} moved the project back to active`;
+      return `${who} changed the project status to ${d.to || "?"}`;
     }
-    case "project_blocked":         return `${who} marked project as blocked${d.reason ? ` — ${d.reason}` : ""}`;
+    case "project_blocked":         return `${who} marked the project as blocked${d.reason ? ` — ${d.reason}` : ""}`;
     case "project_unblocked":       return `${who} unblocked the project`;
-    case "project_updated":         return `${who} updated the project`;
-    case "project_owner_changed":   return `${who} set owner to ${link(d.to) || "—"}`;
-    case "project_squad_changed":   return `${who} moved squad to ${d.to || "—"}`;
-    case "member_added":            return `${who} added ${link(d.person_name) || "a member"}`;
-    case "member_removed":          return `${who} removed ${link(d.person_name) || "a member"}`;
-    case "resource_added":          return `${who} added ${d.label || "a resource"}`;
-    case "resource_removed":        return `${who} removed a resource`;
+    case "project_updated":         return `${who} updated the project details`;
+    case "edit_project":            return `${who} edited the project details`;
+    case "project_owner_changed":   return `${who} changed the owner to ${link(d.to) || "—"}`;
+    case "project_squad_changed":   return `${who} moved the project to ${d.to || "—"} squad`;
+    case "project_start_date_moved": return `${who} moved the tentative start date to ${d.to || "—"}`;
+    case "member_added":            return `${who} added ${link(d.person_name) || "a member"} to the team`;
+    case "member_removed":          return `${who} removed ${link(d.person_name) || "a member"} from the team`;
+    case "resource_added":          return `${who} added a ${d.label || "resource"} link`;
+    case "resource_removed":        return `${who} removed a resource link`;
+    case "track_started":           return `${who} started the ${d.track || "?"} track`;
+    case "track_completed":         return `${who} completed the ${d.track || "?"} track`;
+    case "track_reopened":          return `${who} reopened the ${d.track || "?"} track`;
+    case "project_shipped":         return `${who} shipped the project`;
     default:                        return `${who} · ${ev.action}`;
   }
 }
@@ -507,7 +514,7 @@ function InlineEditor({ value, onSave, onCancel, busy }) {
 // ═══════════════════════════════════════════════════════════════════
 export default function ProjectActivity({
   project, people, currentPerson, isAppOwner = false,
-  onPersonNavigate, membersOnly = false, hideMembers = false,
+  onPersonNavigate, membersOnly = false, membersInline = false, hideMembers = false,
 }) {
   const projectId = project?.id;
   const { comments, members, events, loading, error } = useProjectActivity(projectId);
@@ -588,14 +595,8 @@ export default function ProjectActivity({
   const [membersModalOpen, setMembersModalOpen] = useState(false);
 
   if (membersOnly) {
-    return (
-      <div style={{
-        padding: `${space[4]}px ${space[5]}px`,
-        background: c.surface,
-        border: `1px solid ${c.border}`,
-        borderRadius: layout.radiusLg,
-        boxShadow: c.shadowCard,
-      }}>
+    const inner = (
+      <>
         <MembersRow
           ownerPerson={ownerPerson}
           memberPeople={memberPeople}
@@ -612,6 +613,18 @@ export default function ProjectActivity({
             onClose={() => setMembersModalOpen(false)}
           />
         )}
+      </>
+    );
+    if (membersInline) return inner;
+    return (
+      <div style={{
+        padding: `${space[4]}px ${space[5]}px`,
+        background: c.surface,
+        border: `1px solid ${c.border}`,
+        borderRadius: layout.radiusLg,
+        boxShadow: c.shadowCard,
+      }}>
+        {inner}
       </div>
     );
   }
@@ -710,9 +723,10 @@ export default function ProjectActivity({
               <li key={`e-${item.data.id}`} style={{ position: "relative", paddingTop: 1, paddingBottom: 1 }}>
                 {/* Opaque dot: white backing circle covers the rail, dot sits on top */}
                 {(() => {
-                  const isShipEvent = item.data.action === "project_phase_changed" && ["Alpha", "Beta", "GA"].includes(item.data.details?.to);
-                  const dotColor = isShipEvent ? c.green : c.border;
-                  const textColor = isShipEvent ? c.green : c.textDim;
+                  const isShipEvent = item.data.action === "project_shipped" || (item.data.action === "project_phase_changed" && ["Alpha", "Beta", "GA"].includes(item.data.details?.to));
+                  const isTrackEvent = ["track_started", "track_completed", "track_reopened"].includes(item.data.action);
+                  const dotColor = isShipEvent ? c.green : isTrackEvent ? c.accent : c.border;
+                  const textColor = isShipEvent ? c.green : isTrackEvent ? c.textMid : c.textDim;
                   return (
                     <>
                       <span aria-hidden="true" style={{

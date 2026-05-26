@@ -16,6 +16,7 @@ import {
   logProjectMemberRemoved,
 } from './activityLog';
 import { isDevSeedMode, devStore } from '../data/devSeed';
+import { startTrack as _startTrack, completeTrack as _completeTrack, reopenTrack as _reopenTrack, derivePrimaryPhase } from './tracks';
 
 function logError(op, err) {
   console.error(`[Flow DB] ${op} failed:`, err.message || err);
@@ -255,6 +256,92 @@ export async function deleteProjectFromDB(projectId) {
   const { error } = await supabase.from('projects').delete().eq('id', projectId);
   if (error) { logError('deleteProject', error); return false; }
   return true;
+}
+
+// ─── TRACK MUTATIONS ────────────────────────────────────────
+
+export async function startTrackInDB(projectId, trackName, projectsRef) {
+  if (isDevSeedMode()) {
+    const proj = projectsRef?.find(p => p.id === projectId);
+    if (proj) {
+      _startTrack(proj, trackName);
+      if (proj.status === "upcoming") proj.status = "in_flight";
+      devStore.persistProjects(projectsRef);
+      devStore.logEvent({ projectId, action: 'track_started', details: { track: trackName } });
+    }
+    return { ok: true };
+  }
+  const { data: cur } = await supabase.from('projects').select('tracks').eq('id', projectId).maybeSingle();
+  const proj = { tracks: cur?.tracks || {}, phase: null };
+  _startTrack(proj, trackName);
+  const { error } = await supabase.from('projects').update({ tracks: proj.tracks, phase: proj.phase }).eq('id', projectId);
+  if (error) { logError('startTrack', error); return { ok: false, error }; }
+  return { ok: true };
+}
+
+export async function completeTrackInDB(projectId, trackName, projectsRef) {
+  if (isDevSeedMode()) {
+    const proj = projectsRef?.find(p => p.id === projectId);
+    if (proj) {
+      _completeTrack(proj, trackName);
+      devStore.persistProjects(projectsRef);
+      devStore.logEvent({ projectId, action: 'track_completed', details: { track: trackName } });
+    }
+    return { ok: true };
+  }
+  const { data: cur } = await supabase.from('projects').select('tracks').eq('id', projectId).maybeSingle();
+  const proj = { tracks: cur?.tracks || {}, phase: null };
+  _completeTrack(proj, trackName);
+  const { error } = await supabase.from('projects').update({ tracks: proj.tracks, phase: proj.phase }).eq('id', projectId);
+  if (error) { logError('completeTrack', error); return { ok: false, error }; }
+  return { ok: true };
+}
+
+export async function reopenTrackInDB(projectId, trackName, projectsRef) {
+  if (isDevSeedMode()) {
+    const proj = projectsRef?.find(p => p.id === projectId);
+    if (proj) {
+      _reopenTrack(proj, trackName);
+      devStore.persistProjects(projectsRef);
+      devStore.logEvent({ projectId, action: 'track_reopened', details: { track: trackName } });
+    }
+    return { ok: true };
+  }
+  const { data: cur } = await supabase.from('projects').select('tracks').eq('id', projectId).maybeSingle();
+  const proj = { tracks: cur?.tracks || {}, phase: null };
+  _reopenTrack(proj, trackName);
+  const { error } = await supabase.from('projects').update({ tracks: proj.tracks, phase: proj.phase }).eq('id', projectId);
+  if (error) { logError('reopenTrack', error); return { ok: false, error }; }
+  return { ok: true };
+}
+
+export async function shipProjectInDB(projectId, projectsRef) {
+  if (isDevSeedMode()) {
+    const proj = projectsRef?.find(p => p.id === projectId);
+    if (proj) {
+      const now = new Date().toISOString();
+      if (proj.tracks) {
+        for (const name of Object.keys(proj.tracks)) {
+          const periods = proj.tracks[name].periods;
+          if (periods.length > 0) {
+            const last = periods[periods.length - 1];
+            if (last.completed_at === null) last.completed_at = now;
+          }
+        }
+      }
+      proj.status = "shipped";
+      proj.shippedAt = now;
+      proj.phase = derivePrimaryPhase(proj);
+      devStore.persistProjects(projectsRef);
+      devStore.logEvent({ projectId, action: 'project_shipped', details: {} });
+    }
+    return { ok: true };
+  }
+  const { error } = await supabase.from('projects').update({
+    status: 'shipped', shipped_at: new Date().toISOString(),
+  }).eq('id', projectId);
+  if (error) { logError('shipProject', error); return { ok: false, error }; }
+  return { ok: true };
 }
 
 // ─── COMMITS ─────────────────────────────────────────────────

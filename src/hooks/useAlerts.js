@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from "react";
-import { shipPhases } from "../styles/theme";
+import { trackNames } from "../styles/theme";
+import { getActiveTracks, getTrackActiveDays } from "../lib/tracks";
 
 const STALE_DAYS = 14;
 const NEW_PROJECT_HOURS = 24;
@@ -17,7 +18,7 @@ export default function useAlerts(projects, phaseDurationDefaults) {
     const result = [];
 
     projects.forEach(p => {
-      if (p.status === "deprioritized") return;
+      if (p.status === "deprioritized" || p.status === "upcoming") return;
 
       if (p.isBlocked) {
         const days = p.blockedAt ? Math.floor((now - new Date(p.blockedAt).getTime()) / 86_400_000) : 0;
@@ -30,24 +31,38 @@ export default function useAlerts(projects, phaseDurationDefaults) {
           squad: p.squad, message: "New project", severity: "info" });
       }
 
-      if (!shipPhases.includes(p.phase) && p.lastActivityAt && phaseDurationDefaults) {
-        const overrides = p.phaseDurationOverrides || {};
-        const threshold = overrides[p.phase] ?? phaseDurationDefaults[p.phase];
-        if (threshold) {
-          const daysInPhase = Math.floor((now - new Date(p.lastActivityAt).getTime()) / 86_400_000);
-          if (daysInPhase > threshold) {
-            result.push({ id: `overstay-${p.id}`, type: "phase_overstay", projectId: p.id, projectName: p.name,
-              squad: p.squad, phase: p.phase, days: daysInPhase, threshold,
-              message: `${p.phase} for ${daysInPhase}d (limit ${threshold}d)`, severity: "warning" });
+      if (p.status !== "shipped" && phaseDurationDefaults) {
+        const active = getActiveTracks(p);
+        for (const trackName of active) {
+          const overrides = p.phaseDurationOverrides || {};
+          const threshold = overrides[trackName] ?? phaseDurationDefaults[trackName];
+          if (threshold) {
+            const daysInTrack = getTrackActiveDays(p, trackName);
+            if (daysInTrack > threshold) {
+              result.push({ id: `overstay-${p.id}-${trackName}`, type: "phase_overstay", projectId: p.id, projectName: p.name,
+                squad: p.squad, phase: trackName, days: daysInTrack, threshold,
+                message: `${trackName} for ${daysInTrack}d (limit ${threshold}d)`, severity: "warning" });
+            }
           }
         }
       }
 
       const staleCheck = p.lastActivityAt ? (now - new Date(p.lastActivityAt).getTime()) / 86_400_000 : Infinity;
-      if (!shipPhases.includes(p.phase) && staleCheck > STALE_DAYS) {
+      if (p.status !== "shipped" && staleCheck > STALE_DAYS) {
         result.push({ id: `stale-${p.id}`, type: "stale", projectId: p.id, projectName: p.name,
           squad: p.squad, days: Math.floor(staleCheck),
           message: `No activity for ${Math.floor(staleCheck)}d`, severity: "warning" });
+      }
+    });
+
+    projects.forEach(p => {
+      if (p.status !== "upcoming" || !p.tentativeStartDate) return;
+      const tentMs = new Date(p.tentativeStartDate + "T00:00:00").getTime();
+      if (tentMs < now) {
+        const days = Math.floor((now - tentMs) / 86_400_000);
+        result.push({ id: `start-overdue-${p.id}`, type: "start_overdue",
+          projectId: p.id, projectName: p.name, squad: p.squad, days,
+          message: `Tentative start date passed by ${days}d`, severity: "warning" });
       }
     });
 

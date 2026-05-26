@@ -98,7 +98,7 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
   // ── Sort flat by start date (skip projects missing dates) ──
   const sortedProjects = useMemo(() =>
     [...filteredProjects]
-      .filter(p => p.startDate && p.endDate)
+      .filter(p => p.startDate && p.endDate && p.status !== "upcoming")
       .sort((a, b) => parseDate(a.startDate) - parseDate(b.startDate)),
   [filteredProjects]);
 
@@ -429,9 +429,6 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
         const elapsed = Math.max(0, Math.min(diffDays(start, today), duration));
         const pct = duration > 0 ? Math.round((elapsed / duration) * 100) : 0;
 
-        const healthScore = pct >= 100 ? (p.status === "deprioritized" ? 0 : 40) : pct > 85 ? 60 : 90;
-        const healthColor = healthScore >= 80 ? c.green : healthScore >= 50 ? c.orange : c.red;
-        const healthLabel = healthScore >= 80 ? "On Track" : healthScore >= 50 ? "At Risk" : "Critical";
 
         return (
           <div ref={tooltipRef} style={{
@@ -458,11 +455,10 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
               ["Priority", p.priority || "P2"],
               ["Owner", p.owner || "—"],
               ["Squad", p.squad || "—"],
-              ["Health", healthLabel],
             ].map(([label, val]) => (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "3px 0" }}>
                 <span style={{ color: c.textDim }}>{label}</span>
-                <span style={{ color: label === "Health" ? healthColor : c.text, fontWeight: 500 }}>{val}</span>
+                <span style={{ color: c.text, fontWeight: 500 }}>{val}</span>
               </div>
             ))}
             <div style={{

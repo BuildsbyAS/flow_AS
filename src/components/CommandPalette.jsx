@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { c, typo, layout, space, motion } from "../styles/theme";
+import { getActiveTracks } from "../lib/tracks";
 import { NAV } from "./AppShell";
 import useDevLabel from "../hooks/useDevLabel";
 import { initialsOf } from "../lib/names";
@@ -84,7 +85,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
         cmds.push({
           id: `proj-${p.id}`,
           label: `${p.id} — ${p.name}`,
-          hint: `${p.squad || "No squad"} · ${p.owner || "No owner"} · ${p.phase || ""}`,
+          hint: `${p.squad || "No squad"} · ${p.owner || "No owner"} · ${p.status === "shipped" ? "Shipped" : p.status === "upcoming" ? "Upcoming" : getActiveTracks(p).join(", ") || p.phase || ""}`,
           section: "Projects",
           cat: "projects",
           icon: p.id.slice(0, 3),

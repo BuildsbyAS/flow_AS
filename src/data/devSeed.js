@@ -54,6 +54,7 @@ const SQUAD_FINSERV    = "00000000-0000-0000-0000-00000000000c";
 const ROLE_ENG         = "00000000-0000-0000-0000-000000000101";
 const ROLE_PM          = "00000000-0000-0000-0000-000000000102";
 const ROLE_DESIGN      = "00000000-0000-0000-0000-000000000103";
+const ROLE_ANALYST     = "00000000-0000-0000-0000-000000000104";
 
 const PERSON_AJ        = "00000000-0000-0000-0000-000000000201";
 const PERSON_MARIAM    = "00000000-0000-0000-0000-000000000202";
@@ -67,6 +68,21 @@ const PERSON_SARA      = "00000000-0000-0000-0000-000000000209";
 const PERSON_TARIQ     = "00000000-0000-0000-0000-000000000210";
 const PERSON_LINA      = "00000000-0000-0000-0000-000000000211";
 const PERSON_HASSAN    = "00000000-0000-0000-0000-000000000212";
+
+// ── New people: Customer squad ──
+const PERSON_HESHAM      = "00000000-0000-0000-0000-000000000213";
+const PERSON_MSAFFIDIENE = "00000000-0000-0000-0000-000000000214";
+const PERSON_YSAEED      = "00000000-0000-0000-0000-000000000215";
+// ── New people: Gaming squad ──
+const PERSON_PAVNEET     = "00000000-0000-0000-0000-000000000216";
+const PERSON_ARCHIN      = "00000000-0000-0000-0000-000000000217";
+const PERSON_SHUBHAM     = "00000000-0000-0000-0000-000000000218";
+const PERSON_YNAGY       = "00000000-0000-0000-0000-000000000219";
+// ── New people: Storefront squad ──
+const PERSON_VAIBHAV     = "00000000-0000-0000-0000-000000000220";
+const PERSON_ZEYAD       = "00000000-0000-0000-0000-000000000221";
+const PERSON_MELBANNA    = "00000000-0000-0000-0000-000000000222";
+const PERSON_SARAELKADY  = "00000000-0000-0000-0000-000000000223";
 
 export const seedSquads = [
   { id: SQUAD_UGC,        name: "UGC" },
@@ -84,16 +100,17 @@ export const seedSquads = [
 ];
 
 export const seedRoles = [
-  { id: ROLE_ENG,    name: "Engineer"      },
-  { id: ROLE_PM,     name: "Product Manager" },
-  { id: ROLE_DESIGN, name: "Designer"      },
+  { id: ROLE_ENG,     name: "Engineer"         },
+  { id: ROLE_PM,      name: "Product Manager"  },
+  { id: ROLE_DESIGN,  name: "Designer"         },
+  { id: ROLE_ANALYST, name: "Product Analyst"  },
 ];
 
 export const seedPeople = [
   { id: PERSON_AJ,      name: "AJ",      squad: "Storefront", role: "Product Manager", squad_id: SQUAD_STOREFRONT, role_id: ROLE_PM },
   { id: PERSON_MARIAM,  name: "Mariam",  squad: "Platform",   role: "Engineer",        squad_id: SQUAD_PLATFORM,   role_id: ROLE_ENG },
   { id: PERSON_RANIA,   name: "Rania",   squad: "UGC",        role: "Engineer",        squad_id: SQUAD_UGC,        role_id: ROLE_ENG },
-  { id: PERSON_KHALID,  name: "Khalid",  squad: "Customer",   role: "Designer",        squad_id: SQUAD_CUSTOMER,   role_id: ROLE_DESIGN },
+  { id: PERSON_KHALID,  name: "Khalid Anwer",  squad: "Customer",   role: "Product Manager",  squad_id: SQUAD_CUSTOMER,   role_id: ROLE_PM },
   { id: PERSON_AYUSH,   name: "Ayush",   squad: "Platform",   role: "Engineer",        squad_id: SQUAD_PLATFORM,   role_id: ROLE_ENG },
   { id: PERSON_IBRAHIM, name: "Ibrahim", squad: "O2D",        role: "Product Manager", squad_id: SQUAD_O2D,        role_id: ROLE_PM },
   { id: PERSON_FATIMA,  name: "Fatima",  squad: "Financial Service", role: "Product Manager", squad_id: SQUAD_FINSERV, role_id: ROLE_PM },
@@ -102,6 +119,20 @@ export const seedPeople = [
   { id: PERSON_TARIQ,   name: "Tariq",   squad: "Gaming",     role: "Engineer",        squad_id: SQUAD_GAMING,     role_id: ROLE_ENG },
   { id: PERSON_LINA,    name: "Lina",    squad: "AFS",        role: "Engineer",        squad_id: SQUAD_AFS,        role_id: ROLE_ENG },
   { id: PERSON_HASSAN,  name: "Hassan",  squad: "Sales",      role: "Product Manager", squad_id: SQUAD_SALES,      role_id: ROLE_PM },
+  // ── Customer squad ──
+  { id: PERSON_HESHAM,      name: "Hesham Elalamy",      squad: "Customer",   role: "Product Manager", squad_id: SQUAD_CUSTOMER,   role_id: ROLE_PM },
+  { id: PERSON_MSAFFIDIENE, name: "Mohammad Saffidiene", squad: "Customer",   role: "Engineer",        squad_id: SQUAD_CUSTOMER,   role_id: ROLE_ENG },
+  { id: PERSON_YSAEED,      name: "Youssef Saeed",       squad: "Customer",   role: "Engineer",        squad_id: SQUAD_CUSTOMER,   role_id: ROLE_ENG },
+  // ── Gaming squad ──
+  { id: PERSON_PAVNEET,     name: "Pavneet Kaur",        squad: "Gaming",     role: "Product Manager", squad_id: SQUAD_GAMING,     role_id: ROLE_PM },
+  { id: PERSON_ARCHIN,      name: "Archin Jain",         squad: "Gaming",     role: "Product Analyst", squad_id: SQUAD_GAMING,     role_id: ROLE_ANALYST },
+  { id: PERSON_SHUBHAM,     name: "Shubham Bansal",      squad: "Gaming",     role: "Engineer",        squad_id: SQUAD_GAMING,     role_id: ROLE_ENG },
+  { id: PERSON_YNAGY,       name: "Youssef Nagy",        squad: "Gaming",     role: "Engineer",        squad_id: SQUAD_GAMING,     role_id: ROLE_ENG },
+  // ── Storefront squad ──
+  { id: PERSON_VAIBHAV,     name: "Vaibhav Singh",       squad: "Storefront", role: "Product Manager", squad_id: SQUAD_STOREFRONT, role_id: ROLE_PM },
+  { id: PERSON_ZEYAD,       name: "Zeyad Tolba",         squad: "Storefront", role: "Product Manager", squad_id: SQUAD_STOREFRONT, role_id: ROLE_PM },
+  { id: PERSON_MELBANNA,    name: "Mohammad Elbanna",    squad: "Storefront", role: "Engineer",        squad_id: SQUAD_STOREFRONT, role_id: ROLE_ENG },
+  { id: PERSON_SARAELKADY,  name: "Sara Elkady",         squad: "Storefront", role: "Engineer",        squad_id: SQUAD_STOREFRONT, role_id: ROLE_ENG },
 ];
 
 // Project shape mirrors what toSeedProjects() in useSupabaseData returns.
@@ -118,11 +149,12 @@ export const seedProjects = [
     startDate: "2026-03-01", endDate: "2026-06-15",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(80 * DAY),
     lastActivityAt: isoAgo(3 * HOUR),
   },
   {
     id: "X02", name: "Onboarding redesign",
-    owner: "Khalid", owner_id: PERSON_KHALID, squad: "Customer",
+    owner: "Khalid Anwer", owner_id: PERSON_KHALID, squad: "Customer",
     phase: "Design", status: "active",
     priority: "P1", complexity: "M",
     isBlocked: false, blockedReason: null, blockedAt: null,
@@ -130,7 +162,8 @@ export const seedProjects = [
     startDate: "2026-04-12", endDate: "2026-07-30",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
-    lastActivityAt: isoAgo(10 * DAY), // frozen — no update in 10d
+    createdAt: isoAgo(38 * DAY),
+    lastActivityAt: isoAgo(10 * DAY),
   },
   {
     id: "X03", name: "Notifications platform",
@@ -142,6 +175,7 @@ export const seedProjects = [
     startDate: "2026-02-02", endDate: "2026-05-10",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(107 * DAY),
     lastActivityAt: isoAgo(20 * DAY),
   },
   {
@@ -154,7 +188,8 @@ export const seedProjects = [
     startDate: "2026-05-01", endDate: "2026-08-10",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
-    lastActivityAt: isoAgo(18 * DAY), // sloth — PRD threshold is 14d
+    createdAt: isoAgo(19 * DAY),
+    lastActivityAt: isoAgo(18 * DAY),
   },
   {
     id: "X05", name: "Returns flow",
@@ -168,6 +203,7 @@ export const seedProjects = [
     gaEnteredAt: "2026-04-02", depriReason: null,
     gaReleaseNote: "Full self-service returns with auto-refund for eligible items. Supports 12 return reasons with photo upload.",
     gaFeatureType: "New",
+    createdAt: isoAgo(186 * DAY),
     lastActivityAt: isoAgo(11 * DAY),
   },
   {
@@ -180,6 +216,7 @@ export const seedProjects = [
     startDate: "2026-02-20", endDate: "2026-06-30",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: "Pushed to Q3 — focus shifted to checkout speed.",
+    createdAt: isoAgo(89 * DAY),
     lastActivityAt: isoAgo(33 * DAY),
   },
   {
@@ -192,6 +229,7 @@ export const seedProjects = [
     startDate: "2026-02-01", endDate: "2026-05-15",
     actualStartDate: "2026-02-05", actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(108 * DAY),
     lastActivityAt: isoAgo(1 * HOUR),
   },
   {
@@ -204,6 +242,7 @@ export const seedProjects = [
     startDate: "2026-03-10", endDate: "2026-06-20",
     actualStartDate: "2026-03-12", actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(71 * DAY),
     lastActivityAt: isoAgo(4 * HOUR),
   },
   {
@@ -218,7 +257,8 @@ export const seedProjects = [
     gaEnteredAt: null, depriReason: null,
     shipNote: "Testing new ML scoring model with 10% of payment transactions.",
     shipPct: 10,
-    lastActivityAt: isoAgo(9 * DAY), // frozen — 9d no update
+    createdAt: isoAgo(125 * DAY),
+    lastActivityAt: isoAgo(9 * DAY),
   },
   {
     id: "X10", name: "Last-mile tracking dashboard",
@@ -230,7 +270,8 @@ export const seedProjects = [
     startDate: "2026-04-20", endDate: "2026-08-15",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
-    lastActivityAt: isoAgo(25 * DAY), // sloth — Design threshold is 21d
+    createdAt: isoAgo(30 * DAY),
+    lastActivityAt: isoAgo(25 * DAY),
   },
   {
     id: "X11", name: "Subscription billing engine",
@@ -242,6 +283,7 @@ export const seedProjects = [
     startDate: "2026-05-10", endDate: "2026-09-30",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(10 * DAY),
     lastActivityAt: isoAgo(12 * HOUR),
   },
   {
@@ -254,6 +296,7 @@ export const seedProjects = [
     startDate: "2026-03-01", endDate: "2026-05-01",
     actualStartDate: "2026-03-05", actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(80 * DAY),
     lastActivityAt: isoAgo(3 * DAY),
   },
   {
@@ -266,6 +309,7 @@ export const seedProjects = [
     startDate: "2025-12-01", endDate: "2026-05-30",
     actualStartDate: "2025-12-10", actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(170 * DAY),
     lastActivityAt: isoAgo(5 * HOUR),
   },
   {
@@ -280,6 +324,7 @@ export const seedProjects = [
     gaEnteredAt: "2026-03-10", depriReason: null,
     gaReleaseNote: "Google Maps autocomplete + UAE-specific address formatting. Reduced delivery failures by 23%.",
     gaFeatureType: "Enhancement",
+    createdAt: isoAgo(231 * DAY),
     lastActivityAt: isoAgo(7 * DAY),
   },
   {
@@ -292,6 +337,7 @@ export const seedProjects = [
     startDate: "2026-04-01", endDate: "2026-08-30",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: "Waiting on vendor API contract finalization.",
+    createdAt: isoAgo(49 * DAY),
     lastActivityAt: isoAgo(15 * DAY),
   },
   {
@@ -304,7 +350,422 @@ export const seedProjects = [
     startDate: "2026-05-15", endDate: "2026-10-31",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(5 * DAY),
     lastActivityAt: isoAgo(2 * HOUR),
+  },
+  {
+    id: "X17", name: "Loyalty program v2",
+    owner: "Khalid Anwer", owner_id: PERSON_KHALID, squad: "Customer",
+    phase: null, status: "upcoming",
+    priority: "P1", complexity: "L",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: null, endDate: null,
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    tentativeStartDate: "2026-05-10",
+    createdAt: isoAgo(14 * DAY),
+    lastActivityAt: isoAgo(1 * DAY),
+    dependencies: ["X02"],
+  },
+  {
+    id: "X18", name: "Voice search integration",
+    owner: "Fatima", owner_id: PERSON_FATIMA, squad: "Platform",
+    phase: null, status: "upcoming",
+    priority: "P2", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: null, endDate: null,
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    tentativeStartDate: "2026-06-15",
+    createdAt: isoAgo(10 * DAY),
+    lastActivityAt: isoAgo(2 * DAY),
+  },
+  {
+    id: "X19", name: "Seller analytics dashboard",
+    owner: "Hassan", owner_id: PERSON_HASSAN, squad: "Sales",
+    phase: null, status: "upcoming",
+    priority: "P2", complexity: null,
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: null, endDate: null,
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    tentativeStartDate: null,
+    createdAt: isoAgo(7 * DAY),
+    lastActivityAt: isoAgo(3 * DAY),
+  },
+  {
+    id: "X20", name: "Live chat support widget",
+    owner: "Mariam", owner_id: PERSON_MARIAM, squad: "Customer",
+    phase: null, status: "upcoming",
+    priority: "P1", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: null, endDate: null,
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    tentativeStartDate: "2026-05-01",
+    createdAt: isoAgo(21 * DAY),
+    lastActivityAt: isoAgo(5 * DAY),
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // CUSTOMER SQUAD PROJECTS
+  // ═══════════════════════════════════════════════════════════
+  {
+    id: "X21", name: "Onboarding Flow Revamp",
+    owner: "Khalid Anwer", owner_id: PERSON_KHALID, squad: "Customer",
+    phase: "Dev", status: "active",
+    priority: "P0", complexity: "L",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-03-10", endDate: "2026-06-20",
+    actualStartDate: "2026-03-12", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(71 * DAY),
+    lastActivityAt: isoAgo(2 * HOUR),
+  },
+  {
+    id: "X22", name: "Address Caching | Building & Polygons",
+    owner: "Hesham Elalamy", owner_id: PERSON_HESHAM, squad: "Customer",
+    phase: "Design", status: "active",
+    priority: "P1", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-04-01", endDate: "2026-07-15",
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(49 * DAY),
+    lastActivityAt: isoAgo(1 * DAY),
+  },
+  {
+    id: "X23", name: "Current Location based browsing",
+    owner: "Khalid Anwer", owner_id: PERSON_KHALID, squad: "Customer",
+    phase: "PRD", status: "active",
+    priority: "P1", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-05-05", endDate: "2026-08-30",
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(15 * DAY),
+    lastActivityAt: isoAgo(3 * DAY),
+  },
+  {
+    id: "X24", name: "Handling Primary Phone (Linking/Delinking)",
+    owner: "Mohammad Saffidiene", owner_id: PERSON_MSAFFIDIENE, squad: "Customer",
+    phase: "QA", status: "active",
+    priority: "P2", complexity: "S",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-02-15", endDate: "2026-05-30",
+    actualStartDate: "2026-02-18", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(94 * DAY),
+    lastActivityAt: isoAgo(6 * HOUR),
+  },
+  {
+    id: "X25", name: "Account Page Revamp",
+    owner: "Hesham Elalamy", owner_id: PERSON_HESHAM, squad: "Customer",
+    phase: null, status: "upcoming",
+    priority: "P1", complexity: "L",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: null, endDate: null,
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    tentativeStartDate: "2026-06-01",
+    createdAt: isoAgo(5 * DAY),
+    lastActivityAt: isoAgo(5 * DAY),
+  },
+  {
+    id: "X26", name: "Passkeys",
+    owner: "Youssef Saeed", owner_id: PERSON_YSAEED, squad: "Customer",
+    phase: "Dev", status: "active",
+    priority: "P0", complexity: "XL",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: { Dev: 42 },
+    startDate: "2026-02-01", endDate: "2026-06-30",
+    actualStartDate: "2026-02-05", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(108 * DAY),
+    lastActivityAt: isoAgo(5 * HOUR),
+  },
+  {
+    id: "X27", name: "Address Nickname Suggestion",
+    owner: "Mohammad Saffidiene", owner_id: PERSON_MSAFFIDIENE, squad: "Customer",
+    phase: null, status: "upcoming",
+    priority: "P2", complexity: "S",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: null, endDate: null,
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    tentativeStartDate: "2026-07-01",
+    createdAt: isoAgo(3 * DAY),
+    lastActivityAt: isoAgo(3 * DAY),
+  },
+  {
+    id: "X28", name: "Address Migration",
+    owner: "Youssef Saeed", owner_id: PERSON_YSAEED, squad: "Customer",
+    phase: "Alpha", status: "active",
+    priority: "P1", complexity: "L",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2025-12-01", endDate: "2026-05-20",
+    actualStartDate: "2025-12-08", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(170 * DAY),
+    lastActivityAt: isoAgo(2 * DAY),
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // GAMING SQUAD PROJECTS
+  // ═══════════════════════════════════════════════════════════
+  {
+    id: "X29", name: "Yalla Goal - Football Game",
+    owner: "Pavneet Kaur", owner_id: PERSON_PAVNEET, squad: "Gaming",
+    phase: "Dev", status: "active",
+    priority: "P1", complexity: "L",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-03-15", endDate: "2026-06-30",
+    actualStartDate: "2026-03-18", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(66 * DAY),
+    lastActivityAt: isoAgo(8 * HOUR),
+  },
+  {
+    id: "X30", name: "Golazo 2026 FIFA",
+    owner: "Pavneet Kaur", owner_id: PERSON_PAVNEET, squad: "Gaming",
+    phase: null, status: "upcoming",
+    priority: "P0", complexity: "XL",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: null, endDate: null,
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    tentativeStartDate: "2026-06-15",
+    createdAt: isoAgo(8 * DAY),
+    lastActivityAt: isoAgo(2 * DAY),
+  },
+  {
+    id: "X31", name: "Hisense Quiz Sponsored",
+    owner: "Archin Jain", owner_id: PERSON_ARCHIN, squad: "Gaming",
+    phase: "QA", status: "active",
+    priority: "P2", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-04-01", endDate: "2026-06-15",
+    actualStartDate: "2026-04-03", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(49 * DAY),
+    lastActivityAt: isoAgo(1 * DAY),
+  },
+
+  // ═══════════════════════════════════════════════════════════
+  // STOREFRONT SQUAD PROJECTS
+  // ═══════════════════════════════════════════════════════════
+  {
+    id: "X32", name: "Limited time deals (Improved Logic and UI revamp)",
+    owner: "Vaibhav Singh", owner_id: PERSON_VAIBHAV, squad: "Storefront",
+    phase: "Dev", status: "active",
+    priority: "P0", complexity: "L",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-03-01", endDate: "2026-06-15",
+    actualStartDate: "2026-03-05", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(80 * DAY),
+    lastActivityAt: isoAgo(4 * HOUR),
+  },
+  {
+    id: "X33", name: "Cross pollination logic improvements",
+    owner: "Zeyad Tolba", owner_id: PERSON_ZEYAD, squad: "Storefront",
+    phase: "Design", status: "active",
+    priority: "P1", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-04-10", endDate: "2026-07-20",
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(40 * DAY),
+    lastActivityAt: isoAgo(2 * DAY),
+  },
+  {
+    id: "X34", name: "Webp images support for chinese sellers",
+    owner: "Mohammad Elbanna", owner_id: PERSON_MELBANNA, squad: "Storefront",
+    phase: "QA", status: "active",
+    priority: "P2", complexity: "S",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-03-20", endDate: "2026-05-25",
+    actualStartDate: "2026-03-22", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(60 * DAY),
+    lastActivityAt: isoAgo(12 * HOUR),
+  },
+  {
+    id: "X35", name: "Quara Monet Campaign PDP",
+    owner: "Vaibhav Singh", owner_id: PERSON_VAIBHAV, squad: "Storefront",
+    phase: "Beta", status: "active",
+    priority: "P1", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2025-11-01", endDate: "2026-05-30",
+    actualStartDate: "2025-11-05", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(200 * DAY),
+    lastActivityAt: isoAgo(1 * DAY),
+  },
+  {
+    id: "X36", name: "App optimization",
+    owner: "Sara Elkady", owner_id: PERSON_SARAELKADY, squad: "Storefront",
+    phase: "Dev", status: "active",
+    priority: "P0", complexity: "XL",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: { Dev: 56 },
+    startDate: "2026-02-10", endDate: "2026-07-15",
+    actualStartDate: "2026-02-12", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(99 * DAY),
+    lastActivityAt: isoAgo(3 * HOUR),
+  },
+  {
+    id: "X37", name: "Previously Bought tag on PLP - Consumables category",
+    owner: "Zeyad Tolba", owner_id: PERSON_ZEYAD, squad: "Storefront",
+    phase: "PRD", status: "active",
+    priority: "P2", complexity: "S",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-05-10", endDate: "2026-07-30",
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(10 * DAY),
+    lastActivityAt: isoAgo(4 * DAY),
+  },
+  {
+    id: "X38", name: "Discount tag personalization basis coupon targetting",
+    owner: "Vaibhav Singh", owner_id: PERSON_VAIBHAV, squad: "Storefront",
+    phase: "Design", status: "active",
+    priority: "P1", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-04-15", endDate: "2026-08-10",
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(35 * DAY),
+    lastActivityAt: isoAgo(1 * DAY),
+  },
+  {
+    id: "X39", name: "Gifting Registry for category",
+    owner: "Zeyad Tolba", owner_id: PERSON_ZEYAD, squad: "Storefront",
+    phase: null, status: "upcoming",
+    priority: "P1", complexity: "L",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: null, endDate: null,
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    tentativeStartDate: "2026-07-01",
+    createdAt: isoAgo(6 * DAY),
+    lastActivityAt: isoAgo(6 * DAY),
+  },
+  {
+    id: "X40", name: "Legacy to New models Callout - PDP",
+    owner: "Mohammad Elbanna", owner_id: PERSON_MELBANNA, squad: "Storefront",
+    phase: "Alpha", status: "active",
+    priority: "P2", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2025-12-15", endDate: "2026-05-31",
+    actualStartDate: "2025-12-18", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(156 * DAY),
+    lastActivityAt: isoAgo(3 * DAY),
+  },
+  {
+    id: "X41", name: "Virtual bundle optimization",
+    owner: "Sara Elkady", owner_id: PERSON_SARAELKADY, squad: "Storefront",
+    phase: "Dev", status: "active",
+    priority: "P1", complexity: "L",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-03-15", endDate: "2026-06-30",
+    actualStartDate: "2026-03-18", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(66 * DAY),
+    lastActivityAt: isoAgo(6 * HOUR),
+  },
+  {
+    id: "X42", name: "Variants on PDP",
+    owner: "Vaibhav Singh", owner_id: PERSON_VAIBHAV, squad: "Storefront",
+    phase: "GA", status: "active",
+    priority: "P0", complexity: "L",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2025-09-01", endDate: "2026-03-15",
+    actualStartDate: "2025-09-05", actualEndDate: "2026-03-20",
+    gaEnteredAt: "2026-03-20", depriReason: null,
+    gaReleaseNote: "Full variant selection on PDP with color/size swatches, image switching, and stock-per-variant display.",
+    gaFeatureType: "Enhancement",
+    createdAt: isoAgo(260 * DAY),
+    lastActivityAt: isoAgo(10 * DAY),
+  },
+  {
+    id: "X43", name: "Hiding Carousels with less than X (4) products",
+    owner: "Mohammad Elbanna", owner_id: PERSON_MELBANNA, squad: "Storefront",
+    phase: "QA", status: "active",
+    priority: "P2", complexity: "S",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-04-05", endDate: "2026-06-10",
+    actualStartDate: "2026-04-07", actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(45 * DAY),
+    lastActivityAt: isoAgo(2 * DAY),
+  },
+  {
+    id: "X44", name: "Video Reel Carousel widget (Noon finds)",
+    owner: "Zeyad Tolba", owner_id: PERSON_ZEYAD, squad: "Storefront",
+    phase: "PRD", status: "active",
+    priority: "P1", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-05-15", endDate: "2026-09-30",
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(5 * DAY),
+    lastActivityAt: isoAgo(1 * DAY),
+  },
+  {
+    id: "X45", name: "Enabling Frenzy deals widget on SM",
+    owner: "Sara Elkady", owner_id: PERSON_SARAELKADY, squad: "Storefront",
+    phase: null, status: "upcoming",
+    priority: "P2", complexity: "S",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: null, endDate: null,
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    tentativeStartDate: "2026-06-15",
+    createdAt: isoAgo(4 * DAY),
+    lastActivityAt: isoAgo(4 * DAY),
+  },
+  {
+    id: "X46", name: "2X2 Grid personalized widget",
+    owner: "Vaibhav Singh", owner_id: PERSON_VAIBHAV, squad: "Storefront",
+    phase: "Design", status: "active",
+    priority: "P2", complexity: "M",
+    isBlocked: false, blockedReason: null, blockedAt: null,
+    phaseDurationOverrides: null,
+    startDate: "2026-04-20", endDate: "2026-08-01",
+    actualStartDate: null, actualEndDate: null,
+    gaEnteredAt: null, depriReason: null,
+    createdAt: isoAgo(30 * DAY),
+    lastActivityAt: isoAgo(3 * DAY),
   },
 ];
 
@@ -479,6 +940,70 @@ const _state = {
     // X16: owner is Omar; members are Fatima, Lina
     { id: "mem-41", project_id: "X16", person_id: PERSON_FATIMA,  added_by: PERSON_OMAR,    added_at: isoAgo(4 * DAY) },
     { id: "mem-42", project_id: "X16", person_id: PERSON_LINA,    added_by: PERSON_OMAR,    added_at: isoAgo(2 * DAY) },
+    // ── Customer squad projects ──
+    // X21: owner Khalid; members Hesham, Mohammad S, Youssef S
+    { id: "mem-50", project_id: "X21", person_id: PERSON_HESHAM,      added_by: PERSON_KHALID,    added_at: isoAgo(60 * DAY) },
+    { id: "mem-51", project_id: "X21", person_id: PERSON_MSAFFIDIENE, added_by: PERSON_KHALID,    added_at: isoAgo(50 * DAY) },
+    { id: "mem-52", project_id: "X21", person_id: PERSON_YSAEED,      added_by: PERSON_KHALID,    added_at: isoAgo(40 * DAY) },
+    // X22: owner Hesham; members Khalid, Mohammad S
+    { id: "mem-53", project_id: "X22", person_id: PERSON_KHALID,      added_by: PERSON_HESHAM,    added_at: isoAgo(40 * DAY) },
+    { id: "mem-54", project_id: "X22", person_id: PERSON_MSAFFIDIENE, added_by: PERSON_HESHAM,    added_at: isoAgo(30 * DAY) },
+    // X23: owner Khalid; members Hesham
+    { id: "mem-55", project_id: "X23", person_id: PERSON_HESHAM,      added_by: PERSON_KHALID,    added_at: isoAgo(10 * DAY) },
+    // X24: owner Mohammad S; members Youssef S, Khalid
+    { id: "mem-56", project_id: "X24", person_id: PERSON_YSAEED,      added_by: PERSON_MSAFFIDIENE, added_at: isoAgo(80 * DAY) },
+    { id: "mem-57", project_id: "X24", person_id: PERSON_KHALID,      added_by: PERSON_MSAFFIDIENE, added_at: isoAgo(70 * DAY) },
+    // X26: owner Youssef S; members Khalid, Mohammad S, Hesham
+    { id: "mem-58", project_id: "X26", person_id: PERSON_KHALID,      added_by: PERSON_YSAEED,    added_at: isoAgo(90 * DAY) },
+    { id: "mem-59", project_id: "X26", person_id: PERSON_MSAFFIDIENE, added_by: PERSON_YSAEED,    added_at: isoAgo(70 * DAY) },
+    { id: "mem-60", project_id: "X26", person_id: PERSON_HESHAM,      added_by: PERSON_YSAEED,    added_at: isoAgo(50 * DAY) },
+    // X28: owner Youssef S; members Mohammad S, Hesham
+    { id: "mem-61", project_id: "X28", person_id: PERSON_MSAFFIDIENE, added_by: PERSON_YSAEED,    added_at: isoAgo(140 * DAY) },
+    { id: "mem-62", project_id: "X28", person_id: PERSON_HESHAM,      added_by: PERSON_YSAEED,    added_at: isoAgo(100 * DAY) },
+    // ── Gaming squad projects ──
+    // X29: owner Pavneet; members Shubham, Youssef N, Archin
+    { id: "mem-63", project_id: "X29", person_id: PERSON_SHUBHAM,     added_by: PERSON_PAVNEET,   added_at: isoAgo(55 * DAY) },
+    { id: "mem-64", project_id: "X29", person_id: PERSON_YNAGY,       added_by: PERSON_PAVNEET,   added_at: isoAgo(45 * DAY) },
+    { id: "mem-65", project_id: "X29", person_id: PERSON_ARCHIN,      added_by: PERSON_PAVNEET,   added_at: isoAgo(35 * DAY) },
+    // X31: owner Archin; members Shubham, Youssef N
+    { id: "mem-66", project_id: "X31", person_id: PERSON_SHUBHAM,     added_by: PERSON_ARCHIN,    added_at: isoAgo(40 * DAY) },
+    { id: "mem-67", project_id: "X31", person_id: PERSON_YNAGY,       added_by: PERSON_ARCHIN,    added_at: isoAgo(30 * DAY) },
+    // ── Storefront squad projects ──
+    // X32: owner Vaibhav; members Zeyad, Elbanna, Sara E
+    { id: "mem-70", project_id: "X32", person_id: PERSON_ZEYAD,       added_by: PERSON_VAIBHAV,   added_at: isoAgo(70 * DAY) },
+    { id: "mem-71", project_id: "X32", person_id: PERSON_MELBANNA,    added_by: PERSON_VAIBHAV,   added_at: isoAgo(50 * DAY) },
+    { id: "mem-72", project_id: "X32", person_id: PERSON_SARAELKADY,  added_by: PERSON_VAIBHAV,   added_at: isoAgo(30 * DAY) },
+    // X33: owner Zeyad; members Vaibhav, Elbanna
+    { id: "mem-73", project_id: "X33", person_id: PERSON_VAIBHAV,     added_by: PERSON_ZEYAD,     added_at: isoAgo(30 * DAY) },
+    { id: "mem-74", project_id: "X33", person_id: PERSON_MELBANNA,    added_by: PERSON_ZEYAD,     added_at: isoAgo(20 * DAY) },
+    // X34: owner Elbanna; members Sara E
+    { id: "mem-75", project_id: "X34", person_id: PERSON_SARAELKADY,  added_by: PERSON_MELBANNA,  added_at: isoAgo(40 * DAY) },
+    // X35: owner Vaibhav; members Zeyad, Sara E, Elbanna
+    { id: "mem-76", project_id: "X35", person_id: PERSON_ZEYAD,       added_by: PERSON_VAIBHAV,   added_at: isoAgo(180 * DAY) },
+    { id: "mem-77", project_id: "X35", person_id: PERSON_SARAELKADY,  added_by: PERSON_VAIBHAV,   added_at: isoAgo(130 * DAY) },
+    { id: "mem-78", project_id: "X35", person_id: PERSON_MELBANNA,    added_by: PERSON_VAIBHAV,   added_at: isoAgo(90 * DAY) },
+    // X36: owner Sara E; members Vaibhav, Elbanna
+    { id: "mem-79", project_id: "X36", person_id: PERSON_VAIBHAV,     added_by: PERSON_SARAELKADY, added_at: isoAgo(80 * DAY) },
+    { id: "mem-80", project_id: "X36", person_id: PERSON_MELBANNA,    added_by: PERSON_SARAELKADY, added_at: isoAgo(60 * DAY) },
+    // X38: owner Vaibhav; members Zeyad
+    { id: "mem-81", project_id: "X38", person_id: PERSON_ZEYAD,       added_by: PERSON_VAIBHAV,   added_at: isoAgo(25 * DAY) },
+    // X40: owner Elbanna; members Sara E, Vaibhav
+    { id: "mem-82", project_id: "X40", person_id: PERSON_SARAELKADY,  added_by: PERSON_MELBANNA,  added_at: isoAgo(120 * DAY) },
+    { id: "mem-83", project_id: "X40", person_id: PERSON_VAIBHAV,     added_by: PERSON_MELBANNA,  added_at: isoAgo(100 * DAY) },
+    // X41: owner Sara E; members Elbanna, Zeyad
+    { id: "mem-84", project_id: "X41", person_id: PERSON_MELBANNA,    added_by: PERSON_SARAELKADY, added_at: isoAgo(50 * DAY) },
+    { id: "mem-85", project_id: "X41", person_id: PERSON_ZEYAD,       added_by: PERSON_SARAELKADY, added_at: isoAgo(30 * DAY) },
+    // X42: owner Vaibhav; members Zeyad, Elbanna, Sara E
+    { id: "mem-86", project_id: "X42", person_id: PERSON_ZEYAD,       added_by: PERSON_VAIBHAV,   added_at: isoAgo(240 * DAY) },
+    { id: "mem-87", project_id: "X42", person_id: PERSON_MELBANNA,    added_by: PERSON_VAIBHAV,   added_at: isoAgo(200 * DAY) },
+    { id: "mem-88", project_id: "X42", person_id: PERSON_SARAELKADY,  added_by: PERSON_VAIBHAV,   added_at: isoAgo(150 * DAY) },
+    // X43: owner Elbanna; members Sara E
+    { id: "mem-89", project_id: "X43", person_id: PERSON_SARAELKADY,  added_by: PERSON_MELBANNA,  added_at: isoAgo(35 * DAY) },
+    // X44: owner Zeyad; members Vaibhav
+    { id: "mem-90", project_id: "X44", person_id: PERSON_VAIBHAV,     added_by: PERSON_ZEYAD,     added_at: isoAgo(3 * DAY) },
+    // X46: owner Vaibhav; members Zeyad, Elbanna
+    { id: "mem-91", project_id: "X46", person_id: PERSON_ZEYAD,       added_by: PERSON_VAIBHAV,   added_at: isoAgo(20 * DAY) },
+    { id: "mem-92", project_id: "X46", person_id: PERSON_MELBANNA,    added_by: PERSON_VAIBHAV,   added_at: isoAgo(15 * DAY) },
   ],
   links: [
     { id: "link-1", project_id: "X01", type: "prd", label: null, url: "https://docs.google.com/document/d/checkout-speedup-prd", created_at: isoAgo(30 * DAY) },
@@ -585,6 +1110,132 @@ const _state = {
     // ── X16 — Dynamic pricing engine (start 5d ago, currently PRD) ──
     { id: "ev-58", entity_type: "project", entity_id: "X16", action: "project_created", user_name: "Omar", user_email: "omar@noon.com", details: {}, created_at: isoAgo(5 * DAY) },
 
+    // ── X17–X20 — Upcoming projects ──
+    { id: "ev-65", entity_type: "project", entity_id: "X17", action: "project_created", user_name: "Khalid", user_email: "khalid@noon.com", details: {}, created_at: isoAgo(14 * DAY) },
+    { id: "ev-66", entity_type: "project", entity_id: "X18", action: "project_created", user_name: "Fatima", user_email: "fatima@noon.com", details: {}, created_at: isoAgo(10 * DAY) },
+    { id: "ev-67", entity_type: "project", entity_id: "X19", action: "project_created", user_name: "Hassan", user_email: "hassan@noon.com", details: {}, created_at: isoAgo(7 * DAY) },
+    { id: "ev-68", entity_type: "project", entity_id: "X20", action: "project_created", user_name: "Mariam", user_email: "mariam@noon.com", details: {}, created_at: isoAgo(21 * DAY) },
+
+    // ── X21 — Onboarding Flow Revamp (Customer, Dev) ──
+    { id: "ev-70", entity_type: "project", entity_id: "X21", action: "project_created", user_name: "Khalid Anwer", user_email: "khalid@noon.com", details: {}, created_at: isoAgo(71 * DAY) },
+    { id: "ev-71", entity_type: "project", entity_id: "X21", action: "project_phase_changed", user_name: "Khalid Anwer", user_email: "khalid@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(50 * DAY) },
+    { id: "ev-72", entity_type: "project", entity_id: "X21", action: "project_phase_changed", user_name: "Khalid Anwer", user_email: "khalid@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(20 * DAY) },
+
+    // ── X22 — Address Caching (Customer, Design) ──
+    { id: "ev-73", entity_type: "project", entity_id: "X22", action: "project_created", user_name: "Hesham Elalamy", user_email: "hesham@noon.com", details: {}, created_at: isoAgo(49 * DAY) },
+    { id: "ev-74", entity_type: "project", entity_id: "X22", action: "project_phase_changed", user_name: "Hesham Elalamy", user_email: "hesham@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(30 * DAY) },
+
+    // ── X23 — Current Location browsing (Customer, PRD) ──
+    { id: "ev-75", entity_type: "project", entity_id: "X23", action: "project_created", user_name: "Khalid Anwer", user_email: "khalid@noon.com", details: {}, created_at: isoAgo(15 * DAY) },
+
+    // ── X24 — Primary Phone (Customer, QA) ──
+    { id: "ev-76", entity_type: "project", entity_id: "X24", action: "project_created", user_name: "Mohammad Saffidiene", user_email: "msaffidiene@noon.com", details: {}, created_at: isoAgo(94 * DAY) },
+    { id: "ev-77", entity_type: "project", entity_id: "X24", action: "project_phase_changed", user_name: "Mohammad Saffidiene", user_email: "msaffidiene@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(75 * DAY) },
+    { id: "ev-78", entity_type: "project", entity_id: "X24", action: "project_phase_changed", user_name: "Mohammad Saffidiene", user_email: "msaffidiene@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(50 * DAY) },
+    { id: "ev-79", entity_type: "project", entity_id: "X24", action: "project_phase_changed", user_name: "Mohammad Saffidiene", user_email: "msaffidiene@noon.com", details: { from: "Dev", to: "QA" }, created_at: isoAgo(10 * DAY) },
+
+    // ── X25 — Account Page Revamp (Customer, upcoming) ──
+    { id: "ev-80", entity_type: "project", entity_id: "X25", action: "project_created", user_name: "Hesham Elalamy", user_email: "hesham@noon.com", details: {}, created_at: isoAgo(5 * DAY) },
+
+    // ── X26 — Passkeys (Customer, Dev) ──
+    { id: "ev-81", entity_type: "project", entity_id: "X26", action: "project_created", user_name: "Youssef Saeed", user_email: "ysaeed@noon.com", details: {}, created_at: isoAgo(108 * DAY) },
+    { id: "ev-82", entity_type: "project", entity_id: "X26", action: "project_phase_changed", user_name: "Youssef Saeed", user_email: "ysaeed@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(85 * DAY) },
+    { id: "ev-83", entity_type: "project", entity_id: "X26", action: "project_phase_changed", user_name: "Youssef Saeed", user_email: "ysaeed@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(50 * DAY) },
+
+    // ── X27 — Address Nickname (Customer, upcoming) ──
+    { id: "ev-84", entity_type: "project", entity_id: "X27", action: "project_created", user_name: "Mohammad Saffidiene", user_email: "msaffidiene@noon.com", details: {}, created_at: isoAgo(3 * DAY) },
+
+    // ── X28 — Address Migration (Customer, Alpha) ──
+    { id: "ev-85", entity_type: "project", entity_id: "X28", action: "project_created", user_name: "Youssef Saeed", user_email: "ysaeed@noon.com", details: {}, created_at: isoAgo(170 * DAY) },
+    { id: "ev-86", entity_type: "project", entity_id: "X28", action: "project_phase_changed", user_name: "Youssef Saeed", user_email: "ysaeed@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(145 * DAY) },
+    { id: "ev-87", entity_type: "project", entity_id: "X28", action: "project_phase_changed", user_name: "Youssef Saeed", user_email: "ysaeed@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(110 * DAY) },
+    { id: "ev-88", entity_type: "project", entity_id: "X28", action: "project_phase_changed", user_name: "Youssef Saeed", user_email: "ysaeed@noon.com", details: { from: "Dev", to: "QA" }, created_at: isoAgo(55 * DAY) },
+    { id: "ev-89", entity_type: "project", entity_id: "X28", action: "project_phase_changed", user_name: "Youssef Saeed", user_email: "ysaeed@noon.com", details: { from: "QA", to: "Alpha" }, created_at: isoAgo(20 * DAY) },
+
+    // ── X29 — Yalla Goal (Gaming, Dev) ──
+    { id: "ev-90", entity_type: "project", entity_id: "X29", action: "project_created", user_name: "Pavneet Kaur", user_email: "pavneet@noon.com", details: {}, created_at: isoAgo(66 * DAY) },
+    { id: "ev-91", entity_type: "project", entity_id: "X29", action: "project_phase_changed", user_name: "Pavneet Kaur", user_email: "pavneet@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(48 * DAY) },
+    { id: "ev-92", entity_type: "project", entity_id: "X29", action: "project_phase_changed", user_name: "Shubham Bansal", user_email: "shubham@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(25 * DAY) },
+
+    // ── X30 — Golazo 2026 FIFA (Gaming, upcoming) ──
+    { id: "ev-93", entity_type: "project", entity_id: "X30", action: "project_created", user_name: "Pavneet Kaur", user_email: "pavneet@noon.com", details: {}, created_at: isoAgo(8 * DAY) },
+
+    // ── X31 — Hisense Quiz (Gaming, QA) ──
+    { id: "ev-94", entity_type: "project", entity_id: "X31", action: "project_created", user_name: "Archin Jain", user_email: "archin@noon.com", details: {}, created_at: isoAgo(49 * DAY) },
+    { id: "ev-95", entity_type: "project", entity_id: "X31", action: "project_phase_changed", user_name: "Archin Jain", user_email: "archin@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(35 * DAY) },
+    { id: "ev-96", entity_type: "project", entity_id: "X31", action: "project_phase_changed", user_name: "Shubham Bansal", user_email: "shubham@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(18 * DAY) },
+    { id: "ev-97", entity_type: "project", entity_id: "X31", action: "project_phase_changed", user_name: "Youssef Nagy", user_email: "ynagy@noon.com", details: { from: "Dev", to: "QA" }, created_at: isoAgo(5 * DAY) },
+
+    // ── X32 — Limited time deals (Storefront, Dev) ──
+    { id: "ev-100", entity_type: "project", entity_id: "X32", action: "project_created", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: {}, created_at: isoAgo(80 * DAY) },
+    { id: "ev-101", entity_type: "project", entity_id: "X32", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(60 * DAY) },
+    { id: "ev-102", entity_type: "project", entity_id: "X32", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(30 * DAY) },
+
+    // ── X33 — Cross pollination (Storefront, Design) ──
+    { id: "ev-103", entity_type: "project", entity_id: "X33", action: "project_created", user_name: "Zeyad Tolba", user_email: "zeyad@noon.com", details: {}, created_at: isoAgo(40 * DAY) },
+    { id: "ev-104", entity_type: "project", entity_id: "X33", action: "project_phase_changed", user_name: "Zeyad Tolba", user_email: "zeyad@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(20 * DAY) },
+
+    // ── X34 — Webp images (Storefront, QA) ──
+    { id: "ev-105", entity_type: "project", entity_id: "X34", action: "project_created", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: {}, created_at: isoAgo(60 * DAY) },
+    { id: "ev-106", entity_type: "project", entity_id: "X34", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(45 * DAY) },
+    { id: "ev-107", entity_type: "project", entity_id: "X34", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(28 * DAY) },
+    { id: "ev-108", entity_type: "project", entity_id: "X34", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "Dev", to: "QA" }, created_at: isoAgo(8 * DAY) },
+
+    // ── X35 — Quara Monet (Storefront, Beta) ──
+    { id: "ev-109", entity_type: "project", entity_id: "X35", action: "project_created", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: {}, created_at: isoAgo(200 * DAY) },
+    { id: "ev-110", entity_type: "project", entity_id: "X35", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(180 * DAY) },
+    { id: "ev-111", entity_type: "project", entity_id: "X35", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(145 * DAY) },
+    { id: "ev-112", entity_type: "project", entity_id: "X35", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "Dev", to: "QA" }, created_at: isoAgo(70 * DAY) },
+    { id: "ev-113", entity_type: "project", entity_id: "X35", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "QA", to: "Alpha" }, created_at: isoAgo(40 * DAY) },
+    { id: "ev-114", entity_type: "project", entity_id: "X35", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "Alpha", to: "Beta" }, created_at: isoAgo(15 * DAY) },
+
+    // ── X36 — App optimization (Storefront, Dev) ──
+    { id: "ev-115", entity_type: "project", entity_id: "X36", action: "project_created", user_name: "Sara Elkady", user_email: "saraelkady@noon.com", details: {}, created_at: isoAgo(99 * DAY) },
+    { id: "ev-116", entity_type: "project", entity_id: "X36", action: "project_phase_changed", user_name: "Sara Elkady", user_email: "saraelkady@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(75 * DAY) },
+    { id: "ev-117", entity_type: "project", entity_id: "X36", action: "project_phase_changed", user_name: "Sara Elkady", user_email: "saraelkady@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(40 * DAY) },
+
+    // ── X37 — Previously Bought tag (Storefront, PRD) ──
+    { id: "ev-118", entity_type: "project", entity_id: "X37", action: "project_created", user_name: "Zeyad Tolba", user_email: "zeyad@noon.com", details: {}, created_at: isoAgo(10 * DAY) },
+
+    // ── X38 — Discount tag personalization (Storefront, Design) ──
+    { id: "ev-119", entity_type: "project", entity_id: "X38", action: "project_created", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: {}, created_at: isoAgo(35 * DAY) },
+    { id: "ev-120", entity_type: "project", entity_id: "X38", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(18 * DAY) },
+
+    // ── X39 — Gifting Registry (Storefront, upcoming) ──
+    { id: "ev-121", entity_type: "project", entity_id: "X39", action: "project_created", user_name: "Zeyad Tolba", user_email: "zeyad@noon.com", details: {}, created_at: isoAgo(6 * DAY) },
+
+    // ── X40 — Legacy to New models (Storefront, Alpha) ──
+    { id: "ev-122", entity_type: "project", entity_id: "X40", action: "project_created", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: {}, created_at: isoAgo(156 * DAY) },
+    { id: "ev-123", entity_type: "project", entity_id: "X40", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(135 * DAY) },
+    { id: "ev-124", entity_type: "project", entity_id: "X40", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(100 * DAY) },
+    { id: "ev-125", entity_type: "project", entity_id: "X40", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "Dev", to: "QA" }, created_at: isoAgo(45 * DAY) },
+    { id: "ev-126", entity_type: "project", entity_id: "X40", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "QA", to: "Alpha" }, created_at: isoAgo(15 * DAY) },
+
+    // ── X41 — Virtual bundle (Storefront, Dev) ──
+    { id: "ev-127", entity_type: "project", entity_id: "X41", action: "project_created", user_name: "Sara Elkady", user_email: "saraelkady@noon.com", details: {}, created_at: isoAgo(66 * DAY) },
+    { id: "ev-128", entity_type: "project", entity_id: "X41", action: "project_phase_changed", user_name: "Sara Elkady", user_email: "saraelkady@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(48 * DAY) },
+    { id: "ev-129", entity_type: "project", entity_id: "X41", action: "project_phase_changed", user_name: "Sara Elkady", user_email: "saraelkady@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(22 * DAY) },
+
+    // ── X42 — Variants on PDP (Storefront, GA) ──
+    { id: "ev-130", entity_type: "project", entity_id: "X42", action: "project_created", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: {}, created_at: isoAgo(260 * DAY) },
+    { id: "ev-131", entity_type: "project", entity_id: "X42", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "Beta", to: "GA" }, created_at: isoAgo(61 * DAY) },
+
+    // ── X43 — Hiding Carousels (Storefront, QA) ──
+    { id: "ev-132", entity_type: "project", entity_id: "X43", action: "project_created", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: {}, created_at: isoAgo(45 * DAY) },
+    { id: "ev-133", entity_type: "project", entity_id: "X43", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(33 * DAY) },
+    { id: "ev-134", entity_type: "project", entity_id: "X43", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "Design", to: "Dev" }, created_at: isoAgo(18 * DAY) },
+    { id: "ev-135", entity_type: "project", entity_id: "X43", action: "project_phase_changed", user_name: "Mohammad Elbanna", user_email: "melbanna@noon.com", details: { from: "Dev", to: "QA" }, created_at: isoAgo(5 * DAY) },
+
+    // ── X44 — Video Reel Carousel (Storefront, PRD) ──
+    { id: "ev-136", entity_type: "project", entity_id: "X44", action: "project_created", user_name: "Zeyad Tolba", user_email: "zeyad@noon.com", details: {}, created_at: isoAgo(5 * DAY) },
+
+    // ── X45 — Frenzy deals widget (Storefront, upcoming) ──
+    { id: "ev-137", entity_type: "project", entity_id: "X45", action: "project_created", user_name: "Sara Elkady", user_email: "saraelkady@noon.com", details: {}, created_at: isoAgo(4 * DAY) },
+
+    // ── X46 — 2X2 Grid (Storefront, Design) ──
+    { id: "ev-138", entity_type: "project", entity_id: "X46", action: "project_created", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: {}, created_at: isoAgo(30 * DAY) },
+    { id: "ev-139", entity_type: "project", entity_id: "X46", action: "project_phase_changed", user_name: "Vaibhav Singh", user_email: "vaibhav@noon.com", details: { from: "PRD", to: "Design" }, created_at: isoAgo(14 * DAY) },
+
     // ── Shoutouts & Feedback for shipped GA projects ──
     { id: "ev-59", entity_type: "project", entity_id: "X05", action: "shoutout", user_name: "AJ", user_email: "ajain@noon.com", details: { from: "AJ", projectName: "Returns flow optimization" }, created_at: isoAgo(45 * DAY) },
     { id: "ev-60", entity_type: "project", entity_id: "X05", action: "shoutout", user_name: "Khalid", user_email: "khalid@noon.com", details: { from: "Khalid", projectName: "Returns flow optimization" }, created_at: isoAgo(40 * DAY) },
@@ -594,6 +1245,133 @@ const _state = {
     { id: "ev-64", entity_type: "project", entity_id: "X14", action: "shoutout", user_name: "Fatima", user_email: "fatima@noon.com", details: { from: "Fatima", projectName: "Customer address validation" }, created_at: isoAgo(55 * DAY) },
   ],
 };
+
+// ── Migrate all projects to tracks model ─────────────────────────
+// Runs once at module load to add `tracks` and update `status` on every seed project.
+import { migrateProjectToTracks, derivePrimaryPhase } from '../lib/tracks';
+
+(() => {
+  for (const p of seedProjects) {
+    if (!p.tracks) {
+      const { tracks, status } = migrateProjectToTracks(p, _state.events);
+      p.tracks = tracks;
+      p.status = status;
+      p.phase = derivePrimaryPhase(p);
+    }
+  }
+})();
+
+// Add showcase projects with parallel tracks (multiple tracks active simultaneously)
+(() => {
+  const byId = (id) => seedProjects.find(p => p.id === id);
+
+  // X01 Checkout speedup: PRD (done), Design (done), Dev + QA + Alpha active (3 tracks)
+  const x01 = byId("X01");
+  if (x01?.tracks) {
+    x01.tracks.QA = { periods: [{ started_at: isoAgo(2 * DAY), completed_at: null }], owner: null };
+    x01.tracks.Alpha = { periods: [{ started_at: isoAgo(1 * DAY), completed_at: null }], owner: null };
+  }
+
+  // X21 Onboarding Flow Revamp: PRD (done), Design + Dev + QA active (3 tracks)
+  const x21 = byId("X21");
+  if (x21?.tracks) {
+    x21.tracks.QA = { periods: [{ started_at: isoAgo(1 * DAY), completed_at: null }], owner: null };
+    if (!x21.tracks.Design || x21.tracks.Design.periods.every(p => p.completed_at)) {
+      if (!x21.tracks.Design) x21.tracks.Design = { periods: [], owner: null };
+      x21.tracks.Design.periods.push({ started_at: isoAgo(3 * DAY), completed_at: null });
+    }
+  }
+
+  // X32 Limited time deals: Design reopened + Dev + QA active (3 tracks, Design has 2 periods)
+  const x32 = byId("X32");
+  if (x32?.tracks) {
+    x32.tracks.Design = {
+      periods: [
+        { started_at: isoAgo(60 * DAY), completed_at: isoAgo(30 * DAY) },
+        { started_at: isoAgo(5 * DAY), completed_at: null },
+      ],
+      owner: null,
+    };
+    x32.tracks.QA = { periods: [{ started_at: isoAgo(3 * DAY), completed_at: null }], owner: null };
+  }
+
+  // X02 Onboarding redesign: PRD (done,reopened,done), Design + Dev active (2 tracks, PRD has 3 periods)
+  const x02 = byId("X02");
+  if (x02?.tracks) {
+    if (x02.tracks.PRD) {
+      x02.tracks.PRD.periods = [
+        { started_at: isoAgo(90 * DAY), completed_at: isoAgo(70 * DAY) },
+        { started_at: isoAgo(40 * DAY), completed_at: isoAgo(35 * DAY) },
+        { started_at: isoAgo(15 * DAY), completed_at: isoAgo(10 * DAY) },
+      ];
+    }
+    if (!x02.tracks.Dev) x02.tracks.Dev = { periods: [{ started_at: isoAgo(10 * DAY), completed_at: null }], owner: null };
+  }
+
+  // X04 Search relevance: PRD + Design + Dev active (3 tracks simultaneously)
+  const x04 = byId("X04");
+  if (x04?.tracks) {
+    if (!x04.tracks.Design) x04.tracks.Design = { periods: [{ started_at: isoAgo(5 * DAY), completed_at: null }], owner: null };
+    if (!x04.tracks.Dev) x04.tracks.Dev = { periods: [{ started_at: isoAgo(2 * DAY), completed_at: null }], owner: null };
+  }
+
+  // X07 Payment gateway migration: Dev (done, reopened) + QA active (2 tracks, Dev has 2 periods)
+  const x07 = byId("X07");
+  if (x07?.tracks) {
+    if (x07.tracks.Dev) {
+      x07.tracks.Dev.periods = [
+        { started_at: isoAgo(45 * DAY), completed_at: isoAgo(20 * DAY) },
+        { started_at: isoAgo(8 * DAY), completed_at: null },
+      ];
+    }
+    if (!x07.tracks.QA) x07.tracks.QA = { periods: [{ started_at: isoAgo(5 * DAY), completed_at: null }], owner: null };
+  }
+
+  // X11 Subscription billing: PRD + Design active (2 tracks)
+  const x11 = byId("X11");
+  if (x11?.tracks) {
+    if (!x11.tracks.Design) x11.tracks.Design = { periods: [{ started_at: isoAgo(3 * DAY), completed_at: null }], owner: null };
+  }
+
+  // X22 Address Caching: Design (done, reopened, done, reopened) + Dev active (Design has 4 periods)
+  const x22 = byId("X22");
+  if (x22?.tracks) {
+    x22.tracks.Design = {
+      periods: [
+        { started_at: isoAgo(80 * DAY), completed_at: isoAgo(60 * DAY) },
+        { started_at: isoAgo(50 * DAY), completed_at: isoAgo(40 * DAY) },
+        { started_at: isoAgo(25 * DAY), completed_at: isoAgo(15 * DAY) },
+        { started_at: isoAgo(5 * DAY), completed_at: null },
+      ],
+      owner: null,
+    };
+  }
+
+  // X26 Passkeys: PRD + Design + Dev + QA active (4 tracks!)
+  const x26 = byId("X26");
+  if (x26?.tracks) {
+    if (!x26.tracks.Design) x26.tracks.Design = { periods: [{ started_at: isoAgo(7 * DAY), completed_at: null }], owner: null };
+    if (!x26.tracks.Dev) x26.tracks.Dev = { periods: [{ started_at: isoAgo(4 * DAY), completed_at: null }], owner: null };
+    if (!x26.tracks.QA) x26.tracks.QA = { periods: [{ started_at: isoAgo(1 * DAY), completed_at: null }], owner: null };
+  }
+
+  // X10 Last-mile tracking: QA (done, reopened) + Dev active (QA has 2 periods)
+  const x10 = byId("X10");
+  if (x10?.tracks) {
+    x10.tracks.QA = {
+      periods: [
+        { started_at: isoAgo(30 * DAY), completed_at: isoAgo(15 * DAY) },
+        { started_at: isoAgo(4 * DAY), completed_at: null },
+      ],
+      owner: null,
+    };
+  }
+
+  // Recompute derived phase for all modified projects
+  for (const p of seedProjects) {
+    p.phase = derivePrimaryPhase(p);
+  }
+})();
 
 // Bump every project's last_activity_at to its actual most-recent event.
 (() => {

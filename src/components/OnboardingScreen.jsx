@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import { c, body, mono, typo, layout, motion, space } from "../styles/theme";
+import { selChevron } from "./shared";
 import { supabase } from "../lib/supabase";
 import FlowLogo from "./FlowLogo";
 import useDevLabel from "../hooks/useDevLabel";
@@ -55,7 +56,7 @@ export default function OnboardingScreen({ user, onComplete }) {
     width: "100%",
     height: 40,
     padding: "0 14px",
-    background: c.surfaceAlt,
+    background: c.surface,
     border: `1px solid ${c.border}`,
     borderRadius: layout.radiusSm,
     color: c.text,
@@ -216,7 +217,7 @@ export default function OnboardingScreen({ user, onComplete }) {
               className="flow-onboard-input flow-onboard-select"
               value={squadId}
               onChange={e => setSquadId(e.target.value)}
-              style={{ ...inputStyle, cursor: "pointer", color: squadId ? c.text : c.textDim }}
+              style={{ ...inputStyle, cursor: "pointer", color: squadId ? c.text : c.textDim, appearance: "none", WebkitAppearance: "none", paddingRight: 32, background: `${c.surface} ${selChevron} no-repeat right 12px center / 12px 12px` }}
             >
               <option value="" disabled>{loadingDropdowns ? "Loading..." : squads.length === 0 ? "No squads available" : "Select your squad"}</option>
               {squads.map(s => (
@@ -232,7 +233,7 @@ export default function OnboardingScreen({ user, onComplete }) {
               className="flow-onboard-input flow-onboard-select"
               value={roleId}
               onChange={e => setRoleId(e.target.value)}
-              style={{ ...inputStyle, cursor: "pointer", color: roleId ? c.text : c.textDim }}
+              style={{ ...inputStyle, cursor: "pointer", color: roleId ? c.text : c.textDim, appearance: "none", WebkitAppearance: "none", paddingRight: 32, background: `${c.surface} ${selChevron} no-repeat right 12px center / 12px 12px` }}
             >
               <option value="" disabled>{loadingDropdowns ? "Loading..." : roles.length === 0 ? "No roles available" : "Select your role"}</option>
               {roles.map(r => (

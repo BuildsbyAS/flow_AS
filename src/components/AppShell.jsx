@@ -4,7 +4,7 @@
 // Filter drawer slides from right when triggered
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { c, typo, layout, space, motion, mono } from "../styles/theme";
-import { FilterChip, Btn, Modal } from "./shared";
+import { FilterChip, Btn, Modal, selChevron } from "./shared";
 import { ANNOUNCEMENTS } from "../data/announcements";
 import { isDevSeedMode, devStore } from "../data/devSeed";
 import { addProjectCommentToDB } from "../lib/mutations";
@@ -1522,9 +1522,9 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
 
   const inputStyle = {
     width: "100%", padding: "6px 10px",
-    background: "rgba(0,0,0,0.04)",
-    border: `1px solid rgba(0,0,0,0.07)`,
-    borderRadius: 6, color: c.text,
+    background: c.surface,
+    border: `1px solid ${c.border}`,
+    borderRadius: layout.radiusSm, color: c.text,
     fontSize: 12, fontFamily: "inherit",
     outline: "none",
   };
@@ -1633,7 +1633,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
               <select
                 value={editSquadId}
                 onChange={e => setEditSquadId(e.target.value)}
-                style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}
+                style={{ ...inputStyle, cursor: "pointer", appearance: "none", WebkitAppearance: "none", paddingRight: 28, background: `${c.surface} ${selChevron} no-repeat right 8px center / 12px 12px` }}
               >
                 <option value="" disabled>Squad</option>
                 {squads.map(s => (
@@ -1645,7 +1645,7 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
               <select
                 value={editRoleId}
                 onChange={e => setEditRoleId(e.target.value)}
-                style={{ ...inputStyle, cursor: "pointer", appearance: "none" }}
+                style={{ ...inputStyle, cursor: "pointer", appearance: "none", WebkitAppearance: "none", paddingRight: 28, background: `${c.surface} ${selChevron} no-repeat right 8px center / 12px 12px` }}
               >
                 <option value="" disabled>Role</option>
                 {roles.map(r => (
@@ -2379,9 +2379,10 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
                 value={squadFilter}
                 onChange={e => setSquadFilter(e.target.value)}
                 style={{
-                  height: 28, padding: `0 ${space[2]}px`, borderRadius: layout.radiusXs,
-                  border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.text,
+                  height: 28, padding: `0 ${space[2] + 20}px 0 ${space[2]}px`, borderRadius: layout.radiusSm,
+                  border: `1px solid ${c.border}`, background: `${c.surface} ${selChevron} no-repeat right ${space[2]}px center / 10px 10px`, color: c.text,
                   fontFamily: typo.monoSm.font, fontSize: 11, cursor: "pointer", outline: "none",
+                  appearance: "none", WebkitAppearance: "none",
                 }}
               >
                 <option value="">All squads</option>

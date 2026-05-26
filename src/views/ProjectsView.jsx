@@ -2,20 +2,21 @@
 // Two states: Registry (Pulse-style table with tabs) → Project Deep Dive (PeopleDeepDive-style)
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
-import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, typeConfig, phaseColors as getPhaseColors, phaseMids as getPhaseMids, phaseDims as getPhaseDims, statusColors, entityColors, colWidths } from "../styles/theme";
+import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, trackNames, typeConfig, phaseColors as getPhaseColors, phaseMids as getPhaseMids, phaseDims as getPhaseDims, statusColors, statusConfig, entityColors, colWidths } from "../styles/theme";
 import { Badge, Tag, Modal, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, Th as SharedTh, TableShell, StickyLeftTd } from "../components/shared";
-import { KpiGrid, KpiCard, HealthGauge, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
-import { HealthBar } from "../components/chart";
+import { KpiGrid, KpiCard, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
 import useKeyboard from "../hooks/useKeyboard";
 import useExitAnimation from "../hooks/useExitAnimation";
 import GanttChart from "../components/GanttChart";
 import FlowLogo from "../components/FlowLogo";
 import ProjectActivity from "../components/ProjectActivity";
 import ProjectTimeline from "../components/ProjectTimeline";
+import TrackGantt from "../components/TrackGantt";
 import { isDevSeedMode, devStore } from "../data/devSeed";
 import { initialsOf } from "../lib/names";
 import { timeAgo, isStale, fmtAbsolute } from "../lib/time";
-import { getProjectDependencies, deleteProjectFromDB, updateProjectInDB, addProjectLinkToDB, deleteProjectLinkFromDB } from "../lib/mutations";
+import { getProjectDependencies, deleteProjectFromDB, updateProjectInDB, addProjectLinkToDB, deleteProjectLinkFromDB, startTrackInDB, completeTrackInDB, reopenTrackInDB, shipProjectInDB } from "../lib/mutations";
+import { getActiveTracks, getTrackStatus, getTrackActiveDays, derivePrimaryPhase } from "../lib/tracks";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
 
@@ -169,6 +170,8 @@ function deriveProjectMetrics(projects, history, today) {
       teamMembers: [], // filled below from devStore
     };
 
+    if (proj.status === "upcoming") { map[id] = m; continue; }
+
     const projHist = history[id] || [];
     for (const wk of projHist) {
       const entries = wk.entries || [];
@@ -203,61 +206,39 @@ function deriveProjectMetrics(projects, history, today) {
 
     // Risk flags
     const daysToEnd = daysBetween(today, proj.endDate);
-    const inShipPhase = SHIPPED_PHASES.includes(proj.phase);
-    if (daysToEnd <= 14 && daysToEnd > 0 && !inShipPhase) m.endingSoon = true;
-    if (daysToEnd < 0 && !inShipPhase) m.overdue = true;
+    const isShipped = proj.status === "shipped";
+    if (daysToEnd <= 14 && daysToEnd > 0 && !isShipped) m.endingSoon = true;
+    if (daysToEnd < 0 && !isShipped) m.overdue = true;
 
-    // ── Health calculation ──
-    // Factors: timeline adherence, stage duration vs threshold, activity
-    // frequency, blocked/deprioritized status
-    const age = daysBetween(proj.startDate, today);
-    const planned = daysBetween(proj.startDate, proj.endDate);
-    const pctEl = planned > 0 ? age / planned : 0;
-    let health = 100;
+    // Active tracks
+    m.activeTracks = getActiveTracks(proj);
 
-    // 1) Timeline: past end date = big penalty, approaching = moderate
-    if (planned > 0) {
-      if (pctEl > 1) health -= 35;
-      else if (pctEl > 0.85) health -= 20;
-      else if (pctEl > 0.65) health -= 10;
-    }
-
-    // 2) Phase overstay: current phase exceeding threshold (complexity-aware)
+    // Phase overstay tracking (per-track: use longest active track)
     const overrides = proj.phaseDurationOverrides || {};
-    const threshold = overrides[proj.phase] ?? getPhaseThreshold(proj.complexity, proj.phase);
     {
-      let daysInPhase = age;
-      if (isDevSeedMode()) {
-        const events = devStore.listEvents(proj.id) || [];
-        const phaseEvents = events
-          .filter(e => e.action === "project_phase_changed" && e.details?.to === proj.phase)
-          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        if (phaseEvents.length > 0) {
-          daysInPhase = Math.round((new Date(today + "T00:00:00") - new Date(phaseEvents[0].created_at)) / 86400000);
+      let maxDaysInTrack = 0;
+      let trackThreshold = null;
+      if (m.activeTracks.length > 0) {
+        for (const t of m.activeTracks) {
+          const days = getTrackActiveDays(proj, t);
+          const th = overrides[t] ?? getPhaseThreshold(proj.complexity, t);
+          if (days > maxDaysInTrack) {
+            maxDaysInTrack = days;
+            trackThreshold = th;
+          }
         }
+      } else {
+        const age = daysBetween(proj.startDate, today);
+        maxDaysInTrack = age;
+        trackThreshold = overrides[proj.phase] ?? getPhaseThreshold(proj.complexity, proj.phase);
       }
-      m.daysInPhase = daysInPhase;
-      m.phaseThreshold = threshold;
-      if (threshold && daysInPhase > threshold * 1.5) health -= 20;
-      else if (threshold && daysInPhase > threshold) health -= 10;
+      m.daysInPhase = maxDaysInTrack;
+      m.phaseThreshold = trackThreshold;
     }
 
-    // 3) Activity frequency
-    if (daysSinceActivity > 14 && !inShipPhase) health -= 25;
-    else if (daysSinceActivity > 7 && !inShipPhase) health -= 15;
-
-    // 4) No owner
-    if (!proj.owner) health -= 20;
-
-    // 5) Blocked / deprioritized
-    if (m.isBlocked) health -= 15;
-    if (proj.status === "deprioritized") health -= 10;
-
-    m.health = Math.max(0, Math.min(100, health));
-
-    // At Risk: overdue OR no activity in 1 week OR health < 50% OR blocked
-    m.atRisk = proj.status !== "deprioritized" && !inShipPhase && (
-      m.overdue || m.noActivityWeek || m.health < 50 || m.isBlocked
+    // At Risk: overdue OR no activity in 1 week OR blocked
+    m.atRisk = proj.status !== "deprioritized" && !isShipped && proj.status !== "upcoming" && (
+      m.overdue || m.noActivityWeek || m.isBlocked
     );
 
     map[id] = m;
@@ -281,8 +262,8 @@ function sortList(list, key, dir, metrics, today) {
       }
       case "owner": return d * (a.owner || "").localeCompare(b.owner || "");
       case "status": return d * (a.status || "active").localeCompare(b.status || "active");
-      case "phase": return d * (allPhases.indexOf(a.phase) - allPhases.indexOf(b.phase));
-      case "health": return d * ((metrics[a.id]?.health ?? 0) - (metrics[b.id]?.health ?? 0));
+      case "phase":
+      case "tracks": return d * (allPhases.indexOf(a.phase) - allPhases.indexOf(b.phase));
       case "total": return d * ((metrics[a.id]?.historyTotal || 0) - (metrics[b.id]?.historyTotal || 0));
       case "priority": {
         const order = { P0: 0, P1: 1, P2: 2, P3: 3 };
@@ -299,6 +280,8 @@ function sortList(list, key, dir, metrics, today) {
       case "daysInPhase": return d * ((metrics[a.id]?.daysInPhase ?? 0) - (metrics[b.id]?.daysInPhase ?? 0));
       case "timeline": return d * (daysBetween(today, a.endDate) - daysBetween(today, b.endDate));
       case "actualEnd": return d * ((a.actualEndDate || "").localeCompare(b.actualEndDate || ""));
+      case "createdAt": return d * ((a.createdAt || "").localeCompare(b.createdAt || ""));
+      case "startDate": return d * ((a.startDate || a.tentativeStartDate || "").localeCompare(b.startDate || b.tentativeStartDate || ""));
       default: return 0;
     }
   });
@@ -389,6 +372,10 @@ export default function ProjectsView({
   const [sortKey, setSortKey] = useState("squad");
   const [sortDir, setSortDir] = useState("asc");
   const [hoveredProject, setHoveredProject] = useState(null);
+  const [activityTip, setActivityTip] = useState(null); // { projId, rect }
+  const activityTipTimer = useRef(null);
+  const showActivityTip = (data) => { clearTimeout(activityTipTimer.current); setActivityTip(data); };
+  const hideActivityTip = () => { activityTipTimer.current = setTimeout(() => setActivityTip(null), 120); };
   const [focusIdx, setFocusIdx] = useState(0);
   const [kbActive, setKbActive] = useState(false);
   const [searchGlow, setSearchGlow] = useState(false);
@@ -433,6 +420,8 @@ export default function ProjectsView({
   const [dragOverPhase, setDragOverPhaseRaw] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const dragOverRef = useRef(null);
+  const [listStartNowId, setListStartNowId] = useState(null);
+  const [listStartNowTracks, setListStartNowTracks] = useState(["PRD"]);
 
   // Wire searchRef
   useEffect(() => {
@@ -515,48 +504,44 @@ export default function ProjectsView({
       list = filtered;
     } else {
       switch (activeTab) {
-        case "active": list = filtered.filter(p => p.status === "active" && IN_FLIGHT_PHASES.includes(p.phase)); break;
+        case "active": list = filtered.filter(p => p.status === "in_flight"); break;
         case "at_risk": list = filtered.filter(p => metrics[p.id]?.atRisk); break;
-        case "shipped": list = filtered.filter(p => SHIPPED_PHASES.includes(p.phase)); break;
-        case "blocked": list = filtered.filter(p => metrics[p.id]?.isBlocked); break;
+        case "shipped": list = filtered.filter(p => p.status === "shipped"); break;
+        case "blocked": list = filtered.filter(p => p.status === "blocked" || metrics[p.id]?.isBlocked); break;
         case "deprioritized": list = filtered.filter(p => p.status === "deprioritized"); break;
-        case "overdue": list = filtered.filter(p => IN_FLIGHT_PHASES.includes(p.phase) && p.status !== "deprioritized" && metrics[p.id]?.overdue); break;
+        case "upcoming": list = filtered.filter(p => p.status === "upcoming"); break;
+        case "overdue": list = filtered.filter(p => p.status === "in_flight" && metrics[p.id]?.overdue); break;
         default: list = filtered;
       }
     }
     if (showWatchlistOnly) list = list.filter(p => pinnedIds.has(p.id));
     const sorted = sortList(list, sortKey, sortDir, metrics, today);
     const pinned = sorted.filter(p => pinnedIds.has(p.id));
-    const shipped = sorted.filter(p => !pinnedIds.has(p.id) && SHIPPED_PHASES.includes(p.phase) && p.status !== "deprioritized");
-    const regular = sorted.filter(p => !pinnedIds.has(p.id) && !SHIPPED_PHASES.includes(p.phase) && p.status !== "deprioritized");
+    const shipped = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "shipped");
+    const regular = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "in_flight");
+    const blocked = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "blocked");
     const depri = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "deprioritized");
-    return [...pinned, ...shipped, ...regular, ...depri];
+    const upcoming = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "upcoming");
+    return [...pinned, ...shipped, ...regular, ...blocked, ...depri, ...upcoming];
   }, [filtered, activeTab, sortKey, sortDir, metrics, today, search, showWatchlistOnly, pinnedIds]);
 
   // ── KPI summary (from filtered data) ──
-  // Health and risk are computed once in `deriveProjectMetrics`; this section
-  // never re-derives them, so numbers stay consistent with the table + gauges.
+  // Risk is computed once in `deriveProjectMetrics`; this section
+  // never re-derives it, so numbers stay consistent with the table.
   const summary = useMemo(() => {
-    const active = filtered.filter(p => p.status === "active" && IN_FLIGHT_PHASES.includes(p.phase));
-    const shipped = filtered.filter(p => SHIPPED_PHASES.includes(p.phase));
+    const active = filtered.filter(p => p.status === "in_flight");
+    const shipped = filtered.filter(p => p.status === "shipped");
     const depri = filtered.filter(p => p.status === "deprioritized");
-    const blockedCount = filtered.filter(p => metrics[p.id]?.isBlocked).length;
+    const upcomingProjs = filtered.filter(p => p.status === "upcoming");
+    const blockedProjs = filtered.filter(p => p.status === "blocked" || metrics[p.id]?.isBlocked);
     const atRiskCount = filtered.filter(p => metrics[p.id]?.atRisk).length;
-    const avgHealth = active.length > 0
-      ? Math.round(active.reduce((s, p) => s + (metrics[p.id]?.health ?? 100), 0) / active.length)
-      : 0;
-    // In-flight phase distribution
-    const phaseCounts = {};
-    ["PRD", "Design", "Dev", "QA"].forEach(ph => {
-      phaseCounts[ph] = active.filter(p => p.phase === ph).length;
-    });
-    // Shipped phase distribution
-    const shipPhaseCounts = {};
-    ["Alpha", "Beta", "GA"].forEach(ph => {
-      shipPhaseCounts[ph] = shipped.filter(p => p.phase === ph).length;
+    // Track distribution: how many in-flight projects have each track active
+    const trackCounts = {};
+    trackNames.forEach(t => {
+      trackCounts[t] = active.filter(p => (metrics[p.id]?.activeTracks || []).includes(t)).length;
     });
     const overdueCount = active.filter(p => metrics[p.id]?.overdue).length;
-    return { active: active.length, shipped: shipped.length, depri: depri.length, blocked: blockedCount, overdue: overdueCount, all: filtered.length, avgHealth, atRiskCount, phaseCounts, shipPhaseCounts };
+    return { active: active.length, shipped: shipped.length, depri: depri.length, upcoming: upcomingProjs.length, blocked: blockedProjs.length, overdue: overdueCount, all: filtered.length, atRiskCount, trackCounts };
   }, [filtered, metrics, today]);
 
   // ── Gantt-specific filter (separate from registry filters) ──
@@ -650,26 +635,28 @@ export default function ProjectsView({
       const who = ev.user_name || "Someone";
       switch (ev.action) {
         case "project_created":         return `${who} created this project`;
+        case "project_started":         return `${who} started the project in ${d.phase || "?"} phase`;
         case "project_phase_changed": {
           const to = d.to || "?";
-          if (["Alpha", "Beta", "GA"].includes(to)) return `🚀 ${who} shipped the project in ${to} phase`;
-          return `${who} moved phase ${d.from || "?"} → ${to}`;
+          if (["Alpha", "Beta", "GA"].includes(to)) return `${who} shipped the project to ${to}`;
+          return `${who} moved the project from ${d.from || "?"} to ${to}`;
         }
         case "project_status_changed": {
-          if (d.to === "deprioritized") return `${who} marked project as deprioritized`;
-          if (d.from === "deprioritized") return `${who} moved project back to active`;
-          return `${who} changed status to ${d.to || "?"}`;
+          if (d.to === "deprioritized") return `${who} deprioritized the project`;
+          if (d.from === "deprioritized") return `${who} moved the project back to active`;
+          return `${who} changed the project status to ${d.to || "?"}`;
         }
-        case "project_blocked":         return `${who} marked project as blocked${d.reason ? ` — ${d.reason}` : ""}`;
+        case "project_blocked":         return `${who} marked the project as blocked${d.reason ? ` — ${d.reason}` : ""}`;
         case "project_unblocked":       return `${who} unblocked the project`;
-        case "project_updated":         return `${who} updated the project`;
-        case "edit_project":            return `${who} edited project details`;
-        case "project_owner_changed":   return `${who} set owner to ${d.to || "—"}`;
-        case "project_squad_changed":   return `${who} moved squad to ${d.to || "—"}`;
-        case "member_added":            return `${who} added ${d.person_name || "a member"}`;
-        case "member_removed":          return `${who} removed ${d.person_name || "a member"}`;
-        case "resource_added":          return `${who} added ${d.label || "a resource"}`;
-        case "resource_removed":        return `${who} removed a resource`;
+        case "project_updated":         return `${who} updated the project details`;
+        case "edit_project":            return `${who} edited the project details`;
+        case "project_owner_changed":   return `${who} changed the owner to ${d.to || "—"}`;
+        case "project_squad_changed":   return `${who} moved the project to ${d.to || "—"} squad`;
+        case "project_start_date_moved": return `${who} moved the tentative start date to ${d.to || "—"}`;
+        case "member_added":            return `${who} added ${d.person_name || "a member"} to the team`;
+        case "member_removed":          return `${who} removed ${d.person_name || "a member"} from the team`;
+        case "resource_added":          return `${who} added a ${d.label || "resource"} link`;
+        case "resource_removed":        return `${who} removed a resource link`;
         default:                        return `${who} · ${ev.action}`;
       }
     };
@@ -715,10 +702,11 @@ export default function ProjectsView({
     { key: "shipped", label: "Shipped", count: summary.shipped },
     { key: "blocked", label: "Blocked", count: summary.blocked },
     { key: "deprioritized", label: "Deprioritized", count: summary.depri },
+    { key: "upcoming", label: "Upcoming", count: summary.upcoming },
     { key: "overdue", label: "Overdue", count: summary.overdue },
   ];
 
-  const tabLabelMap = { at_risk: "at risk", active: "in flight", shipped: "shipped", blocked: "blocked", deprioritized: "deprioritized", overdue: "overdue", all: "" };
+  const tabLabelMap = { at_risk: "at risk", active: "in flight", shipped: "shipped", blocked: "blocked", deprioritized: "deprioritized", upcoming: "upcoming", overdue: "overdue", all: "" };
   const isSyntheticTab = activeTab === "at_risk";
 
   // ── Shared Th wrapper ──
@@ -836,12 +824,12 @@ export default function ProjectsView({
             active={activeTab === "active"}
           >
             <PillRow>
-              {["PRD", "Design", "Dev", "QA"].map(ph => (
+              {trackNames.map(t => (
                 <Pill
-                  key={ph}
-                  count={summary.phaseCounts[ph] || 0}
-                  label={ph}
-                  color={pc[ph] || c.textDim}
+                  key={t}
+                  count={summary.trackCounts?.[t] || 0}
+                  label={t}
+                  color={pc[t] || c.textDim}
                 />
               ))}
             </PillRow>
@@ -854,14 +842,7 @@ export default function ProjectsView({
             active={activeTab === "shipped"}
           >
             <PillRow>
-              {["Alpha", "Beta", "GA"].map(ph => (
-                <Pill
-                  key={ph}
-                  count={summary.shipPhaseCounts[ph] || 0}
-                  label={ph}
-                  color={ph === "GA" ? c.green : pc[ph] || c.textMid}
-                />
-              ))}
+              <Pill count={summary.shipped} label="Shipped" color={c.green} />
             </PillRow>
           </KpiCard>
           <KpiCard
@@ -1015,7 +996,9 @@ export default function ProjectsView({
         const columns = allPhases;
         const columnProjects = {};
         columns.forEach(ph => { columnProjects[ph] = []; });
+        const upcomingBoardProjects = [];
         tabProjects.forEach(proj => {
+          if (proj.status === "upcoming") { upcomingBoardProjects.push(proj); return; }
           const ph = proj.phase || "PRD";
           if (columnProjects[ph]) columnProjects[ph].push(proj);
         });
@@ -1074,10 +1057,15 @@ export default function ProjectsView({
 
         return (
           <div style={{
-            display: "flex", gap: space[3],
-            minWidth: columns.length * 180, minHeight: 500,
+            display: "flex", flexDirection: "column", gap: space[4],
+            minWidth: columns.length * 180,
             padding: `${space[2]}px 0`,
           }}>
+            {/* Phase columns */}
+            <div style={{
+              display: "flex", gap: space[3],
+              maxHeight: "calc(100vh - 280px)", minHeight: 400,
+            }}>
             {columns.map(phase => {
               const phColor = pc[phase] || c.textDim;
               const cards = columnProjects[phase] || [];
@@ -1259,6 +1247,76 @@ export default function ProjectsView({
                 </div>
               );
             })}
+
+            </div>
+
+            {/* Upcoming — horizontal strip at bottom */}
+            {upcomingBoardProjects.length > 0 && (
+              <div style={{
+                background: c.surface,
+                borderRadius: layout.radiusLg,
+                border: `1px solid ${c.border}`,
+              }}>
+                <div style={{
+                  padding: `${space[2]}px ${space[4]}px`,
+                  borderBottom: `1px solid ${c.border}`,
+                  display: "flex", alignItems: "center", gap: space[2],
+                }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.textDim }} />
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                    fontWeight: 700, letterSpacing: "0.06em",
+                    color: c.textDim, textTransform: "uppercase",
+                  }}>Upcoming</span>
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                    fontWeight: 700, color: c.textMid,
+                    background: c.surfaceAlt, padding: "1px 7px",
+                    borderRadius: layout.radiusPill, border: `1px solid ${c.border}`,
+                  }}>{upcomingBoardProjects.length}</span>
+                </div>
+                <div style={{
+                  display: "flex", gap: space[3], padding: space[3],
+                  overflowX: "auto",
+                  scrollbarWidth: "thin", scrollbarColor: `${c.textDim}20 transparent`,
+                }}>
+                  {upcomingBoardProjects.map(proj => (
+                    <div key={proj.id} role="button" tabIndex={0}
+                      onClick={() => openProject(proj.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProject(proj.id); } }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.10)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}
+                      style={{
+                        minWidth: 220, maxWidth: 260, padding: 14, borderRadius: layout.radiusMd,
+                        background: c.surfaceAlt, border: `1px solid ${c.border}`,
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.04)", cursor: "pointer",
+                        display: "flex", flexDirection: "column", gap: space[2], flexShrink: 0,
+                        transition: `box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                        <span style={{ fontFamily: typo.monoMd.font, fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", color: ec.project }}>{proj.id}</span>
+                        {proj.priority && (() => {
+                          const pColors = { P0: c.red, P1: c.amber, P2: c.textDim, P3: c.textGhost };
+                          const pBg = { P0: c.redDim, P1: c.amberDim, P2: c.surfaceAlt, P3: c.surfaceAlt };
+                          return <Tag color={pColors[proj.priority] || c.textDim} bg={pBg[proj.priority] || c.surfaceAlt} style={{ fontSize: 9, padding: "1px 5px" }}>{proj.priority}</Tag>;
+                        })()}
+                      </div>
+                      <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 600, color: c.text, lineHeight: 1.4 }}>{proj.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: typo.bodySm.font, fontSize: 11, color: c.textMid }}>
+                        <span style={{ fontWeight: 500 }}>{proj.owner || "—"}</span>
+                        <span style={{ padding: "1px 6px", borderRadius: 999, background: "rgba(255,255,255,0.6)", border: `1px solid ${c.border}`, fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: c.textDim }}>{proj.squad}</span>
+                      </div>
+                      {proj.tentativeStartDate && (
+                        <div style={{ fontFamily: typo.monoSm.font, fontSize: 9, color: c.textDim, borderTop: `1px solid ${c.border}`, paddingTop: space[1], marginTop: 2 }}>
+                          Starts {fmtDate(proj.tentativeStartDate)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         );
       })() :
@@ -1296,19 +1354,17 @@ export default function ProjectsView({
         }
         return <EmptyState icon="📂" title={title} message={message} action={action} onAction={onAction} />;
       })() : (
-        <TableShell minWidth={900}>
+        <TableShell minWidth={820}>
             <thead>
                 <tr>
-                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: colWidths.squad.min }}>Squad</Th>
-                  <Th col="project" style={{ minWidth: 200 }}>Project</Th>
-                  <Th col="priority" style={{ minWidth: 60, textAlign: "center" }}>Priority</Th>
-                  <Th col="complexity" style={{ minWidth: 60, textAlign: "center" }}>Complexity</Th>
-                  <Th col="owner" style={{ minWidth: colWidths.owner.min }}>Owner</Th>
-                  <Th col="phase" style={{ minWidth: colWidths.phase.min, textAlign: "center" }}>Phase</Th>
-                  <Th col="health" style={{ minWidth: 90, textAlign: "center" }}>Health</Th>
-                  <Th col="people" style={{ minWidth: 100, textAlign: "center" }}>Team</Th>
-                  <Th col="last" style={{ minWidth: colWidths.date.min, textAlign: "center" }}>Updated</Th>
-                  <Th col="timeline" style={{ minWidth: colWidths.timeline?.min || 130, textAlign: "center" }}>Timeline</Th>
+                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: 70 }}>Squad</Th>
+                  <Th col="project" style={{ minWidth: 160 }}>Project</Th>
+                  <Th col="priority" style={{ minWidth: 50, textAlign: "center" }}>Pri</Th>
+                  <Th col="owner" style={{ minWidth: 80 }}>Owner</Th>
+                  <Th col="tracks" style={{ minWidth: 90, textAlign: "center" }}>Tracks</Th>
+                  <Th col="people" style={{ minWidth: 70, textAlign: "center" }}>Team</Th>
+                  <Th col="last" style={{ minWidth: 80, textAlign: "center" }}>Updated</Th>
+                  <Th col="timeline" style={{ minWidth: colWidths.timeline?.min || 110, textAlign: "center" }}>Timeline</Th>
                 </tr>
               </thead>
               <tbody>
@@ -1317,9 +1373,11 @@ export default function ProjectsView({
                   const isFocused = kbActive && fi === focusIdx;
                   const isHovered = hoveredProject === proj.id;
                   const isDimmed = proj.status === "deprioritized";
+                  const isUpcoming = proj.status === "upcoming";
                   const isPinned = pinnedIds.has(proj.id);
-                  const isShipped = SHIPPED_PHASES.includes(proj.phase);
-                  const isBlockedOrOverdue = m.isBlocked || m.overdue;
+                  const isShipped = proj.status === "shipped";
+                  const isBlockedProj = proj.status === "blocked" || m.isBlocked;
+                  const isBlockedOrOverdue = isBlockedProj || m.overdue;
                   const leftBarColor = isShipped ? c.green : isBlockedOrOverdue ? c.red : null;
 
                   const cellBorder = "1px solid rgba(0,0,0,0.03)";
@@ -1403,6 +1461,7 @@ export default function ProjectsView({
                           {m.overdue && <span title={`Overdue by ${Math.abs(daysBetween(today, proj.endDate))}d`} style={{ flexShrink: 0, fontSize: 13, lineHeight: 1 }}>⚠️</span>}
                           {m.isBlocked && <Tag color={c.red} bg={c.redDim} style={{ flexShrink: 0 }}>BLOCKED</Tag>}
                           {proj.status === "deprioritized" && <Tag color={c.textDim} bg={c.surfaceAlt} style={{ flexShrink: 0 }}>DEPRIORITIZED</Tag>}
+                          {isUpcoming && <Tag color={c.textDim} bg={c.surfaceAlt} style={{ flexShrink: 0 }}>UPCOMING</Tag>}
                           {SHIPPED_PHASES.includes(proj.phase) && <Tag color={c.green} bg={c.greenDim} style={{ flexShrink: 0 }}>SHIPPED</Tag>}
                         </div>
                       </td>
@@ -1420,20 +1479,6 @@ export default function ProjectsView({
                         })()}
                       </td>
 
-                      {/* Complexity */}
-                      <td style={{
-                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                        borderBottom: cellBorder,
-                      }}>
-                        {proj.complexity ? (() => {
-                          const cLabels = { S: "Low", M: "Med", L: "High", XL: "High" };
-                          return <span style={{
-                            fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600,
-                            color: c.textMid, letterSpacing: "0.04em",
-                          }}>{cLabels[proj.complexity]}</span>;
-                        })() : <span style={{ color: c.textDim, fontSize: 11 }}>—</span>}
-                      </td>
-
                       {/* Owner */}
                       <td style={{
                         padding: `${space[3]}px ${space[4]}px`,
@@ -1443,48 +1488,37 @@ export default function ProjectsView({
                         whiteSpace: "nowrap",
                       }}>{proj.owner || "Unassigned"}</td>
 
-                      {/* Phase + days in phase */}
+                      {/* Active Tracks */}
                       <td style={{
                         padding: `${space[3]}px ${space[4]}px`,
                         textAlign: "center",
                         borderBottom: cellBorder,
                       }}>
-                        {(() => {
-                          const days = m.daysInPhase;
-                          const thresh = m.phaseThreshold;
-                          const overThreshold = thresh && days > thresh;
+                        {isUpcoming ? <span style={{ color: c.textDim, fontSize: 11 }}>—</span>
+                         : isShipped ? (
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: "3px 10px", borderRadius: layout.radiusXs,
+                            background: c.greenDim, color: c.green,
+                            fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 700,
+                          }}>Shipped</span>
+                        ) : (() => {
+                          const active = m.activeTracks || getActiveTracks(proj);
+                          if (active.length === 0) return <span style={{ color: c.textDim, fontSize: 11 }}>—</span>;
                           return (
-                            <span style={{
-                              display: "inline-flex", alignItems: "center", gap: 5,
-                              padding: `3px 10px`,
-                              borderRadius: layout.radiusXs,
-                              background: pcMid[proj.phase] || c.surfaceAlt,
-                              color: pc[proj.phase] || c.textDim,
-                              fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 700,
-                            }}>
-                              {proj.phase}
-                              {days != null && (
-                                <span style={{
-                                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600,
-                                  color: overThreshold ? c.red : c.textDim,
-                                  fontVariantNumeric: "tabular-nums",
-                                }}>
-                                  · {days}d
-                                </span>
-                              )}
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
+                              {active.map(t => (
+                                <span key={t} style={{
+                                  padding: "2px 7px", borderRadius: layout.radiusXs,
+                                  background: pcMid[t] || c.surfaceAlt,
+                                  color: pc[t] || c.textDim,
+                                  fontFamily: typo.bodyXs.font, fontSize: 11, fontWeight: 700,
+                                  border: isBlockedProj ? `1px solid ${c.red}` : "none",
+                                }}>{t}</span>
+                              ))}
                             </span>
                           );
                         })()}
-                      </td>
-
-                      {/* Health */}
-                      <td style={{
-                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                        borderBottom: cellBorder,
-                      }}>
-                        <div style={{ display: "inline-flex", justifyContent: "center" }}>
-                          <HealthBar value={m.health ?? 100} compact />
-                        </div>
                       </td>
 
                       {/* Team — solid filled avatar bubbles */}
@@ -1492,7 +1526,7 @@ export default function ProjectsView({
                         padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
                         borderBottom: cellBorder,
                       }}>
-                        {(() => {
+                        {isUpcoming ? <span style={{ color: c.textDim, fontSize: 11 }}>—</span> : (() => {
                           const SOLID_COLORS = ["#0E7490", "#B45309", "#6D28D9", "#059669", "#DC2626", "#E8590C"];
                           return (
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1524,12 +1558,15 @@ export default function ProjectsView({
                         })()}
                       </td>
 
-                      {/* Updated */}
-                      {(() => {
+                      {/* Updated + activity peek icon */}
+                      {isUpcoming ? (
+                        <td style={{ padding: `${space[3]}px ${space[4]}px`, textAlign: "center", borderBottom: cellBorder }}>
+                          <span style={{ color: c.textDim, fontSize: 11 }}>—</span>
+                        </td>
+                      ) : (() => {
                         const stale = isStale(proj.lastActivityAt);
                         return (
                           <td
-                            title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : "No activity yet"}
                             style={{
                               padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
                               borderBottom: cellBorder,
@@ -1538,7 +1575,38 @@ export default function ProjectsView({
                               fontWeight: 500,
                               fontVariantNumeric: "tabular-nums",
                             }}
-                          >{proj.lastActivityAt ? timeAgo(proj.lastActivityAt) : "—"}</td>
+                          >
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                              <span title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : "No activity yet"}>
+                                {proj.lastActivityAt ? timeAgo(proj.lastActivityAt) : "—"}
+                              </span>
+                              {lastActivity && (
+                                <span
+                                  style={{
+                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                    width: 16, height: 16, cursor: "default", flexShrink: 0,
+                                    opacity: 0.35,
+                                    transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.opacity = "0.7";
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    showActivityTip({ projId: proj.id, rect });
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.opacity = "0.35";
+                                    hideActivityTip();
+                                  }}
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <circle cx="8" cy="8" r="6.5" />
+                                    <line x1="8" y1="7" x2="8" y2="11" />
+                                    <circle cx="8" cy="5" r="0.5" fill={c.textDim} stroke="none" />
+                                  </svg>
+                                </span>
+                              )}
+                            </div>
+                          </td>
                         );
                       })()}
 
@@ -1547,7 +1615,7 @@ export default function ProjectsView({
                         padding: `${space[3]}px ${space[4]}px`,
                         borderBottom: cellBorder,
                       }}>
-                        {(() => {
+                        {isUpcoming ? <span style={{ color: c.textDim, fontSize: 11 }}>—</span> : (() => {
                           const allocated = daysBetween(proj.startDate, proj.endDate);
                           const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, today), allocated));
                           const pct = allocated > 0 ? Math.round((elapsed / allocated) * 100) : 0;
@@ -1574,38 +1642,6 @@ export default function ProjectsView({
                         })()}
                       </td>
                     </tr>
-                    {isHovered && lastActivity && (
-                      <tr style={{ pointerEvents: "none" }}>
-                        <td colSpan={10} style={{
-                          padding: `${space[2]}px ${space[4]}px ${space[3]}px`,
-                          background: c.surfaceAlt,
-                          borderBottom: cellBorder,
-                        }}>
-                          <div style={{
-                            display: "flex", alignItems: "center", gap: space[2],
-                            maxWidth: 700,
-                          }}>
-                            <span style={{ fontSize: 12, flexShrink: 0 }}>{lastActivity.kind === "comment" ? "💬" : "⚡"}</span>
-                            {lastActivity.kind === "comment" && (
-                              <span style={{
-                                fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-                                color: c.text, flexShrink: 0,
-                              }}>{lastActivity.author}</span>
-                            )}
-                            <span style={{
-                              fontFamily: typo.bodySm.font, fontSize: 12,
-                              color: lastActivity.kind === "comment" ? c.textMid : c.textDim,
-                              fontStyle: lastActivity.kind === "event" ? "italic" : "normal",
-                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1,
-                            }}>{lastActivity.body}</span>
-                            <span style={{
-                              fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim,
-                              flexShrink: 0,
-                            }}>{timeAgo(lastActivity.ts)}</span>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                     </React.Fragment>
                   );
                 })}
@@ -1614,6 +1650,56 @@ export default function ProjectsView({
       )}
       <div style={{ flexShrink: 0, height: space[8] }} />
       </div>
+
+      {/* Activity peek tooltip — portal to body so it escapes table overflow:clip */}
+      {activityTip && (() => {
+        const act = latestActivity[activityTip.projId];
+        if (!act) return null;
+        const r = activityTip.rect;
+        const tipW = 280;
+        const cx = r.left + r.width / 2;
+        const idealLeft = cx - tipW / 2;
+        const clampedLeft = Math.max(12, Math.min(idealLeft, window.innerWidth - tipW - 12));
+        const arrowLeft = cx - clampedLeft;
+        return createPortal(
+          <div
+            onMouseEnter={() => clearTimeout(activityTipTimer.current)}
+            onMouseLeave={() => hideActivityTip()}
+            style={{
+              position: "fixed",
+              top: r.bottom + 8, left: clampedLeft,
+              background: c.surface, border: `1px solid ${c.border}`,
+              borderRadius: layout.radiusSm, boxShadow: c.shadowFloat,
+              padding: `${space[2]}px ${space[3]}px`,
+              width: tipW, zIndex: 10000,
+              animation: `fadeScaleIn ${motion.fast.duration} ${motion.fast.easing} both`,
+              transformOrigin: "top center",
+            }}
+          >
+            <div style={{
+              position: "absolute", top: -4, left: `${arrowLeft}px`, transform: "translateX(-50%) rotate(45deg)",
+              width: 8, height: 8, background: c.surface,
+              borderLeft: `1px solid ${c.border}`, borderTop: `1px solid ${c.border}`,
+            }} />
+            {act.kind === "comment" ? (<>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                <span style={{ fontSize: 11, flexShrink: 0 }}>💬</span>
+                <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.text }}>{act.author}</span>
+              </div>
+              <div style={{
+                fontFamily: typo.bodySm.font, fontSize: 12, lineHeight: 1.4, color: c.textMid,
+                overflow: "hidden", display: "-webkit-box",
+                WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+              }}>{act.body}</div>
+            </>) : (
+              <div style={{
+                fontFamily: typo.bodySm.font, fontSize: 12, lineHeight: 1.4, color: c.textDim, fontStyle: "italic",
+              }}>{act.body}</div>
+            )}
+          </div>,
+          document.body
+        );
+      })()}
 
       {/* FAB — Add Project (hidden in historical mode) */}
       {<button className="flow-btn" onClick={() => setShowCreate(true)} aria-label="Add project" style={{
@@ -1634,7 +1720,67 @@ export default function ProjectsView({
       {showCreate && <CreateProjectOverlay
         projects={projects} people={people} squads={squads} setProjects={setProjects}
         onClose={() => setShowCreate(false)}
+        onCreated={(id, name) => {
+          setCreateSuccess({ name, id });
+          if (createSuccessTimerRef.current) clearTimeout(createSuccessTimerRef.current);
+          createSuccessTimerRef.current = setTimeout(() => { setCreateSuccess(null); createSuccessTimerRef.current = null; }, 4500);
+          setSelectedProject(id);
+        }}
       />}
+
+      {/* ═══ LIST-LEVEL START NOW MODAL ═══ */}
+      {listStartNowId && (() => {
+        const targetProj = projects.find(p => p.id === listStartNowId);
+        if (!targetProj) return null;
+        return (
+          <Modal open={true} onClose={() => setListStartNowId(null)} title="Start this project" accent={c.accent}>
+            <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
+              Select tracks to start for <strong style={{ color: c.text }}>{targetProj.name}</strong>. The start date will be set to today.
+            </div>
+            <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", marginBottom: space[5] }}>
+              {trackNames.map(t => {
+                const sel = listStartNowTracks.includes(t);
+                const phColor = pc[t] || c.textDim;
+                return (
+                  <button key={t} type="button" onClick={() => setListStartNowTracks(prev => sel ? prev.filter(x => x !== t) : [...prev, t])} style={{
+                    padding: `8px 16px`, borderRadius: layout.radiusSm,
+                    background: sel ? phColor + "18" : c.surfaceAlt,
+                    border: `1.5px solid ${sel ? phColor : c.border}`,
+                    color: sel ? phColor : c.textMid,
+                    fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                    letterSpacing: "0.04em", cursor: "pointer",
+                    transition: `all ${motion.fast.duration} ${motion.fast.easing}`,
+                  }}>{t}</button>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
+              <Btn variant="ghost" size="sm" onClick={() => setListStartNowId(null)}>Cancel</Btn>
+              <Btn variant="primary" size="sm" disabled={listStartNowTracks.length === 0} onClick={() => {
+                const todayStr = today;
+                const now = new Date().toISOString();
+                const newTracks = {};
+                for (const t of listStartNowTracks) {
+                  newTracks[t] = { periods: [{ started_at: now, completed_at: null }], owner: null };
+                }
+                const primaryPhase = listStartNowTracks[listStartNowTracks.length - 1];
+                setProjects(prev => prev.map(p => p.id === listStartNowId ? { ...p, status: "in_flight", phase: primaryPhase, tracks: newTracks, startDate: todayStr, tentativeStartDate: null } : p));
+                updateProjectInDB(listStartNowId, { status: "in_flight", phase: primaryPhase, startDate: todayStr, tentativeStartDate: null });
+                if (isDevSeedMode()) {
+                  const proj = rawProjects.find(p => p.id === listStartNowId);
+                  if (proj) { proj.tracks = newTracks; proj.status = "in_flight"; proj.phase = primaryPhase; proj.startDate = todayStr; devStore.persistProjects(rawProjects); }
+                  for (const t of listStartNowTracks) {
+                    devStore.logEvent({ projectId: listStartNowId, action: "track_started", details: { track: t } });
+                  }
+                }
+                window.__flowToast?.(`${targetProj.name} started with ${listStartNowTracks.join(", ")}`);
+                setListStartNowId(null);
+                setListStartNowTracks(["PRD"]);
+              }}>Start Project</Btn>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* Board and Gantt fullscreen overlays removed — both are now inline */}
     </div>
@@ -1645,63 +1791,80 @@ export default function ProjectsView({
 /* ══════════════════════════════════════════════════════════════════
    CREATE PROJECT OVERLAY
    ══════════════════════════════════════════════════════════════════ */
-function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }) {
+function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, onCreated }) {
   useDevLabel('CreateProjectOverlay', 'src/views/ProjectsView.jsx', 'Modal overlay form for creating new projects with all field inputs');
   const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [owner, setOwner] = useState("");
   const [squad, setSquad] = useState("");
-  const [phase, setPhase] = useState("PRD");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
   const [priority, setPriority] = useState("P2");
   const [complexity, setComplexity] = useState("");
+  const [startNow, setStartNow] = useState(false);
+  const [selectedTracks, setSelectedTracks] = useState(["PRD"]);
+  const [tentativeStart, setTentativeStart] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [dependencies, setDependencies] = useState([]);
+  const [depSearch, setDepSearch] = useState("");
+  const [depOpen, setDepOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Prefer the canonical squads list from App.jsx so newly-created squads
-  // that haven't been assigned to any project yet still appear here.
   const allSquads = squads && squads.length
     ? [...squads].sort()
     : [...new Set(projects.map(p => p.squad).filter(Boolean))].sort();
   const allOwners = people ? people.map(p => p.name).sort() : [...new Set(projects.map(p => p.owner).filter(Boolean))].sort();
 
-  // Display-only preview — real ID is generated server-side
   const previewId = useMemo(() => {
     const nums = projects.map(p => parseInt(p.id.replace(/\D/g, ""), 10)).filter(n => !isNaN(n));
     const max = nums.length > 0 ? Math.max(...nums) : 0;
     return `X${String(max + 1).padStart(2, "0")}`;
   }, [projects]);
 
-  const canSave = name.trim() && owner && squad && startDate && endDate && endDate > startDate;
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }, []);
+
+  const startDate = startNow ? todayStr : tentativeStart;
+  const canSave = name.trim() && owner && squad;
 
   const handleCreate = () => {
     if (!canSave || saving) return;
     setSaving(true);
     const tempId = previewId;
     const now = new Date().toISOString();
+    const tracks = {};
+    if (startNow && selectedTracks.length > 0) {
+      for (const t of selectedTracks) {
+        tracks[t] = { periods: [{ started_at: now, completed_at: null }], owner: null };
+      }
+    }
+    const primaryPhase = startNow && selectedTracks.length > 0 ? selectedTracks[selectedTracks.length - 1] : null;
     const newProj = {
-      id: tempId, name: name.trim(), description: description.trim() || null,
-      owner, squad, phase, startDate, endDate, status: "active",
+      id: tempId, name: name.trim(), description: null,
+      owner, squad, phase: primaryPhase, startDate: startNow ? (startDate || null) : null, endDate: endDate || null,
+      status: startNow ? "in_flight" : "upcoming",
+      tracks,
+      tentativeStartDate: startNow ? null : (tentativeStart || null),
       priority, complexity: complexity || null,
       isBlocked: false, blockedReason: null, blockedAt: null,
       lastActivityAt: now, createdAt: now,
       phaseDurationOverrides: null,
+      dependencies: dependencies.length > 0 ? dependencies : null,
     };
     setProjects(prev => [...prev, newProj]);
     onClose();
+    if (onCreated) onCreated(tempId, name.trim());
   };
 
   const inputStyle = {
     width: "100%", height: 40, padding: `0 ${space[3]}px`,
     borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-    background: c.surfaceAlt, color: c.text,
+    background: c.surface, color: c.text,
     fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
     outline: "none", boxSizing: "border-box",
   };
 
   const fieldLabel = { fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 600, color: c.textMid, marginBottom: space[1], letterSpacing: 0 };
 
-  // Pill selector helper
   const PillSelector = ({ options, value, onChange }) => (
     <div style={{ display: "flex", flexWrap: "wrap", gap: space[1] }}>
       {options.map(opt => {
@@ -1731,8 +1894,6 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
     </div>
   );
 
-  const phaseOpts = allPhases.map(p => ({ value: p, label: p, color: getPhaseColors()[p] }));
-
   const priorityOpts = [
     { value: "P0", label: "Critical", color: c.red },
     { value: "P1", label: "P1", color: c.amber },
@@ -1745,6 +1906,20 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
     { value: "M", label: "Med", color: c.amber },
     { value: "L", label: "High", color: c.red },
   ];
+
+  const depCandidates = projects.filter(p =>
+    p.id !== previewId &&
+    !dependencies.includes(p.id) &&
+    (depSearch === "" || p.name.toLowerCase().includes(depSearch.toLowerCase()) || p.id.toLowerCase().includes(depSearch.toLowerCase()))
+  );
+
+  const depRef = useRef(null);
+  useEffect(() => {
+    if (!depOpen) return;
+    const handler = (e) => { if (depRef.current && !depRef.current.contains(e.target)) setDepOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [depOpen]);
 
   return (
     <Modal open onClose={onClose} blur={8} width={540} title="New project">
@@ -1771,30 +1946,6 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
             <Inp value={name} onChange={e => { if (e.target.value.length <= 100) setName(e.target.value); }} placeholder="e.g. Checkout Redesign" style={{ width: "100%" }} autoFocus maxLength={100} />
           </div>
 
-          {/* Description */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <div style={fieldLabel}>Description <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: description.length > 280 ? c.red : c.textDim, fontVariantNumeric: "tabular-nums" }}>{description.length}/300</span>
-            </div>
-            <textarea
-              value={description}
-              onChange={e => { if (e.target.value.length <= 300) setDescription(e.target.value); }}
-              placeholder="Brief project description..."
-              maxLength={300}
-              rows={3}
-              style={{
-                width: "100%", padding: `${space[2]}px ${space[3]}px`,
-                borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-                background: c.surfaceAlt, color: c.text,
-                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                outline: "none", boxSizing: "border-box",
-                resize: "vertical", minHeight: 72,
-                lineHeight: 1.5,
-              }}
-            />
-          </div>
-
           {/* Owner + Squad */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
             <div>
@@ -1805,12 +1956,6 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
               <div style={fieldLabel}>Squad</div>
               <SearchSelect value={squad} onChange={setSquad} options={allSquads} placeholder="Search squads..." />
             </div>
-          </div>
-
-          {/* Phase pills */}
-          <div>
-            <div style={fieldLabel}>Phase</div>
-            <PillSelector options={phaseOpts} value={phase} onChange={setPhase} />
           </div>
 
           {/* Priority + Complexity side by side */}
@@ -1825,16 +1970,156 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose }
             </div>
           </div>
 
-          {/* Duration — start → end inline */}
+          {/* Timeline — toggle + dates */}
           <div>
-            <div style={fieldLabel}>Duration</div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
-              <span style={{ fontFamily: typo.bodyMd.font, fontSize: 14, color: c.textDim, flexShrink: 0 }}>→</span>
-              <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[1] }}>
+              <div style={{ ...fieldLabel, marginBottom: 0 }}>Timeline</div>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: startNow ? c.text : c.textDim, fontWeight: 500 }}>
+                  Start immediately
+                </span>
+                <button
+                  onClick={() => { setStartNow(v => { setTentativeStart(v ? "" : todayStr); return !v; }); }}
+                  style={{
+                    width: 36, height: 20, borderRadius: 10, border: "none", cursor: "pointer",
+                    background: startNow ? c.accent : c.border,
+                    position: "relative", flexShrink: 0,
+                    transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
+                  }}
+                >
+                  <div style={{
+                    width: 16, height: 16, borderRadius: 8,
+                    background: "#fff",
+                    position: "absolute", top: 2,
+                    left: startNow ? 18 : 2,
+                    transition: `left ${motion.fast.duration} ${motion.fast.easing}`,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
+                  }} />
+                </button>
+              </div>
+            </div>
+
+            {/* Track pills — revealed when starting immediately (multiselect) */}
+            <div style={{
+              overflow: "hidden",
+              maxHeight: startNow ? 70 : 0,
+              opacity: startNow ? 1 : 0,
+              marginTop: startNow ? space[2] : 0,
+              transition: `max-height ${motion.normal.duration} ${motion.normal.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}, margin-top ${motion.normal.duration} ${motion.normal.easing}`,
+            }}>
+              <div style={fieldLabel}>Starting Tracks <span style={{ fontWeight: 400, color: c.textDim }}>— select one or more</span></div>
+              <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
+                {trackNames.map(t => {
+                  const isSelected = selectedTracks.includes(t);
+                  const phColor = getPhaseColors()[t] || c.textMid;
+                  return (
+                    <button key={t} type="button" onClick={() => {
+                      setSelectedTracks(prev => isSelected ? prev.filter(x => x !== t) : [...prev, t]);
+                    }} style={{
+                      padding: `4px 12px`, borderRadius: 999,
+                      background: isSelected ? phColor : c.surfaceAlt,
+                      color: isSelected ? "#fff" : c.textMid,
+                      border: `1px solid ${isSelected ? phColor : c.border}`,
+                      fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                      cursor: "pointer", transition: "all 120ms ease",
+                    }}>{t}</button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Dates row — always side by side */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3], marginTop: space[2] }}>
+              <div>
+                <div style={fieldLabel}>Tentative start date <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
+                <input
+                  type="date"
+                  value={startNow ? todayStr : tentativeStart}
+                  onChange={e => { if (!startNow) setTentativeStart(e.target.value); }}
+                  readOnly={startNow}
+                  style={{ ...inputStyle, ...(startNow ? { background: c.surfaceAlt, color: c.textDim, cursor: "default" } : {}) }}
+                />
+              </div>
+              <div>
+                <div style={fieldLabel}>Tentative end date <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} min={startDate || undefined} style={{ ...inputStyle }} />
+              </div>
             </div>
             {startDate && endDate && endDate <= startDate && (
               <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.red, marginTop: space[1] }}>End date must be after start date</div>
+            )}
+          </div>
+
+          {/* Project Dependencies */}
+          <div ref={depRef} style={{ position: "relative" }}>
+            <div style={fieldLabel}>Dependencies <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
+            <div
+              onClick={() => setDepOpen(true)}
+              style={{
+                ...inputStyle,
+                height: "auto", minHeight: 40,
+                display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4,
+                padding: `4px ${space[2]}px`,
+                cursor: "text",
+              }}
+            >
+              {dependencies.map(depId => {
+                const dp = projects.find(p => p.id === depId);
+                return (
+                  <span key={depId} style={{
+                    display: "inline-flex", alignItems: "center", gap: 4,
+                    padding: "2px 8px", borderRadius: layout.radiusXs,
+                    background: c.surfaceAlt, border: `1px solid ${c.border}`,
+                    fontFamily: typo.bodySm.font, fontSize: 12, color: c.text, lineHeight: 1,
+                  }}>
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.amber, fontWeight: 700 }}>{depId}</span>
+                    {dp?.name && <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dp.name}</span>}
+                    <button onClick={(e) => { e.stopPropagation(); setDependencies(prev => prev.filter(id => id !== depId)); }} style={{
+                      background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1,
+                      color: c.textDim, fontSize: 14, fontWeight: 400,
+                    }}>&times;</button>
+                  </span>
+                );
+              })}
+              <input
+                value={depSearch}
+                onChange={e => { setDepSearch(e.target.value); setDepOpen(true); }}
+                onFocus={() => setDepOpen(true)}
+                placeholder={dependencies.length === 0 ? "Search projects..." : ""}
+                style={{
+                  border: "none", outline: "none", background: "transparent",
+                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.text,
+                  flex: 1, minWidth: 80, height: 30, padding: 0,
+                }}
+              />
+            </div>
+            {depOpen && depCandidates.length > 0 && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0,
+                marginTop: 4, maxHeight: 180, overflowY: "auto",
+                background: c.surface, border: `1px solid ${c.border}`,
+                borderRadius: layout.radiusSm, boxShadow: c.shadowFloat,
+                zIndex: 20,
+              }}>
+                {depCandidates.slice(0, 20).map(p => (
+                  <div
+                    key={p.id}
+                    onClick={() => { setDependencies(prev => [...prev, p.id]); setDepSearch(""); }}
+                    style={{
+                      padding: `${space[2]}px ${space[3]}px`,
+                      display: "flex", alignItems: "center", gap: space[2],
+                      cursor: "pointer",
+                      transition: `background ${motion.instant.duration} ${motion.instant.easing}`,
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = c.surfaceAlt; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700, color: c.amber }}>{p.id}</span>
+                    <span style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim }}>{p.phase}</span>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
@@ -1893,6 +2178,8 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
   const [blockedReasonText, setBlockedReasonText] = useState("");
   const [showOverrides, setShowOverrides] = useState(false);
   const [stagePickerOpen, setStagePickerOpen] = useState(false);
+  const [startNowModal, setStartNowModal] = useState(false);
+  const [startNowTracks, setStartNowTracks] = useState(["PRD"]);
   // Ship-phase modals: Alpha/Beta note + GA release note
   const [shipPhaseModal, setShipPhaseModal] = useState(null); // { phase, from }
   const [shipNote, setShipNote] = useState("");
@@ -1900,6 +2187,12 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
   const [gaReleaseNote, setGaReleaseNote] = useState("");
   const [gaFeatureType, setGaFeatureType] = useState("New");
   const [showConfetti, setShowConfetti] = useState(false);
+  const [trackReopenModal, setTrackReopenModal] = useState(false);
+  const [trackReopenReason, setTrackReopenReason] = useState("");
+  const [trackReopenTarget, setTrackReopenTarget] = useState(null);
+  const [shipProjectModal, setShipProjectModal] = useState(false);
+  const [shipProjectNote, setShipProjectNote] = useState("");
+  const [shipProjectFeatureType, setShipProjectFeatureType] = useState("New");
 
   // Helper: log an event to activity feed, update lastActivityAt, show toast
   const recordAction = useCallback((action, details, toastMsg) => {
@@ -1968,9 +2261,9 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
   // the edit form would also navigate back to the project list.
   useEffect(() => {
     if (!suppressBackRef) return;
-    suppressBackRef.current = !!(editing || deleteModal || depriReasonModal || blockedReasonModal || reactivateModal || retroDateModal || shipPhaseModal);
+    suppressBackRef.current = !!(editing || deleteModal || depriReasonModal || blockedReasonModal || reactivateModal || retroDateModal || shipPhaseModal || trackReopenModal || shipProjectModal);
     return () => { if (suppressBackRef) suppressBackRef.current = false; };
-  }, [editing, deleteModal, depriReasonModal, blockedReasonModal, reactivateModal, retroDateModal, shipPhaseModal, suppressBackRef]);
+  }, [editing, deleteModal, depriReasonModal, blockedReasonModal, reactivateModal, retroDateModal, shipPhaseModal, trackReopenModal, shipProjectModal, suppressBackRef]);
 
   // Fetch phase-change history from activity_log for this project.
   // Two formats coexist:
@@ -2026,7 +2319,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
 
   // Safe default so missing metrics don't crash the view (e.g. first-render
   // race or brand-new project with no commits yet).
-  if (!m) m = { historyTotal: 0, peopleList: [], weeklyData: [], health: null, overdue: false, atRisk: false, isBlocked: false, isStale: false };
+  if (!m) m = { historyTotal: 0, peopleList: [], weeklyData: [], overdue: false, atRisk: false, isBlocked: false, isStale: false };
 
   const [justSaved, setJustSaved] = useState(false);
   const justSavedTimerRef = useRef(null);
@@ -2102,7 +2395,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
 
   // Does this project have any history entries from past weeks (i.e., before
   // the current week's start)? If so, changing start/end dates retroactively
-  // alters health/overdue calculations for those frozen weeks.
+  // alters overdue calculations for those frozen weeks.
   const pastHistoryWeekCount = useMemo(() => {
     const projHist = history[proj.id] || [];
     return projHist.filter(w => w.entries?.length > 0).length;
@@ -2125,7 +2418,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       return;
     }
     // If plan dates change on a project with prior-week history, warn
-    // that health/overdue for those frozen weeks will shift.
+    // that overdue status for those frozen weeks will shift.
     if (datesChanged && pastHistoryWeekCount > 0) {
       setPendingSave({});
       setRetroDateModal(true);
@@ -2228,14 +2521,9 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
     : isDepri ? (remaining < 0 ? `ended ${Math.abs(remaining)}d ago` : `${remaining}d left`)
     : remaining < 0 ? (inShip ? `${Math.abs(remaining)}d past plan` : `${Math.abs(remaining)}d over`)
     : `${remaining}d`;
-  // Only fall back to date-elapsed % when there's no planned health signal AND dates exist.
-  const healthVal = m.health != null ? m.health : (hasPlannedDates ? pct : null);
-  const healthSub = m.health != null ? "project health score"
-    : hasPlannedDates ? "planned vs actual"
-    : "not enough signal";
   const fmtShort = (d) => { if (!d) return "—"; const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
 
-  // ── Risk tier (critical/warning/healthy) derived from metrics ──
+  // ── Risk tier derived from metrics ──
   return (
     <div style={{
       display: "flex", flexDirection: "column", gap: space[3], paddingBottom: 96,
@@ -2245,7 +2533,34 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       transformOrigin: "center top",
     }}>
 
-      {/* ═══ STATE BANNERS — historical / deprioritized / blocked ═══ */}
+      {/* ═══ STATE BANNERS — upcoming / deprioritized / blocked ═══ */}
+      {proj.status === "upcoming" && (
+        <div style={{
+          padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
+          background: c.surfaceAlt, border: `1px solid ${c.border}`,
+          display: "flex", alignItems: "center", gap: space[3],
+        }}>
+          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0 }}>
+            Upcoming Project
+          </span>
+          {proj.tentativeStartDate && (() => {
+            const daysOver = Math.round((new Date(today + "T00:00:00") - new Date(proj.tentativeStartDate + "T00:00:00")) / 86400000);
+            if (daysOver > 0) return (
+              <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.amber }}>
+                Tentative start date passed by {daysOver}d
+              </span>
+            );
+            return null;
+          })()}
+          <div style={{ flex: 1 }} />
+          <button type="button" onClick={() => { setStartNowTracks(["PRD"]); setStartNowModal(true); }} style={{
+            padding: `5px 14px`, borderRadius: 999, flexShrink: 0,
+            background: c.accent, border: "none",
+            color: c.textOnAccent, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+            cursor: "pointer",
+          }}>Start Now</button>
+        </div>
+      )}
       {proj.status === "deprioritized" && (
         <div style={{
           padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
@@ -2259,9 +2574,9 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             {proj.depriReason || <span style={{ color: c.textDim, fontStyle: "italic" }}>No reason provided.</span>}
           </div>
           <button type="button" onClick={() => {
-            setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: "active", depriReason: null } : p));
-            updateProjectInDB(proj.id, { status: "active", depriReason: null });
-            recordAction("project_status_changed", { from: "deprioritized", to: "active" }, "Project moved back to active");
+            setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: "in_flight", depriReason: null } : p));
+            updateProjectInDB(proj.id, { status: "in_flight", depriReason: null });
+            recordAction("project_status_changed", { from: "deprioritized", to: "in_flight" }, "Project moved back to in flight");
           }} style={{
             padding: `4px 12px`, borderRadius: 999, flexShrink: 0,
             background: "transparent", border: `1px solid ${c.amber}`,
@@ -2314,6 +2629,58 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
           </div>
         </div>
       )}
+
+      {/* ═══ ALPHA / BETA RELEASE NOTE — above hero card ═══ */}
+      {(() => {
+        const hasAlphaOrBeta = (proj.shipNote || proj.shipPct != null) &&
+          (proj.phase === "Alpha" || proj.phase === "Beta" ||
+           proj.tracks?.Alpha?.periods?.some(p => !p.completed_at) ||
+           proj.tracks?.Beta?.periods?.some(p => !p.completed_at));
+        if (!hasAlphaOrBeta) return null;
+        const releasePhase = proj.tracks?.Beta?.periods?.some(p => !p.completed_at) ? "Beta"
+          : proj.tracks?.Alpha?.periods?.some(p => !p.completed_at) ? "Alpha"
+          : proj.phase === "Beta" ? "Beta" : "Alpha";
+        return (
+          <div style={{
+            padding: `${space[4]}px ${space[5]}px`,
+            borderRadius: layout.radiusSm, background: c.greenDim,
+            border: `1px solid ${c.green}20`,
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[2] }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z" />
+                <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+                <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+                <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+              </svg>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, color: c.green, letterSpacing: "0.08em", textTransform: "uppercase" }}>{releasePhase} Release</span>
+              {proj.shipPct != null && (
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
+                  color: c.green, background: c.surface, padding: `2px 8px`,
+                  borderRadius: layout.radiusXs, border: `1px solid ${c.green}30`,
+                  marginLeft: "auto",
+                }}>{proj.shipPct}% rollout</span>
+              )}
+              <button type="button" onClick={() => {
+                setShipNote(proj.shipNote || "");
+                setShipPct(proj.shipPct != null ? String(proj.shipPct) : "");
+                setShipPhaseModal({ phase: releasePhase, from: releasePhase });
+              }} style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: c.textDim, fontSize: 11, fontWeight: 600,
+                fontFamily: typo.bodySm.font, textDecoration: "underline",
+                flexShrink: 0, marginLeft: proj.shipPct == null ? "auto" : 0,
+              }}>Edit</button>
+            </div>
+            {proj.shipNote && (
+              <div style={{ fontFamily: typo.bodyMd.font, fontSize: 14, color: c.textMid, lineHeight: 1.55 }}>
+                {proj.shipNote}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ═══ IDENTITY HEADER — project id + name + owner|squad + status + freshness ═══ */}
       <div style={{
@@ -2382,90 +2749,148 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                   <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, color: c.textMid }}>{proj.squad}</span>
                 </>
               )}
+              {proj.createdAt && (
+                <>
+                  <span style={{ color: c.border, fontSize: 11, margin: `0 ${space[1]}px` }}>|</span>
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600, color: c.textDim, textTransform: "uppercase", letterSpacing: "0.08em" }}>Created</span>
+                  <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 500, color: c.textDim }}>{fmtShort(proj.createdAt.split("T")[0])}</span>
+                </>
+              )}
             </div>
 
-            {/* Row 4: Stage (clickable picker) + quick-actions */}
-            <div style={{ marginTop: space[4], display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: space[3] }}>
-              <div style={{ position: "relative" }} ref={el => { if (el) el.__stagePickerEl = el; }}>
+            {/* Row 4: Active Tracks + quick-actions — hidden for upcoming */}
+            {proj.status !== "upcoming" && <div style={{ marginTop: space[4], display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: space[3] }}>
+              <div>
                 <span style={{
                   fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
                   letterSpacing: "0.1em", textTransform: "uppercase", color: c.textDim,
                   display: "block", marginBottom: space[1],
-                }}>Stage</span>
-                <button id="stage-picker-btn" type="button" onClick={() => setStagePickerOpen(v => !v)} style={{
-                  display: "inline-flex", alignItems: "center", gap: 6,
-                  padding: `5px 12px 5px 16px`, borderRadius: 999,
-                  fontFamily: typo.monoSm.font, fontSize: 13, fontWeight: 700,
-                  letterSpacing: "0.06em", textTransform: "uppercase",
-                  background: sCfg.bg || c.surfaceAlt, color: sCfg.color || c.textMid,
-                  border: `1px solid ${(sCfg.color || c.textMid) + "30"}`,
-                  cursor: "pointer", transition: "box-shadow 120ms ease",
-                }}>
-                  {proj.status === "deprioritized" ? "Deprioritized" : proj.phase}
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ opacity: 0.5 }}>
-                    <path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </button>
-                {stagePickerOpen && createPortal(
-                  <>
-                    <div style={{ position: "fixed", inset: 0, zIndex: 99999 }} onClick={() => setStagePickerOpen(false)} />
-                    <div style={{
-                      position: "fixed", zIndex: 100000,
-                      top: (() => { const btn = document.getElementById("stage-picker-btn"); return btn ? btn.getBoundingClientRect().bottom + 4 : 0; })(),
-                      left: (() => { const btn = document.getElementById("stage-picker-btn"); return btn ? btn.getBoundingClientRect().left : 0; })(),
-                      background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusSm,
-                      boxShadow: c.shadowElevated, padding: space[1], minWidth: 140,
-                      display: "flex", flexDirection: "column",
-                    }}>
-                      {allPhases.map(ph => {
-                        const isCurrent = ph === proj.phase;
-                        const phColor = getPhaseColors()[ph] || c.textMid;
-                        return (
-                          <button key={ph} type="button" onClick={() => {
-                            if (ph !== proj.phase) {
-                              if (ph === "Alpha" || ph === "Beta") {
-                                setShipNote(""); setShipPct("");
-                                setShipPhaseModal({ phase: ph, from: proj.phase });
-                                setStagePickerOpen(false);
-                                return;
-                              }
-                              if (ph === "GA") {
-                                setGaReleaseNote(""); setGaFeatureType("New");
-                                setShipPhaseModal({ phase: "GA", from: proj.phase });
-                                setStagePickerOpen(false);
-                                return;
-                              }
-                              const oldPhase = proj.phase;
-                              setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, phase: ph } : p));
-                              updateProjectInDB(proj.id, { phase: ph });
-                              recordAction("project_phase_changed", { from: oldPhase, to: ph }, `Stage updated to ${ph}`);
-                            }
-                            setStagePickerOpen(false);
-                          }} style={{
-                            padding: `6px 12px`, borderRadius: layout.radiusXs,
-                            background: isCurrent ? c.surfaceAlt : "transparent",
-                            border: "none", cursor: "pointer", textAlign: "left",
-                            fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: isCurrent ? 700 : 500,
-                            color: isCurrent ? phColor : c.text,
-                            display: "flex", alignItems: "center", gap: space[2],
-                            transition: "background 80ms ease",
+                }}>Active Tracks</span>
+                <div style={{ display: "flex", alignItems: "center", gap: space[2], flexWrap: "wrap" }}>
+                  {(() => {
+                    const activeTracks = getActiveTracks(proj);
+                    const phColors = getPhaseColors();
+                    const phMids = getPhaseMids();
+                    return (
+                      <>
+                        {activeTracks.length > 0 ? activeTracks.map(t => (
+                          <span key={t} style={{
+                            display: "inline-flex", alignItems: "center", gap: 5,
+                            padding: `4px 12px`, borderRadius: 999,
+                            background: phMids[t] || c.surfaceAlt, color: phColors[t] || c.textMid,
+                            fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                            letterSpacing: "0.06em", textTransform: "uppercase",
+                            border: `1px solid ${(phColors[t] || c.textMid) + "30"}`,
+                          }}>
+                            <span style={{ width: 6, height: 6, borderRadius: "50%", background: phColors[t] || c.textMid }} />
+                            {t}
+                            <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim, fontVariantNumeric: "tabular-nums" }}>
+                              {getTrackActiveDays(proj, t)}d
+                            </span>
+                          </span>
+                        )) : (
+                          <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: c.textDim, fontStyle: "italic" }}>No active tracks</span>
+                        )}
+                        {/* + Track button */}
+                        {proj.status !== "shipped" && (
+                          <button id="add-track-btn" type="button" onClick={() => setStagePickerOpen(v => !v)} style={{
+                            display: "inline-flex", alignItems: "center", gap: 4,
+                            padding: `4px 10px`, borderRadius: 999,
+                            background: "transparent", border: `1px dashed ${c.border}`,
+                            color: c.textDim, fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
+                            cursor: "pointer", transition: "border-color 120ms ease, color 120ms ease",
                           }}
-                            onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = c.surfaceAlt; }}
-                            onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}
-                          >
-                            <span style={{ width: 8, height: 8, borderRadius: "50%", background: phColor, flexShrink: 0 }} />
-                            {ph}
-                            {isCurrent && <span style={{ marginLeft: "auto", fontSize: 11, color: c.textDim }}>current</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>,
-                  document.body
-                )}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = c.accent; e.currentTarget.style.color = c.accent; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textDim; }}
+                          >+ Track</button>
+                        )}
+                      </>
+                    );
+                  })()}
+                  {stagePickerOpen && createPortal(
+                    <>
+                      <div style={{ position: "fixed", inset: 0, zIndex: 99999 }} onClick={() => setStagePickerOpen(false)} />
+                      <div style={{
+                        position: "fixed", zIndex: 100000,
+                        top: (() => { const btn = document.getElementById("add-track-btn"); return btn ? btn.getBoundingClientRect().bottom + 4 : 0; })(),
+                        left: (() => { const btn = document.getElementById("add-track-btn"); return btn ? btn.getBoundingClientRect().left : 0; })(),
+                        background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusSm,
+                        boxShadow: c.shadowElevated, padding: space[1], minWidth: 140,
+                        display: "flex", flexDirection: "column",
+                      }}>
+                        {trackNames.map(t => {
+                          const tStatus = getTrackStatus(proj, t);
+                          const phColor = getPhaseColors()[t] || c.textMid;
+                          const isActive = tStatus === "active";
+                          return (
+                            <button key={t} type="button" onClick={() => {
+                              if (!isActive) {
+                                setStagePickerOpen(false);
+                                if (t === "Alpha" || t === "Beta") {
+                                  setShipNote(proj.shipNote || "");
+                                  setShipPct(proj.shipPct != null ? String(proj.shipPct) : "");
+                                  setShipPhaseModal({ phase: t, from: proj.phase, isTrackStart: true });
+                                  return;
+                                }
+                                startTrackInDB(proj.id, t, projects);
+                                setProjects(prev => {
+                                  const copy = prev.map(p => {
+                                    if (p.id !== proj.id) return p;
+                                    const updated = { ...p, tracks: { ...p.tracks } };
+                                    if (!updated.tracks[t]) updated.tracks[t] = { periods: [], owner: null };
+                                    updated.tracks[t] = { ...updated.tracks[t], periods: [...updated.tracks[t].periods, { started_at: new Date().toISOString(), completed_at: null }] };
+                                    updated.phase = derivePrimaryPhase(updated);
+                                    if (updated.status === "upcoming") updated.status = "in_flight";
+                                    return updated;
+                                  });
+                                  return copy;
+                                });
+                              }
+                              setStagePickerOpen(false);
+                            }} disabled={isActive} style={{
+                              padding: `6px 12px`, borderRadius: layout.radiusXs,
+                              background: isActive ? c.surfaceAlt : "transparent",
+                              border: "none", cursor: isActive ? "default" : "pointer", textAlign: "left",
+                              fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: isActive ? 700 : 500,
+                              color: isActive ? phColor : c.text,
+                              opacity: isActive ? 0.5 : 1,
+                              display: "flex", alignItems: "center", gap: space[2],
+                              transition: "background 80ms ease",
+                            }}
+                              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = c.surfaceAlt; }}
+                              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
+                            >
+                              <span style={{ width: 8, height: 8, borderRadius: "50%", background: phColor, flexShrink: 0 }} />
+                              {t}
+                              {isActive && <span style={{ marginLeft: "auto", fontSize: 10, color: c.textDim }}>active</span>}
+                              {tStatus === "completed" && <span style={{ marginLeft: "auto", fontSize: 10, color: c.green }}>done</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>,
+                    document.body
+                  )}
+                </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                {!proj.isBlocked && proj.status !== "deprioritized" && (
+                {/* Ship Project */}
+                {proj.status === "in_flight" && (
+                  <button type="button" onClick={() => {
+                    setShipProjectNote("");
+                    setShipProjectFeatureType("New");
+                    setShipProjectModal(true);
+                  }} style={{
+                    padding: `4px 10px`, borderRadius: 999,
+                    background: c.greenDim, border: `1px solid ${c.green}40`,
+                    color: c.green, fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
+                    cursor: "pointer", transition: "background 120ms ease",
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.background = c.green; e.currentTarget.style.color = c.surface; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = c.greenDim; e.currentTarget.style.color = c.green; }}
+                  >Ship Project</button>
+                )}
+                {!proj.isBlocked && proj.status !== "deprioritized" && proj.status !== "shipped" && (
                   <button type="button" onClick={() => { setBlockedReasonText(""); setBlockedReasonModal(true); }} style={{
                     padding: `4px 10px`, borderRadius: 999,
                     background: "transparent", border: `1px solid ${c.border}`,
@@ -2476,7 +2901,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                     onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textDim; }}
                   >Mark blocked</button>
                 )}
-                {proj.status !== "deprioritized" && (
+                {proj.status !== "deprioritized" && proj.status !== "shipped" && (
                   <button type="button" onClick={() => { setDepriReasonText(""); setDepriReasonModal(true); }} style={{
                     padding: `4px 10px`, borderRadius: 999,
                     background: "transparent", border: `1px solid ${c.border}`,
@@ -2488,43 +2913,29 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                   >Deprioritize</button>
                 )}
               </div>
-            </div>
+            </div>}
 
-            {/* Ship note + rollout % for Alpha/Beta */}
-            {(proj.phase === "Alpha" || proj.phase === "Beta") && (proj.shipNote || proj.shipPct) && (
-              <div style={{
-                marginTop: space[3], padding: `${space[3]}px ${space[4]}px`,
-                borderRadius: layout.radiusSm, background: c.greenDim,
-                border: `1px solid ${c.green}20`,
-                display: "flex", alignItems: "center", gap: space[3],
-              }}>
-                <div style={{ flex: 1 }}>
-                  {proj.shipNote && (
-                    <div style={{ fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textMid, lineHeight: 1.45 }}>
-                      {proj.shipNote}
-                    </div>
-                  )}
-                </div>
-                {proj.shipPct != null && (
-                  <span style={{
-                    fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
-                    color: c.green, background: c.surface, padding: `2px 8px`,
-                    borderRadius: layout.radiusXs, border: `1px solid ${c.green}30`,
-                    flexShrink: 0,
-                  }}>{proj.shipPct}% rollout</span>
-                )}
-                <button type="button" onClick={() => {
-                  setShipNote(proj.shipNote || "");
-                  setShipPct(proj.shipPct != null ? String(proj.shipPct) : "");
-                  setShipPhaseModal({ phase: proj.phase, from: proj.phase });
-                }} style={{
-                  background: "none", border: "none", cursor: "pointer",
-                  color: c.textDim, fontSize: 11, fontWeight: 600,
-                  fontFamily: typo.bodySm.font, textDecoration: "underline",
-                  flexShrink: 0,
-                }}>Edit</button>
+            {/* Tentative start date for upcoming projects */}
+            {proj.status === "upcoming" && (
+              <div style={{ marginTop: space[4], display: "flex", alignItems: "center", gap: space[3] }}>
+                <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: c.textDim }}>Tentative Start</span>
+                <input type="date" value={proj.tentativeStartDate || ""}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    const oldDate = proj.tentativeStartDate || "";
+                    setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, tentativeStartDate: newDate || null } : p));
+                    updateProjectInDB(proj.id, { tentativeStartDate: newDate || null });
+                    recordAction("project_start_date_moved", { from: oldDate, to: newDate }, `Start date moved to ${newDate || "none"}`);
+                  }}
+                  style={{
+                    height: 32, padding: `0 ${space[2]}px`, borderRadius: layout.radiusXs,
+                    border: `1px solid ${c.border}`, background: c.surface, color: c.text,
+                    fontFamily: typo.monoSm.font, fontSize: 12,
+                  }}
+                />
               </div>
             )}
+
 
           </div>
         ) : (
@@ -2836,20 +3247,71 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             </div>
           );
         })()}
+
+        {/* ═══ DEPENDENCIES — pill-format links subsection inside header card ═══ */}
+        {proj.dependencies && proj.dependencies.length > 0 && !editing && (
+          <div style={{ marginTop: space[4], paddingTop: space[3], borderTop: `1px solid ${c.border}` }}>
+            <span style={{
+              fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.1em", textTransform: "uppercase", color: c.textDim,
+              display: "block", marginBottom: space[2],
+            }}>Dependencies</span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: space[2], alignItems: "center" }}>
+              {proj.dependencies.map(depId => {
+                const dp = projects.find(p => p.id === depId);
+                if (!dp) return null;
+                const depPhaseColor = getPhaseColors()[dp.phase] || c.textDim;
+                return (
+                  <button
+                    key={depId}
+                    onClick={() => { if (onNavigate) onNavigate("projects", depId); }}
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: `6px 12px 6px 8px`, borderRadius: 12,
+                      background: c.surfaceAlt, border: `1px solid ${c.border}`,
+                      cursor: "pointer", textDecoration: "none",
+                      transition: "border-color 120ms ease",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = c.textMid; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; }}
+                  >
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700, color: c.amber }}>{depId}</span>
+                    <span style={{ fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 600, color: c.text }}>{dp.name}</span>
+                    <span style={{
+                      fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600,
+                      padding: "2px 6px", borderRadius: layout.radiusXs,
+                      background: `${depPhaseColor}18`, color: depPhaseColor,
+                    }}>{dp.phase || "—"}</span>
+                    {dp.isBlocked && <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, color: c.red }}>BLOCKED</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ TEAM — inline inside header card ═══ */}
+        {!editing && (
+          <div style={{ marginTop: space[4], paddingTop: space[3], borderTop: `1px solid ${c.border}` }}>
+            <span style={{
+              fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+              letterSpacing: "0.1em", textTransform: "uppercase", color: c.textDim,
+              display: "block", marginBottom: space[2],
+            }}>Team</span>
+            <ProjectActivity
+              project={proj}
+              people={people}
+              currentPerson={personProfile}
+              isAppOwner={isAppOwner}
+              onPersonNavigate={(name) => onNavigate && onNavigate("people", name)}
+              membersOnly
+              membersInline
+            />
+          </div>
+        )}
       </div>
 
-      {/* ═══ TEAM — standalone member pills section ═══ */}
-      <div>
-        <SectionHead title="Team" />
-        <ProjectActivity
-          project={proj}
-          people={people}
-          currentPerson={personProfile}
-          isAppOwner={isAppOwner}
-          onPersonNavigate={(name) => onNavigate && onNavigate("people", name)}
-          membersOnly
-        />
-      </div>
+      {/* Team section moved into hero card below */}
 
       {/* ═══ SHOUTOUTS — displayed for all GA projects ═══ */}
       {proj.phase === "GA" && shoutouts.length > 0 && (
@@ -3021,16 +3483,58 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
         </div>
       )}
 
-      {/* ═══ TIMELINE — phase ladder, transition dates, plan dates, % elapsed ═══ */}
-      <div>
+      {/* ═══ TIMELINE — TrackGantt then alerts below ═══ */}
+      {proj.status !== "upcoming" && <div>
         <SectionHead title="Timeline" />
 
-        {/* ── Phase overstay + overdue alerts ── */}
+        {/* ── Track Gantt (parallel tracks) ── */}
+        <TrackGantt
+          proj={proj}
+          onStartTrack={(trackName) => {
+            if (trackName === "Alpha" || trackName === "Beta") {
+              setShipNote(proj.shipNote || "");
+              setShipPct(proj.shipPct != null ? String(proj.shipPct) : "");
+              setShipPhaseModal({ phase: trackName, from: proj.phase, isTrackStart: true });
+              return;
+            }
+            startTrackInDB(proj.id, trackName, projects);
+            setProjects(prev => prev.map(p => {
+              if (p.id !== proj.id) return p;
+              const updated = { ...p, tracks: { ...p.tracks } };
+              if (!updated.tracks[trackName]) updated.tracks[trackName] = { periods: [], owner: null };
+              updated.tracks[trackName] = { ...updated.tracks[trackName], periods: [...updated.tracks[trackName].periods, { started_at: new Date().toISOString(), completed_at: null }] };
+              updated.phase = derivePrimaryPhase(updated);
+              if (updated.status === "upcoming") updated.status = "in_flight";
+              return updated;
+            }));
+          }}
+          onCompleteTrack={(trackName) => {
+            completeTrackInDB(proj.id, trackName, projects);
+            setProjects(prev => prev.map(p => {
+              if (p.id !== proj.id) return p;
+              const updated = { ...p, tracks: { ...p.tracks } };
+              if (updated.tracks[trackName]) {
+                const periods = [...updated.tracks[trackName].periods];
+                const last = periods[periods.length - 1];
+                if (last && last.completed_at === null) periods[periods.length - 1] = { ...last, completed_at: new Date().toISOString() };
+                updated.tracks[trackName] = { ...updated.tracks[trackName], periods };
+              }
+              updated.phase = derivePrimaryPhase(updated);
+              return updated;
+            }));
+          }}
+          onReopenTrack={(trackName) => {
+            setTrackReopenTarget(trackName);
+            setTrackReopenReason("");
+            setTrackReopenModal(true);
+          }}
+        />
+
+        {/* ── Track overstay + overdue alerts (below timeline) ── */}
         {(() => {
           const projOverrides = proj.phaseDurationOverrides || {};
           const alerts = [];
 
-          // Phase overstay: compute duration of each phase segment from transitions
           if (phaseTransitions.length > 0) {
             for (let i = 0; i < phaseTransitions.length; i++) {
               const seg = phaseTransitions[i];
@@ -3053,8 +3557,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             }
           }
 
-          // Overdue: end date passed and project not in a shipped phase
-          const inShipPhase = SHIPPED_PHASES.includes(proj.phase);
+          const inShipPhase = proj.status === "shipped";
           if (proj.endDate && !inShipPhase) {
             const overdueDays = Math.round(
               (new Date(today + "T00:00:00") - new Date(proj.endDate + "T00:00:00")) / 86400000
@@ -3062,7 +3565,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             if (overdueDays > 0) {
               alerts.push({
                 type: "overdue",
-                message: `The project is overdue by ${overdueDays} day${overdueDays === 1 ? "" : "s"}. Health is deteriorating. Take action!`,
+                message: `The project is overdue by ${overdueDays} day${overdueDays === 1 ? "" : "s"}. Take action!`,
               });
             }
           }
@@ -3070,7 +3573,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
           if (alerts.length === 0) return null;
 
           return (
-            <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginBottom: space[3] }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginTop: space[3] }}>
               {alerts.map((a, i) => (
                 <div
                   key={i}
@@ -3092,14 +3595,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             </div>
           );
         })()}
-
-        <ProjectTimeline
-          project={proj}
-          phaseTransitions={phaseTransitions}
-          today={today}
-          phaseDurationDefaults={phaseDurationDefaults}
-        />
-      </div>
+      </div>}
 
       {/* ═══ SCHEDULE — plan vs actual with actual as the primary fact ═══ */}
       {inShip && (proj.actualStartDate || proj.actualEndDate) && (() => {
@@ -3205,6 +3701,53 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
 
 
       {/* FAB removed — edit is now the pencil icon in the header; delete lives in the edit panel. */}
+
+      {/* ═══ START NOW MODAL — pick tracks to begin ═══ */}
+      <Modal open={startNowModal} onClose={() => setStartNowModal(false)} title="Start this project" accent={c.accent}>
+        <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
+          Select tracks to start for <strong style={{ color: c.text }}>{proj.name}</strong>. The start date will be set to today.
+        </div>
+        <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", marginBottom: space[5] }}>
+          {trackNames.map(t => {
+            const sel = startNowTracks.includes(t);
+            const phColor = pc[t] || c.textDim;
+            return (
+              <button key={t} type="button" onClick={() => setStartNowTracks(prev => sel ? prev.filter(x => x !== t) : [...prev, t])} style={{
+                padding: `8px 16px`, borderRadius: layout.radiusSm,
+                background: sel ? phColor + "18" : c.surfaceAlt,
+                border: `1.5px solid ${sel ? phColor : c.border}`,
+                color: sel ? phColor : c.textMid,
+                fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                letterSpacing: "0.04em", cursor: "pointer",
+                transition: `all ${motion.fast.duration} ${motion.fast.easing}`,
+              }}>{t}</button>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
+          <Btn variant="ghost" size="sm" onClick={() => setStartNowModal(false)}>Cancel</Btn>
+          <Btn variant="primary" size="sm" disabled={startNowTracks.length === 0} onClick={() => {
+            const todayStr = today;
+            const now = new Date().toISOString();
+            const newTracks = {};
+            for (const t of startNowTracks) {
+              newTracks[t] = { periods: [{ started_at: now, completed_at: null }], owner: null };
+            }
+            const primaryPhase = startNowTracks[startNowTracks.length - 1];
+            setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: "in_flight", phase: primaryPhase, tracks: newTracks, startDate: todayStr, tentativeStartDate: null } : p));
+            updateProjectInDB(proj.id, { status: "in_flight", phase: primaryPhase, startDate: todayStr, tentativeStartDate: null });
+            if (isDevSeedMode()) {
+              const raw = projects.find(p => p.id === proj.id);
+              if (raw) { raw.tracks = newTracks; raw.status = "in_flight"; raw.phase = primaryPhase; raw.startDate = todayStr; devStore.persistProjects(projects); }
+              for (const t of startNowTracks) {
+                devStore.logEvent({ projectId: proj.id, action: "track_started", details: { track: t } });
+              }
+            }
+            recordAction("project_started", { tracks: startNowTracks }, `Project started with ${startNowTracks.join(", ")}`);
+            setStartNowModal(false);
+          }}>Start Project</Btn>
+        </div>
+      </Modal>
 
       {/* ═══ DEPRIORITIZATION REASON MODAL ═══ */}
       <Modal open={!!depriReasonModal} onClose={() => setDepriReasonModal(false)} title="Why is this being deprioritized?" accent={c.amber}>
@@ -3329,7 +3872,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       {/* ═══ RETROACTIVE DATE-CHANGE WARNING ═══ */}
       <Modal open={retroDateModal} onClose={() => { setRetroDateModal(false); setPendingSave(null); }} title="Change affects past weeks?" accent={c.amber}>
         <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[3] }}>
-          This project has <strong style={{ color: c.text }}>{pastHistoryWeekCount}</strong> {pastHistoryWeekCount === 1 ? "week" : "weeks"} of historical activity. Changing the plan dates will retroactively alter health, overdue, and timeline calculations for those frozen weeks.
+          This project has <strong style={{ color: c.text }}>{pastHistoryWeekCount}</strong> {pastHistoryWeekCount === 1 ? "week" : "weeks"} of historical activity. Changing the plan dates will retroactively alter overdue and timeline calculations for those frozen weeks.
         </div>
         <div style={{
           padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
@@ -3423,18 +3966,33 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             <Btn variant="secondary" size="sm" onClick={() => setShipPhaseModal(null)}>Cancel</Btn>
             <Btn variant="command" size="sm" style={{ borderColor: c.greenBorder, color: c.green }} onClick={() => {
               const ph = shipPhaseModal.phase;
-              const oldPhase = shipPhaseModal.from;
               const now = new Date().toISOString();
-              setProjects(prev => prev.map(p => p.id === proj.id ? {
-                ...p, phase: ph, lastActivityAt: now,
-                shipNote: shipNote.trim() || null,
-                shipPct: shipPct ? Number(shipPct) : null,
-              } : p));
-              updateProjectInDB(proj.id, { phase: ph });
-              recordAction("project_phase_changed", { from: oldPhase, to: ph, note: shipNote.trim() || null, rolloutPct: shipPct || null }, `Stage updated to ${ph}`);
+              if (shipPhaseModal.isTrackStart) {
+                startTrackInDB(proj.id, ph, projects);
+                setProjects(prev => prev.map(p => {
+                  if (p.id !== proj.id) return p;
+                  const updated = { ...p, tracks: { ...p.tracks }, lastActivityAt: now,
+                    shipNote: shipNote.trim() || null, shipPct: shipPct ? Number(shipPct) : null };
+                  if (!updated.tracks[ph]) updated.tracks[ph] = { periods: [], owner: null };
+                  updated.tracks[ph] = { ...updated.tracks[ph], periods: [...updated.tracks[ph].periods, { started_at: now, completed_at: null }] };
+                  updated.phase = derivePrimaryPhase(updated);
+                  if (updated.status === "upcoming") updated.status = "in_flight";
+                  return updated;
+                }));
+                recordAction("track_started", { track: ph, note: shipNote.trim() || null, rolloutPct: shipPct || null }, `${ph} track started`);
+              } else {
+                const oldPhase = shipPhaseModal.from;
+                setProjects(prev => prev.map(p => p.id === proj.id ? {
+                  ...p, phase: ph, lastActivityAt: now,
+                  shipNote: shipNote.trim() || null,
+                  shipPct: shipPct ? Number(shipPct) : null,
+                } : p));
+                updateProjectInDB(proj.id, { phase: ph });
+                recordAction("project_phase_changed", { from: oldPhase, to: ph, note: shipNote.trim() || null, rolloutPct: shipPct || null }, `Stage updated to ${ph}`);
+              }
               setShipPhaseModal(null);
             }}>
-              Move to {shipPhaseModal?.phase}
+              {shipPhaseModal?.isTrackStart ? `Start ${shipPhaseModal?.phase}` : `Move to ${shipPhaseModal?.phase}`}
             </Btn>
           </div>
         </div>
@@ -3486,6 +4044,112 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                 featureType: gaFeatureType,
               }, `🚀 ${proj.name} shipped to GA!`);
               setShipPhaseModal(null);
+              setShowConfetti(true);
+              setTimeout(() => setShowConfetti(false), 4000);
+            }}>
+              Ship it!
+            </Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ═══ REOPEN TRACK — reason modal ═══ */}
+      <Modal open={trackReopenModal} onClose={() => setTrackReopenModal(false)} title={`Reopen ${trackReopenTarget || ""} track`} accent={c.amber}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+          <div>
+            <Label style={{ marginBottom: space[1] }}>Why is this track being reopened?</Label>
+            <textarea
+              value={trackReopenReason}
+              onChange={e => setTrackReopenReason(e.target.value)}
+              placeholder="e.g. QA found regressions, scope change..."
+              rows={3}
+              style={{
+                width: "100%", padding: `${space[2]}px ${space[3]}px`,
+                borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                background: c.surfaceAlt, color: c.text, resize: "vertical",
+                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
+            <Btn variant="secondary" size="sm" onClick={() => setTrackReopenModal(false)}>Cancel</Btn>
+            <Btn variant="command" size="sm" style={{ borderColor: `${c.amber}60`, color: c.amber }} onClick={() => {
+              const trackName = trackReopenTarget;
+              reopenTrackInDB(proj.id, trackName, projects);
+              setProjects(prev => prev.map(p => {
+                if (p.id !== proj.id) return p;
+                const updated = { ...p, tracks: { ...p.tracks } };
+                if (updated.tracks[trackName]) {
+                  updated.tracks[trackName] = { ...updated.tracks[trackName], periods: [...updated.tracks[trackName].periods, { started_at: new Date().toISOString(), completed_at: null }] };
+                }
+                updated.phase = derivePrimaryPhase(updated);
+                return updated;
+              }));
+              recordAction("track_reopened", { track: trackName, reason: trackReopenReason.trim() || null }, `${trackName} track reopened`);
+              setTrackReopenModal(false);
+            }}>
+              Reopen {trackReopenTarget}
+            </Btn>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ═══ SHIP PROJECT — release note + feature type + confetti (replaces GA) ═══ */}
+      <Modal open={shipProjectModal} onClose={() => setShipProjectModal(false)} title="Ship Project" accent={c.green}>
+        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+          <div>
+            <Label style={{ marginBottom: space[1] }}>Release note</Label>
+            <textarea
+              value={shipProjectNote}
+              onChange={e => setShipProjectNote(e.target.value)}
+              placeholder="What shipped? Write a brief release note..."
+              rows={3}
+              style={{
+                width: "100%", padding: `${space[2]}px ${space[3]}px`,
+                borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                background: c.surfaceAlt, color: c.text, resize: "vertical",
+                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div>
+            <Label style={{ marginBottom: space[1] }}>Feature type</Label>
+            <Sel value={shipProjectFeatureType} onChange={e => setShipProjectFeatureType(e.target.value)} style={{ width: "100%" }}>
+              <option value="New">New Feature</option>
+              <option value="Fix">Bug Fix</option>
+              <option value="Enhancement">Enhancement</option>
+              <option value="UI/UX">UI/UX Improvement</option>
+            </Sel>
+          </div>
+          <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
+            <Btn variant="secondary" size="sm" onClick={() => setShipProjectModal(false)}>Cancel</Btn>
+            <Btn variant="command" size="sm" style={{ borderColor: c.greenBorder, color: c.green }} onClick={() => {
+              const now = new Date().toISOString();
+              shipProjectInDB(proj.id, projects);
+              setProjects(prev => prev.map(p => {
+                if (p.id !== proj.id) return p;
+                const newTracks = { ...p.tracks };
+                for (const name of Object.keys(newTracks)) {
+                  const periods = [...newTracks[name].periods];
+                  const last = periods[periods.length - 1];
+                  if (last && last.completed_at === null) {
+                    periods[periods.length - 1] = { ...last, completed_at: now };
+                  }
+                  newTracks[name] = { ...newTracks[name], periods };
+                }
+                return { ...p, status: "shipped", shippedAt: now, tracks: newTracks,
+                  phase: derivePrimaryPhase({ ...p, tracks: newTracks }),
+                  gaReleaseNote: shipProjectNote.trim() || null,
+                  gaFeatureType: shipProjectFeatureType,
+                };
+              }));
+              recordAction("project_shipped", {
+                releaseNote: shipProjectNote.trim() || null,
+                featureType: shipProjectFeatureType,
+              }, `${proj.name} shipped!`);
+              setShipProjectModal(false);
               setShowConfetti(true);
               setTimeout(() => setShowConfetti(false), 4000);
             }}>

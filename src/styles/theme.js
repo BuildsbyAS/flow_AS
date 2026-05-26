@@ -145,6 +145,7 @@ export const phaseNames = ["PRD", "Design", "Dev", "QA"];
 export const shipPhases = ["Alpha", "Beta", "GA"];
 export const allPhases = [...phaseNames, ...shipPhases];
 export const commitPhases = ["PRD", "Design", "Dev", "QA"]; // Work activities only — no lifecycle stages
+export const trackNames = ["PRD", "Design", "Dev", "QA", "Alpha", "Beta"];
 
 // Mutable color reference - updated on theme change.
 // Default is LIGHT (Steel & Orange). Dark is reserved for Terminal/Rant/Admin.
@@ -196,6 +197,14 @@ export const phaseDims = () => ({
 export const statusColors = () => ({
   active:        { color: c.cyan,   bg: c.cyanDim,   label: "Active" },
   deprioritized: { color: c.orange, bg: c.orangeDim, label: "Depri" },
+});
+
+export const statusConfig = () => ({
+  in_flight:     { color: c.accent, bg: c.accentDim, label: "In Flight" },
+  shipped:       { color: c.green,  bg: c.greenDim,  label: "Shipped" },
+  blocked:       { color: c.red,    bg: c.redDim,    label: "Blocked" },
+  deprioritized: { color: c.orange, bg: c.orangeDim, label: "Deprioritized" },
+  upcoming:      { color: c.textMid, bg: c.surfaceAlt, label: "Upcoming" },
 });
 
 // ── Canonical entity reference color ──

@@ -2,7 +2,8 @@
 // Product head dashboard — answers in 30s:
 //   1) Weekly digest 2) Pipeline shape 3) What needs attention?
 import React, { useState, useMemo } from "react";
-import { c, typo, space, layout, motion, shipPhases, phaseColors, allPhases, phaseNames } from "../styles/theme";
+import { c, typo, space, layout, motion, shipPhases, phaseColors, allPhases, phaseNames, trackNames } from "../styles/theme";
+import { getActiveTracks, getTrackActiveDays } from "../lib/tracks";
 import { Surface, Label, EmptyState, Tag, Badge } from "../components/shared";
 import { KpiGrid, KpiCard, SectionHead, Pill, PillRow } from "../components/kpi";
 import { isDevSeedMode, devStore } from "../data/devSeed";
@@ -17,14 +18,15 @@ function computeProjectMetrics(projects, phaseDurationDefaults) {
   const todayMs = today.getTime();
   const weekAgo = new Date(todayMs - 7 * 86_400_000);
 
-  const active = projects.filter(p => p.status === "active" && !shipPhases.includes(p.phase));
-  const shipped = projects.filter(p => shipPhases.includes(p.phase) && p.status === "active");
-  const blocked = projects.filter(p => p.isBlocked);
+  const active = projects.filter(p => p.status === "in_flight");
+  const shipped = projects.filter(p => p.status === "shipped");
+  const blocked = projects.filter(p => p.status === "blocked" || p.isBlocked);
   const deprioritized = projects.filter(p => p.status === "deprioritized");
+  const upcoming = projects.filter(p => p.status === "upcoming");
 
   const byPhase = {};
   allPhases.forEach(ph => { byPhase[ph] = 0; });
-  projects.filter(p => p.status === "active").forEach(p => { byPhase[p.phase] = (byPhase[p.phase] || 0) + 1; });
+  projects.filter(p => p.status === "in_flight" || p.status === "blocked").forEach(p => { byPhase[p.phase] = (byPhase[p.phase] || 0) + 1; });
 
   const byPriority = { P0: 0, P1: 0, P2: 0, P3: 0 };
   active.forEach(p => { byPriority[p.priority || "P2"]++; });
@@ -59,7 +61,7 @@ function computeProjectMetrics(projects, phaseDurationDefaults) {
   const needsAttention = blocked.length + stale.length + frozen.length + phaseOverstay.length + overdue.length;
 
   return {
-    active, shipped, blocked, deprioritized,
+    active, shipped, blocked, deprioritized, upcoming,
     byPhase, byPriority,
     stale, frozen, phaseOverstay, overdue,
     needsAttention,
@@ -76,7 +78,7 @@ function generateWeeklyDigest(projects, allEvents) {
   const blockerEvents = recentEvents.filter(e => e.action === "project_blocked");
 
   const shipEvents = phaseChanges.filter(e => ["Alpha", "Beta", "GA"].includes(e.details?.to));
-  const p0Projects = projects.filter(p => p.priority === "P0" && p.status === "active");
+  const p0Projects = projects.filter(p => p.priority === "P0" && (p.status === "in_flight" || p.status === "blocked"));
   const blockedProjects = projects.filter(p => p.isBlocked);
 
   const squadActivity = {};
@@ -114,6 +116,12 @@ function generateWeeklyDigest(projects, allEvents) {
 
   if (newProjects.length > 0) {
     lines.push(`**New:** ${newProjects.length} project${newProjects.length > 1 ? "s" : ""} created this week.`);
+  }
+
+  const upcomingProjects = projects.filter(p => p.status === "upcoming");
+  if (upcomingProjects.length > 0) {
+    const overdueStart = upcomingProjects.filter(p => p.tentativeStartDate && new Date(p.tentativeStartDate + "T00:00:00").getTime() < now);
+    lines.push(`**Upcoming:** ${upcomingProjects.length} project${upcomingProjects.length > 1 ? "s" : ""} in the pipeline.${overdueStart.length > 0 ? ` ⚠ ${overdueStart.length} past tentative start date.` : ""}`);
   }
 
   if (mostActiveSquad) {
@@ -179,7 +187,7 @@ const SummaryView = ({
   const timelineCutoff = Date.now() - timelineMs;
 
   const heatmapData = useMemo(() => {
-    const activeProjs = filteredProjects.filter(p => p.status === "active");
+    const activeProjs = filteredProjects.filter(p => p.status === "in_flight" || p.status === "blocked");
     const grid = {};
     let maxCount = 0;
     allSquadNames.forEach(sq => {
@@ -194,7 +202,7 @@ const SummaryView = ({
   }, [filteredProjects, allSquadNames]);
 
   const phaseBarData = useMemo(() => {
-    const activeProjs = filteredProjects.filter(p => p.status === "active");
+    const activeProjs = filteredProjects.filter(p => p.status === "in_flight" || p.status === "blocked");
     const counts = {};
     allPhases.forEach(ph => { counts[ph] = activeProjs.filter(p => p.phase === ph).length; });
     return counts;
@@ -598,12 +606,12 @@ const SummaryView = ({
                   <tbody>
                     {(() => {
                       const rows = allSquadNames.map(sq => {
-                        const sqProjects = filteredProjects.filter(p => p.squad === sq && p.status === "active");
+                        const sqProjects = filteredProjects.filter(p => p.squad === sq && (p.status === "in_flight" || p.status === "blocked" || p.status === "shipped"));
                         const byPhase = {};
                         allPhases.forEach(ph => { byPhase[ph] = 0; });
                         sqProjects.forEach(p => { byPhase[p.phase] = (byPhase[p.phase] || 0) + 1; });
-                        const inflightCount = sqProjects.filter(p => !shipPhases.includes(p.phase)).length;
-                        const shippedCount = sqProjects.filter(p => shipPhases.includes(p.phase)).length;
+                        const inflightCount = sqProjects.filter(p => p.status === "in_flight").length;
+                        const shippedCount = sqProjects.filter(p => p.status === "shipped").length;
                         const blockedCount = sqProjects.filter(p => p.isBlocked).length;
                         return { sq, inflight: inflightCount, shipped: shippedCount, blockedCount, byPhase };
                       });
