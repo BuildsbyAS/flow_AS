@@ -24,6 +24,7 @@ const KEYFRAMES = `
 export default function ActionToast() {
   const [visible, setVisible] = useState(false);
   const [message, setMessage] = useState("");
+  const [icon, setIcon] = useState("success"); // "success" | "warn"
   const [exiting, setExiting] = useState(false);
   const timer = useRef(null);
   const exitTimer = useRef(null);
@@ -36,10 +37,16 @@ export default function ActionToast() {
     }, EXIT_MS);
   }, []);
 
-  const show = useCallback((msg) => {
+  const show = useCallback((msgOrObj) => {
     clearTimeout(timer.current);
     clearTimeout(exitTimer.current);
-    setMessage(msg);
+    if (typeof msgOrObj === "object" && msgOrObj !== null) {
+      setMessage(msgOrObj.message || "");
+      setIcon(msgOrObj.icon || "success");
+    } else {
+      setMessage(msgOrObj);
+      setIcon("success");
+    }
     setExiting(false);
     setVisible(true);
     timer.current = setTimeout(() => dismiss(), DURATION);
@@ -85,7 +92,9 @@ export default function ActionToast() {
           boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.12)",
           whiteSpace: "nowrap",
         }}>
-          <span style={{ color: "#4ade80", fontSize: 14, lineHeight: 1 }}>✓</span>
+          <span style={{ color: icon === "warn" ? "#fbbf24" : "#4ade80", fontSize: 14, lineHeight: 1 }}>
+            {icon === "warn" ? "⚠" : "✓"}
+          </span>
           {message}
         </div>
       </div>

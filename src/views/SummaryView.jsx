@@ -4,7 +4,7 @@
 import React, { useState, useMemo } from "react";
 import { c, typo, space, layout, motion, shipPhases, phaseColors, allPhases, phaseNames, trackNames } from "../styles/theme";
 import { getActiveTracks, getTrackActiveDays } from "../lib/tracks";
-import { Surface, Label, EmptyState, Tag, Badge } from "../components/shared";
+import { Surface, Label, EmptyState } from "../components/shared";
 import { KpiGrid, KpiCard, SectionHead, Pill, PillRow } from "../components/kpi";
 import { isDevSeedMode, devStore } from "../data/devSeed";
 import useDevLabel from "../hooks/useDevLabel";
@@ -147,6 +147,7 @@ const SummaryView = ({
   projects, people, squads,
   globalFilters, onNavigate,
   phaseDurationDefaults,
+  myLens = false, followedProjects = [], viewerSquad,
 }) => {
   const devRef = useDevLabel('SummaryView', 'src/views/SummaryView.jsx', 'Project-centric dashboard');
 
@@ -155,8 +156,9 @@ const SummaryView = ({
     let p = projects;
     if (gf.squad?.length) p = p.filter(x => gf.squad.includes(x.squad));
     if (gf.owner?.length) p = p.filter(x => gf.owner.includes(x.owner));
+    if (myLens) p = p.filter(x => followedProjects.includes(x.id));
     return p;
-  }, [projects, gf.squad, gf.owner]);
+  }, [projects, gf.squad, gf.owner, myLens, viewerSquad, followedProjects]);
 
   const metrics = useMemo(
     () => computeProjectMetrics(filteredProjects, phaseDurationDefaults),
@@ -411,27 +413,25 @@ const SummaryView = ({
         {metrics.shipped.length > 0 && (
           <div>
             <SectionHead title={`Recently Shipped (${metrics.shipped.length})`} />
-            <Surface variant="data" compact style={{ padding: space[5] }}>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
-                {metrics.shipped.map(p => (
-                  <button key={p.id} className="flow-chip-btn" onClick={() => onNavigate?.("projects", p.id)} style={{
-                    fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500,
-                    color: c.green, background: `${c.green}0d`, border: `1px solid ${c.green}44`,
-                    borderRadius: layout.radiusSm, padding: `${space[2]}px ${space[3]}px`, cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: space[2],
-                  }}>
-                    <span style={{ fontSize: 14 }}>🚀</span>
-                    <span style={{ fontFamily: typo.monoSm.font, marginRight: 2 }}>{p.id}</span>
-                    {p.name}
-                    <span style={{
-                      marginLeft: 4, fontWeight: 600, fontSize: 11,
-                      color: c.green, background: `${c.green}15`,
-                      padding: "1px 6px", borderRadius: layout.radiusXs,
-                    }}>{p.phase}</span>
-                  </button>
-                ))}
-              </div>
-            </Surface>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
+              {metrics.shipped.slice(0, 12).map(p => (
+                <button key={p.id} type="button" onClick={() => onNavigate?.("projects", p.id)} style={{
+                  display: "inline-flex", alignItems: "center", gap: space[2],
+                  padding: `${space[1] + 2}px ${space[3]}px`,
+                  borderRadius: layout.radiusSm, background: c.greenDim,
+                  border: `1px solid ${c.green}25`, cursor: "pointer",
+                  fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, color: c.text,
+                  transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
+                }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = c.green}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = `${c.green}25`}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={c.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  <span style={{ fontFamily: typo.monoSm.font, color: c.amber, fontSize: 11 }}>{p.id}</span>
+                  {p.name}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -445,7 +445,6 @@ const SummaryView = ({
                   <tr>
                     <th style={{ ...thStyle, textAlign: "left", cursor: "default" }}>Project</th>
                     <th style={{ ...thStyle, textAlign: "left", cursor: "default" }}>Squad</th>
-                    <th style={{ ...thStyle, textAlign: "center", cursor: "default" }}>Phase</th>
                     <th style={{ ...thStyle, textAlign: "center", cursor: "default" }}>Issue</th>
                     <th style={{ ...thStyle, textAlign: "left", cursor: "default" }}>Detail</th>
                   </tr>
@@ -461,7 +460,7 @@ const SummaryView = ({
                           <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
                         </td>
                         <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+
                         <td style={{ ...tdBase }}>
                           <span style={{
                             fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
@@ -483,7 +482,7 @@ const SummaryView = ({
                           <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
                         </td>
                         <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+
                         <td style={{ ...tdBase }}>
                           <span style={{
                             fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
@@ -507,7 +506,7 @@ const SummaryView = ({
                           <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
                         </td>
                         <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+
                         <td style={{ ...tdBase }}>
                           <span style={{
                             fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
@@ -531,7 +530,7 @@ const SummaryView = ({
                           <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
                         </td>
                         <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+
                         <td style={{ ...tdBase }}>
                           <span style={{
                             fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
@@ -553,7 +552,7 @@ const SummaryView = ({
                           <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
                         </td>
                         <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-                        <td style={{ ...tdBase }}><span style={{ color: pc[p.phase], fontWeight: 700 }}>{p.phase}</span></td>
+
                         <td style={{ ...tdBase }}>
                           <span style={{
                             fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,

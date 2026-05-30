@@ -85,6 +85,8 @@ export function Header({
   alertCount = 0,
   // ── Inbox modal data ──
   projects, people, currentPerson, onNavigate,
+  // ── My Lens ──
+  myLens = false, toggleMyLens, followedProjects = [],
 }) {
 
   const devRef = useDevLabel('Header', 'src/components/AppShell.jsx', 'Two-layer app header with nav, week controls, and filters');
@@ -340,8 +342,42 @@ export function Header({
       {/* Spacer removed — nav-rail grows to fill remaining space (flex:1) */}
       <div style={{ width: space[2], flexShrink: 0 }} />
 
-      {/* ── Utility cluster: search · user ── */}
+      {/* ── Utility cluster: lens · search · user ── */}
       <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
+        {/* ── My Lens toggle switch ── */}
+        {toggleMyLens && (
+          <div
+            onClick={toggleMyLens}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              cursor: "pointer", padding: "0 4px", userSelect: "none",
+            }}
+            title={myLens ? "My Lens ON — showing your squad + followed projects" : "My Lens — filter to your squad + followed projects"}
+          >
+            <span style={{
+              fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+              color: myLens ? c.accent : c.textDim,
+              letterSpacing: "0.06em", textTransform: "uppercase",
+            }}>My Lens</span>
+            <div style={{
+              width: 36, height: 20, borderRadius: 10,
+              background: myLens ? c.accent : c.border,
+              position: "relative",
+              transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
+              flexShrink: 0,
+            }}>
+              <div style={{
+                width: 16, height: 16, borderRadius: "50%",
+                background: "#fff",
+                position: "absolute", top: 2,
+                left: myLens ? 18 : 2,
+                transition: `left ${motion.fast.duration} ${motion.fast.easing}`,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              }} />
+            </div>
+          </div>
+        )}
+
         <CompactSearch onClick={onCmdOpen} />
 
         {/* ── Inbox (mentions) ── */}
@@ -2275,29 +2311,37 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
     [projects]
   );
 
-  const gaProjects = React.useMemo(() => {
+  /* ── Shipped projects timeline (never cleared) ── */
+  const shippedProjects = React.useMemo(() => {
     return projects
-      .filter(p => p.phase === "GA" && p.gaEnteredAt)
+      .filter(p => p.status === "shipped")
       .filter(p => !squadFilter || p.squad === squadFilter)
-      .sort((a, b) => (b.gaEnteredAt || "").localeCompare(a.gaEnteredAt || ""));
+      .map(p => {
+        // Normalize date — shippedAt could be ISO datetime or date-only
+        const raw = p.shippedAt || p.gaEnteredAt || "";
+        const dateStr = raw.slice(0, 10); // "YYYY-MM-DD"
+        return { ...p, _shipDate: dateStr };
+      })
+      .filter(p => p._shipDate && p._shipDate.length === 10 && !isNaN(new Date(p._shipDate + "T00:00:00")))
+      .sort((a, b) => b._shipDate.localeCompare(a._shipDate));
   }, [projects, squadFilter]);
 
-  const gaGroupedByMonth = React.useMemo(() => {
+  const shippedGroupedByMonth = React.useMemo(() => {
     const groups = [];
     let currentMonth = null;
     let currentGroup = null;
-    for (const p of gaProjects) {
-      const mk = p.gaEnteredAt?.slice(0, 7) || "unknown";
+    for (const p of shippedProjects) {
+      const mk = p._shipDate.slice(0, 7);
       if (mk !== currentMonth) {
         currentMonth = mk;
-        const d = new Date(p.gaEnteredAt + "T00:00:00");
+        const d = new Date(p._shipDate + "T00:00:00");
         currentGroup = { month: mk, label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }), items: [] };
         groups.push(currentGroup);
       }
       currentGroup.items.push(p);
     }
     return groups;
-  }, [gaProjects]);
+  }, [shippedProjects]);
 
   const featureTypeColor = (type) => {
     const m = {
@@ -2311,23 +2355,6 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
 
   const openPanel = () => { setOpen(true); markAllRead(); };
   const closePanel = () => setOpen(false);
-
-  const tagStyle = (tag) => {
-    const m = {
-      new:    { bg: c.accentDim, color: c.accent },
-      fix:    { bg: c.greenDim,  color: c.green },
-      update: { bg: c.amberDim,  color: c.amber },
-      soon:   { bg: c.cyanDim || c.surfaceAlt, color: c.cyan || c.textMid },
-    };
-    return m[tag] || { bg: c.surfaceAlt, color: c.textMid };
-  };
-
-  const fmtDate = (iso) => {
-    try {
-      const d = new Date(iso + "T00:00:00");
-      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    } catch { return iso; }
-  };
 
   return (
     <>
@@ -2391,23 +2418,23 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
             </div>
           )}
 
-          {gaProjects.length === 0 ? (
+          {shippedProjects.length === 0 ? (
             <div style={{
               padding: `${space[5]}px`, textAlign: "center",
               borderRadius: layout.radiusSm, background: c.surfaceAlt,
             }}>
               <div style={{ fontSize: 28, marginBottom: space[2] }}>🚀</div>
               <div style={{ fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textDim }}>
-                No shipped projects yet. When a project reaches GA, it'll appear here.
+                No shipped projects yet. When a project is shipped, it'll appear here.
               </div>
             </div>
           ) : (
-            gaGroupedByMonth.map(group => (
-              <div key={group.month} style={{ marginBottom: space[4] }}>
+            shippedGroupedByMonth.map(group => (
+              <div key={group.month} style={{ marginBottom: space[5] }}>
+                {/* ── Month header ── */}
                 <div style={{
                   display: "flex", alignItems: "center", gap: space[3],
-                  padding: `${space[1]}px 0 ${space[2]}px`,
-                  marginBottom: space[1],
+                  padding: `${space[1]}px 0 ${space[3]}px`,
                 }}>
                   <span style={{
                     fontFamily: typo.monoSm.font, fontSize: 11,
@@ -2419,31 +2446,36 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
                 </div>
 
                 {group.items.map((proj, i) => {
+                  const d = new Date(proj._shipDate + "T00:00:00");
+                  const dayLabel = d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
                   const ftc = featureTypeColor(proj.gaFeatureType);
-                  const d = new Date(proj.gaEnteredAt + "T00:00:00");
-                  const dayLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
                   return (
                     <div
                       key={proj.id}
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "60px 1fr",
+                        gridTemplateColumns: "64px 1fr",
                         gap: space[3],
                         padding: `${space[3]}px 0`,
-                        borderTop: i > 0 ? `1px solid ${c.border}` : "none",
+                        borderTop: "none",
                       }}
                     >
+                      {/* Date column */}
                       <div style={{
                         fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
                         color: c.text,
-                        letterSpacing: "0.04em", textTransform: "uppercase",
+                        letterSpacing: "0.02em",
                         fontVariantNumeric: "tabular-nums",
                         paddingTop: 2,
+                        lineHeight: 1.4,
                       }}>{dayLabel}</div>
+
+                      {/* Content column */}
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: 4 }}>
+                        {/* Row 1: Project name + release type tag */}
+                        <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: 6 }}>
                           <span style={{
-                            fontFamily: typo.bodyMd.font, fontSize: 15, fontWeight: 700,
+                            fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: 700,
                             color: c.text, lineHeight: 1.3,
                             flex: 1, minWidth: 0,
                           }}>{proj.name}</span>
@@ -2455,22 +2487,28 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
                             flexShrink: 0,
                           }}>{proj.gaFeatureType || "New"}</span>
                         </div>
-                        {proj.gaReleaseNote && (
-                          <div style={{
-                            fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                            color: c.textMid, lineHeight: 1.55,
-                            marginBottom: space[1],
-                          }}>{proj.gaReleaseNote}</div>
-                        )}
-                        <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: space[2] }}>
+
+                        {/* Row 2: Owner | Squad */}
+                        <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: 6 }}>
                           <span style={{
                             fontFamily: typo.bodySm.font, fontSize: 12, color: c.cyan, fontWeight: 600,
                           }}>{proj.owner}</span>
+                          <span style={{ color: c.textDim, fontSize: 11 }}>|</span>
                           <span style={{
-                            fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim,
-                            padding: "1px 6px", borderRadius: 999, background: c.surfaceAlt,
+                            fontFamily: typo.bodySm.font, fontSize: 12, color: c.textMid,
                           }}>{proj.squad}</span>
                         </div>
+
+                        {/* Row 3: Release note */}
+                        {proj.gaReleaseNote && (
+                          <div style={{
+                            fontFamily: typo.bodyMd.font, fontSize: 13,
+                            color: c.textMid, lineHeight: 1.55,
+                            marginBottom: space[2],
+                          }}>{proj.gaReleaseNote}</div>
+                        )}
+
+                        {/* Row 4: Action buttons */}
                         <div style={{ display: "flex", gap: space[2] }}>
                           {[
                             { label: "Shoutout", icon: "👏", action: () => {
@@ -2485,7 +2523,7 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
                           ].map(btn => (
                             <button key={btn.label} type="button" onClick={btn.action} style={{
                               display: "inline-flex", alignItems: "center", gap: 4,
-                              padding: "3px 8px", borderRadius: 999,
+                              padding: "4px 10px", borderRadius: 999,
                               background: "transparent", border: `1px solid ${c.border}`,
                               color: c.textMid, fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
                               cursor: "pointer", transition: "border-color 100ms ease, color 100ms ease",

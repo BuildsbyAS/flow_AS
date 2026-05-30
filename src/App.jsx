@@ -26,6 +26,7 @@ import FlowLogo from "./components/FlowLogo";
 import SyncToast from "./components/SyncToast";
 import ActionToast from "./components/ActionToast";
 import DevOverlayProvider from "./components/DevOverlay";
+import { isDevSeedMode, devStore } from "./data/devSeed";
 
 export default function FlowApp() {
   // ── Auth ──
@@ -180,6 +181,42 @@ function FlowDashboard({ auth }) {
   const suppressBackRef = useRef(false);
   const searchRef = useRef(null);
   const [showHints, setShowHints] = useState(false);
+
+  // ── My Lens (personal filter: my squad + followed projects) ──
+  const [myLens, setMyLens] = useState(() => {
+    try { return localStorage.getItem("flow_my_lens") === "true"; } catch { return false; }
+  });
+  // Explicit cross-squad follows
+  const [extraFollows, setExtraFollows] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("flow_followed_projects") || "[]"); } catch { return []; }
+  });
+  // Legacy cleanup — unfollowed-my is no longer used (squad projects can't be unfollowed)
+  const unfollowedMy = [];
+
+  // ── Toggle sound (Web Audio API — subtle click) ──
+  const playToggleSound = useCallback((isOn) => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = isOn ? 740 : 580;
+      gain.gain.setValueAtTime(0.03, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.08);
+      setTimeout(() => ctx.close(), 150);
+    } catch {}
+  }, []);
+
+  const toggleMyLens = useCallback(() => setMyLens(v => {
+    const next = !v;
+    try { localStorage.setItem("flow_my_lens", String(next)); } catch {}
+    playToggleSound(next);
+    return next;
+  }), [playToggleSound]);
 
   // ── Global filters (header bar) ──
   const [globalFilters, setGlobalFilters] = useState({ owner: [], squad: [], person: [] });
@@ -341,10 +378,60 @@ function FlowDashboard({ auth }) {
       const first = people[0];
       // Include `id` in the dev fallback — comments + members mutations need
       // a real people-row id, not just a name.
-      return { id: first.id, name: first.name };
+      return { id: first.id, name: first.name, squad: first.squad };
     }
     return null;
   }, [auth.personProfile, people]);
+
+  // ── My Lens: compute "my projects" ──
+  // All squad projects + any cross-squad project where viewer is owner or member
+  const myProjectIds = useMemo(() => {
+    if (!viewerProfile?.id || !viewerProfile?.squad) return [];
+    return projects.filter(p => {
+      // All projects in my squad are "mine"
+      if (p.squad === viewerProfile.squad) return true;
+      // Cross-squad: only if I own or am a member
+      if (p.owner_id === viewerProfile.id) return true;
+      if (isDevSeedMode()) {
+        const members = devStore.listMembers(p.id) || [];
+        return members.some(m => m.person_id === viewerProfile.id);
+      }
+      return false;
+    }).map(p => p.id);
+  }, [projects, viewerProfile]);
+
+  // Effective followed = my projects + extra follows
+  const followedProjects = useMemo(() => {
+    const set = new Set(myProjectIds);
+    extraFollows.forEach(id => set.add(id));
+    return [...set];
+  }, [myProjectIds, extraFollows]);
+
+  const toggleFollowProject = useCallback((projectId) => {
+    const isMy = myProjectIds.includes(projectId);
+    const isCurrentlyFollowed = isMy || extraFollows.includes(projectId);
+    if (isCurrentlyFollowed) {
+      // Block unfollow on "my" projects (squad / owner / member)
+      if (isMy) {
+        window.__flowToast?.({ message: "Can’t unfollow — you’re a squad member on this project", icon: "warn" });
+        return;
+      }
+      setExtraFollows(prev => {
+        const next = prev.filter(id => id !== projectId);
+        try { localStorage.setItem("flow_followed_projects", JSON.stringify(next)); } catch {}
+        return next;
+      });
+      window.__flowToast?.("Project unfollowed");
+    } else {
+      // Follow
+      setExtraFollows(prev => {
+        const next = [...prev, projectId];
+        try { localStorage.setItem("flow_followed_projects", JSON.stringify(next)); } catch {}
+        return next;
+      });
+      window.__flowToast?.("Project followed");
+    }
+  }, [myProjectIds, extraFollows]);
 
   useKeyboard([
     { key: "1", fn: () => handleTabSwitch("summary") },
@@ -475,6 +562,9 @@ function FlowDashboard({ auth }) {
         people={people}
         currentPerson={viewerProfile}
         onNavigate={handleNavigate}
+        myLens={myLens}
+        toggleMyLens={toggleMyLens}
+        followedProjects={followedProjects}
       />
       )}
 
@@ -485,10 +575,10 @@ function FlowDashboard({ auth }) {
       {activeTab !== "terminal" && (
       <main key={activeTab} className="flow-page" style={{ maxWidth: 1440, margin: "0 auto", padding: `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
         <ErrorCatcher key={activeTab}>
-          {activeTab === "summary" && <SummaryView loading={loading} error={error} projects={projects} people={people} squads={squads} globalFilters={globalFilters} onNavigate={handleNavigate} phaseDurationDefaults={phaseDurationDefaults} />}
-          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAppOwner={!!auth?.isOwner} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} />}
+          {activeTab === "summary" && <SummaryView loading={loading} error={error} projects={projects} people={people} squads={squads} globalFilters={globalFilters} onNavigate={handleNavigate} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAppOwner={!!auth?.isOwner} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} />}
 
-          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} />}
+          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} />}
           {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} />}
           {activeTab === "guide" && (
             <React.Suspense fallback={<div style={{ padding: 40, color: c.textDim, fontFamily: body, fontSize: 16, textAlign: "center" }}>Loading...</div>}>

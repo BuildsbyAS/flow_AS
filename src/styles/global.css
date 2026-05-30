@@ -76,6 +76,10 @@ body::before {
 .flow-page *::-webkit-scrollbar { display: none; }
 .flow-page *::-webkit-scrollbar-thumb { display: none; }
 
+/* ── Hide scrollbars in TrackGantt (renders inside modal portal, outside .flow-page) ── */
+.flow-gantt-no-scroll::-webkit-scrollbar { display: none; }
+.flow-gantt-no-scroll { scrollbar-width: none; }
+
 /* ── Page scrollbar (body) ── */
 ::-webkit-scrollbar {
   width: 10px;

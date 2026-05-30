@@ -867,7 +867,7 @@ export const Th = ({ col, sortKey, sortDir, onSort, children, style: s }) => {
         background: c.tableHeader || c.surfaceAlt,
         color: sortKey === col ? c.accent : c.textDim,
         transition: `color ${motion.fast.duration} ${motion.fast.easing}, background ${motion.fast.duration} ${motion.fast.easing}`,
-        position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 2,
+        position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 10,
         whiteSpace: "nowrap", ...s,
       }}
     >{children}{sortKey === col ? (sortDir === "asc" ? " ↑" : " ↓") : ""}</th>

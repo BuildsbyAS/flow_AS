@@ -296,6 +296,7 @@ export default function ProjectsView({
   initialId, onNavigate, setDetailLabel, setGoBack, searchRef, globalFilters = {},
   suppressBackRef,
   projectLinks, setProjectLinks, phaseDurationDefaults,
+  myLens = false, followedProjects = [], toggleFollowProject,
 }) {
   const devRef = useDevLabel('ProjectsView', 'src/views/ProjectsView.jsx', 'Project registry table with deep dive and Gantt chart');
   const projects = useMemo(() => rawProjects.map(ensureStatus), [rawProjects]);
@@ -491,8 +492,12 @@ export default function ProjectsView({
     if ((globalFilters.person || []).length > 0) {
       list = list.filter(p => globalFilters.person.some(fp => metrics[p.id]?.people.has(fp)));
     }
+    // My Lens: show only followed projects (auto-followed squad + explicit follows)
+    if (myLens) {
+      list = list.filter(p => followedProjects.includes(p.id));
+    }
     return list;
-  }, [projects, search, globalFilters, metrics, listSquadFilter]);
+  }, [projects, search, globalFilters, metrics, listSquadFilter, myLens, personProfile, followedProjects]);
 
   // ── Tab splits ──
   // When a search query is active, bypass the tab filter so results surface
@@ -534,7 +539,7 @@ export default function ProjectsView({
     const depri = filtered.filter(p => p.status === "deprioritized");
     const upcomingProjs = filtered.filter(p => p.status === "upcoming");
     const blockedProjs = filtered.filter(p => p.status === "blocked" || metrics[p.id]?.isBlocked);
-    const atRiskCount = filtered.filter(p => metrics[p.id]?.atRisk).length;
+    const atRiskCount = blockedProjs.length + active.filter(p => metrics[p.id]?.overdue).length;
     // Track distribution: how many in-flight projects have each track active
     const trackCounts = {};
     trackNames.forEach(t => {
@@ -689,7 +694,7 @@ export default function ProjectsView({
   if (selectedProject) {
     const proj = projects.find(p => p.id === selectedProject);
     if (!proj) return <EmptyState icon="🔍" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
-    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} isAppOwner={isAppOwner} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} today={today} leaving={detailLeaving} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} />;
+    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} isAppOwner={isAppOwner} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} today={today} leaving={detailLeaving} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} />;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -1357,7 +1362,7 @@ export default function ProjectsView({
         <TableShell minWidth={820}>
             <thead>
                 <tr>
-                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 3, minWidth: 70 }}>Squad</Th>
+                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 11, minWidth: 70 }}>Squad</Th>
                   <Th col="project" style={{ minWidth: 160 }}>Project</Th>
                   <Th col="priority" style={{ minWidth: 50, textAlign: "center" }}>Pri</Th>
                   <Th col="owner" style={{ minWidth: 80 }}>Owner</Th>
@@ -1365,6 +1370,7 @@ export default function ProjectsView({
                   <Th col="people" style={{ minWidth: 70, textAlign: "center" }}>Team</Th>
                   <Th col="last" style={{ minWidth: 80, textAlign: "center" }}>Updated</Th>
                   <Th col="timeline" style={{ minWidth: colWidths.timeline?.min || 110, textAlign: "center" }}>Timeline</Th>
+                  {toggleFollowProject && <th style={{ width: 32, padding: 0 }} />}
                 </tr>
               </thead>
               <tbody>
@@ -1641,6 +1647,30 @@ export default function ProjectsView({
                           );
                         })()}
                       </td>
+
+                      {/* Follow bookmark — right end */}
+                      {toggleFollowProject && (
+                        <td style={{
+                          padding: `0 ${space[3]}px`, borderBottom: cellBorder,
+                          textAlign: "center", width: 32,
+                        }}>
+                          <button
+                            type="button"
+                            title={followedProjects.includes(proj.id) ? "Unfollow project" : "Follow project"}
+                            onClick={(e) => { e.stopPropagation(); toggleFollowProject(proj.id); }}
+                            style={{
+                              background: "none", border: "none", padding: 2, cursor: "pointer",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              opacity: followedProjects.includes(proj.id) ? 1 : isHovered ? 0.35 : 0,
+                              transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill={followedProjects.includes(proj.id) ? c.accent : "none"} stroke={followedProjects.includes(proj.id) ? c.accent : c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                            </svg>
+                          </button>
+                        </td>
+                      )}
                     </tr>
                     </React.Fragment>
                   );
@@ -1719,6 +1749,7 @@ export default function ProjectsView({
       {/* Create Project Overlay */}
       {showCreate && <CreateProjectOverlay
         projects={projects} people={people} squads={squads} setProjects={setProjects}
+        personProfile={personProfile}
         onClose={() => setShowCreate(false)}
         onCreated={(id, name) => {
           setCreateSuccess({ name, id });
@@ -1791,11 +1822,11 @@ export default function ProjectsView({
 /* ══════════════════════════════════════════════════════════════════
    CREATE PROJECT OVERLAY
    ══════════════════════════════════════════════════════════════════ */
-function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, onCreated }) {
+function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, onCreated, personProfile }) {
   useDevLabel('CreateProjectOverlay', 'src/views/ProjectsView.jsx', 'Modal overlay form for creating new projects with all field inputs');
   const [name, setName] = useState("");
-  const [owner, setOwner] = useState("");
-  const [squad, setSquad] = useState("");
+  const [owner, setOwner] = useState(personProfile?.name || "");
+  const [squad, setSquad] = useState(personProfile?.squad || "");
   const [priority, setPriority] = useState("P2");
   const [complexity, setComplexity] = useState("");
   const [startNow, setStartNow] = useState(false);
@@ -1907,11 +1938,19 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
     { value: "L", label: "High", color: c.red },
   ];
 
-  const depCandidates = projects.filter(p =>
-    p.id !== previewId &&
-    !dependencies.includes(p.id) &&
-    (depSearch === "" || p.name.toLowerCase().includes(depSearch.toLowerCase()) || p.id.toLowerCase().includes(depSearch.toLowerCase()))
-  );
+  const depCandidates = useMemo(() => {
+    const filtered = projects.filter(p =>
+      p.id !== previewId &&
+      !dependencies.includes(p.id) &&
+      (depSearch === "" || p.name.toLowerCase().includes(depSearch.toLowerCase()) || p.id.toLowerCase().includes(depSearch.toLowerCase()))
+    );
+    // Squad projects first, then the rest
+    const mySquad = squad || personProfile?.squad;
+    if (!mySquad) return filtered;
+    const inSquad = filtered.filter(p => p.squad === mySquad);
+    const rest = filtered.filter(p => p.squad !== mySquad);
+    return [...inSquad, ...rest];
+  }, [projects, previewId, dependencies, depSearch, squad, personProfile]);
 
   const depRef = useRef(null);
   useEffect(() => {
@@ -2101,24 +2140,42 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
                 borderRadius: layout.radiusSm, boxShadow: c.shadowFloat,
                 zIndex: 20,
               }}>
-                {depCandidates.slice(0, 20).map(p => (
-                  <div
-                    key={p.id}
-                    onClick={() => { setDependencies(prev => [...prev, p.id]); setDepSearch(""); }}
-                    style={{
-                      padding: `${space[2]}px ${space[3]}px`,
-                      display: "flex", alignItems: "center", gap: space[2],
-                      cursor: "pointer",
-                      transition: `background ${motion.instant.duration} ${motion.instant.easing}`,
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.background = c.surfaceAlt; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700, color: c.amber }}>{p.id}</span>
-                    <span style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                    <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim }}>{p.phase}</span>
-                  </div>
-                ))}
+                {(() => {
+                  const mySquad = squad || personProfile?.squad;
+                  const items = depCandidates.slice(0, 25);
+                  let shownSeparator = false;
+                  return items.map((p, idx) => {
+                    const isSquad = mySquad && p.squad === mySquad;
+                    const prevIsSquad = idx > 0 && mySquad && items[idx - 1].squad === mySquad;
+                    const needSep = mySquad && !isSquad && !shownSeparator && idx > 0 && prevIsSquad;
+                    if (needSep) shownSeparator = true;
+                    return (
+                      <React.Fragment key={p.id}>
+                        {needSep && (
+                          <div style={{ padding: `${space[1]}px ${space[3]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
+                            <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>All projects</span>
+                            <span style={{ flex: 1, height: 1, background: c.border }} />
+                          </div>
+                        )}
+                        <div
+                          onClick={() => { setDependencies(prev => [...prev, p.id]); setDepSearch(""); }}
+                          style={{
+                            padding: `${space[2]}px ${space[3]}px`,
+                            display: "flex", alignItems: "center", gap: space[2],
+                            cursor: "pointer",
+                            transition: `background ${motion.instant.duration} ${motion.instant.easing}`,
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = c.surfaceAlt; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                        >
+                          <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700, color: c.amber }}>{p.id}</span>
+                          <span style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
+                          <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim }}>{p.squad}</span>
+                        </div>
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </div>
             )}
           </div>
@@ -2146,7 +2203,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
    PROJECT DEEP DIVE — PeopleDeepDive structural model
    De-cluttered: hero → history → ledger → supporting metadata
    ══════════════════════════════════════════════════════════════════ */
-function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, people, squads, personProfile, isAppOwner = false, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, today, leaving = false, suppressBackRef, projectLinks = [], setProjectLinks, phaseDurationDefaults }) {
+function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, people, squads, personProfile, isAppOwner = false, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, today, leaving = false, suppressBackRef, projectLinks = [], setProjectLinks, phaseDurationDefaults, followedProjects = [], toggleFollowProject }) {
   useDevLabel('ProjectDeepDive', 'src/views/ProjectsView.jsx', 'Full project detail view with hero telemetry, timeline, and history');
   const [editing, setEditingRaw] = useState(false);
   const [editName, setEditName] = useState(proj.name);
@@ -2242,7 +2299,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
   }, []);
 
   useEffect(() => {
-    if (!isDevSeedMode() || proj.phase !== "GA") return;
+    if (!isDevSeedMode() || proj.status !== "shipped") return;
     const refresh = () => {
       const events = devStore.listEvents(proj.id) || [];
       setShoutouts(events.filter(e => e.action === "shoutout"));
@@ -2253,7 +2310,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       if (change.type === "events" && change.projectId === proj.id) refresh();
     });
     return unsub;
-  }, [proj.id, proj.phase]);
+  }, [proj.id, proj.status]);
 
 
   // Tell App.jsx's global Escape handler to stand down whenever this deep-dive
@@ -2610,23 +2667,65 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
         </div>
       )}
 
-      {/* ═══ GA RELEASE NOTE — above hero card ═══ */}
-      {proj.phase === "GA" && proj.gaReleaseNote && (
+      {/* ═══ SHIPPED BANNER — above hero card ═══ */}
+      {proj.status === "shipped" && (
         <div style={{
-          padding: `${space[4]}px ${space[5]}px`,
-          borderRadius: layout.radiusSm, background: c.greenDim,
-          border: `1px solid ${c.green}20`,
+          padding: `${space[5]}px ${space[6]}px`,
+          borderRadius: layout.radiusLg, background: c.greenDim,
+          border: `1px solid ${c.green}25`,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[2] }}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>🚀</span>
-            <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, color: c.green, letterSpacing: "0.08em", textTransform: "uppercase" }}>Release Note</span>
+          <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: proj.gaReleaseNote ? space[3] : 0 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: layout.radiusSm,
+              background: `${c.green}18`, display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{
+                fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                color: c.green, letterSpacing: "0.04em", textTransform: "uppercase",
+              }}>Project Shipped</div>
+              {(proj.shippedAt || proj.gaEnteredAt) && (
+                <div style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: c.textMid, marginTop: 2 }}>
+                  {new Date((proj.shippedAt || proj.gaEnteredAt).slice(0, 10) + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+                </div>
+              )}
+            </div>
             {proj.gaFeatureType && (
-              <Tag color={c.green} bg={c.surface} style={{ fontSize: 9, marginLeft: "auto" }}>{proj.gaFeatureType}</Tag>
+              <Tag color={c.green} bg={c.surface} style={{ fontSize: 10 }}>{proj.gaFeatureType}</Tag>
             )}
+            <button type="button" onClick={() => {
+              const viewerName = personProfile?.name || "AJ";
+              if (isDevSeedMode()) {
+                devStore.logEvent({ projectId: proj.id, action: "shoutout", userName: viewerName, details: { from: viewerName, projectName: proj.name } });
+              }
+              window.__flowToast?.(`🎉 Shoutout sent for ${proj.name}!`);
+            }} style={{
+              display: "inline-flex", alignItems: "center", gap: 6,
+              padding: `5px 12px`, borderRadius: layout.radiusSm,
+              background: "transparent", border: `1px solid ${c.green}30`,
+              color: c.green, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+              cursor: "pointer", marginLeft: "auto",
+              transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = `${c.green}12`; e.currentTarget.style.borderColor = c.green; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = `${c.green}30`; }}
+            >
+              <span style={{ fontSize: 14, lineHeight: 1 }}>👏</span>
+              Give shoutout
+            </button>
           </div>
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: 14, color: c.textMid, lineHeight: 1.55 }}>
-            {proj.gaReleaseNote}
-          </div>
+          {proj.gaReleaseNote && (
+            <div style={{
+              fontFamily: typo.bodyMd.font, fontSize: 14, color: c.textMid, lineHeight: 1.6,
+              paddingLeft: 36 + space[3], marginTop: space[1],
+            }}>
+              {proj.gaReleaseNote}
+            </div>
+          )}
         </div>
       )}
 
@@ -2736,7 +2835,24 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
               fontWeight: typo.displayLg.weight, color: c.text,
               letterSpacing: typo.displayLg.tracking, lineHeight: 1.15,
               marginTop: space[2],
-            }}>{proj.name}</div>
+            }}>{proj.name}
+              {toggleFollowProject && (
+                <button
+                  type="button"
+                  title={followedProjects.includes(proj.id) ? "Unfollow project" : "Follow project"}
+                  onClick={() => toggleFollowProject(proj.id)}
+                  style={{
+                    background: "none", border: "none", cursor: "pointer",
+                    display: "inline-flex", alignItems: "center", verticalAlign: "middle",
+                    marginLeft: space[3], padding: 4,
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill={followedProjects.includes(proj.id) ? c.accent : "none"} stroke={followedProjects.includes(proj.id) ? c.accent : c.textGhost} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                  </svg>
+                </button>
+              )}
+            </div>
 
             {/* Row 3: Owner | Squad */}
             <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2] }}>
@@ -3313,8 +3429,8 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
 
       {/* Team section moved into hero card below */}
 
-      {/* ═══ SHOUTOUTS — displayed for all GA projects ═══ */}
-      {proj.phase === "GA" && shoutouts.length > 0 && (
+      {/* ═══ SHOUTOUTS — displayed for shipped projects ═══ */}
+      {proj.status === "shipped" && shoutouts.length > 0 && (
           <div>
             <SectionHead title="Shoutouts" />
             <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
@@ -3346,8 +3462,8 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
           </div>
       )}
 
-      {/* ═══ FEEDBACK — GA projects only ═══ */}
-      {proj.phase === "GA" && (
+      {/* ═══ FEEDBACK — shipped projects ═══ */}
+      {proj.status === "shipped" && (
         <div ref={feedbackSectionRef}>
           <SectionHead title="Feedback" />
           <div style={{
@@ -3596,56 +3712,6 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
           );
         })()}
       </div>}
-
-      {/* ═══ SCHEDULE — plan vs actual with actual as the primary fact ═══ */}
-      {inShip && (proj.actualStartDate || proj.actualEndDate) && (() => {
-        const startSlip = proj.actualStartDate && proj.startDate ? daysBetween(proj.startDate, proj.actualStartDate) : null;
-        const endSlip = proj.actualEndDate && proj.endDate ? daysBetween(proj.endDate, proj.actualEndDate) : null;
-        const slipCfg = (d) => {
-          if (d == null) return null;
-          if (d === 0) return { label: "on plan", color: c.textMid, bg: c.surfaceAlt };
-          if (d > 0) return { label: `${d} day${d === 1 ? "" : "s"} late`, color: c.red, bg: c.redDim };
-          return { label: `${Math.abs(d)} day${Math.abs(d) === 1 ? "" : "s"} early`, color: c.green, bg: c.greenDim };
-        };
-        const Column = ({ head, planDate, actualDate, slip }) => (
-          <div>
-            <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: space[1] }}>
-              {head}
-            </div>
-            <div style={{ fontFamily: typo.bodyMd.font, fontSize: 15, fontWeight: 700, color: c.text, lineHeight: 1.2 }}>
-              {actualDate ? fmtShort(actualDate) : "—"}
-            </div>
-            {planDate && (
-              <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim, marginTop: 2 }}>
-                planned <span style={{ color: c.textMid, fontWeight: 500 }}>{fmtShort(planDate)}</span>
-              </div>
-            )}
-            {slip && (
-              <span style={{
-                display: "inline-block", marginTop: space[1] + 2,
-                padding: `2px ${space[2]}px`, borderRadius: layout.radiusXs,
-                fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
-                color: slip.color, background: slip.bg,
-              }}>
-                {slip.label}
-              </span>
-            )}
-          </div>
-        );
-        return (
-          <div style={{
-            padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-            background: c.surfaceAlt, border: `1px solid ${c.border}`,
-            display: "grid", gridTemplateColumns: "auto 1fr 1fr", gap: space[5], alignItems: "center",
-          }}>
-            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-              Schedule
-            </span>
-            <Column head="Start" planDate={proj.startDate} actualDate={proj.actualStartDate} slip={slipCfg(startSlip)} />
-            <Column head="End" planDate={proj.endDate} actualDate={proj.actualEndDate} slip={slipCfg(endSlip)} />
-          </div>
-        );
-      })()}
 
       {/* ═══ ACTIVITY — composer + comments + auto-events ═══ */}
       <div>

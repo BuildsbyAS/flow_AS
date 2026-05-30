@@ -21,7 +21,7 @@ const firstGlyph = (name) => {
 /*  PEOPLE DEEP DIVE                                         */
 /* ═══════════════════════════════════════════════════════════ */
 
-const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical = false, selectedWeekKey, weekConfig: weekConfigProp, globalFilters = {}, loading, error }) => {
+const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical = false, selectedWeekKey, weekConfig: weekConfigProp, globalFilters = {}, loading, error, viewerSquad }) => {
   const devRef = useDevLabel(
     'PeopleDeepDive',
     'src/views/PeopleDeepDive.jsx',
@@ -75,11 +75,13 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
   const flatFiltered = [];
   Object.values(squadsWithPeople).forEach(members => flatFiltered.push(...members));
 
-  // Compute per-person project counts
+  // Compute per-person active project counts (in_flight + blocked only)
+  const OVERLOAD_THRESHOLD = 5;
   const personProjectCounts = useMemo(() => {
     const map = {};
+    const activeProjs = (projects || []).filter(p => p.status === "in_flight" || p.status === "blocked");
     people.forEach(p => {
-      const count = (projects || []).filter(proj =>
+      const count = activeProjs.filter(proj =>
         proj.owner_id === p.id ||
         (isDevSeedMode() && devStore.listMembers(proj.id)?.some(m => m.person_id === p.id))
       ).length;
@@ -300,12 +302,14 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
                           </div>
                         </div>
                       </div>
-                      {/* Project count */}
-                      <div style={{ textAlign: "right", flexShrink: 0, marginLeft: space[3] }}>
-                        <div style={{ fontFamily: typo.monoLg.font, fontSize: 22, fontWeight: 700, color: c.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
+                      {/* Project count + overload */}
+                      <div style={{ textAlign: "right", flexShrink: 0, marginLeft: space[3], display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                        <div style={{ fontFamily: typo.monoLg.font, fontSize: 22, fontWeight: 700, color: projCount > OVERLOAD_THRESHOLD ? c.red : c.text, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
                           {projCount}
                         </div>
-                        <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: c.textMid, marginTop: space[1], textTransform: "uppercase" }}>Project{projCount !== 1 ? "s" : ""}</div>
+                        <div style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight, letterSpacing: typo.monoSm.tracking, color: projCount > OVERLOAD_THRESHOLD ? c.red : c.textMid, marginTop: space[1], textTransform: "uppercase" }}>
+                          {projCount > OVERLOAD_THRESHOLD ? "Overloaded" : `Project${projCount !== 1 ? "s" : ""}`}
+                        </div>
                       </div>
                     </div>
                   );
@@ -362,6 +366,7 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
             projects={projects}
             setPeople={setPeople}
             onClose={() => setShowAddMember(false)}
+            viewerSquad={viewerSquad}
           />
         </Modal>
 
@@ -473,9 +478,9 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
 
 /* ═══ ADD MEMBER FORM ═══════════════════════════════════════ */
 
-function AddMemberForm({ squads, roles, projects, setPeople, onClose }) {
+function AddMemberForm({ squads, roles, projects, setPeople, onClose, viewerSquad }) {
   const [name, setName] = useState("");
-  const [squad, setSquad] = useState("");
+  const [squad, setSquad] = useState(viewerSquad || "");
   const [role, setRole] = useState("");
   const [selectedProjects, setSelectedProjects] = useState([]);
 

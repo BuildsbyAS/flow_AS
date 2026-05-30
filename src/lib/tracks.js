@@ -131,6 +131,7 @@ export function migrateProjectToTracks(proj, events) {
   let status;
   if (proj.phase === "GA") {
     status = "shipped";
+    proj.shippedAt = proj.gaEnteredAt || new Date().toISOString().slice(0, 10);
     for (const name of Object.keys(tracks)) {
       const periods = tracks[name].periods;
       const last = periods[periods.length - 1];
