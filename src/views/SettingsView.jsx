@@ -23,7 +23,7 @@ const getAuditSeverity = (action) => {
 const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, projects, setProjects }) => {
   const devRef = useDevLabel('Admin console for managing squads, roles, and people with audit log');
   const [subTab, setSubTab] = useState("people");
-  const subTabKeys = ["people", "squads", "roles"];
+  const subTabKeys = ["people", "squads", "roles", "permissions"];
 
   /* ── Audit trail ── */
   const [auditLog, setAuditLog] = useState([]);
@@ -203,10 +203,12 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
     { key: "Escape", fn: () => { if (confirmAction) { setConfirmAction(null); return; } if (panel) { closePanel(); } } },
   ], [subTab, confirmAction, panel]);
 
+  const adminCount = people.filter(p => p.isAdmin).length;
   const subTabs = [
     { key: "people", label: "People", count: people.length },
     { key: "squads", label: "Squads", count: squads.length },
     { key: "roles", label: "Roles", count: roles.length },
+    { key: "permissions", label: "Permissions", count: adminCount },
   ];
 
   const pc = getPhaseColors();
@@ -618,6 +620,162 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
         </Surface>
       )}
 
+
+      {/* ═══ PERMISSIONS ═══ */}
+      {subTab === "permissions" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: space[5] }}>
+
+          {/* ── Admin Management ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: space[2] }}>
+              <span style={{
+                fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+                fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+                color: c.text,
+              }}>Admin Users</span>
+              <Tag color={c.accent} bg={c.accentDim}>{adminCount}</Tag>
+            </div>
+            <p style={{
+              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+              color: c.textMid, lineHeight: 1.6, margin: 0,
+            }}>
+              Admins have full control over every project: edit, delete, ship, block, manage tracks, and remove members. Toggle admin status per person below.
+            </p>
+            <div className="flow-data-grid">
+              <div className="flow-data-grid-header" style={{ gridTemplateColumns: "1fr 1fr 1fr 80px" }}>
+                <span>Name</span>
+                <span>Squad</span>
+                <span>Role</span>
+                <span style={{ textAlign: "center" }}>Admin</span>
+              </div>
+              <div style={{ overflowY: "auto", maxHeight: 400 }}>
+                {people.map((p) => (
+                  <div key={p.id || p.name} className="flow-data-grid-row" style={{ gridTemplateColumns: "1fr 1fr 1fr 80px" }}>
+                    <span style={{
+                      fontFamily: typo.bodyLg.font, fontSize: typo.bodyLg.size,
+                      fontWeight: p.isAdmin ? 700 : typo.bodyLg.weight,
+                      color: p.isAdmin ? c.accent : c.text,
+                    }}>{p.name}</span>
+                    <span style={{
+                      fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, color: c.textMid,
+                    }}>{p.squad || "Unassigned"}</span>
+                    <span style={{
+                      fontFamily: typo.bodySm.font, fontSize: typo.bodyMd.size, color: c.textMid,
+                    }}>{p.role || "No role"}</span>
+                    <div style={{ display: "flex", justifyContent: "center" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPeople(prev => prev.map(pp =>
+                            (pp.id || pp.name) === (p.id || p.name) ? { ...pp, isAdmin: !pp.isAdmin } : pp
+                          ));
+                        }}
+                        style={{
+                          width: 36, height: 20, borderRadius: 10, border: "none", cursor: "pointer",
+                          background: p.isAdmin ? c.accent : c.border,
+                          position: "relative",
+                          transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
+                        }}
+                      >
+                        <span style={{
+                          position: "absolute", top: 2,
+                          left: p.isAdmin ? 18 : 2,
+                          width: 16, height: 16, borderRadius: 8,
+                          background: "#fff",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                          transition: `left ${motion.fast.duration} ${motion.fast.easing}`,
+                        }} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Permission Matrix Reference ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+            <span style={{
+              fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+              fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+              color: c.text,
+            }}>Permission Matrix</span>
+            <p style={{
+              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+              color: c.textMid, lineHeight: 1.6, margin: 0,
+            }}>
+              Permissions are automatically determined by a person's relationship to each project. Admins override all checks.
+            </p>
+            <div className="flow-data-grid">
+              <div className="flow-data-grid-header" style={{ gridTemplateColumns: "2fr 60px 60px 60px 60px" }}>
+                <span>Action</span>
+                <span style={{ textAlign: "center" }}>Admin</span>
+                <span style={{ textAlign: "center" }}>Owner</span>
+                <span style={{ textAlign: "center" }}>Member</span>
+                <span style={{ textAlign: "center" }}>Viewer</span>
+              </div>
+              <div>
+                {[
+                  { action: "Edit project fields",          admin: true, owner: true, member: false, viewer: false },
+                  { action: "Change status (ship, block)",  admin: true, owner: true, member: false, viewer: false },
+                  { action: "Delete project",               admin: true, owner: true, member: false, viewer: false },
+                  { action: "Manage tracks",                admin: true, owner: true, member: false, viewer: false },
+                  { action: "Board drag-and-drop",          admin: true, owner: true, member: false, viewer: false },
+                  { action: "Add/remove resources",         admin: true, owner: true, member: true,  viewer: false },
+                  { action: "Add team members",             admin: true, owner: true, member: true,  viewer: false },
+                  { action: "Remove team members",          admin: true, owner: true, member: false, viewer: false },
+                  { action: "Delete any comment",           admin: true, owner: true, member: false, viewer: false },
+                  { action: "Create project",               admin: true, owner: true, member: true,  viewer: true  },
+                  { action: "Post comments",                admin: true, owner: true, member: true,  viewer: true  },
+                  { action: "View, filter, search",         admin: true, owner: true, member: true,  viewer: true  },
+                ].map((row, i) => (
+                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "2fr 60px 60px 60px 60px" }}>
+                    <span style={{
+                      fontFamily: typo.bodySm.font, fontSize: 13, color: c.text,
+                    }}>{row.action}</span>
+                    {["admin", "owner", "member", "viewer"].map(role => (
+                      <span key={role} style={{ textAlign: "center", fontSize: 14 }}>
+                        {row[role] ? (
+                          <span style={{ color: c.green }}>&#10003;</span>
+                        ) : (
+                          <span style={{ color: c.textDim }}>&#8212;</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Role Descriptions ── */}
+          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
+            <span style={{
+              fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+              fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+              color: c.text,
+            }}>Role Definitions</span>
+            {[
+              { role: "Admin", color: c.accent, desc: "Full control over all projects and settings. Set via the toggle above." },
+              { role: "Project Owner", color: c.amber, desc: "Full control over projects they own. Assigned as the project's owner field." },
+              { role: "Team Member", color: c.cyan, desc: "Can add resources and team members to projects they belong to." },
+              { role: "Viewer", color: c.textDim, desc: "Can view everything, create projects, post comments, and give feedback." },
+            ].map(({ role, color, desc }) => (
+              <div key={role} style={{
+                display: "flex", alignItems: "flex-start", gap: space[3],
+                padding: `${space[3]}px ${space[4]}px`,
+                borderRadius: layout.radiusSm,
+                background: color + "08", border: `1px solid ${color}18`,
+              }}>
+                <Tag color={color} bg={color + "15"} style={{ flexShrink: 0, marginTop: 2 }}>{role}</Tag>
+                <span style={{
+                  fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textMid, lineHeight: 1.5,
+                }}>{desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ═══ SLIDE-OVER PANEL ═══ */}
       {panel && (

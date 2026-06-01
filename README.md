@@ -148,6 +148,47 @@ Press `T` to enter the terminal, the gateway to: **Settings** (squads, roles, pe
 2. Click **Ship Project**. All active tracks are marked complete.
 3. The project moves to the Shipped tab and appears in Announcements.
 
+## Permissions (RBAC)
+
+Flow uses role-based access control with three permission tiers per project. Non-permitted controls are hidden (not disabled).
+
+### Roles
+
+| Role | Scope | How assigned |
+|------|-------|-------------|
+| **Admin** | Full control everywhere | `isAdmin` flag on person record |
+| **Project Owner** | Full control over owned projects | Assigned as project owner |
+| **Team Member** | Limited actions on assigned projects | Added to project team |
+| **Viewer** | Read-only + create + comment | Default for everyone else |
+
+### Permission Matrix
+
+| Action | Admin | Owner | Member | Viewer |
+|--------|:-----:|:-----:|:------:|:------:|
+| Edit project (name, dates, priority) | ✅ | ✅ | | |
+| Change project status (ship, block, deprioritize) | ✅ | ✅ | | |
+| Delete project | ✅ | ✅ | | |
+| Manage tracks (start, complete, reopen) | ✅ | ✅ | | |
+| Board drag-and-drop | ✅ | ✅ | | |
+| Add/remove resources | ✅ | ✅ | ✅ | |
+| Add team members | ✅ | ✅ | ✅ | |
+| Remove team members | ✅ | ✅ | | |
+| Delete any comment | ✅ | ✅ | | |
+| Create project | ✅ | ✅ | ✅ | ✅ |
+| Post comments and updates | ✅ | ✅ | ✅ | ✅ |
+| Give shoutouts and feedback | ✅ | ✅ | ✅ | ✅ |
+| View, filter, search, sort | ✅ | ✅ | ✅ | ✅ |
+| Edit own comment (15 min window) | ✅ | ✅ | ✅ | ✅ |
+
+### Implementation
+
+Permissions are defined in `src/lib/permissions.js`:
+
+- `getProjectRole(viewerId, project, memberIds, isAdmin)` returns the viewer's role for a specific project
+- `can.editProject(role)`, `can.changeStatus(role)`, `can.manageTracks(role)`, etc. return boolean
+
+Admin status is configured per person in Settings > Permissions.
+
 ## Architecture
 
 ```
@@ -177,6 +218,7 @@ flow/
 │   ├── lib/
 │   │   ├── tracks.js              # Track utilities (start, complete, reopen, migrate)
 │   │   ├── mutations.js           # DB write operations (track CRUD, status mutations)
+│   │   ├── permissions.js         # RBAC: getProjectRole(), can.* permission checks
 │   │   ├── supabase.js            # Supabase client
 │   │   └── activityLog.js         # Activity tracking
 │   ├── styles/
