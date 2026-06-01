@@ -254,44 +254,7 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
             });
           }
 
-          // 2. Single-member squads (bus-factor risk)
-          const soloSquads = Object.entries(squadsRaw).filter(([sq, members]) => sq !== "Unassigned" && members.length === 1);
-          if (soloSquads.length > 0) {
-            insights.push({
-              severity: "warning",
-              icon: (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.amber} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" />
-                  <line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" />
-                </svg>
-              ),
-              text: `${soloSquads.map(([sq]) => sq).join(", ")} ${soloSquads.length === 1 ? "has" : "have"} only 1 member: bus-factor risk`,
-            });
-          }
-
-          // 3. Squads missing a key role (no PM or no Engineer)
-          const KEY_ROLES = ["Product Manager", "Engineer"];
-          const missingRoleSquads = [];
-          Object.entries(squadsRaw).forEach(([sq, members]) => {
-            if (sq === "Unassigned") return;
-            const rolesInSquad = new Set(members.map(m => (m.role || "").trim()));
-            const missing = KEY_ROLES.filter(r => !rolesInSquad.has(r));
-            if (missing.length > 0) missingRoleSquads.push({ squad: sq, missing });
-          });
-          if (missingRoleSquads.length > 0) {
-            const topMissing = missingRoleSquads.slice(0, 3);
-            insights.push({
-              severity: "info",
-              icon: (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.blue || c.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
-                </svg>
-              ),
-              text: topMissing.map(({ squad, missing }) => `${squad} has no ${missing.join(" or ")}`).join("; ") + (missingRoleSquads.length > 3 ? ` (+${missingRoleSquads.length - 3} more)` : ""),
-            });
-          }
-
-          // 4. Idle people (0 active projects)
+          // 2. Idle people (0 active projects)
           const idle = people.filter(p => (personProjectCounts[p.id] || 0) === 0);
           if (idle.length > 0) {
             insights.push({
@@ -305,26 +268,11 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
             });
           }
 
-          // 5. Unassigned people
-          const unassigned = people.filter(p => !p.squad);
-          if (unassigned.length > 0) {
-            insights.push({
-              severity: "warning",
-              icon: (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.amber} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" />
-                  <line x1="23" y1="11" x2="17" y2="11" />
-                </svg>
-              ),
-              text: `${unassigned.length} ${unassigned.length === 1 ? "person is" : "people are"} not assigned to any squad`,
-            });
-          }
-
           if (insights.length === 0) return null;
 
-          const severityColor = { critical: c.red, warning: c.amber, info: c.blue || c.accent };
-          const severityBg = { critical: c.red + "0A", warning: c.amber + "0A", info: (c.blue || c.accent) + "08" };
-          const severityBorder = { critical: c.red + "20", warning: c.amber + "20", info: (c.blue || c.accent) + "15" };
+          const severityColor = { critical: c.red, info: c.blue || c.accent };
+          const severityBg = { critical: c.red + "0A", info: (c.blue || c.accent) + "08" };
+          const severityBorder = { critical: c.red + "20", info: (c.blue || c.accent) + "15" };
 
           return (
             <div style={{
