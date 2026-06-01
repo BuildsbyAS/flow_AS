@@ -1709,10 +1709,11 @@ export default function ProjectsView({
                             <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
                               {active.map(t => (
                                 <span key={t} style={{
-                                  padding: "2px 7px", borderRadius: layout.radiusXs,
-                                  background: pcMid[t] || c.surfaceAlt,
+                                  padding: "1px 5px", borderRadius: layout.radiusXs,
+                                  background: `${pc[t] || c.textDim}15`,
                                   color: pc[t] || c.textDim,
-                                  fontFamily: typo.bodyXs.font, fontSize: 11, fontWeight: 700,
+                                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                                  letterSpacing: "0.04em",
                                   border: isBlockedProj ? `1px solid ${c.red}` : "none",
                                 }}>{t}</span>
                               ))}
