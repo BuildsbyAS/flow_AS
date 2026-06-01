@@ -1697,10 +1697,10 @@ export default function ProjectsView({
                         {isUpcoming ? <span style={{ color: c.textDim, fontSize: 11 }}>—</span>
                          : isShipped ? (
                           <span style={{
-                            display: "inline-flex", alignItems: "center", gap: 4,
-                            padding: "3px 10px", borderRadius: layout.radiusXs,
-                            background: c.greenDim, color: c.green,
-                            fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 700,
+                            padding: "1px 5px", borderRadius: layout.radiusXs,
+                            background: `${c.green}15`, color: c.green,
+                            fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                            letterSpacing: "0.04em",
                           }}>Shipped</span>
                         ) : (() => {
                           const active = m.activeTracks || getActiveTracks(proj);
