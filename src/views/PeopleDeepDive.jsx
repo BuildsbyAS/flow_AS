@@ -234,6 +234,144 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
           />
         </KpiGrid>
 
+        {/* ═══ TEAM ALLOCATION INSIGHTS ═══ */}
+        {(() => {
+          const insights = [];
+
+          // 1. Overloaded people (≥ OVERLOAD_THRESHOLD active projects)
+          const overloaded = people.filter(p => (personProjectCounts[p.id] || 0) >= OVERLOAD_THRESHOLD);
+          if (overloaded.length > 0) {
+            insights.push({
+              severity: "critical",
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.red} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              ),
+              text: `${overloaded.map(p => p.name.split(" ")[0]).join(", ")} ${overloaded.length === 1 ? "is" : "are"} overloaded with ${overloaded.length === 1 ? personProjectCounts[overloaded[0].id] : OVERLOAD_THRESHOLD + "+"} active projects`,
+              action: overloaded.length === 1 ? () => openPerson(overloaded[0].name) : null,
+            });
+          }
+
+          // 2. Single-member squads (bus-factor risk)
+          const soloSquads = Object.entries(squadsRaw).filter(([sq, members]) => sq !== "Unassigned" && members.length === 1);
+          if (soloSquads.length > 0) {
+            insights.push({
+              severity: "warning",
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.amber} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" />
+                  <line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" />
+                </svg>
+              ),
+              text: `${soloSquads.map(([sq]) => sq).join(", ")} ${soloSquads.length === 1 ? "has" : "have"} only 1 member: bus-factor risk`,
+            });
+          }
+
+          // 3. Squads missing a key role (no PM or no Engineer)
+          const KEY_ROLES = ["Product Manager", "Engineer"];
+          const missingRoleSquads = [];
+          Object.entries(squadsRaw).forEach(([sq, members]) => {
+            if (sq === "Unassigned") return;
+            const rolesInSquad = new Set(members.map(m => (m.role || "").trim()));
+            const missing = KEY_ROLES.filter(r => !rolesInSquad.has(r));
+            if (missing.length > 0) missingRoleSquads.push({ squad: sq, missing });
+          });
+          if (missingRoleSquads.length > 0) {
+            const topMissing = missingRoleSquads.slice(0, 3);
+            insights.push({
+              severity: "info",
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.blue || c.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+              ),
+              text: topMissing.map(({ squad, missing }) => `${squad} has no ${missing.join(" or ")}`).join("; ") + (missingRoleSquads.length > 3 ? ` (+${missingRoleSquads.length - 3} more)` : ""),
+            });
+          }
+
+          // 4. Idle people (0 active projects)
+          const idle = people.filter(p => (personProjectCounts[p.id] || 0) === 0);
+          if (idle.length > 0) {
+            insights.push({
+              severity: "info",
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.blue || c.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                </svg>
+              ),
+              text: `${idle.length} ${idle.length === 1 ? "person has" : "people have"} no active projects: ${idle.slice(0, 4).map(p => p.name.split(" ")[0]).join(", ")}${idle.length > 4 ? ` +${idle.length - 4} more` : ""}`,
+            });
+          }
+
+          // 5. Unassigned people
+          const unassigned = people.filter(p => !p.squad);
+          if (unassigned.length > 0) {
+            insights.push({
+              severity: "warning",
+              icon: (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c.amber} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2" /><circle cx="8.5" cy="7" r="4" />
+                  <line x1="23" y1="11" x2="17" y2="11" />
+                </svg>
+              ),
+              text: `${unassigned.length} ${unassigned.length === 1 ? "person is" : "people are"} not assigned to any squad`,
+            });
+          }
+
+          if (insights.length === 0) return null;
+
+          const severityColor = { critical: c.red, warning: c.amber, info: c.blue || c.accent };
+          const severityBg = { critical: c.red + "0A", warning: c.amber + "0A", info: (c.blue || c.accent) + "08" };
+          const severityBorder = { critical: c.red + "20", warning: c.amber + "20", info: (c.blue || c.accent) + "15" };
+
+          return (
+            <div style={{
+              background: c.surfaceSolid,
+              borderRadius: layout.radiusLg,
+              border: `1px solid ${c.border}`,
+              padding: `${space[4]}px`,
+              display: "flex", flexDirection: "column", gap: space[2],
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[1] }}>
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700,
+                  letterSpacing: "0.08em", color: c.textMid, textTransform: "uppercase",
+                }}>Team Allocation Insights</span>
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
+                  color: c.surfaceSolid, background: c.textDim,
+                  padding: "2px 6px", borderRadius: 99, lineHeight: 1.3, minWidth: 16,
+                  textAlign: "center",
+                }}>{insights.length}</span>
+              </div>
+              {insights.map((ins, i) => (
+                <div key={i}
+                  onClick={ins.action || undefined}
+                  style={{
+                    display: "flex", alignItems: "flex-start", gap: space[2],
+                    padding: `${space[2]}px ${space[3]}px`,
+                    borderRadius: layout.radiusSm,
+                    background: severityBg[ins.severity],
+                    border: `1px solid ${severityBorder[ins.severity]}`,
+                    cursor: ins.action ? "pointer" : "default",
+                    transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
+                  }}
+                  onMouseEnter={ins.action ? e => { e.currentTarget.style.background = severityColor[ins.severity] + "14"; } : undefined}
+                  onMouseLeave={ins.action ? e => { e.currentTarget.style.background = severityBg[ins.severity]; } : undefined}
+                >
+                  <span style={{ flexShrink: 0, marginTop: 1 }}>{ins.icon}</span>
+                  <span style={{
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                    color: c.text, lineHeight: 1.5,
+                  }}>{ins.text}</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* ═══ SEARCH ROW ═══ */}
         <div style={{ position: "relative" }}>
           <input ref={localSearchRef} value={search} onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
