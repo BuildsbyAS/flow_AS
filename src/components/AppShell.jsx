@@ -621,6 +621,7 @@ export function Header({
           people={people}
           currentPerson={currentPerson}
           onNavigate={onNavigate}
+          myLens={myLens}
         />
 
         {/* ── Announcements (What's new) ── */}
@@ -1913,7 +1914,7 @@ function extractMentionsFromBody(text) {
   return [...mentions];
 }
 
-function InboxBell({ projects, people, currentPerson, onNavigate }) {
+function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false }) {
   const [open, setOpen] = React.useState(false);
   const [readIds, setReadIds] = React.useState(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem("flow_inbox_read") || "[]")); }
@@ -2098,42 +2099,43 @@ function InboxBell({ projects, people, currentPerson, onNavigate }) {
 
       <Modal open={open} onClose={() => { setOpen(false); setReplyingTo(null); setSquadFilter(null); }} title="Inbox" accent={c.accent} width={580}>
         <div style={{ height: "min(560px, 65vh)", display: "flex", flexDirection: "column" }}>
-        {/* ── Squad Filter ── */}
-        {(() => {
+        {/* ── Squad Filter Dropdown ── */}
+        {!myLens && (() => {
           const allSquads = [...new Set((projects || []).map(p => p.squad).filter(Boolean))].sort();
           if (allSquads.length < 2) return null;
           return (
             <div style={{
-              display: "flex", alignItems: "center", gap: space[1], flexWrap: "wrap",
-              marginBottom: space[4], paddingBottom: space[3],
+              display: "flex", justifyContent: "flex-end",
+              marginBottom: space[3], paddingBottom: space[3],
               borderBottom: `1px solid ${c.border}`,
             }}>
-              <span style={{
-                fontFamily: mono, fontSize: 10, fontWeight: 700,
-                letterSpacing: "0.08em", textTransform: "uppercase", color: c.textDim,
-                marginRight: space[1],
-              }}>Squad</span>
-              {[null, ...allSquads].map(sq => {
-                const active = squadFilter === sq;
-                return (
-                  <button key={sq || "__all"} type="button" onClick={() => setSquadFilter(sq)} style={{
-                    padding: "3px 10px", borderRadius: 999,
-                    background: active ? c.accent : c.surfaceAlt,
-                    color: active ? "#fff" : c.textMid,
-                    border: `1px solid ${active ? c.accent : c.border}`,
-                    fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 600,
-                    cursor: "pointer", transition: `all ${motion.fast.duration} ${motion.fast.easing}`,
-                  }}>{sq || "All"}</button>
-                );
-              })}
+              <select
+                value={squadFilter || ""}
+                onChange={e => setSquadFilter(e.target.value || null)}
+                style={{
+                  padding: "5px 28px 5px 10px", borderRadius: layout.radiusSm,
+                  border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                  fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                  color: squadFilter ? c.text : c.textMid,
+                  cursor: "pointer", outline: "none",
+                  appearance: "none",
+                  backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(`<svg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>`)}")`,
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "right 8px center",
+                }}
+              >
+                <option value="">All squads</option>
+                {allSquads.map(sq => <option key={sq} value={sq}>{sq}</option>)}
+              </select>
             </div>
           );
         })()}
 
         {/* ── Section 1: Mentions ── */}
         {(() => {
-          const filtered = squadFilter
-            ? mentions.filter(m => m.project?.squad === squadFilter)
+          const effectiveSquad = myLens ? (currentPerson?.squad || null) : squadFilter;
+          const filtered = effectiveSquad
+            ? mentions.filter(m => m.project?.squad === effectiveSquad)
             : mentions;
           const filteredUnread = filtered.filter(m => !readIds.has(m.comment.id)).length;
           return (
@@ -2311,8 +2313,9 @@ function InboxBell({ projects, people, currentPerson, onNavigate }) {
 
         {/* ── Section 2: Weekly Project Updates (own scroll) ── */}
         {(() => {
-          const filtered = squadFilter
-            ? weeklyUpdates.filter(u => u.squad === squadFilter)
+          const effectiveSquad = myLens ? (currentPerson?.squad || null) : squadFilter;
+          const filtered = effectiveSquad
+            ? weeklyUpdates.filter(u => u.squad === effectiveSquad)
             : weeklyUpdates;
           return (
             <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
