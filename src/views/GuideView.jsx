@@ -285,33 +285,6 @@ const GuideView = ({ onNavigate }) => {
           <Callout icon="⏱" title="Track Timeline (Mini-Gantt)" color={c.cyan}>
             Every project deep-dive has a track timeline showing all tracks as horizontal bars. It scrolls horizontally for long projects and shows a <B color={c.accent}>Today</B> marker, <B color={c.textDim}>Ship Date</B> line, and <B color={c.green}>Shipped</B> line. Hover track rows to start, complete, or reopen tracks.
           </Callout>
-
-          {/* Board View */}
-          <div>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 700, color: c.text, marginBottom: space[2] }}>Board View (Kanban)</div>
-            <Body style={{ marginBottom: space[3] }}>
-              The board shows six track columns: <B>PRD</B>, <B>Design</B>, <B>Dev</B>, <B>QA</B>, <B>Alpha</B>, and <B>Beta</B>. A project with multiple active tracks appears in every matching column. Upcoming projects sit in a strip at the bottom, ready to be kicked off.
-            </Body>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Drag-and-drop</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginBottom: space[3] }}>
-              {[
-                { label: "Track to track", desc: "Drag a card between columns. The source track is completed and the target track starts automatically." },
-                { label: "Upcoming to track", desc: "Drag an upcoming project onto any column to kick it off. The project moves to In Flight and the selected track starts." },
-                { label: "Reopen a track", desc: "If the target track was previously completed, a modal asks for an optional reason before reopening it." },
-                { label: "Already active", desc: "Dropping onto a track the project already has open shows a warning." },
-              ].map(d => (
-                <div key={d.label} style={{ display: "flex", gap: space[2] }}>
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, color: c.accent, minWidth: 110, flexShrink: 0 }}>{d.label}</span>
-                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>{d.desc}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Hover actions</div>
-            <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
-              <Body>Hover any card to reveal a green <B color={c.green}>Done</B> button. Click it to complete that track instantly.</Body>
-              <Body>Each card shows an "also:" row listing the project's other active tracks so you always know what else is running.</Body>
-            </div>
-          </div>
         </Surface>
 
         {/* ── Project Statuses ── */}
@@ -564,6 +537,84 @@ const GuideView = ({ onNavigate }) => {
           <Callout icon="✏️" title="Post Updates" color={c.cyan}>
             Click into any project and use the update box to post what you're working on. Mention blockers, share wins, or flag risks. Everyone on the project gets visibility.
           </Callout>
+        </Surface>
+      </div>
+
+      {/* BOARD VIEW */}
+      <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+        <SectionTitle title="Board View" subtitle="Kanban for parallel tracks" color={c.amber} />
+
+        <Surface variant="panel" style={{ padding: `${space[5]}px`, display: "flex", flexDirection: "column", gap: space[4], ...indented }}>
+          <Body>
+            The board shows six track columns. A project with multiple active tracks appears in every matching column simultaneously. Upcoming projects sit in a horizontal strip at the bottom, ready to be dragged into action.
+          </Body>
+
+          {/* Visual: mini board mockup */}
+          <ExampleCard style={{ padding: space[4] }}>
+            <div style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, color: c.textDim, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: space[3] }}>Board Layout</div>
+            <div style={{ display: "flex", gap: space[2], marginBottom: space[3] }}>
+              {[
+                { track: "PRD", cards: ["X03"] },
+                { track: "Design", cards: ["X03", "X12"] },
+                { track: "Dev", cards: ["X07", "X15"] },
+                { track: "QA", cards: ["X07"] },
+                { track: "Alpha", cards: [] },
+                { track: "Beta", cards: [] },
+              ].map(col => (
+                <div key={col.track} style={{ flex: 1, display: "flex", flexDirection: "column", gap: space[1] }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[1] }}>
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700, color: pc[col.track] || c.textDim, textTransform: "uppercase" }}>{col.track}</span>
+                    <span style={{ fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700, color: c.textDim, background: c.surfaceAlt, padding: "1px 4px", borderRadius: 4 }}>{col.cards.length}</span>
+                  </div>
+                  {col.cards.length === 0 ? (
+                    <div style={{ height: 32, border: `1px dashed ${c.border}`, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <span style={{ fontFamily: typo.bodySm.font, fontSize: 9, color: c.textGhost }}>empty</span>
+                    </div>
+                  ) : col.cards.map(id => (
+                    <div key={id} style={{
+                      padding: "4px 6px", borderRadius: 4,
+                      background: c.surface, border: `1px solid ${c.border}`,
+                      fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: c.text,
+                    }}>{id}</div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: 11, color: c.textDim, textAlign: "center" }}>
+              X03 appears in both PRD and Design because both tracks are active. X07 appears in Dev and QA.
+            </div>
+          </ExampleCard>
+
+          {/* Drag-and-drop actions */}
+          <div>
+            <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[3] }}>Drag-and-drop</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+              {[
+                { icon: "↔", title: "Track to track", desc: "Drag a card between columns. The source track completes and the target track starts.", color: c.accent },
+                { icon: "🚀", title: "Upcoming to track", desc: "Drag an upcoming project onto any column. It moves to In Flight and the track starts.", color: c.green },
+                { icon: "🔄", title: "Reopen a track", desc: "Drop onto a previously completed track. A modal asks for an optional reason.", color: c.amber },
+                { icon: "⚠", title: "Already active", desc: "Drop onto a track the project already has open. Shows a warning toast.", color: c.red },
+              ].map(a => (
+                <ExampleCard key={a.title} style={{ display: "flex", gap: space[2], alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 16, lineHeight: 1.3, flexShrink: 0 }}>{a.icon}</span>
+                  <div>
+                    <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 700, color: a.color, marginBottom: 2 }}>{a.title}</div>
+                    <div style={{ fontFamily: typo.bodySm.font, fontSize: 11, color: c.textMid, lineHeight: 1.5 }}>{a.desc}</div>
+                  </div>
+                </ExampleCard>
+              ))}
+            </div>
+          </div>
+
+          {/* Hover actions */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
+            <Callout icon="✓" title="Hover Done" color={c.green}>
+              Hover any card to reveal a green <B color={c.green}>Done</B> button in the top-right corner. Click it to complete that track instantly.
+            </Callout>
+            <Callout icon="🔗" title="Also active" color={c.cyan}>
+              Each card shows an "also:" row listing the project's other active tracks, so you always know what else is running in parallel.
+            </Callout>
+          </div>
         </Surface>
       </div>
 
