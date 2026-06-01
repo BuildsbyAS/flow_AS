@@ -249,7 +249,7 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
                   <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
                 </svg>
               ),
-              text: `${overloaded.map(p => p.name.split(" ")[0]).join(", ")} ${overloaded.length === 1 ? "is" : "are"} overloaded with ${overloaded.length === 1 ? personProjectCounts[overloaded[0].id] : OVERLOAD_THRESHOLD + "+"} active projects`,
+              text: `${overloaded.length} ${overloaded.length === 1 ? "person is" : "persons are"} overloaded with multiple active projects: ${overloaded.map(p => p.name.split(" ")[0]).join(", ")}`,
               action: overloaded.length === 1 ? () => openPerson(overloaded[0].name) : null,
             });
           }
@@ -264,7 +264,7 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
                   <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
                 </svg>
               ),
-              text: `${idle.length} ${idle.length === 1 ? "person has" : "people have"} no active projects: ${idle.slice(0, 4).map(p => p.name.split(" ")[0]).join(", ")}${idle.length > 4 ? ` +${idle.length - 4} more` : ""}`,
+              text: `${idle.length} ${idle.length === 1 ? "person has" : "persons have"} no active projects: ${idle.slice(0, 4).map(p => p.name.split(" ")[0]).join(", ")}${idle.length > 4 ? ` +${idle.length - 4} more` : ""}`,
             });
           }
 

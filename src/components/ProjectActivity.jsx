@@ -134,34 +134,83 @@ function actionLabel(ev, peopleByLowerName) {
 }
 
 // ── Members row — pill format with initial bubbles + name + designation ──
-function MembersRow({ ownerPerson, memberPeople, canManage, onPersonNavigate, onManage }) {
+function MembersRow({ ownerPerson, memberPeople, canManage, onPersonNavigate, onManage, project }) {
   const allPeople = [ownerPerson, ...memberPeople].filter(Boolean);
   const isEmpty = allPeople.length === 0;
 
-  const MemberPill = ({ person, isOwner }) => (
-    <button
-      type="button"
-      onClick={() => onPersonNavigate?.(person?.name)}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 8,
-        padding: `6px 12px 6px 6px`, borderRadius: 12,
-        background: c.surfaceAlt, border: `1px solid ${c.border}`,
-        cursor: "pointer", transition: "border-color 120ms ease",
-      }}
-      onMouseEnter={e => { e.currentTarget.style.borderColor = c.textMid; }}
-      onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; }}
-    >
-      <Avatar name={person?.name} size={32} accent={isOwner} />
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
-        <span style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: "nowrap", lineHeight: 1.2 }}>
-          {person?.name || "Unknown"}
-        </span>
-        <span style={{ fontFamily: body, fontSize: 11, fontWeight: 500, color: c.textDim, whiteSpace: "nowrap", lineHeight: 1.2 }}>
-          {isOwner ? "Owner" : person?.role || person?.designation || "Member"}
-        </span>
+  const [removeTarget, setRemoveTarget] = useState(null);
+  const [removeReason, setRemoveReason] = useState("");
+  const [removing, setRemoving] = useState(false);
+
+  const handleRemove = async () => {
+    if (!removeTarget || !project?.id) return;
+    setRemoving(true);
+    const meta = { personName: removeTarget.name, projectName: project?.name, reason: removeReason.trim() || undefined };
+    await removeProjectMemberFromDB(project.id, removeTarget.id, meta);
+    window.__flowToast?.(`${removeTarget.name} removed from team`);
+    setRemoving(false);
+    setRemoveTarget(null);
+    setRemoveReason("");
+  };
+
+  const MemberPill = ({ person, isOwner }) => {
+    const [hovered, setHovered] = useState(false);
+    const showRemove = hovered && canManage && !isOwner;
+
+    return (
+      <div
+        style={{ position: "relative", display: "inline-flex" }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+      >
+        <button
+          type="button"
+          onClick={() => onPersonNavigate?.(person?.name)}
+          style={{
+            display: "inline-flex", alignItems: "center", gap: 8,
+            padding: `6px 12px 6px 6px`, borderRadius: 12,
+            background: c.surfaceAlt, border: `1px solid ${c.border}`,
+            cursor: "pointer", transition: "border-color 120ms ease",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = c.textMid; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; }}
+        >
+          <Avatar name={person?.name} size={32} accent={isOwner} />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 1 }}>
+            <span style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: "nowrap", lineHeight: 1.2 }}>
+              {person?.name || "Unknown"}
+            </span>
+            <span style={{ fontFamily: body, fontSize: 11, fontWeight: 500, color: c.textDim, whiteSpace: "nowrap", lineHeight: 1.2 }}>
+              {isOwner ? "Owner" : person?.role || person?.designation || "Member"}
+            </span>
+          </div>
+        </button>
+        {showRemove && (
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); setRemoveTarget(person); }}
+            title={`Remove ${person?.name}`}
+            style={{
+              position: "absolute", top: -6, right: -6, zIndex: 2,
+              width: 20, height: 20, borderRadius: 99,
+              background: c.red, border: `2px solid ${c.surfaceSolid || "#fff"}`,
+              color: "#fff", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              padding: 0, lineHeight: 1,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
+              transition: `transform 100ms ease, background 100ms ease`,
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.15)"; }}
+            onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; }}
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+              <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />
+            </svg>
+          </button>
+        )}
       </div>
-    </button>
-  );
+    );
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
@@ -206,6 +255,55 @@ function MembersRow({ ownerPerson, memberPeople, canManage, onPersonNavigate, on
             </button>
           )}
         </div>
+      )}
+
+      {/* Remove member confirmation modal */}
+      {removeTarget && (
+        <Modal open onClose={() => { setRemoveTarget(null); setRemoveReason(""); }} title="Remove team member">
+          <div style={{ fontFamily: body, fontSize: 14, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
+            Remove <strong style={{ color: c.text }}>{removeTarget.name}</strong> from <strong style={{ color: c.text }}>{project?.name || "this project"}</strong>?
+          </div>
+          <div style={{ marginBottom: space[4] }}>
+            <label style={{ fontFamily: mono, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: c.textDim, textTransform: "uppercase", display: "block", marginBottom: 6 }}>
+              Reason <span style={{ fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>(optional)</span>
+            </label>
+            <textarea
+              value={removeReason}
+              onChange={e => setRemoveReason(e.target.value.slice(0, 200))}
+              placeholder="e.g. Moved to another squad, project scope changed..."
+              rows={2}
+              autoFocus
+              style={{
+                width: "100%", boxSizing: "border-box",
+                padding: `${space[2]}px ${space[3]}px`,
+                borderRadius: layout.radiusSm,
+                border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                color: c.text, fontFamily: body, fontSize: 13,
+                resize: "none", outline: "none", lineHeight: 1.5,
+              }}
+              onFocus={e => { e.currentTarget.style.borderColor = c.accent; }}
+              onBlur={e => { e.currentTarget.style.borderColor = c.border; }}
+            />
+          </div>
+          <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
+            <button type="button" onClick={() => { setRemoveTarget(null); setRemoveReason(""); }}
+              style={{
+                padding: `8px 16px`, borderRadius: layout.radiusSm,
+                background: "transparent", border: `1px solid ${c.border}`,
+                color: c.text, fontFamily: body, fontSize: 13, fontWeight: 600, cursor: "pointer",
+              }}
+            >Cancel</button>
+            <button type="button" onClick={handleRemove} disabled={removing}
+              style={{
+                padding: `8px 20px`, borderRadius: layout.radiusSm,
+                background: c.red, border: "none",
+                color: "#fff", fontFamily: body, fontSize: 13, fontWeight: 600,
+                cursor: removing ? "wait" : "pointer",
+                opacity: removing ? 0.7 : 1,
+              }}
+            >{removing ? "Removing..." : "Remove"}</button>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -612,6 +710,7 @@ export default function ProjectActivity({
           canManage={canManageMembers}
           onPersonNavigate={onPersonNavigate}
           onManage={() => setMembersModalOpen(true)}
+          project={project}
         />
         {membersModalOpen && (
           <ManageMembersModal
@@ -654,6 +753,7 @@ export default function ProjectActivity({
           canManage={canManageMembers}
           onPersonNavigate={onPersonNavigate}
           onManage={() => setMembersModalOpen(true)}
+          project={project}
         />
       )}
 
