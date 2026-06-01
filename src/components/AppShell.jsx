@@ -2111,15 +2111,12 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
                 value={squadFilter || ""}
                 onChange={e => setSquadFilter(e.target.value || null)}
                 style={{
-                  padding: "5px 28px 5px 10px", borderRadius: layout.radiusSm,
-                  border: `1px solid ${c.border}`, background: c.surfaceAlt,
-                  fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-                  color: squadFilter ? c.text : c.textMid,
+                  padding: "6px 30px 6px 14px", borderRadius: 999,
+                  border: `1px solid ${c.border}`, background: `${c.surfaceSolid} ${selChevron} no-repeat right 10px center / 12px 12px`,
+                  fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 500,
+                  color: c.text,
                   cursor: "pointer", outline: "none",
-                  appearance: "none",
-                  backgroundImage: `url("data:image/svg+xml,${encodeURIComponent(`<svg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M1 1l4 4 4-4' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>`)}")`,
-                  backgroundRepeat: "no-repeat",
-                  backgroundPosition: "right 8px center",
+                  appearance: "none", WebkitAppearance: "none",
                 }}
               >
                 <option value="">All squads</option>
