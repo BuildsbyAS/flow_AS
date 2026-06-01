@@ -56,7 +56,7 @@ Every project deep-dive has a track timeline showing all tracks as horizontal ba
 Three view modes:
 
 - **Table** — Dense, sortable rows. Active track pills per project. Scope chips filter by In Flight, Shipped, Blocked, Deprioritized, or All.
-- **Board** — Kanban columns grouped by phase. Drag-and-drop project cards.
+- **Board** — Kanban columns by track. Projects appear in every column where they have an active track. Drag-and-drop to transition between tracks.
 - **Gantt** — Timeline view. See all projects on a horizontal timeline.
 
 KPI cards show **In Flight** (PRD/Design/Dev/QA breakdown), **Shipped** (shipped + alpha + beta), and **At Risk** (blocked + overdue).
@@ -82,6 +82,22 @@ Click any person for a full deep-dive: project list, activity timeline, and role
 Toggle from the header bar to filter the project registry to **your squad's projects** and **projects you follow**. Announcements and mentions are always visible regardless of lens.
 
 Follow any project from its deep-dive page — followed projects appear in your lens even if they belong to another squad.
+
+### Board View (Kanban)
+
+The board view shows six track columns: PRD, Design, Dev, QA, Alpha, and Beta. A project with multiple active tracks appears in every matching column. Upcoming projects sit in a horizontal strip at the bottom.
+
+**Drag-and-drop actions:**
+
+- **Track to track** — Drag a card from one column to another. The source track is completed and the target track is started automatically.
+- **Upcoming to track** — Drag an upcoming project onto any track column to kick it off. The project moves to In Flight and the selected track starts.
+- **Reopen a completed track** — If the target track was previously completed, a modal asks for an optional reason before reopening it.
+- **Already active** — Dropping onto a track the project already has open shows a warning instead of duplicating.
+
+**Hover actions:**
+
+- Hover any card to reveal a green **Done** button in the top-right corner. Click it to complete that track instantly.
+- Each card shows an "also:" row listing the project's other active tracks, so you always know what else is running.
 
 ### Pin Projects
 
