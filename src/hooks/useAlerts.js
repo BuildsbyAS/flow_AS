@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback } from "react";
 import { trackNames } from "../styles/theme";
 import { getActiveTracks, getTrackActiveDays } from "../lib/tracks";
 
-const STALE_DAYS = 14;
+const FROZEN_DAYS = 7;
 const NEW_PROJECT_HOURS = 24;
 
 export default function useAlerts(projects, phaseDurationDefaults) {
@@ -47,11 +47,11 @@ export default function useAlerts(projects, phaseDurationDefaults) {
         }
       }
 
-      const staleCheck = p.lastActivityAt ? (now - new Date(p.lastActivityAt).getTime()) / 86_400_000 : Infinity;
-      if (p.status !== "shipped" && staleCheck > STALE_DAYS) {
-        result.push({ id: `stale-${p.id}`, type: "stale", projectId: p.id, projectName: p.name,
-          squad: p.squad, days: Math.floor(staleCheck),
-          message: `No activity for ${Math.floor(staleCheck)}d`, severity: "warning" });
+      const frozenCheck = p.lastActivityAt ? (now - new Date(p.lastActivityAt).getTime()) / 86_400_000 : Infinity;
+      if (p.status !== "shipped" && frozenCheck > FROZEN_DAYS) {
+        result.push({ id: `frozen-${p.id}`, type: "frozen", projectId: p.id, projectName: p.name,
+          squad: p.squad, days: Math.floor(frozenCheck),
+          message: `No activity for ${Math.floor(frozenCheck)}d`, severity: "warning" });
       }
     });
 

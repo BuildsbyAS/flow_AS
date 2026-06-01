@@ -418,7 +418,7 @@ const GuideView = ({ onNavigate }) => {
             <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
               {[
                 { icon: "📊", title: "Project KPIs", desc: "In-flight, shipped, at-risk counts with week-over-week deltas." },
-                { icon: "🔥", title: "Needs Attention", desc: "Projects that are overdue, blocked, frozen (no updates), or stale. Sorted by urgency." },
+                { icon: "🔥", title: "Needs Attention", desc: "Projects that are overdue, blocked, or frozen (no updates). Sorted by urgency." },
                 { icon: "📰", title: "Weekly Digest", desc: "Auto-generated summary: phase transitions, new projects, blockers, and squad activity." },
                 { icon: "🚀", title: "Recently Shipped", desc: "Quick-access chips for all recently shipped projects." },
                 { icon: "📋", title: "Squad Breakdown", desc: "Per-squad metrics table. See which squads are shipping and which are stuck." },

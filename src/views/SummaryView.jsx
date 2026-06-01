@@ -10,7 +10,6 @@ import { isDevSeedMode, devStore } from "../data/devSeed";
 import useDevLabel from "../hooks/useDevLabel";
 
 const PRIORITY_COLORS = { P0: c.red, P1: c.orange || c.amber, P2: c.textMid, P3: c.textDim };
-const STALE_DAYS = 14;
 const FROZEN_DAYS = 7;
 
 function computeProjectMetrics(projects, phaseDurationDefaults) {
@@ -31,16 +30,10 @@ function computeProjectMetrics(projects, phaseDurationDefaults) {
   const byPriority = { P0: 0, P1: 0, P2: 0, P3: 0 };
   active.forEach(p => { byPriority[p.priority || "P2"]++; });
 
-  const stale = active.filter(p => {
-    if (!p.lastActivityAt) return true;
-    const diff = (todayMs - new Date(p.lastActivityAt).getTime()) / 86_400_000;
-    return diff > STALE_DAYS;
-  });
-
   const frozen = active.filter(p => {
     if (!p.lastActivityAt) return true;
     const diff = (todayMs - new Date(p.lastActivityAt).getTime()) / 86_400_000;
-    return diff > FROZEN_DAYS && diff <= STALE_DAYS;
+    return diff > FROZEN_DAYS;
   });
 
   const phaseOverstay = active.filter(p => {
@@ -58,12 +51,12 @@ function computeProjectMetrics(projects, phaseDurationDefaults) {
     return end.getTime() < todayMs;
   });
 
-  const needsAttention = blocked.length + stale.length + frozen.length + phaseOverstay.length + overdue.length;
+  const needsAttention = blocked.length + frozen.length + phaseOverstay.length + overdue.length;
 
   return {
     active, shipped, blocked, deprioritized, upcoming,
     byPhase, byPriority,
-    stale, frozen, phaseOverstay, overdue,
+    frozen, phaseOverstay, overdue,
     needsAttention,
   };
 }
@@ -527,7 +520,7 @@ const SummaryView = ({
                       </tr>
                     );
                   })}
-                  {/* Sloth / Phase Overstay — shown before stale, takes priority */}
+                  {/* Sloth / Phase Overstay */}
                   {metrics.phaseOverstay.filter(p => !metrics.blocked.includes(p)).map(p => {
                     const overrides = p.phaseDurationOverrides || {};
                     const threshold = overrides[p.phase] ?? phaseDurationDefaults?.[p.phase];
@@ -548,28 +541,6 @@ const SummaryView = ({
                           }}>SLOTH</span>
                         </td>
                         <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{days}d in {p.phase} (threshold: {threshold}d)</td>
-                      </tr>
-                    );
-                  })}
-                  {/* Stale (>14d) — exclude projects already shown as sloth or blocked */}
-                  {metrics.stale.filter(p => !metrics.phaseOverstay.includes(p) && !metrics.blocked.includes(p)).map(p => {
-                    const daysSince = p.lastActivityAt ? Math.floor((Date.now() - new Date(p.lastActivityAt).getTime()) / 86_400_000) : "?";
-                    return (
-                      <tr key={`stale-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
-                        <td style={{ ...tdBase, textAlign: "left" }}>
-                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
-                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-
-                        <td style={{ ...tdBase }}>
-                          <span style={{
-                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
-                            color: c.orange, background: `${c.orange}12`,
-                            padding: "2px 8px", borderRadius: layout.radiusXs,
-                          }}>STALE</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>No update in {daysSince}d</td>
                       </tr>
                     );
                   })}
