@@ -2132,9 +2132,8 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
 
         {/* ── Section 1: Mentions ── */}
         {(() => {
-          const effectiveSquad = myLens ? (currentPerson?.squad || null) : squadFilter;
-          const filtered = effectiveSquad
-            ? mentions.filter(m => m.project?.squad === effectiveSquad)
+          const filtered = squadFilter
+            ? mentions.filter(m => m.project?.squad === squadFilter)
             : mentions;
           const filteredUnread = filtered.filter(m => !readIds.has(m.comment.id)).length;
           return (
@@ -2208,7 +2207,7 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
                               fontFamily: mono, fontSize: 10, fontWeight: 700,
                               color: c.amber || c.textMid, letterSpacing: "0.03em",
                             }}>
-                              {project?.id || "?"} · {project?.name || "Unknown"}
+                              {project?.id || "?"} · {project?.name || "Unknown"}{project?.squad ? <span style={{ color: c.textDim, fontWeight: 500 }}> · {project.squad}</span> : ""}
                             </span>
                           </div>
                           <span title={fmtAbsolute(comment.created_at)} style={{
