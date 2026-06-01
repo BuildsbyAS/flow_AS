@@ -2449,6 +2449,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
   const [stagePickerOpen, setStagePickerOpen] = useState(false);
   const [startNowModal, setStartNowModal] = useState(false);
   const [startNowTracks, setStartNowTracks] = useState(["PRD"]);
+  const [startNowEndDate, setStartNowEndDate] = useState("");
   // Ship-phase modals: Alpha/Beta note + GA release note
   const [shipPhaseModal, setShipPhaseModal] = useState(null); // { phase, from }
   const [shipNote, setShipNote] = useState("");
@@ -3984,11 +3985,11 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       {/* FAB removed — edit is now the pencil icon in the header; delete lives in the edit panel. */}
 
       {/* ═══ START NOW MODAL — pick tracks to begin ═══ */}
-      <Modal open={startNowModal} onClose={() => setStartNowModal(false)} title="Start this project" accent={c.accent}>
+      <Modal open={startNowModal} onClose={() => { setStartNowModal(false); setStartNowEndDate(""); }} title="Start this project" accent={c.accent}>
         <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
           Select tracks to start for <strong style={{ color: c.text }}>{proj.name}</strong>. The start date will be set to today.
         </div>
-        <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", marginBottom: space[5] }}>
+        <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", marginBottom: space[4] }}>
           {trackNames.map(t => {
             const sel = startNowTracks.includes(t);
             const phColor = pc[t] || c.textDim;
@@ -4005,8 +4006,28 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             );
           })}
         </div>
+        {/* Tentative end date */}
+        <div style={{ marginBottom: space[5] }}>
+          <label style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid, letterSpacing: "0.03em", display: "block", marginBottom: 6 }}>
+            TENTATIVE END DATE
+          </label>
+          <input
+            type="date"
+            value={startNowEndDate}
+            onChange={e => setStartNowEndDate(e.target.value)}
+            min={today}
+            style={{
+              width: "100%", boxSizing: "border-box", height: 40,
+              borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+              background: c.surfaceSolid, fontFamily: typo.bodyMd.font, fontSize: 14,
+              color: startNowEndDate ? c.text : c.textDim,
+              padding: `0 ${space[3]}px`, outline: "none",
+              colorScheme: "light",
+            }}
+          />
+        </div>
         <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
-          <Btn variant="ghost" size="sm" onClick={() => setStartNowModal(false)}>Cancel</Btn>
+          <Btn variant="ghost" size="sm" onClick={() => { setStartNowModal(false); setStartNowEndDate(""); }}>Cancel</Btn>
           <Btn variant="primary" size="sm" disabled={startNowTracks.length === 0} onClick={() => {
             const todayStr = today;
             const now = new Date().toISOString();
@@ -4015,17 +4036,19 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
               newTracks[t] = { periods: [{ started_at: now, completed_at: null }], owner: null };
             }
             const primaryPhase = startNowTracks[startNowTracks.length - 1];
-            setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: "in_flight", phase: primaryPhase, tracks: newTracks, startDate: todayStr, tentativeStartDate: null } : p));
-            updateProjectInDB(proj.id, { status: "in_flight", phase: primaryPhase, startDate: todayStr, tentativeStartDate: null });
+            const endDateVal = startNowEndDate || null;
+            setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: "in_flight", phase: primaryPhase, tracks: newTracks, startDate: todayStr, tentativeStartDate: null, endDate: endDateVal } : p));
+            updateProjectInDB(proj.id, { status: "in_flight", phase: primaryPhase, startDate: todayStr, tentativeStartDate: null, endDate: endDateVal });
             if (isDevSeedMode()) {
               const raw = projects.find(p => p.id === proj.id);
-              if (raw) { raw.tracks = newTracks; raw.status = "in_flight"; raw.phase = primaryPhase; raw.startDate = todayStr; devStore.persistProjects(projects); }
+              if (raw) { raw.tracks = newTracks; raw.status = "in_flight"; raw.phase = primaryPhase; raw.startDate = todayStr; raw.endDate = endDateVal; devStore.persistProjects(projects); }
               for (const t of startNowTracks) {
                 devStore.logEvent({ projectId: proj.id, action: "track_started", details: { track: t } });
               }
             }
             recordAction("project_started", { tracks: startNowTracks }, `Project started with ${startNowTracks.join(", ")}`);
             setStartNowModal(false);
+            setStartNowEndDate("");
           }}>Start Project</Btn>
         </div>
       </Modal>
