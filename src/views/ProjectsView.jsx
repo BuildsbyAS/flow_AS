@@ -1327,6 +1327,74 @@ export default function ProjectsView({
 
             </div>
 
+            {/* Shipped — horizontal strip */}
+            {shippedBoardProjects.length > 0 && (
+              <div style={{
+                background: c.surface,
+                borderRadius: layout.radiusLg,
+                border: `1px solid ${c.green}25`,
+              }}>
+                <div style={{
+                  padding: `${space[2]}px ${space[4]}px`,
+                  borderBottom: `1px solid ${c.green}15`,
+                  display: "flex", alignItems: "center", gap: space[2],
+                }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.green }} />
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                    fontWeight: 700, letterSpacing: "0.06em",
+                    color: c.green, textTransform: "uppercase",
+                  }}>Shipped</span>
+                  <span style={{
+                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+                    fontWeight: 700, color: c.textMid,
+                    background: c.surfaceAlt, padding: "1px 7px",
+                    borderRadius: layout.radiusPill, border: `1px solid ${c.border}`,
+                  }}>{shippedBoardProjects.length}</span>
+                </div>
+                <div style={{
+                  display: "flex", gap: space[3], padding: space[3],
+                  overflowX: "auto",
+                  scrollbarWidth: "thin", scrollbarColor: `${c.textDim}20 transparent`,
+                }}>
+                  {shippedBoardProjects.map(proj => (
+                    <div key={proj.id} role="button" tabIndex={0}
+                      onClick={() => openProject(proj.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProject(proj.id); } }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(5,150,105,0.12)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}
+                      style={{
+                        minWidth: 220, maxWidth: 260, padding: 14, borderRadius: layout.radiusMd,
+                        background: "#dcfce7", border: `1px solid #86efac`,
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.04)", cursor: "pointer",
+                        display: "flex", flexDirection: "column", gap: space[2], flexShrink: 0,
+                        transition: `box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                        <span style={{ fontFamily: typo.monoMd.font, fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", color: ec.project }}>{proj.id}</span>
+                        <span style={{
+                          fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+                          color: "#166534", background: "#bbf7d0",
+                          padding: "1px 6px", borderRadius: layout.radiusXs,
+                        }}>SHIPPED</span>
+                      </div>
+                      <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 600, color: "#14532d", lineHeight: 1.4 }}>{proj.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: typo.bodySm.font, fontSize: 11, color: "#166534" }}>
+                        <span style={{ fontWeight: 500 }}>{proj.owner || "—"}</span>
+                        <span style={{ padding: "1px 6px", borderRadius: 999, background: "rgba(255,255,255,0.5)", border: `1px solid #86efac60`, fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: "#166534" }}>{proj.squad}</span>
+                      </div>
+                      {proj.shipped_at && (
+                        <div style={{ fontFamily: typo.monoSm.font, fontSize: 9, color: "#15803d", borderTop: "1px solid #86efac60", paddingTop: space[1], marginTop: 2 }}>
+                          Shipped {fmtDate(proj.shipped_at)}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Upcoming — horizontal strip at bottom */}
             {upcomingBoardProjects.length > 0 && (
               <div style={{
