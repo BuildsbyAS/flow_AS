@@ -185,9 +185,12 @@ a.flow-header-tab.flow-tab-active:hover { color: #FFFFFF !important; }
   border-color: var(--flow-border-medium) !important;
 }
 
-.flow-breadcrumb:hover {
+.flow-breadcrumb:hover,
+.flow-breadcrumb:active,
+.flow-breadcrumb:focus {
   background: transparent !important;
   border-color: transparent !important;
+  color: rgba(255, 255, 255, 1) !important;
 }
 
 .flow-week-nav button:hover { background: rgba(0, 0, 0, 0.05); }
