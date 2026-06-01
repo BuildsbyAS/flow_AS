@@ -1338,7 +1338,7 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
         borderRadius: layout.radiusSm,
         border: "1px solid transparent",
       }}>
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.6 }}>
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 1 }}>
           <path d="M10 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         <span className="flow-breadcrumb-label">{breadcrumbLabel}</span>
