@@ -192,7 +192,7 @@ const GuideView = ({ onNavigate }) => {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: space[3], ...indented }}>
           {[
             { label: "Table", desc: "Dense, sortable rows. Best for scanning status across many projects.", icon: "═" },
-            { label: "Board", desc: "Kanban columns grouped by phase. Drag-and-drop project cards.", icon: "▦" },
+            { label: "Board", desc: "Kanban columns by track. Projects appear in every active track column. Drag-and-drop to transition.", icon: "▦" },
             { label: "Gantt", desc: "Timeline view. See all projects on a horizontal timeline.", icon: "▬" },
           ].map(v => (
             <ExampleCard key={v.label} style={{ textAlign: "center" }}>
@@ -285,6 +285,33 @@ const GuideView = ({ onNavigate }) => {
           <Callout icon="⏱" title="Track Timeline (Mini-Gantt)" color={c.cyan}>
             Every project deep-dive has a track timeline showing all tracks as horizontal bars. It scrolls horizontally for long projects and shows a <B color={c.accent}>Today</B> marker, <B color={c.textDim}>Ship Date</B> line, and <B color={c.green}>Shipped</B> line. Hover track rows to start, complete, or reopen tracks.
           </Callout>
+
+          {/* Board View */}
+          <div>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 700, color: c.text, marginBottom: space[2] }}>Board View (Kanban)</div>
+            <Body style={{ marginBottom: space[3] }}>
+              The board shows six track columns: <B>PRD</B>, <B>Design</B>, <B>Dev</B>, <B>QA</B>, <B>Alpha</B>, and <B>Beta</B>. A project with multiple active tracks appears in every matching column. Upcoming projects sit in a strip at the bottom, ready to be kicked off.
+            </Body>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Drag-and-drop</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: space[2], marginBottom: space[3] }}>
+              {[
+                { label: "Track to track", desc: "Drag a card between columns. The source track is completed and the target track starts automatically." },
+                { label: "Upcoming to track", desc: "Drag an upcoming project onto any column to kick it off. The project moves to In Flight and the selected track starts." },
+                { label: "Reopen a track", desc: "If the target track was previously completed, a modal asks for an optional reason before reopening it." },
+                { label: "Already active", desc: "Dropping onto a track the project already has open shows a warning." },
+              ].map(d => (
+                <div key={d.label} style={{ display: "flex", gap: space[2] }}>
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, color: c.accent, minWidth: 110, flexShrink: 0 }}>{d.label}</span>
+                  <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>{d.desc}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text, marginBottom: space[1] }}>Hover actions</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: space[1] }}>
+              <Body>Hover any card to reveal a green <B color={c.green}>Done</B> button. Click it to complete that track instantly.</Body>
+              <Body>Each card shows an "also:" row listing the project's other active tracks so you always know what else is running.</Body>
+            </div>
+          </div>
         </Surface>
 
         {/* ── Project Statuses ── */}
