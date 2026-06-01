@@ -1737,7 +1737,6 @@ export default function ProjectsView({
                                     background: SOLID_COLORS[idx % SOLID_COLORS.length], color: "#fff",
                                     display: "flex", alignItems: "center", justifyContent: "center",
                                     fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
-                                    border: `2px solid ${c.surface}`,
                                     marginLeft: idx > 0 ? -4 : 0,
                                     position: "relative", zIndex: idx + 1,
                                   }}>{initialsOf(person.name)}</div>
@@ -1745,10 +1744,9 @@ export default function ProjectsView({
                               {extraCount > 0 && (
                                 <div style={{
                                   width: 28, height: 28, borderRadius: 8,
-                                  background: c.surfaceAlt, color: c.textMid,
+                                  background: "#D4D4D8", color: c.text,
                                   display: "flex", alignItems: "center", justifyContent: "center",
                                   fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
-                                  border: `2px solid ${c.surface}`,
                                   marginLeft: showTeam.length > 0 ? -4 : 0,
                                   position: "relative", zIndex: showTeam.length + 1,
                                 }}>{extraCount}</div>
