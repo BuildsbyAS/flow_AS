@@ -49,6 +49,35 @@ export function derivePrimaryPhase(proj) {
   return lastCompleted || proj.phase || "PRD";
 }
 
+/**
+ * Get completed tracks with total days and cycle count.
+ * A track is "completed" if it has periods and the last period has completed_at set.
+ * Cycles = number of periods (1 = opened and closed once, 2 = reopened once, etc.)
+ */
+export function getCompletedTracks(proj) {
+  if (!proj.tracks) return [];
+  const now = Date.now();
+  const result = [];
+  for (const name of trackNames) {
+    const t = proj.tracks[name];
+    if (!t || !t.periods || t.periods.length === 0) continue;
+    const last = t.periods[t.periods.length - 1];
+    if (last.completed_at === null) continue; // still active — not completed
+    let totalMs = 0;
+    for (const p of t.periods) {
+      const start = new Date(p.started_at).getTime();
+      const end = p.completed_at ? new Date(p.completed_at).getTime() : now;
+      totalMs += Math.max(0, end - start);
+    }
+    result.push({
+      name,
+      days: Math.round(totalMs / DAY_MS),
+      cycles: t.periods.length,
+    });
+  }
+  return result;
+}
+
 export function startTrack(proj, trackName) {
   if (!proj.tracks) proj.tracks = {};
   if (!proj.tracks[trackName]) {

@@ -17,7 +17,7 @@ import { getProjectRole, can as defaultCan } from "../lib/permissions";
 import { initialsOf } from "../lib/names";
 import { timeAgo, isStale, fmtAbsolute } from "../lib/time";
 import { getProjectDependencies, deleteProjectFromDB, updateProjectInDB, addProjectLinkToDB, deleteProjectLinkFromDB, startTrackInDB, completeTrackInDB, reopenTrackInDB, shipProjectInDB } from "../lib/mutations";
-import { getActiveTracks, getTrackStatus, getTrackActiveDays, derivePrimaryPhase } from "../lib/tracks";
+import { getActiveTracks, getTrackStatus, getTrackActiveDays, getCompletedTracks, derivePrimaryPhase } from "../lib/tracks";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
 
@@ -3264,6 +3264,26 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                 )}
               </div>}
             </div>}
+
+            {/* Completed Tracks Summary */}
+            {proj.status !== "upcoming" && (() => {
+              const completed = getCompletedTracks(proj);
+              if (completed.length === 0) return null;
+              const phColors = getPhaseColors();
+              return (
+                <div style={{ marginTop: space[2], display: "flex", alignItems: "center", gap: space[3], flexWrap: "wrap" }}>
+                  {completed.map(({ name, days, cycles }) => (
+                    <span key={name} style={{
+                      fontFamily: typo.bodySm.font, fontSize: 11, color: c.textMid, lineHeight: 1.4,
+                    }}>
+                      <span style={{ color: phColors[name] || c.textMid, fontWeight: 600 }}>{name}</span>
+                      {" "}completed in {days}d
+                      {cycles > 1 && <span style={{ color: c.textDim }}>{" "}&middot; {cycles} cycles</span>}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
 
             {/* Tentative start date for upcoming projects */}
             {proj.status === "upcoming" && (

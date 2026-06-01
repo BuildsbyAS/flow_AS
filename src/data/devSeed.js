@@ -1413,14 +1413,13 @@ import { migrateProjectToTracks, derivePrimaryPhase } from '../lib/tracks';
 
   // X02 Onboarding redesign: PRD (done,reopened,done), Design + Dev active (2 tracks, PRD has 3 periods)
   const x02 = byId("X02");
-  if (x02?.tracks) {
-    if (x02.tracks.PRD) {
-      x02.tracks.PRD.periods = [
-        { started_at: isoAgo(90 * DAY), completed_at: isoAgo(70 * DAY) },
-        { started_at: isoAgo(40 * DAY), completed_at: isoAgo(35 * DAY) },
-        { started_at: isoAgo(15 * DAY), completed_at: isoAgo(10 * DAY) },
-      ];
-    }
+  if (x02) {
+    if (!x02.tracks) x02.tracks = {};
+    x02.tracks.PRD = { periods: [
+      { started_at: isoAgo(90 * DAY), completed_at: isoAgo(70 * DAY) },
+      { started_at: isoAgo(40 * DAY), completed_at: isoAgo(35 * DAY) },
+      { started_at: isoAgo(15 * DAY), completed_at: isoAgo(10 * DAY) },
+    ], owner: null };
     if (!x02.tracks.Dev) x02.tracks.Dev = { periods: [{ started_at: isoAgo(10 * DAY), completed_at: null }], owner: null };
   }
 
