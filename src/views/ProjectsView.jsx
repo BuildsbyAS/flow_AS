@@ -535,7 +535,9 @@ export default function ProjectsView({
         case "shipped": list = filtered.filter(p => p.status === "shipped"); break;
         case "blocked": list = filtered.filter(p => p.status === "blocked" || metrics[p.id]?.isBlocked); break;
         case "deprioritized": list = filtered.filter(p => p.status === "deprioritized"); break;
-        case "upcoming": list = filtered.filter(p => p.status === "upcoming"); break;
+        case "upcoming": list = filtered.filter(p => p.status === "upcoming").sort((a, b) =>
+          (a.tentativeStartDate || "9999").localeCompare(b.tentativeStartDate || "9999")
+        ); break;
         case "overdue": list = filtered.filter(p => p.status === "in_flight" && metrics[p.id]?.overdue); break;
         default: list = filtered;
       }
@@ -1803,7 +1805,13 @@ export default function ProjectsView({
                         padding: `${space[3]}px ${space[4]}px`,
                         borderBottom: cellBorder,
                       }}>
-                        {isUpcoming ? <span style={{ color: c.textDim, fontSize: 11 }}>—</span> : (() => {
+                        {isUpcoming ? (
+                          proj.tentativeStartDate ? (
+                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>
+                              Starts {fmtDate(proj.tentativeStartDate)}
+                            </span>
+                          ) : <span style={{ color: c.textDim, fontSize: 11 }}>—</span>
+                        ) : (() => {
                           const allocated = daysBetween(proj.startDate, proj.endDate);
                           const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, today), allocated));
                           const pct = allocated > 0 ? Math.round((elapsed / allocated) * 100) : 0;
