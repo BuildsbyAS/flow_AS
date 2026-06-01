@@ -1714,7 +1714,7 @@ export default function ProjectsView({
                                   color: pc[t] || c.textDim,
                                   fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
                                   letterSpacing: "0.04em",
-                                  border: isBlockedProj ? `1px solid ${c.red}` : "none",
+                                  border: "none",
                                 }}>{t}</span>
                               ))}
                             </span>
