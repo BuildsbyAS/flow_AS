@@ -116,9 +116,18 @@ function actionLabel(ev, peopleByLowerName) {
     case "member_removed":          return `${who} removed ${link(d.person_name) || "a member"} from the team`;
     case "resource_added":          return `${who} added a ${d.label || "resource"} link`;
     case "resource_removed":        return `${who} removed a resource link`;
-    case "track_started":           return `${who} started the ${d.track || "?"} track`;
+    case "track_started": {
+      let msg = `${who} started the ${d.track || "?"} track`;
+      if (d.rolloutPct) msg += ` (${d.rolloutPct}%)`;
+      if (d.note) msg += ` — ${d.note}`;
+      return msg;
+    }
     case "track_completed":         return `${who} completed the ${d.track || "?"} track`;
-    case "track_reopened":          return `${who} reopened the ${d.track || "?"} track`;
+    case "track_reopened": {
+      let msg = `${who} reopened the ${d.track || "?"} track`;
+      if (d.reason) msg += ` — ${d.reason}`;
+      return msg;
+    }
     case "project_shipped":         return `${who} shipped the project`;
     default:                        return `${who} · ${ev.action}`;
   }

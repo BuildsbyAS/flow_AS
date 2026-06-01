@@ -292,7 +292,7 @@ export function Header({
                   e.preventDefault();
                   onTabSwitch(tab.key);
                 }}
-                className="flow-header-tab"
+                className={`flow-header-tab${active ? " flow-tab-active" : ""}`}
                 style={{
                   padding: `0 ${space[3] + 2}px`, borderRadius: 0,
                   border: "none", cursor: "pointer",

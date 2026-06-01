@@ -1,8 +1,8 @@
 // Flow — Gantt Chart Component
 // Pure CSS/div-based timeline visualization, no external chart libs
 import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
-import { c, typo, space, layout, motion, phaseColors as getPhaseColors, shipPhases, allPhases } from "../styles/theme";
-import { isDevSeedMode, devStore } from "../data/devSeed";
+import { c, typo, space, layout, motion, phaseColors as getPhaseColors, phaseMids as getPhaseMids } from "../styles/theme";
+import { getActiveTracks } from "../lib/tracks";
 import useDevLabel from "../hooks/useDevLabel";
 
 /* ── Helpers ── */
@@ -20,7 +20,10 @@ const HDR_H = 52;
 const TOOLBAR_H = 40;
 const LEFT_W = 260;
 
-const phaseColorMap = { PRD: () => c.purple, Design: () => c.blue, Dev: () => c.orange, QA: () => c.cyan, Alpha: () => c.green, Beta: () => c.green, GA: () => c.green };
+const BAR_COLOR = "#111111";
+const SHIPPED_BAR_COLOR = "#166534";
+const ALPHABETA_BAR_COLOR = "#86efac";
+const BLOCKED_BAR_COLOR = "#fca5a5";
 const priorityColorMap = { P0: () => c.red, P1: () => c.orange, P2: () => c.blue, P3: () => c.textDim };
 
 
@@ -32,49 +35,8 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
   const today = useMemo(() => parseDate(todayProp || new Date().toISOString().split("T")[0]), [todayProp]);
 
   const filteredProjects = projects;
-
-  // ── Build phase segments from events ──
-  const phaseSegments = useMemo(() => {
-    const map = {};
-    if (isDevSeedMode()) {
-      filteredProjects.forEach(p => {
-        if (!p.startDate || !p.endDate) return;
-        const events = devStore.listEvents(p.id) || [];
-        const phaseChanges = events
-          .filter(ev => ev.action === "project_phase_changed" && ev.details?.from && ev.details?.to)
-          .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-
-        if (phaseChanges.length === 0) {
-          // No transitions — single segment with current phase
-          map[p.id] = [{ phase: p.phase, startDate: p.startDate, endDate: p.endDate }];
-        } else {
-          const segments = [];
-          // First segment: from project start to first phase change
-          const firstPhase = phaseChanges[0].details.from;
-          const firstChangeDate = phaseChanges[0].created_at.split("T")[0];
-          segments.push({ phase: firstPhase, startDate: p.startDate, endDate: firstChangeDate });
-
-          // Middle segments
-          for (let i = 0; i < phaseChanges.length; i++) {
-            const toPhase = phaseChanges[i].details.to;
-            const segStart = phaseChanges[i].created_at.split("T")[0];
-            const segEnd = i + 1 < phaseChanges.length
-              ? phaseChanges[i + 1].created_at.split("T")[0]
-              : p.endDate;
-            segments.push({ phase: toPhase, startDate: segStart, endDate: segEnd });
-          }
-          map[p.id] = segments;
-        }
-      });
-    } else {
-      // Non-dev mode: single segment per project
-      filteredProjects.forEach(p => {
-        if (!p.startDate || !p.endDate) return;
-        map[p.id] = [{ phase: p.phase, startDate: p.startDate, endDate: p.endDate }];
-      });
-    }
-    return map;
-  }, [filteredProjects]);
+  const pc = getPhaseColors();
+  const pcMid = getPhaseMids();
 
   // ── Compute time axis ──
   const { weeks, timelineStart, totalWidth } = useMemo(() => {
@@ -109,8 +71,7 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
   const hideTimer = useRef(null);
   const showTooltip = useCallback((e, p) => {
     if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current = null; }
-    const rect = e.currentTarget.getBoundingClientRect();
-    setTooltip({ project: p, x: rect.right + 8, y: rect.top });
+    setTooltip({ project: p, x: e.clientX + 12, y: e.clientY + 12 });
   }, []);
   const hideTooltip = useCallback(() => {
     hideTimer.current = setTimeout(() => setTooltip(null), 150);
@@ -198,40 +159,8 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
     return spans;
   }, [weeks]);
 
-  const pc = getPhaseColors();
-
-  // Phase legend items
-  const legendPhases = [
-    { label: "PRD", color: c.purple },
-    { label: "Design", color: c.blue },
-    { label: "Dev", color: c.orange },
-    { label: "QA", color: c.cyan },
-    { label: "Alpha", color: c.green },
-    { label: "Beta", color: c.green },
-    { label: "GA", color: c.green },
-  ];
-
   return (
     <div ref={devRef} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden", borderRadius: layout.radius, border: `1px solid ${c.border}` }}>
-
-      {/* ── LEGEND ── */}
-      <div style={{
-        height: TOOLBAR_H, flexShrink: 0, display: "flex", alignItems: "center",
-        padding: `0 ${space[4]}px`,
-        borderBottom: `1px solid ${c.border}`, background: c.bg, gap: space[4],
-      }}>
-        {legendPhases.map(lp => (
-          <div key={lp.label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <div style={{ width: 12, height: 12, borderRadius: 3, background: lp.color, opacity: 0.75, flexShrink: 0 }} />
-            <span style={{ fontSize: 11, fontWeight: 600, color: c.textMid, fontFamily: typo.bodySm.font }}>{lp.label}</span>
-          </div>
-        ))}
-        <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: space[2] }}>
-          <div style={{ width: 12, height: 12, borderRadius: 3, flexShrink: 0,
-            background: `repeating-linear-gradient(-45deg, transparent, transparent 2px, rgba(110,120,148,0.3) 2px, rgba(110,120,148,0.3) 4px)` }} />
-          <span style={{ fontSize: 11, fontWeight: 600, color: c.textMid, fontFamily: typo.bodySm.font }}>Deprioritized</span>
-        </div>
-      </div>
 
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
       {/* ── LEFT PANEL (frozen) ── */}
@@ -341,7 +270,11 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
             const p = row.project;
             const { left, width } = barPos(p.startDate, p.endDate);
             const isDepri = p.status === "deprioritized";
-            const segments = phaseSegments[p.id] || [{ phase: p.phase, startDate: p.startDate, endDate: p.endDate }];
+            const isShipped = p.status === "shipped" || p.status === "complete";
+            const isBlocked = p.status === "blocked" || p.isBlocked;
+            const active = getActiveTracks(p);
+            const hasAlphaBeta = active.some(t => t === "Alpha" || t === "Beta");
+            const barFill = isBlocked ? BLOCKED_BAR_COLOR : isShipped ? SHIPPED_BAR_COLOR : hasAlphaBeta ? ALPHABETA_BAR_COLOR : BAR_COLOR;
 
             return (
               <div key={p.id + "-bar"} style={{ height: ROW_H, position: "relative",
@@ -350,7 +283,7 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
                 transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
               }}>
 
-                {/* Main bar — multi-phase segments */}
+                {/* Main bar */}
                 <div
                   className="flow-gantt-bar"
                   tabIndex={0}
@@ -370,38 +303,29 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
                   }}
                 >
                   {isDepri ? (
-                    /* Deprioritized — diagonal stripes */
                     <div style={{
                       position: "absolute", inset: 0, borderRadius: 5,
                       background: `repeating-linear-gradient(-45deg, transparent, transparent 3px, rgba(110,120,148,0.25) 3px, rgba(110,120,148,0.25) 6px)`,
                       border: `1px solid rgba(110,120,148,0.2)`,
                     }} />
                   ) : (
-                    /* Phase color mode — multi-segment bar */
-                    segments.map((seg, si) => {
-                      const segStart = parseDate(seg.startDate);
-                      const segEnd = parseDate(seg.endDate);
-                      const projStart = parseDate(p.startDate);
-                      const projEnd = parseDate(p.endDate);
-                      const totalDays = Math.max(1, diffDays(projStart, projEnd));
-                      const segLeftPct = Math.max(0, diffDays(projStart, segStart) / totalDays * 100);
-                      const segWidthPct = Math.max(1, diffDays(segStart, segEnd) / totalDays * 100);
-                      const segColor = phaseColorMap[seg.phase]?.() || c.textDim;
-                      const isFirst = si === 0;
-                      const isLast = si === segments.length - 1;
-                      return (
-                        <div key={si} style={{
-                          position: "absolute", top: 0, bottom: 0,
-                          left: `${segLeftPct}%`,
-                          width: `${Math.min(segWidthPct, 100 - segLeftPct)}%`,
-                          background: segColor,
-                          opacity: 0.75,
-                          borderRadius: isFirst && isLast ? 5
-                            : isFirst ? "5px 0 0 5px"
-                            : isLast ? "0 5px 5px 0" : 0,
-                        }} />
-                      );
-                    })
+                    <div style={{
+                      position: "absolute", inset: 0, borderRadius: 5,
+                      background: barFill,
+                    }} />
+                  )}
+                  {/* Track labels on bar */}
+                  {!isDepri && (active.length > 0 || isShipped) && (
+                    <span style={{
+                      position: "relative", zIndex: 1, paddingLeft: 8,
+                      fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600,
+                      letterSpacing: "0.03em",
+                      color: isBlocked ? "#7f1d1d" : hasAlphaBeta ? "#14532d" : "#ffffff",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                      lineHeight: "24px", pointerEvents: "none",
+                    }}>
+                      {(isShipped ? ["Shipped"] : active).join(" · ")}
+                    </span>
                   )}
                 </div>
 
@@ -422,30 +346,44 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
       {/* ── Tooltip ── */}
       {tooltip && (() => {
         const p = tooltip.project;
-        const color = phaseColorMap[p.phase]?.() || c.textDim;
-        const start = parseDate(p.startDate);
-        const end = parseDate(p.endDate);
-        const duration = diffDays(start, end);
-        const elapsed = Math.max(0, Math.min(diffDays(start, today), duration));
-        const pct = duration > 0 ? Math.round((elapsed / duration) * 100) : 0;
-
+        const active = getActiveTracks(p);
+        const isShippedTip = p.status === "shipped" || p.status === "complete";
 
         return (
           <div ref={tooltipRef} style={{
             position: "fixed", left: tooltip.x, top: tooltip.y, zIndex: 100,
-            background: c.surfaceHero, border: `1px solid ${c.border}`, borderRadius: 10,
-            padding: "14px 18px", minWidth: 200, boxShadow: `0 12px 40px ${c.shadow}`,
+            background: "rgba(255,255,255,0.92)",
+            backdropFilter: "blur(20px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+            border: `1px solid rgba(255,255,255,0.5)`, borderRadius: 10,
+            padding: "14px 18px", minWidth: 220, maxWidth: 280, boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)",
             cursor: "pointer", pointerEvents: "auto",
           }}
           onClick={() => { setTooltip(null); if (onProjectClick) onProjectClick(p.id); }}
           onMouseEnter={cancelHide}
           onMouseLeave={hideTooltip}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <div style={{ width: 10, height: 10, borderRadius: 3, background: color, flexShrink: 0 }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: c.text, flex: 1 }}>{p.name}</span>
-              <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: layout.radiusXs,
-                background: `${color}22`, color }}>{p.phase}</span>
+            <div style={{ marginBottom: 10 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: c.text }}>{p.name}</span>
+            </div>
+            {/* Active track pills */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap", marginBottom: 10 }}>
+              {isShippedTip ? (
+                <span style={{
+                  padding: "2px 7px", borderRadius: layout.radiusXs,
+                  background: `${c.green}15`, color: c.green,
+                  fontFamily: typo.bodyXs.font, fontSize: 11, fontWeight: 700,
+                }}>Shipped</span>
+              ) : active.length > 0 ? active.map(t => (
+                <span key={t} style={{
+                  padding: "2px 7px", borderRadius: layout.radiusXs,
+                  background: pcMid[t] || c.surfaceAlt,
+                  color: pc[t] || c.textDim,
+                  fontFamily: typo.bodyXs.font, fontSize: 11, fontWeight: 700,
+                }}>{t}</span>
+              )) : (
+                <span style={{ fontSize: 11, color: c.textDim }}>No active tracks</span>
+              )}
             </div>
             {p.isBlocked && (
               <div style={{ fontSize: 11, fontWeight: 700, color: c.red, background: c.redDim,

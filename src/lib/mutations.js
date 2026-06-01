@@ -260,14 +260,14 @@ export async function deleteProjectFromDB(projectId) {
 
 // ─── TRACK MUTATIONS ────────────────────────────────────────
 
-export async function startTrackInDB(projectId, trackName, projectsRef) {
+export async function startTrackInDB(projectId, trackName, projectsRef, extraDetails) {
   if (isDevSeedMode()) {
     const proj = projectsRef?.find(p => p.id === projectId);
     if (proj) {
       _startTrack(proj, trackName);
       if (proj.status === "upcoming") proj.status = "in_flight";
       devStore.persistProjects(projectsRef);
-      devStore.logEvent({ projectId, action: 'track_started', details: { track: trackName } });
+      devStore.logEvent({ projectId, action: 'track_started', details: { track: trackName, ...extraDetails } });
     }
     return { ok: true };
   }
@@ -297,13 +297,13 @@ export async function completeTrackInDB(projectId, trackName, projectsRef) {
   return { ok: true };
 }
 
-export async function reopenTrackInDB(projectId, trackName, projectsRef) {
+export async function reopenTrackInDB(projectId, trackName, projectsRef, extraDetails) {
   if (isDevSeedMode()) {
     const proj = projectsRef?.find(p => p.id === projectId);
     if (proj) {
       _reopenTrack(proj, trackName);
       devStore.persistProjects(projectsRef);
-      devStore.logEvent({ projectId, action: 'track_reopened', details: { track: trackName } });
+      devStore.logEvent({ projectId, action: 'track_reopened', details: { track: trackName, ...extraDetails } });
     }
     return { ok: true };
   }

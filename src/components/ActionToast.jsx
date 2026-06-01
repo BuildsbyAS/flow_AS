@@ -88,14 +88,16 @@ export default function ActionToast() {
           fontFamily: typo.bodyMd.font,
           fontSize: 13,
           fontWeight: 600,
-          color: c.surface,
+          color: "#ffffff",
           boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.12)",
           whiteSpace: "nowrap",
         }}>
           <span style={{ color: icon === "warn" ? "#fbbf24" : "#4ade80", fontSize: 14, lineHeight: 1 }}>
             {icon === "warn" ? "⚠" : "✓"}
           </span>
-          {message}
+          {typeof message === "string" && message.includes("<") ? (
+            <span dangerouslySetInnerHTML={{ __html: message }} />
+          ) : message}
         </div>
       </div>
     </>

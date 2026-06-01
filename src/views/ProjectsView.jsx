@@ -421,6 +421,10 @@ export default function ProjectsView({
   const [dragOverPhase, setDragOverPhaseRaw] = useState(null);
   const [draggingId, setDraggingId] = useState(null);
   const dragOverRef = useRef(null);
+  // Board-level reopen modal (separate from detail-view reopen modal)
+  const [boardReopenModal, setBoardReopenModal] = useState(null); // { projId, fromTrack, toTrack }
+  const [boardReopenReason, setBoardReopenReason] = useState("");
+  const [boardHoverId, setBoardHoverId] = useState(null); // which card is hovered (for Done btn)
   const [listStartNowId, setListStartNowId] = useState(null);
   const [listStartNowTracks, setListStartNowTracks] = useState(["PRD"]);
 
@@ -989,42 +993,34 @@ export default function ProjectsView({
       {/* ── INLINE BOARD VIEW ── */}
       {viewMode === "board" ? (() => {
         const PASTEL_BG = {
-          PRD: "#F5EEFF",     // very soft purple
-          Design: "#EDF5FF",  // very soft blue
-          Dev: "#FFF8E1",     // very soft amber
-          QA: "#E8F6F8",      // very soft teal
-          Alpha: "#EEF9FF",   // very soft sky
-          Beta: "#FFF5E6",    // very soft warm
-          GA: "#EAFFF0",      // very soft emerald
+          PRD: "#F5EEFF", Design: "#EDF5FF", Dev: "#FFF8E1", QA: "#E8F6F8", Alpha: "#EEF9FF", Beta: "#FFF5E6",
         };
         const PASTEL_BORDER = {
-          PRD: "#D8B4FE",
-          Design: "#A5C8FF",
-          Dev: "#FDE68A",
-          QA: "#99D5DB",
-          Alpha: "#A5D8FF",
-          Beta: "#FCD34D",
-          GA: "#A7F3D0",
+          PRD: "#D8B4FE", Design: "#A5C8FF", Dev: "#FDE68A", QA: "#99D5DB", Alpha: "#A5D8FF", Beta: "#FCD34D",
         };
 
-        const columns = allPhases;
+        // Columns = the 6 tracks (no GA)
+        const columns = trackNames;
+        // Build column data: a project appears in every column where it has an active track
         const columnProjects = {};
-        columns.forEach(ph => { columnProjects[ph] = []; });
+        columns.forEach(t => { columnProjects[t] = []; });
         const upcomingBoardProjects = [];
+        const shippedBoardProjects = [];
         tabProjects.forEach(proj => {
           if (proj.status === "upcoming") { upcomingBoardProjects.push(proj); return; }
-          const ph = proj.phase || "PRD";
-          if (columnProjects[ph]) columnProjects[ph].push(proj);
+          if (proj.status === "shipped" || proj.status === "complete") { shippedBoardProjects.push(proj); return; }
+          const active = getActiveTracks(proj);
+          if (active.length === 0) return; // no active tracks, skip
+          active.forEach(t => { if (columnProjects[t]) columnProjects[t].push(proj); });
         });
 
-        // Drag-over helper (refs + state are at component level)
+        // Drag helpers
         const setDragOverPhase = (ph) => { dragOverRef.current = ph; setDragOverPhaseRaw(ph); };
 
-        const handleDragStart = (e, projId) => {
-          e.dataTransfer.setData("text/plain", projId);
+        const handleDragStart = (e, projId, fromTrack) => {
+          e.dataTransfer.setData("text/plain", JSON.stringify({ projId, fromTrack }));
           e.dataTransfer.effectAllowed = "move";
           setDraggingId(projId);
-          // After browser captures ghost image, collapse original card
           requestAnimationFrame(() => {
             e.target.style.opacity = "0.3";
             e.target.style.pointerEvents = "none";
@@ -1039,7 +1035,6 @@ export default function ProjectsView({
         const handleDragOver = (e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = "move";
-          // Determine which column the mouse is actually over using refs
           const mouseX = e.clientX;
           for (const [ph, el] of Object.entries(colRefs.current)) {
             if (!el) continue;
@@ -1050,23 +1045,88 @@ export default function ProjectsView({
             }
           }
         };
-        const handleDrop = (e, targetPhase) => {
+        const handleDrop = (e, targetTrack) => {
           e.preventDefault();
-          // Use the tracked dragOverPhase as the real target
-          const actualTarget = dragOverRef.current || targetPhase;
+          const actualTarget = dragOverRef.current || targetTrack;
           setDragOverPhase(null);
           setDraggingId(null);
-          const projId = e.dataTransfer.getData("text/plain");
-          if (!projId) return;
+          let payload;
+          try { payload = JSON.parse(e.dataTransfer.getData("text/plain")); } catch { return; }
+          const { projId, fromTrack } = payload;
+          if (!projId || fromTrack === actualTarget) return;
           const proj = projects.find(p => p.id === projId);
-          if (!proj || proj.phase === actualTarget) return;
-          const oldPhase = proj.phase;
-          setProjects(prev => prev.map(p => p.id === projId ? { ...p, phase: actualTarget, lastActivityAt: new Date().toISOString() } : p));
-          updateProjectInDB(projId, { phase: actualTarget });
-          if (isDevSeedMode()) {
-            devStore.logEvent({ projectId: projId, action: "project_phase_changed", details: { from: oldPhase, to: actualTarget } });
+          if (!proj) return;
+
+          // Upcoming project → just start the target track, change status to in_flight
+          if (fromTrack === "__upcoming__") {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            startTrackInDB(proj.id, actualTarget, projects);
+            updateProjectInDB(proj.id, { status: "in_flight", startDate: todayStr, tentativeStartDate: null });
+            setProjects(prev => prev.map(p => {
+              if (p.id !== projId) return p;
+              const updated = { ...p, tracks: { ...p.tracks }, status: "in_flight", startDate: todayStr, tentativeStartDate: null, lastActivityAt: new Date().toISOString() };
+              if (!updated.tracks[actualTarget]) updated.tracks[actualTarget] = { periods: [], owner: null };
+              updated.tracks[actualTarget] = { ...updated.tracks[actualTarget], periods: [...updated.tracks[actualTarget].periods, { started_at: new Date().toISOString(), completed_at: null }] };
+              updated.phase = derivePrimaryPhase(updated);
+              return updated;
+            }));
+            window.__flowToast?.(`<b>${proj.name}</b> started with ${actualTarget} track`);
+            return;
           }
-          window.__flowToast?.(`${proj.name} moved to ${actualTarget}`);
+
+          // Check if target track is already active
+          const targetStatus = getTrackStatus(proj, actualTarget);
+          if (targetStatus === "active") {
+            window.__flowToast?.({ message: `${actualTarget} track already open on <b>${proj.name}</b>`, icon: "warn" });
+            return;
+          }
+
+          // If target track was previously completed, show reopen modal
+          if (targetStatus === "completed") {
+            setBoardReopenModal({ projId, fromTrack, toTrack: actualTarget });
+            setBoardReopenReason("");
+            return;
+          }
+
+          // Normal: complete fromTrack, start toTrack
+          completeTrackInDB(proj.id, fromTrack, projects);
+          startTrackInDB(proj.id, actualTarget, projects);
+          setProjects(prev => prev.map(p => {
+            if (p.id !== projId) return p;
+            const updated = { ...p, tracks: { ...p.tracks }, lastActivityAt: new Date().toISOString() };
+            // Complete fromTrack
+            if (updated.tracks[fromTrack]) {
+              const periods = [...updated.tracks[fromTrack].periods];
+              const last = periods[periods.length - 1];
+              if (last && !last.completed_at) periods[periods.length - 1] = { ...last, completed_at: new Date().toISOString() };
+              updated.tracks[fromTrack] = { ...updated.tracks[fromTrack], periods };
+            }
+            // Start toTrack
+            if (!updated.tracks[actualTarget]) updated.tracks[actualTarget] = { periods: [], owner: null };
+            updated.tracks[actualTarget] = { ...updated.tracks[actualTarget], periods: [...updated.tracks[actualTarget].periods, { started_at: new Date().toISOString(), completed_at: null }] };
+            updated.phase = derivePrimaryPhase(updated);
+            return updated;
+          }));
+          window.__flowToast?.(`<b>${proj.name}</b> ${fromTrack} completed & ${actualTarget} started`);
+        };
+
+        // Complete a single track on hover-click
+        const handleBoardDone = (e, proj, trackName) => {
+          e.stopPropagation();
+          completeTrackInDB(proj.id, trackName, projects);
+          setProjects(prev => prev.map(p => {
+            if (p.id !== proj.id) return p;
+            const updated = { ...p, tracks: { ...p.tracks }, lastActivityAt: new Date().toISOString() };
+            if (updated.tracks[trackName]) {
+              const periods = [...updated.tracks[trackName].periods];
+              const last = periods[periods.length - 1];
+              if (last && !last.completed_at) periods[periods.length - 1] = { ...last, completed_at: new Date().toISOString() };
+              updated.tracks[trackName] = { ...updated.tracks[trackName], periods };
+            }
+            updated.phase = derivePrimaryPhase(updated);
+            return updated;
+          }));
+          window.__flowToast?.(`<b>${proj.name}</b> ${trackName} track completed`);
         };
 
         return (
@@ -1075,20 +1135,20 @@ export default function ProjectsView({
             minWidth: columns.length * 180,
             padding: `${space[2]}px 0`,
           }}>
-            {/* Phase columns */}
+            {/* Track columns */}
             <div style={{
               display: "flex", gap: space[3],
               maxHeight: "calc(100vh - 280px)", minHeight: 400,
             }}>
-            {columns.map(phase => {
-              const phColor = pc[phase] || c.textDim;
-              const cards = columnProjects[phase] || [];
-              const isOver = dragOverPhase === phase;
+            {columns.map(track => {
+              const phColor = pc[track] || c.textDim;
+              const cards = columnProjects[track] || [];
+              const isOver = dragOverPhase === track;
               return (
-                <div key={phase}
-                  ref={el => { colRefs.current[phase] = el; }}
+                <div key={track}
+                  ref={el => { colRefs.current[track] = el; }}
                   onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, phase)}
+                  onDrop={(e) => handleDrop(e, track)}
                   style={{
                     flex: 1, minWidth: 180, display: "flex", flexDirection: "column",
                     borderRadius: layout.radiusLg,
@@ -1111,7 +1171,7 @@ export default function ProjectsView({
                         fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
                         fontWeight: 700, letterSpacing: "0.06em",
                         color: phColor, textTransform: "uppercase",
-                      }}>{phase}</span>
+                      }}>{track}</span>
                     </div>
                     <span style={{
                       fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
@@ -1140,47 +1200,55 @@ export default function ProjectsView({
                     )}
                     {cards.map(proj => {
                       const m = metrics[proj.id] || {};
-                      const pastelBg = PASTEL_BG[phase] || "#F9FAFB";
-                      const pastelBorder = PASTEL_BORDER[phase] || c.border;
-
-                      // Team members for bubbles
-                      const ownerPerson = (people || []).find(p => p.id === proj.owner_id);
-                      const memberIds = m.teamMembers || [];
-                      const allTeam = [];
-                      if (ownerPerson) allTeam.push(ownerPerson);
-                      memberIds.forEach(mid => {
-                        if (mid !== proj.owner_id) {
-                          const p = peopleById.get(mid);
-                          if (p) allTeam.push(p);
-                        }
-                      });
-                      const showTeam = allTeam.slice(0, 3);
-                      const BUBBLE_COLORS = ["#0E7490", "#B45309", "#6D28D9", "#059669", "#DC2626", "#E8590C"];
+                      const pastelBg = PASTEL_BG[track] || "#F9FAFB";
+                      const pastelBorder = PASTEL_BORDER[track] || c.border;
+                      const active = getActiveTracks(proj);
+                      const otherTracks = active.filter(t => t !== track);
+                      const isHovered = boardHoverId === `${proj.id}-${track}`;
 
                       return (
                         <div
-                          key={proj.id}
+                          key={`${proj.id}-${track}`}
                           role="button"
                           tabIndex={0}
                           draggable
-                          onDragStart={(e) => handleDragStart(e, proj.id)}
+                          onDragStart={(e) => handleDragStart(e, proj.id, track)}
                           onDragEnd={handleDragEnd}
                           onClick={() => openProject(proj.id)}
                           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProject(proj.id); } }}
-                          onMouseEnter={e => { const el = e.currentTarget; el.style.transform = "translateY(-2px) rotate(-0.5deg) scale(1.02)"; el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)"; }}
-                          onMouseLeave={e => { const el = e.currentTarget; el.style.transform = "translateY(0) rotate(0deg) scale(1)"; el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}
+                          onMouseEnter={(e) => { setBoardHoverId(`${proj.id}-${track}`); const el = e.currentTarget; el.style.transform = "translateY(-2px) scale(1.02)"; el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)"; }}
+                          onMouseLeave={(e) => { setBoardHoverId(null); const el = e.currentTarget; el.style.transform = "translateY(0) scale(1)"; el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}
                           style={{
-                            padding: 14,
+                            padding: 14, position: "relative",
                             borderRadius: layout.radiusMd,
                             background: pastelBg,
                             border: `1px solid ${pastelBorder}60`,
-                            borderLeft: `4px solid ${pastelBorder}`,
                             boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
                             cursor: "grab",
                             display: "flex", flexDirection: "column", gap: space[2],
                             transition: `box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
                           }}
                         >
+                          {/* Done button — appears on hover */}
+                          {isHovered && (
+                            <button type="button"
+                              onClick={(e) => handleBoardDone(e, proj, track)}
+                              title={`Complete ${track} track`}
+                              style={{
+                                position: "absolute", top: 6, right: 6, zIndex: 2,
+                                width: 22, height: 22, borderRadius: 6,
+                                background: c.green, border: "none",
+                                color: "#fff", cursor: "pointer",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                fontSize: 12, lineHeight: 1, fontWeight: 700,
+                                transition: `opacity ${motion.fast.duration}`,
+                                opacity: 0.9,
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.9"; }}
+                            >✓</button>
+                          )}
+
                           {/* ID + priority + blocked */}
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
@@ -1218,42 +1286,24 @@ export default function ProjectsView({
                             }}>{proj.squad}</span>
                           </div>
 
-                          {/* Team bubbles + updated */}
-                          <div style={{
-                            display: "flex", alignItems: "center", justifyContent: "space-between",
-                            borderTop: `1px solid ${pastelBorder}40`,
-                            paddingTop: space[2], marginTop: 2,
-                          }}>
-                            <div style={{ display: "flex", alignItems: "center" }}>
-                              {showTeam.map((person, idx) => (
-                                <div key={person.id} title={person.name} style={{
-                                  width: 26, height: 26, borderRadius: 7,
-                                  background: BUBBLE_COLORS[idx % BUBBLE_COLORS.length],
-                                  color: "#fff", fontSize: 9, fontWeight: 700,
-                                  fontFamily: typo.monoSm.font,
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  border: `2px solid ${pastelBg}`,
-                                  marginLeft: idx > 0 ? -4 : 0,
-                                  position: "relative", zIndex: idx + 1,
-                                }}>{initialsOf(person.name)}</div>
+                          {/* Other active tracks indicator */}
+                          {otherTracks.length > 0 && (
+                            <div style={{
+                              display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap",
+                              borderTop: `1px solid ${pastelBorder}40`,
+                              paddingTop: space[2], marginTop: 2,
+                            }}>
+                              <span style={{ fontFamily: typo.monoSm.font, fontSize: 9, color: c.textDim, fontWeight: 600 }}>also:</span>
+                              {otherTracks.map(t => (
+                                <span key={t} style={{
+                                  padding: "1px 5px", borderRadius: layout.radiusXs,
+                                  background: pcMid[t] || c.surfaceAlt,
+                                  color: pc[t] || c.textDim,
+                                  fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
+                                }}>{t}</span>
                               ))}
-                              {allTeam.length > 3 && (
-                                <div style={{
-                                  width: 26, height: 26, borderRadius: 7,
-                                  background: c.surfaceAlt, color: c.textMid,
-                                  fontSize: 9, fontWeight: 700, fontFamily: typo.monoSm.font,
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  border: `2px solid ${pastelBg}`,
-                                  marginLeft: -4, position: "relative", zIndex: showTeam.length + 1,
-                                }}>+{allTeam.length - 3}</div>
-                              )}
-                              {allTeam.length === 0 && <span style={{ fontSize: 10, color: c.textGhost }}>—</span>}
                             </div>
-                            <span style={{
-                              fontFamily: typo.monoSm.font, fontSize: 9,
-                              color: c.textDim, whiteSpace: "nowrap",
-                            }}>{proj.lastActivityAt ? timeAgo(proj.lastActivityAt) : "—"}</span>
-                          </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1296,6 +1346,9 @@ export default function ProjectsView({
                 }}>
                   {upcomingBoardProjects.map(proj => (
                     <div key={proj.id} role="button" tabIndex={0}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, proj.id, "__upcoming__")}
+                      onDragEnd={handleDragEnd}
                       onClick={() => openProject(proj.id)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProject(proj.id); } }}
                       onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.10)"; }}
@@ -1331,6 +1384,66 @@ export default function ProjectsView({
                 </div>
               </div>
             )}
+
+            {/* Board reopen modal */}
+            {boardReopenModal && (() => {
+              const proj = projects.find(p => p.id === boardReopenModal.projId);
+              if (!proj) return null;
+              const { fromTrack, toTrack } = boardReopenModal;
+              return (
+                <Modal open onClose={() => setBoardReopenModal(null)} title={`Reopen ${toTrack} track`} accent={c.amber}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: space[3], padding: `${space[2]}px 0` }}>
+                    <Body style={{ color: c.textMid }}>
+                      <B>{toTrack}</B> was previously completed on <B color={ec.project}>{proj.id}</B>. This will complete <B>{fromTrack}</B> and reopen <B>{toTrack}</B>.
+                    </Body>
+                    <input
+                      placeholder="Reason for reopening (optional)"
+                      value={boardReopenReason}
+                      onChange={e => setBoardReopenReason(e.target.value)}
+                      style={{
+                        fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                        padding: `${space[2]}px ${space[3]}px`, borderRadius: layout.radiusSm,
+                        border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                        color: c.text, outline: "none",
+                      }}
+                      autoFocus
+                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("board-reopen-confirm")?.click(); } }}
+                    />
+                    <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
+                      <Btn variant="secondary" size="sm" onClick={() => setBoardReopenModal(null)}>Cancel</Btn>
+                      <Btn id="board-reopen-confirm" variant="command" size="sm" style={{ borderColor: `${c.amber}60`, color: c.amber }} onClick={() => {
+                        const reasonVal = boardReopenReason.trim() || null;
+                        // Complete fromTrack
+                        completeTrackInDB(proj.id, fromTrack, projects);
+                        // Reopen toTrack
+                        reopenTrackInDB(proj.id, toTrack, projects, { reason: reasonVal });
+                        setProjects(prev => prev.map(p => {
+                          if (p.id !== proj.id) return p;
+                          const updated = { ...p, tracks: { ...p.tracks }, lastActivityAt: new Date().toISOString() };
+                          // Complete fromTrack
+                          if (updated.tracks[fromTrack]) {
+                            const periods = [...updated.tracks[fromTrack].periods];
+                            const last = periods[periods.length - 1];
+                            if (last && !last.completed_at) periods[periods.length - 1] = { ...last, completed_at: new Date().toISOString() };
+                            updated.tracks[fromTrack] = { ...updated.tracks[fromTrack], periods };
+                          }
+                          // Reopen toTrack
+                          if (updated.tracks[toTrack]) {
+                            updated.tracks[toTrack] = { ...updated.tracks[toTrack], periods: [...updated.tracks[toTrack].periods, { started_at: new Date().toISOString(), completed_at: null }] };
+                          }
+                          updated.phase = derivePrimaryPhase(updated);
+                          return updated;
+                        }));
+                        window.__flowToast?.(`<b>${proj.name}</b> ${fromTrack} completed & ${toTrack} reopened`);
+                        setBoardReopenModal(null);
+                      }}>
+                        Reopen {toTrack}
+                      </Btn>
+                    </div>
+                  </div>
+                </Modal>
+              );
+            })()}
           </div>
         );
       })() :
@@ -2969,6 +3082,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                                   });
                                   return copy;
                                 });
+                                window.__flowToast?.(`${t} track started`);
                               }
                               setStagePickerOpen(false);
                             }} disabled={isActive} style={{
@@ -3631,6 +3745,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
               if (updated.status === "upcoming") updated.status = "in_flight";
               return updated;
             }));
+            window.__flowToast?.(`${trackName} track started`);
           }}
           onCompleteTrack={(trackName) => {
             completeTrackInDB(proj.id, trackName, projects);
@@ -3646,6 +3761,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
               updated.phase = derivePrimaryPhase(updated);
               return updated;
             }));
+            window.__flowToast?.(`${trackName} track completed`);
           }}
           onReopenTrack={(trackName) => {
             setTrackReopenTarget(trackName);
@@ -4042,18 +4158,20 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
               const ph = shipPhaseModal.phase;
               const now = new Date().toISOString();
               if (shipPhaseModal.isTrackStart) {
-                startTrackInDB(proj.id, ph, projects);
+                const noteVal = shipNote.trim() || null;
+                const pctVal = shipPct ? Number(shipPct) : null;
+                startTrackInDB(proj.id, ph, projects, { note: noteVal, rolloutPct: pctVal });
                 setProjects(prev => prev.map(p => {
                   if (p.id !== proj.id) return p;
                   const updated = { ...p, tracks: { ...p.tracks }, lastActivityAt: now,
-                    shipNote: shipNote.trim() || null, shipPct: shipPct ? Number(shipPct) : null };
+                    shipNote: noteVal, shipPct: pctVal };
                   if (!updated.tracks[ph]) updated.tracks[ph] = { periods: [], owner: null };
                   updated.tracks[ph] = { ...updated.tracks[ph], periods: [...updated.tracks[ph].periods, { started_at: now, completed_at: null }] };
                   updated.phase = derivePrimaryPhase(updated);
                   if (updated.status === "upcoming") updated.status = "in_flight";
                   return updated;
                 }));
-                recordAction("track_started", { track: ph, note: shipNote.trim() || null, rolloutPct: shipPct || null }, `${ph} track started`);
+                window.__flowToast?.(`${ph} track started`);
               } else {
                 const oldPhase = shipPhaseModal.from;
                 setProjects(prev => prev.map(p => p.id === proj.id ? {
@@ -4150,17 +4268,18 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             <Btn variant="secondary" size="sm" onClick={() => setTrackReopenModal(false)}>Cancel</Btn>
             <Btn variant="command" size="sm" style={{ borderColor: `${c.amber}60`, color: c.amber }} onClick={() => {
               const trackName = trackReopenTarget;
-              reopenTrackInDB(proj.id, trackName, projects);
+              const reasonVal = trackReopenReason.trim() || null;
+              reopenTrackInDB(proj.id, trackName, projects, { reason: reasonVal });
               setProjects(prev => prev.map(p => {
                 if (p.id !== proj.id) return p;
-                const updated = { ...p, tracks: { ...p.tracks } };
+                const updated = { ...p, tracks: { ...p.tracks }, lastActivityAt: new Date().toISOString() };
                 if (updated.tracks[trackName]) {
                   updated.tracks[trackName] = { ...updated.tracks[trackName], periods: [...updated.tracks[trackName].periods, { started_at: new Date().toISOString(), completed_at: null }] };
                 }
                 updated.phase = derivePrimaryPhase(updated);
                 return updated;
               }));
-              recordAction("track_reopened", { track: trackName, reason: trackReopenReason.trim() || null }, `${trackName} track reopened`);
+              window.__flowToast?.(`${trackName} track reopened`);
               setTrackReopenModal(false);
             }}>
               Reopen {trackReopenTarget}

@@ -162,20 +162,24 @@ body.flow-chrome-collapsed .flow-th-sticky {
   box-shadow: 0 8px 8px -8px rgba(0, 0, 0, 0.10);
 }
 
-.flow-header-tab:hover,
-.flow-header-tab:active,
-.flow-header-tab:focus {
-  background: transparent !important;
-  background-color: transparent !important;
-  -webkit-tap-highlight-color: transparent !important;
-}
+a.flow-header-tab,
+a.flow-header-tab:link,
+a.flow-header-tab:visited,
 a.flow-header-tab:hover,
-a.flow-header-tab:active {
+a.flow-header-tab:active,
+a.flow-header-tab:focus {
   background: transparent !important;
   background-color: transparent !important;
   text-decoration: none !important;
   -webkit-tap-highlight-color: transparent !important;
 }
+a.flow-header-tab:link,
+a.flow-header-tab:visited { color: rgba(255,255,255,0.50) !important; }
+a.flow-header-tab:hover { color: rgba(255,255,255,0.70) !important; }
+a.flow-header-tab.flow-tab-active,
+a.flow-header-tab.flow-tab-active:link,
+a.flow-header-tab.flow-tab-active:visited,
+a.flow-header-tab.flow-tab-active:hover { color: #FFFFFF !important; }
 
 .flow-search-trigger:hover {
   border-color: var(--flow-border-medium) !important;
