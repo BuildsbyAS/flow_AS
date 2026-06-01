@@ -428,6 +428,7 @@ export default function ProjectsView({
   const [boardHoverId, setBoardHoverId] = useState(null); // which card is hovered (for Done btn)
   const [listStartNowId, setListStartNowId] = useState(null);
   const [listStartNowTracks, setListStartNowTracks] = useState(["PRD"]);
+  const [listStartNowEndDate, setListStartNowEndDate] = useState("");
 
   // Wire searchRef
   useEffect(() => {
@@ -1945,11 +1946,11 @@ export default function ProjectsView({
         const targetProj = projects.find(p => p.id === listStartNowId);
         if (!targetProj) return null;
         return (
-          <Modal open={true} onClose={() => setListStartNowId(null)} title="Start this project" accent={c.accent}>
+          <Modal open={true} onClose={() => { setListStartNowId(null); setListStartNowEndDate(""); }} title="Start this project" accent={c.accent}>
             <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.6, marginBottom: space[4] }}>
               Select tracks to start for <strong style={{ color: c.text }}>{targetProj.name}</strong>. The start date will be set to today.
             </div>
-            <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", marginBottom: space[5] }}>
+            <div style={{ display: "flex", gap: space[2], flexWrap: "wrap", marginBottom: space[4] }}>
               {trackNames.map(t => {
                 const sel = listStartNowTracks.includes(t);
                 const phColor = pc[t] || c.textDim;
@@ -1966,8 +1967,28 @@ export default function ProjectsView({
                 );
               })}
             </div>
+            {/* Tentative end date */}
+            <div style={{ marginBottom: space[5] }}>
+              <label style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.textMid, letterSpacing: "0.03em", display: "block", marginBottom: 6 }}>
+                TENTATIVE END DATE
+              </label>
+              <input
+                type="date"
+                value={listStartNowEndDate}
+                onChange={e => setListStartNowEndDate(e.target.value)}
+                min={today}
+                style={{
+                  width: "100%", boxSizing: "border-box", height: 40,
+                  borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                  background: c.surfaceSolid, fontFamily: typo.bodyMd.font, fontSize: 14,
+                  color: listStartNowEndDate ? c.text : c.textDim,
+                  padding: `0 ${space[3]}px`, outline: "none",
+                  colorScheme: "light",
+                }}
+              />
+            </div>
             <div style={{ display: "flex", gap: space[3], justifyContent: "flex-end" }}>
-              <Btn variant="ghost" size="sm" onClick={() => setListStartNowId(null)}>Cancel</Btn>
+              <Btn variant="ghost" size="sm" onClick={() => { setListStartNowId(null); setListStartNowEndDate(""); }}>Cancel</Btn>
               <Btn variant="primary" size="sm" disabled={listStartNowTracks.length === 0} onClick={() => {
                 const todayStr = today;
                 const now = new Date().toISOString();
@@ -1976,18 +1997,19 @@ export default function ProjectsView({
                   newTracks[t] = { periods: [{ started_at: now, completed_at: null }], owner: null };
                 }
                 const primaryPhase = listStartNowTracks[listStartNowTracks.length - 1];
-                setProjects(prev => prev.map(p => p.id === listStartNowId ? { ...p, status: "in_flight", phase: primaryPhase, tracks: newTracks, startDate: todayStr, tentativeStartDate: null } : p));
-                updateProjectInDB(listStartNowId, { status: "in_flight", phase: primaryPhase, startDate: todayStr, tentativeStartDate: null });
+                const endDateVal = listStartNowEndDate || null;
+                setProjects(prev => prev.map(p => p.id === listStartNowId ? { ...p, status: "in_flight", phase: primaryPhase, tracks: newTracks, startDate: todayStr, tentativeStartDate: null, endDate: endDateVal } : p));
+                updateProjectInDB(listStartNowId, { status: "in_flight", phase: primaryPhase, startDate: todayStr, tentativeStartDate: null, endDate: endDateVal });
                 if (isDevSeedMode()) {
                   const proj = rawProjects.find(p => p.id === listStartNowId);
-                  if (proj) { proj.tracks = newTracks; proj.status = "in_flight"; proj.phase = primaryPhase; proj.startDate = todayStr; devStore.persistProjects(rawProjects); }
-                  for (const t of listStartNowTracks) {
-                    devStore.logEvent({ projectId: listStartNowId, action: "track_started", details: { track: t } });
-                  }
+                  if (proj) { proj.tracks = newTracks; proj.status = "in_flight"; proj.phase = primaryPhase; proj.startDate = todayStr; proj.endDate = endDateVal; devStore.persistProjects(rawProjects); }
+                  const viewerName = personProfile?.name || "AJ";
+                  devStore.logEvent({ projectId: listStartNowId, action: "project_started", userName: viewerName, details: { tracks: listStartNowTracks.join(", ") } });
                 }
                 window.__flowToast?.(`${targetProj.name} started with ${listStartNowTracks.join(", ")}`);
                 setListStartNowId(null);
                 setListStartNowTracks(["PRD"]);
+                setListStartNowEndDate("");
               }}>Start Project</Btn>
             </div>
           </Modal>

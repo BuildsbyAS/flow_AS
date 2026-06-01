@@ -452,6 +452,7 @@ export function Header({
       style={{
         position: "sticky", top: 0, zIndex: 50,
         width: "100%", minWidth: 0,
+        background: c.headerBg || "#111111",
         transform: collapsed ? "translate3d(0,-100%,0)" : "translate3d(0,0,0)",
         opacity: collapsed ? 0 : 1,
         transition: "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease",
@@ -512,6 +513,7 @@ export function Header({
               <a
                 key={tab.key}
                 href={`?tab=${tab.key}`}
+                {...(tab.key === "guide" ? { "data-tour": "guide-tab" } : {})}
                 onClick={(e) => {
                   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
                   e.preventDefault();
@@ -570,16 +572,21 @@ export function Header({
 
       {/* ── Utility cluster: lens · search · user ── */}
       <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
-        {/* ── My Lens toggle switch ── */}
-        {toggleMyLens && (
+        {/* ── My Lens toggle switch (disabled on People & Guide tabs) ── */}
+        {toggleMyLens && (() => {
+          const lensDisabled = activeTab === "people" || activeTab === "guide";
+          return (
           <div
             data-tour="my-lens"
-            onClick={toggleMyLens}
+            onClick={lensDisabled ? undefined : toggleMyLens}
             style={{
               display: "flex", alignItems: "center", gap: 8,
-              cursor: "pointer", padding: "0 4px", userSelect: "none",
+              cursor: lensDisabled ? "default" : "pointer",
+              padding: "0 4px", userSelect: "none",
+              opacity: lensDisabled ? 0.3 : 1,
+              transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
             }}
-            title={myLens ? "My Lens ON — showing your squad + followed projects" : "My Lens — filter to your squad + followed projects"}
+            title={lensDisabled ? "My Lens is not available on this tab" : myLens ? "My Lens ON — showing your squad + followed projects" : "My Lens — filter to your squad + followed projects"}
           >
             <span style={{
               fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
@@ -603,7 +610,8 @@ export function Header({
               }} />
             </div>
           </div>
-        )}
+          );
+        })()}
 
         <CompactSearch onClick={onCmdOpen} />
 
@@ -662,12 +670,11 @@ export function Header({
       <div className="flow-context-bar" style={{
         height: 52, display: "flex", alignItems: "center",
         padding: `0 ${space[7]}px`, gap: space[2],
-        background: "rgba(255,255,255,0.55)",
-        backdropFilter: "blur(16px) saturate(1.3)",
-        WebkitBackdropFilter: "blur(16px) saturate(1.3)",
+        background: "#FFFFFF",
         borderBottom: "1px solid rgba(255,255,255,0.35)",
         boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
         position: "relative", zIndex: 1,
+        borderRadius: `${layout.radiusLg}px ${layout.radiusLg}px 0 0`,
       }}>
 
         {/* ── Today's date + Quarter picker ── */}

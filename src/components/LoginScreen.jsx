@@ -99,28 +99,38 @@ function drawCell(ctx, cell, drawX, drawY, smoothX, smoothY) {
 
 export default function LoginScreen({ onSignIn, loading: signingIn, error: authError }) {
   const devRef = useDevLabel("LoginScreen", "src/components/LoginScreen.jsx", "Login screen with perspective calendar grid and Google OAuth sign-in");
-  const canvasRef = useRef(null);
+  const canvasLeftRef = useRef(null);
+  const canvasRightRef = useRef(null);
   const heroRef = useRef(null);
   const mouseRef = useRef({ x: 0, y: 0, smoothX: 0, smoothY: 0 });
-  const cellsRef = useRef([]);
+  const leftCellsRef = useRef([]);
+  const rightCellsRef = useRef([]);
   const scrollRef = useRef(0);
   const totalRowsRef = useRef(0);
   const rafRef = useRef(null);
 
   const initCells = useCallback(() => {
-    const cv = canvasRef.current;
-    if (!cv) return;
-    const wrap = cv.parentElement;
-    const r = wrap.getBoundingClientRect();
-    cv.width = r.width * 1.2;
-    cv.height = r.height * 1.2;
-    const rows = Math.ceil(cv.height / (CH + GAP)) + 6;
-    totalRowsRef.current = rows;
-    const cells = [];
-    for (let row = 0; row < rows; row++)
-      for (let col = 0; col < COLS; col++)
-        cells.push(makeCell(col * (CW + GAP) + 16, row * (CH + GAP)));
-    cellsRef.current = cells;
+    [canvasLeftRef, canvasRightRef].forEach((ref, i) => {
+      const cv = ref.current;
+      if (!cv) return;
+      const wrap = cv.parentElement;
+      const r = wrap.getBoundingClientRect();
+      cv.width = r.width * 1.2;
+      cv.height = r.height * 1.2;
+      const rows = Math.ceil(cv.height / (CH + GAP)) + 6;
+      totalRowsRef.current = rows;
+      const cells = [];
+      for (let row = 0; row < rows; row++)
+        for (let col = 0; col < COLS; col++) {
+          // Right side: anchor cells from the right edge of the canvas
+          const x = i === 0
+            ? col * (CW + GAP) + 16
+            : cv.width - (col + 1) * (CW + GAP) - 16;
+          cells.push(makeCell(x, row * (CH + GAP)));
+        }
+      if (i === 0) leftCellsRef.current = cells;
+      else rightCellsRef.current = cells;
+    });
   }, []);
 
   useEffect(() => {
@@ -139,10 +149,7 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
     initCells();
 
     const draw = () => {
-      const cv = canvasRef.current;
       const hero = heroRef.current;
-      if (!cv) return;
-      const ctx = cv.getContext("2d");
       const m = mouseRef.current;
 
       // Smooth lerp
@@ -153,21 +160,29 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
       scrollRef.current += 0.2;
       const totalH = totalRowsRef.current * (CH + GAP);
 
-      ctx.clearRect(0, 0, cv.width, cv.height);
+      // Draw both canvases
+      const winW = window.innerWidth;
+      [
+        { cv: canvasLeftRef.current, cells: leftCellsRef.current, dir: 1 },
+        { cv: canvasRightRef.current, cells: rightCellsRef.current, dir: -1 },
+      ].forEach(({ cv, cells, dir }) => {
+        if (!cv) return;
+        const ctx = cv.getContext("2d");
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        // Convert screen mouse to canvas-local coords
+        // Left canvas starts at screen x=0, right canvas starts at screen x=winW/2
+        const mx = dir === -1 ? m.smoothX - winW / 2 : m.smoothX;
+        const my = m.smoothY;
+        for (const cell of cells) {
+          let dy = cell.y - (dir * scrollRef.current % totalH);
+          if (dir === -1) dy = cell.y + (scrollRef.current % totalH);
+          if (dy < -(CH + GAP)) dy += totalH;
+          if (dy > cv.height + CH) { if (dy - totalH > -(CH + GAP)) dy -= totalH; else continue; }
+          drawCell(ctx, cell, cell.x, dy, mx, my);
+        }
+      });
 
-      for (const cell of cellsRef.current) {
-        let dy = cell.y - (scrollRef.current % totalH);
-        if (dy < -(CH + GAP)) dy += totalH;
-        if (dy > cv.height + CH) continue;
-        drawCell(ctx, cell, cell.x, dy, m.smoothX, m.smoothY);
-      }
-
-      // Parallax on hero
-      if (hero) {
-        const dx = (m.smoothX - window.innerWidth / 2) / (window.innerWidth / 2);
-        const dy2 = (m.smoothY - window.innerHeight / 2) / (window.innerHeight / 2);
-        hero.style.transform = `translate(${dx * -4}px, ${dy2 * -4}px)`;
-      }
+      // Hero is static — no parallax
 
       rafRef.current = requestAnimationFrame(draw);
     };
@@ -193,7 +208,7 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
       <style>{`
         @keyframes login-breathe {
           0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.03); filter: drop-shadow(0 0 20px rgba(6,182,212,0.2)); }
+          50% { transform: scale(1.08); }
         }
         @keyframes login-fade-up {
           0% { opacity: 0; transform: translateY(12px); }
@@ -216,11 +231,11 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
 
       {/* ── Perspective-tilted calendar grid (left side) ── */}
       <div className="flow-login-grid-wrap" style={{
-        position: "absolute", left: 0, top: 0, width: "55%", height: "100%",
+        position: "absolute", left: 0, top: 0, width: "50%", height: "100%",
         perspective: 1200, overflow: "hidden", zIndex: 0,
       }}>
         <canvas
-          ref={canvasRef}
+          ref={canvasLeftRef}
           style={{
             position: "absolute", inset: 0, width: "100%", height: "100%",
             transform: "rotateY(12deg) rotateX(-2deg) scale(1.1)",
@@ -229,11 +244,26 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
         />
       </div>
 
+      {/* ── Perspective-tilted calendar grid (right side) ── */}
+      <div className="flow-login-grid-wrap" style={{
+        position: "absolute", right: 0, top: 0, width: "50%", height: "100%",
+        perspective: 1200, overflow: "hidden", zIndex: 0,
+      }}>
+        <canvas
+          ref={canvasRightRef}
+          style={{
+            position: "absolute", inset: 0, width: "100%", height: "100%",
+            transform: "rotateY(-12deg) rotateX(-2deg) scale(1.1)",
+            transformOrigin: "right center",
+          }}
+        />
+      </div>
+
       {/* ── Gradient fades ── */}
-      {/* Right-side fade from grid to dark */}
+      {/* Center fade — grids fade into center hero area */}
       <div style={{
         position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none",
-        background: `linear-gradient(90deg, transparent 25%, ${c.bg} 55%)`,
+        background: `linear-gradient(90deg, transparent 20%, ${c.bg} 38%, ${c.bg} 62%, transparent 80%)`,
       }} />
       {/* Top/bottom fade */}
       <div style={{
@@ -266,25 +296,11 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
           Flow
         </div>
 
-        {/* Commit / Lock / Ship */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 20,
-          justifyContent: "center", marginBottom: 16,
-          animation: "login-fade-up 0.6s ease-out both",
-          animationDelay: "0.25s",
-        }}>
-          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: c.cyan }}>Commit</span>
-          <span style={{ fontSize: 18, opacity: 0.2, fontWeight: 300, color: c.textDim }}>/</span>
-          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: c.red }}>Lock</span>
-          <span style={{ fontSize: 18, opacity: 0.2, fontWeight: 300, color: c.textDim }}>/</span>
-          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "0.16em", textTransform: "uppercase", color: c.green }}>Ship</span>
-        </div>
-
         {/* Subtext */}
         <div style={{
           fontSize: 16, color: c.textDim, fontWeight: 500, lineHeight: 1.5,
           animation: "login-fade-up 0.6s ease-out both",
-          animationDelay: "0.35s",
+          animationDelay: "0.25s",
         }}>
           Workflows, visualized.
         </div>

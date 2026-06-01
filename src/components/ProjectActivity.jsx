@@ -94,7 +94,7 @@ function actionLabel(ev, peopleByLowerName) {
   const link = (name) => name ? (peopleByLowerName.get(name.toLowerCase())?.name || name) : null;
   switch (ev.action) {
     case "project_created":         return `${who} created this project`;
-    case "project_started":         return `${who} started the project in ${d.phase || "?"} phase`;
+    case "project_started":         return d.tracks ? `${who} started this project with ${d.tracks} tracks` : `${who} started the project in ${d.phase || "?"} phase`;
     case "project_phase_changed": {
       const to = d.to || "?";
       if (["Alpha", "Beta", "GA"].includes(to)) return `${who} shipped the project to ${to}`;

@@ -1,6 +1,6 @@
 // Flow — Main App Shell
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { setTheme, c, body, space } from "./styles/theme";
+import { setTheme, c, body, space, layout } from "./styles/theme";
 import AnimStyles from "./components/AnimStyles";
 import CommandPalette from "./components/CommandPalette";
 import ShortcutHintBar from "./components/ShortcutHintBar";
@@ -79,7 +79,17 @@ export default function FlowApp() {
     return <QAReviewView />;
   }
   if (params.has("login")) {
-    return <LoginScreen onSignIn={handleSignIn} loading={signingIn} error={loginError} />;
+    return <LoginScreen onSignIn={() => {
+      // On localhost preview, skip OAuth and show welcome/tutorial flow
+      if (isDev) {
+        try { localStorage.removeItem("flow_tutorial_seen"); } catch {}
+        params.delete("login");
+        const qs = params.toString();
+        window.location.href = `${window.location.pathname}${qs ? `?${qs}` : ""}`;
+        return;
+      }
+      handleSignIn();
+    }} loading={signingIn} error={loginError} />;
   }
   if (params.has("pending")) {
     return (
@@ -273,6 +283,7 @@ function FlowDashboard({ auth }) {
   }, [flushDirtyToDB]);
 
   const [terminalResetKey, setTerminalResetKey] = useState(0);
+  const [projResetKey, setProjResetKey] = useState(0);
 
   const handleTabSwitch = useCallback((key) => {
     // Flush any unsaved commit drafts to DB before leaving
@@ -552,6 +563,20 @@ function FlowDashboard({ auth }) {
       <Header
         onLogoClick={() => {
           handleTabSwitch("projects");
+          setNavPayload(null);
+          setDetailLabel(null);
+          goBackRef.current = null;
+          // Force ProjectsView to remount so it drops any open detail view
+          setProjResetKey(k => k + 1);
+          // Clear stale ?id= from URL so the list view loads cleanly
+          try {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has("id")) {
+              params.delete("id");
+              const qs = params.toString();
+              window.history.replaceState(null, "", `${window.location.pathname}${qs ? `?${qs}` : ""}`);
+            }
+          } catch {}
           // Smooth-scroll to the top — without this, clicking the logo mid-page
           // switches tabs but leaves the user halfway down the new page, which
           // reads as "nothing happened".
@@ -594,7 +619,7 @@ function FlowDashboard({ auth }) {
       <main key={activeTab} className="flow-page" style={{ maxWidth: 1440, margin: "0 auto", padding: `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
         <ErrorCatcher key={activeTab}>
           {activeTab === "summary" && <SummaryView loading={loading} error={error} projects={projects} people={people} squads={squads} globalFilters={globalFilters} onNavigate={handleNavigate} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} timeframe={timeframe} />}
-          {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAppOwner={!!auth?.isOwner} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} timeframe={timeframe} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || `proj-${projResetKey}`} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAppOwner={!!auth?.isOwner} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} timeframe={timeframe} />}
 
           {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} viewerName={viewerProfile?.name} isAppOwner={!!auth?.isOwner} timeframe={timeframe} />}
           {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} />}

@@ -1,5 +1,5 @@
 // Flow — Post-login Welcome + Profile Setup + Guided Tutorial
-// Welcome → Profile setup → 7-step spotlight tutorial
+// Welcome → Profile setup → 8-step spotlight tutorial
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import ReactDOM from "react-dom";
@@ -59,13 +59,25 @@ const STEPS = [
     context: "list",
     spotlightPadding: 8,
     spotlightRadius: 22,
+    spotlightStroke: "#fff",
+  },
+  {
+    target: "[data-tour='guide-tab']",
+    title: "Learn More",
+    desc: "View more information on how Flow can help you keep your projects up to date and your teams informed.",
+    position: "bottom",
+    context: "list",
+    spotlightPadding: 8,
+    spotlightRadius: 22,
+    spotlightStroke: "#fff",
+    spotlightMaxHeight: 20,
   },
 ];
 
 // ── Spotlight overlay with cutout ──
 // A single positioned div uses an enormous box-shadow to darken everything
 // outside its bounds, creating a "hole" effect over the target element.
-function Spotlight({ rect, padding = 10, radius = 14, pulse = false }) {
+function Spotlight({ rect, padding = 10, radius = 14, pulse = false, stroke = null }) {
   const p = padding;
   const r = radius;
 
@@ -85,6 +97,12 @@ function Spotlight({ rect, padding = 10, radius = 14, pulse = false }) {
   const w = rect.width + p * 2;
   const h = rect.height + p * 2;
 
+  // Build box-shadow: accent ring + optional white stroke + dark overlay
+  const shadows = [
+    stroke ? `0 0 0 2px ${stroke}` : `0 0 0 2px ${c.accent}`,
+    `0 0 0 9999px rgba(0,0,0,0.55)`,
+  ];
+
   return (
     <>
       {/* Dark overlay with cutout */}
@@ -93,7 +111,7 @@ function Spotlight({ rect, padding = 10, radius = 14, pulse = false }) {
         left: x, top: y, width: w, height: h,
         zIndex: 9998,
         borderRadius: r,
-        boxShadow: `0 0 0 2px ${c.accent}, 0 0 0 9999px rgba(0,0,0,0.55)`,
+        boxShadow: shadows.join(", "),
         pointerEvents: "none",
         animation: "spotlightFadeIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) both",
         transition: "left 0.3s cubic-bezier(0.22,1,0.36,1), top 0.3s cubic-bezier(0.22,1,0.36,1), width 0.3s cubic-bezier(0.22,1,0.36,1), height 0.3s cubic-bezier(0.22,1,0.36,1)",
@@ -185,7 +203,7 @@ function TourTooltip({ step, stepIdx, totalSteps, rect, onNext, onBack, onSkip, 
   }
 
   return (
-    <div ref={tooltipRef} style={style}>
+    <div ref={tooltipRef} data-tour-tooltip style={style}>
       {/* Step counter */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -318,10 +336,10 @@ function WelcomeScreen({ onStart, onSkip }) {
             <span key={f} style={{
               padding: `${space[1] + 1}px ${space[3]}px`,
               borderRadius: 999,
-              background: c.accentDim,
-              border: `1px solid ${c.accent}20`,
-              fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-              color: c.accent,
+              background: "rgba(0,0,0,0.04)",
+              border: "none",
+              fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 500,
+              color: c.textMid,
             }}>{f}</span>
           ))}
         </div>
@@ -646,6 +664,26 @@ export default function WelcomeTutorial({ onComplete, onStartTour, onOpenProject
     };
   }, [phase, stepIdx]);
 
+  // Lock background scroll for entire tutorial duration (all phases except done)
+  useEffect(() => {
+    if (phase !== "done") {
+      document.body.style.overflow = "hidden";
+      // Also block wheel/touch events from reaching the page
+      const blockScroll = (e) => {
+        // Allow scrolling inside tooltip cards (if any)
+        if (e.target.closest?.('[data-tour-tooltip]')) return;
+        e.preventDefault();
+      };
+      document.addEventListener("wheel", blockScroll, { passive: false });
+      document.addEventListener("touchmove", blockScroll, { passive: false });
+      return () => {
+        document.body.style.overflow = "";
+        document.removeEventListener("wheel", blockScroll);
+        document.removeEventListener("touchmove", blockScroll);
+      };
+    }
+  }, [phase]);
+
   const finish = useCallback(() => {
     // Show loader → call onComplete (resets view) → reveal page
     setPhase("finishing");
@@ -755,10 +793,13 @@ export default function WelcomeTutorial({ onComplete, onStartTour, onOpenProject
         onClick={(e) => e.stopPropagation()}
       />
       <Spotlight
-        rect={transitioning ? null : targetRect}
+        rect={transitioning ? null : (step.spotlightMaxHeight && targetRect && targetRect.height > step.spotlightMaxHeight
+          ? { left: targetRect.left, top: targetRect.top + (targetRect.height - step.spotlightMaxHeight) / 2, width: targetRect.width, height: step.spotlightMaxHeight }
+          : targetRect)}
         padding={step.spotlightPadding}
         radius={step.spotlightRadius}
         pulse={step.pulse}
+        stroke={step.spotlightStroke}
       />
       {!transitioning && (
         <TourTooltip
