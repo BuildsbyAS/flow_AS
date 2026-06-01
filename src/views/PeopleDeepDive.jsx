@@ -61,13 +61,13 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
 
   const squadsRaw = {};
   filtered.forEach(p => {
-    const sq = p.squad || "Unassigned";
+    const sq = p.squad || "Consumer Product";
     if (!squadsRaw[sq]) squadsRaw[sq] = [];
     squadsRaw[sq].push(p);
   });
   const sortedSquadKeys = Object.keys(squadsRaw).sort((a, b) => {
-    if (a === "Unassigned") return 1;
-    if (b === "Unassigned") return -1;
+    if (a === "Consumer Product") return 1;
+    if (b === "Consumer Product") return -1;
     return a.localeCompare(b);
   });
   const squadsWithPeople = {};
@@ -356,7 +356,7 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
           return (
             <div key={squad}>
               <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[3], marginTop: space[5] }}>
-                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: "0.08em", color: c.text, textTransform: "uppercase" }}>{squad === "Unassigned" ? "No Squad" : squad}</span>
+                <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, letterSpacing: "0.08em", color: c.text, textTransform: "uppercase" }}>{squad}</span>
                 <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, color: c.textGhost || c.textDim }}>·</span>
                 <span style={{ fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size, fontWeight: typo.monoMd.weight, color: c.text, fontVariantNumeric: "tabular-nums" }}>{members.length}</span>
               </div>

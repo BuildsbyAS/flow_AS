@@ -2097,18 +2097,16 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
         )}
       </button>
 
-      <Modal open={open} onClose={() => { setOpen(false); setReplyingTo(null); setSquadFilter(null); }} title="Inbox" accent={c.accent} width={580}>
-        <div style={{ height: "min(560px, 65vh)", display: "flex", flexDirection: "column" }}>
-        {/* ── Squad Filter Dropdown ── */}
-        {!myLens && (() => {
-          const allSquads = [...new Set((projects || []).map(p => p.squad).filter(Boolean))].sort();
-          if (allSquads.length < 2) return null;
-          return (
-            <div style={{
-              display: "flex", justifyContent: "flex-end",
-              marginBottom: space[3], paddingBottom: space[3],
-              borderBottom: `1px solid ${c.border}`,
-            }}>
+      <Modal open={open} onClose={() => { setOpen(false); setReplyingTo(null); setSquadFilter(null); }} accent={c.accent} width={580}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[3] }}>
+          <span style={{
+            fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
+            fontWeight: typo.displayMd.weight, color: c.text,
+          }}>Inbox</span>
+          {!myLens && (() => {
+            const allSquads = [...new Set((projects || []).map(p => p.squad).filter(Boolean))].sort();
+            if (allSquads.length < 2) return null;
+            return (
               <select
                 value={squadFilter || ""}
                 onChange={e => setSquadFilter(e.target.value || null)}
@@ -2127,9 +2125,10 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
                 <option value="">All squads</option>
                 {allSquads.map(sq => <option key={sq} value={sq}>{sq}</option>)}
               </select>
-            </div>
-          );
-        })()}
+            );
+          })()}
+        </div>
+        <div style={{ height: "min(560px, 65vh)", display: "flex", flexDirection: "column" }}>
 
         {/* ── Section 1: Mentions ── */}
         {(() => {
