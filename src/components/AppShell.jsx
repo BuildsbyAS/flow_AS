@@ -233,18 +233,19 @@ export function Header({
         willChange: "transform",
       }}
     >
-    {/* ═══ LAYER 1 — Primary navigation bar ═══ */}
+    {/* ═══ LAYER 1 — Primary navigation bar (solid black header — Obsidian) ═══ */}
     <header ref={devRef} className="flow-header" style={{
       height: 52, display: "flex", alignItems: "center",
       padding: `0 ${space[7]}px`,
-      background: c.surface,
-      borderBottom: `1px solid ${c.border}`,
-      boxShadow: c.shadowSm,
+      background: c.headerBg || "#111111",
+      borderBottom: "none",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
       position: "relative", zIndex: 2,
       minWidth: 0,
+      transition: "background 280ms cubic-bezier(0.16, 1, 0.3, 1)",
     }}>
 
-      {/* ── Logo — orange dot + FLOW wordmark ── */}
+      {/* ── Logo — connected dots + FLOW wordmark (white on black header) ── */}
       <div onClick={onLogoClick} className="flow-logo-group" style={{
         display: "flex", alignItems: "center", gap: space[2] + 2,
         cursor: "pointer", marginRight: space[5], flexShrink: 0,
@@ -253,16 +254,16 @@ export function Header({
           flexShrink: 0, position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
         }}>
-          <FlowLogo size={28} />
+          <FlowLogo size={26} color="#FFFFFF" />
         </div>
         <span style={{
           fontFamily: mono, fontSize: 15,
-          fontWeight: 700, color: c.text, letterSpacing: "0.04em",
+          fontWeight: 700, color: "#FFFFFF", letterSpacing: "0.04em",
         }}>FLOW</span>
       </div>
 
-      {/* ── Vertical separator ── */}
-      <div style={{ width: 1, height: 24, background: c.border, marginRight: space[3], flexShrink: 0 }} />
+      {/* ── Vertical separator (subtle on dark header) ── */}
+      <div style={{ width: 1, height: 24, background: "rgba(255,255,255,0.15)", marginRight: space[3], flexShrink: 0 }} />
 
       {/* ── Nav tabs (or breadcrumb in detail mode) ── */}
       {detailLabel ? (
@@ -275,7 +276,7 @@ export function Header({
         <nav className="flow-nav-rail" style={{ display: "flex", alignItems: "stretch", gap: 2, flex: 1, minWidth: 0, overflowX: "auto", overflowY: "hidden", height: "100%", scrollbarWidth: "none" }}>
           {PRIMARY_NAV.map(tab => {
             if (tab.separator) {
-              return <div key={tab.key} style={{ width: 1, height: 20, alignSelf: "center", background: c.border, margin: `0 ${space[1]}px`, flexShrink: 0 }} />;
+              return <div key={tab.key} style={{ width: 1, height: 20, alignSelf: "center", background: "rgba(255,255,255,0.12)", margin: `0 ${space[1]}px`, flexShrink: 0 }} />;
             }
             const active = activeTab === tab.key;
             // Render as an anchor so Chrome's right-click → "Open in new tab"
@@ -298,7 +299,7 @@ export function Header({
                   background: "transparent",
                   fontFamily: typo.bodySm.font, fontSize: 13,
                   fontWeight: 600,
-                  color: active ? c.accent : c.textDim,
+                  color: active ? "#FFFFFF" : "rgba(255,255,255,0.50)",
                   textDecoration: "none",
                   display: "flex", alignItems: "center", gap: 6,
                   position: "relative", flexShrink: 0, whiteSpace: "nowrap",
@@ -308,29 +309,29 @@ export function Header({
                 {tab.key === "summary" && alertCount > 0 && !active && (
                   <span style={{
                     width: 8, height: 8, borderRadius: "50%",
-                    background: c.accent, flexShrink: 0,
+                    background: "#FFFFFF", flexShrink: 0,
                     animation: "flow-accent-pulse 2s ease-in-out infinite",
                   }} />
                 )}
-                {/* Numeric shortcut hint — subtle hotkey */}
+                {/* Numeric shortcut hint — subtle hotkey on dark header */}
                 {tab.num && <span className="flow-tab-hotkey" style={{
                   fontFamily: typo.monoSm.font, fontSize: 11,
                   fontWeight: 700, letterSpacing: typo.monoSm.tracking,
-                  color: c.textGhost || c.textDim,
-                  opacity: active ? 0.7 : 0.5,
+                  color: active ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)",
                   lineHeight: 1, flexShrink: 0,
                   padding: "2px 5px",
-                  border: `1px solid ${c.border}`,
+                  border: "1px solid rgba(255,255,255,0.15)",
                   borderRadius: 3,
-                  transition: `background ${motion.fast.duration}, border-color ${motion.fast.duration}, color ${motion.fast.duration}, box-shadow ${motion.fast.duration}, transform ${motion.fast.duration}, opacity ${motion.fast.duration}`,
+                  transition: `background ${motion.fast.duration}, border-color ${motion.fast.duration}, color ${motion.fast.duration}, opacity ${motion.fast.duration}`,
                   position: "relative", top: -1,
                 }}>{tab.num}</span>}
-                {/* Active indicator — 2px accent underline, no glow */}
+                {/* Active indicator — white underline on dark header */}
                 {active && (
                   <div style={{
                     position: "absolute", bottom: -1, left: 0, right: 0,
-                    height: 2,
-                    background: c.accent,
+                    height: 3,
+                    background: "#FFFFFF",
+                    borderRadius: 1.5,
                   }} />
                 )}
               </a>
@@ -356,23 +357,23 @@ export function Header({
           >
             <span style={{
               fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
-              color: myLens ? c.accent : c.textDim,
+              color: myLens ? "#FFFFFF" : "rgba(255,255,255,0.45)",
               letterSpacing: "0.06em", textTransform: "uppercase",
             }}>My Lens</span>
             <div style={{
               width: 36, height: 20, borderRadius: 10,
-              background: myLens ? c.accent : c.border,
+              background: myLens ? "#FFFFFF" : "rgba(255,255,255,0.2)",
               position: "relative",
               transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
               flexShrink: 0,
             }}>
               <div style={{
                 width: 16, height: 16, borderRadius: "50%",
-                background: "#fff",
+                background: myLens ? "#111111" : "rgba(255,255,255,0.5)",
                 position: "absolute", top: 2,
                 left: myLens ? 18 : 2,
-                transition: `left ${motion.fast.duration} ${motion.fast.easing}`,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                transition: `left ${motion.fast.duration} ${motion.fast.easing}, background ${motion.fast.duration}`,
+                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
               }} />
             </div>
           </div>
@@ -396,14 +397,14 @@ export function Header({
           onClick={() => onTabSwitch("terminal")}
           style={{
             width: 34, height: 34, borderRadius: layout.radiusSm,
-            border: `1px solid ${["terminal","settings","logs","rant"].includes(activeTab) ? c.green + "40" : c.border}`,
-            background: ["terminal","settings","logs","rant"].includes(activeTab) ? c.greenDim : c.surfaceAlt,
+            border: `1px solid ${["terminal","settings","logs","rant"].includes(activeTab) ? "rgba(132,255,149,0.3)" : "rgba(255,255,255,0.15)"}`,
+            background: ["terminal","settings","logs","rant"].includes(activeTab) ? "rgba(132,255,149,0.12)" : "rgba(255,255,255,0.08)",
             cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-            transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}`,
+            transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
           }}
           title="Terminal"
         >
-          <TerminalIcon size={16} color={["terminal","settings","logs","rant"].includes(activeTab) ? c.green : c.textMid} />
+          <TerminalIcon size={16} color={["terminal","settings","logs","rant"].includes(activeTab) ? "#84FF95" : "rgba(255,255,255,0.55)"} />
         </button>
 
         {/* ── Notification bell (admin rant replies) ── */}
@@ -423,13 +424,16 @@ export function Header({
       </div>
     </header>
 
-    {/* ═══ LAYER 2 — Context bar (week + filter trigger + chips) ═══ */}
+    {/* ═══ LAYER 2 — Context bar (glassmorphic — Obsidian) ═══ */}
     {showContextBar && (
       <div className="flow-context-bar" style={{
         height: 52, display: "flex", alignItems: "center",
         padding: `0 ${space[7]}px`, gap: space[2],
-        background: c.surface,
-        borderBottom: `1px solid ${c.border}`,
+        background: "rgba(255,255,255,0.55)",
+        backdropFilter: "blur(16px) saturate(1.3)",
+        WebkitBackdropFilter: "blur(16px) saturate(1.3)",
+        borderBottom: "1px solid rgba(255,255,255,0.35)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)",
         position: "relative", zIndex: 1,
       }}>
 
@@ -465,8 +469,8 @@ export function Header({
             {globalFilters.squad.length > 0 && (
               <FilterChip label={`Squad: ${globalFilters.squad.join(", ")}`} onClick={() => removeAppliedFilter("squad")} />
             )}
-            {globalFilters.person.length > 0 && (
-              <FilterChip label={`Person: ${globalFilters.person.join(", ")}`} onClick={() => removeAppliedFilter("person")} />
+            {globalFilters.track?.length > 0 && (
+              <FilterChip label={`Track: ${globalFilters.track.join(", ")}`} onClick={() => removeAppliedFilter("track")} />
             )}
           </div>
         )}
@@ -734,13 +738,14 @@ function FilterDrawer({
     return () => document.removeEventListener("keydown", handle);
   }, [open, onClose]);
 
+  const allTracks = ["PRD", "Design", "Dev", "QA", "Alpha", "Beta"];
   const filterGroups = [
     { key: "squad",  label: "Squad",  options: allSquads },
     { key: "owner",  label: "Owner",  options: allOwners },
-    { key: "person", label: "Person", options: allPeople },
+    { key: "track",  label: "Track",  options: allTracks },
   ];
 
-  const activeCount = [draft.squad, draft.owner, draft.person].filter(v => v.length > 0).length;
+  const activeCount = [draft.squad, draft.owner, draft.track].filter(v => v?.length > 0).length;
 
   return (
     <>
@@ -763,7 +768,9 @@ function FilterDrawer({
         style={{
           position: "fixed", top: 0, right: 0, bottom: 0,
           width: 360,
-          background: c.surface,
+          background: "rgba(255,255,255,0.82)",
+          backdropFilter: "blur(24px) saturate(1.4)",
+          WebkitBackdropFilter: "blur(24px) saturate(1.4)",
           borderLeft: `1px solid ${c.border}`,
           zIndex: 201,
           transform: open ? "translateX(0)" : "translateX(100%)",
@@ -1081,12 +1088,12 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
       {/* Back link — parent section. On narrow viewports, collapse to chevron only. */}
       <span onClick={onBack} className="flow-breadcrumb" style={{
         fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-        fontWeight: 500, color: c.textMid, cursor: "pointer", flexShrink: 0,
+        fontWeight: 500, color: "rgba(255,255,255,0.6)", cursor: "pointer", flexShrink: 0,
         display: "flex", alignItems: "center", gap: 5,
-        transition: `background ${motion.interaction.duration}, border-color ${motion.interaction.duration}, color ${motion.interaction.duration}, box-shadow ${motion.interaction.duration}, transform ${motion.interaction.duration}, opacity ${motion.interaction.duration}`,
+        transition: `background ${motion.interaction.duration}, color ${motion.interaction.duration}`,
         padding: `3px ${space[2]}px 3px ${space[2] - 2}px`,
         borderRadius: layout.radiusSm,
-        border: `1px solid transparent`,
+        border: "1px solid transparent",
       }}>
         <svg width="12" height="12" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.6 }}>
           <path d="M10 4l-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -1096,26 +1103,26 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
 
       {/* Separator — chevron */}
       <svg width="10" height="10" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.3, flexShrink: 0 }}>
-        <path d="M6 4l4 4-4 4" stroke={c.textDim} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M6 4l4 4-4 4" stroke="rgba(255,255,255,0.4)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
 
-      {/* Detail title — sub-system entry */}
+      {/* Detail title — on dark header */}
       <div style={{
         display: "flex", alignItems: "center", gap: space[2],
         padding: `3px ${space[3]}px`,
         borderRadius: layout.radiusSm,
-        background: c.accentDim,
-        border: `1px solid ${c.accent}25`,
+        background: "rgba(255,255,255,0.1)",
+        border: "1px solid rgba(255,255,255,0.15)",
         minWidth: 0, flex: 1,
       }}>
         <div style={{
           width: 5, height: 5, borderRadius: "50%",
-          background: c.accent,
+          background: "#FFFFFF",
           flexShrink: 0,
         }} />
         <span style={{
           fontFamily: typo.displaySm.font, fontSize: 14,
-          fontWeight: 700, color: c.text,
+          fontWeight: 700, color: "#FFFFFF",
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           minWidth: 0,
         }}>{detailLabel}</span>
@@ -1394,8 +1401,8 @@ function NotificationBell({ userEmail, onNavigate }) {
         onClick={() => { setOpen(v => !v); }}
         style={{
           width: 34, height: 34, borderRadius: layout.radiusSm,
-          border: `1px solid ${open ? c.orange + "40" : c.border}`,
-          background: open ? c.orange + "12" : c.surfaceAlt,
+          border: `1px solid ${open ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.15)"}`,
+          background: open ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)",
           cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
           position: "relative",
           transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
@@ -1588,16 +1595,16 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
         {avatar ? (
           <img src={avatar} alt="" style={{
             width: 28, height: 28, borderRadius: "50%",
-            border: `2px solid ${c.border}`,
+            border: "2px solid rgba(255,255,255,0.2)",
             transition: "border-color 0.15s",
           }} />
         ) : (
           <div style={{
             width: 28, height: 28, borderRadius: "50%",
-            background: c.accent,
+            background: "rgba(255,255,255,0.2)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 700, color: c.textOnAccent,
-            border: `2px solid ${c.border}`,
+            fontSize: 12, fontWeight: 700, color: "#FFFFFF",
+            border: "2px solid rgba(255,255,255,0.15)",
           }}>
             {initialsOf(displayName)}
           </div>
@@ -1609,10 +1616,14 @@ function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
         <div style={{
           position: "absolute", top: "100%", right: 0, marginTop: 6,
           width: editing ? 260 : 220, padding: "8px 0",
-          background: c.surfaceSolid, border: `1px solid ${c.border}`,
-          borderRadius: layout.radiusMd, boxShadow: c.shadowElevated,
+          background: "rgba(255,255,255,0.88)",
+          backdropFilter: "blur(20px) saturate(1.4)",
+          WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+          border: "1px solid rgba(255,255,255,0.4)",
+          borderRadius: layout.radiusMd,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
           zIndex: 200,
-          animation: "flow-load-fade-in 0.15s ease-out",
+          animation: "fadeScaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
         }}>
 
           {!editing ? (
@@ -1727,29 +1738,30 @@ function CompactSearch({ onClick }) {
       position: "relative", width: 200, cursor: "pointer",
       display: "flex", alignItems: "center",
       padding: `8px ${space[3] + 2}px`, gap: 9,
-      borderRadius: layout.radiusMd, border: `1px solid rgba(0,0,0,0.12)`,
-      background: `linear-gradient(135deg, ${c.surfaceAlt} 0%, ${c.surfaceAlt}C0 100%)`,
-      transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}, transform ${motion.interaction.duration} ${motion.interaction.easing}, opacity ${motion.interaction.duration} ${motion.interaction.easing}`,
-      boxShadow: `inset 0 1px 0 rgba(0,0,0,0.04), 0 0 0 0.5px rgba(0,0,0,0.06)`,
+      borderRadius: layout.radiusMd,
+      border: "1px solid rgba(255,255,255,0.15)",
+      background: "rgba(255,255,255,0.08)",
+      transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}`,
     }}>
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.55, flexShrink: 0 }}>
-        <circle cx="7" cy="7" r="5" stroke={c.textDim} strokeWidth="1.5" />
-        <path d="M11 11l3 3" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="7" cy="7" r="5" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" />
+        <path d="M11 11l3 3" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
       <span style={{
         fontFamily: typo.bodyXs.font, fontSize: 14,
-        color: c.textMid,
+        color: "rgba(255,255,255,0.45)",
         flex: 1, whiteSpace: "nowrap", overflow: "hidden",
         userSelect: "none",
       }}>Search</span>
       <span style={{
         fontFamily: typo.monoSm.font, fontSize: 11,
         fontWeight: 600,
-        color: c.textDim, background: c.surface,
-        border: `1px solid ${c.border}`, padding: "1px 5px",
+        color: "rgba(255,255,255,0.4)",
+        background: "rgba(255,255,255,0.08)",
+        border: "1px solid rgba(255,255,255,0.15)",
+        padding: "1px 5px",
         borderRadius: layout.radiusTag + 1,
         lineHeight: 1.4, flexShrink: 0,
-        boxShadow: `0 1px 0 ${c.border}`,
       }}>⌘K</span>
     </div>
   );
@@ -1929,17 +1941,17 @@ function InboxBell({ projects, people, currentPerson, onNavigate }) {
         title="Inbox"
         style={{
           width: 34, height: 34, borderRadius: layout.radiusSm,
-          border: `1px solid ${c.border}`,
-          background: c.surfaceAlt,
+          border: "1px solid rgba(255,255,255,0.15)",
+          background: "rgba(255,255,255,0.08)",
           cursor: "pointer", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
           outline: "none",
           transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = c.surface; e.currentTarget.style.borderColor = c.borderMedium || c.border; }}
-        onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.borderColor = c.border; }}
+        onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; }}
+        onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
       >
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.textMid} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="4" width="20" height="16" rx="2" />
           <path d="M22 7l-10 7L2 7" />
         </svg>
@@ -1947,11 +1959,11 @@ function InboxBell({ projects, people, currentPerson, onNavigate }) {
           <span aria-hidden="true" style={{
             position: "absolute", top: 3, right: 3,
             minWidth: 16, height: 16, borderRadius: 999,
-            background: c.accent, color: "#fff",
+            background: "#FFFFFF", color: "#111111",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: mono, fontSize: 9, fontWeight: 700,
             padding: "0 4px", boxSizing: "border-box",
-            boxShadow: `0 0 0 2px ${c.surfaceAlt}`,
+            boxShadow: "0 0 0 2px #111111",
           }}>{displayUnread > 9 ? "9+" : displayUnread}</span>
         )}
       </button>
@@ -2366,23 +2378,19 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
         title="Announcements"
         style={{
           width: 34, height: 34, borderRadius: layout.radiusSm,
-          border: `1px solid ${c.border}`,
-          background: c.surfaceAlt,
+          border: "1px solid rgba(255,255,255,0.15)",
+          background: "rgba(255,255,255,0.08)",
           cursor: "pointer", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
-          // Override the browser's default blue focus ring with Flow's
-          // accent. This fires when the Modal restores keyboard focus
-          // to this button on Escape-to-close, matching what other
-          // header buttons (edit pencil, etc.) already do.
           outline: "none",
-          transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
+          transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = c.surface; e.currentTarget.style.borderColor = c.borderMedium || c.border; }}
-        onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; e.currentTarget.style.borderColor = c.border; }}
-        onFocus={e => { e.currentTarget.style.boxShadow = `0 0 0 2px ${c.accent}`; }}
+        onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; }}
+        onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+        onFocus={e => { e.currentTarget.style.boxShadow = "0 0 0 2px rgba(255,255,255,0.3)"; }}
         onBlur={e => { e.currentTarget.style.boxShadow = "none"; }}
       >
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.textMid} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           <line x1="12" y1="2" x2="12" y2="4" />
@@ -2391,8 +2399,8 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
           <span aria-hidden="true" style={{
             position: "absolute", top: 6, right: 6,
             width: 8, height: 8, borderRadius: "50%",
-            background: c.accent,
-            boxShadow: `0 0 0 2px ${c.surfaceAlt}`,
+            background: "#FFFFFF",
+            boxShadow: "0 0 0 2px #111111",
           }} />
         )}
       </button>

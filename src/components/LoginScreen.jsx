@@ -193,7 +193,7 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
       <style>{`
         @keyframes login-breathe {
           0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.03); filter: drop-shadow(0 0 20px rgba(255,184,0,0.15)); }
+          50% { transform: scale(1.03); filter: drop-shadow(0 0 20px rgba(6,182,212,0.2)); }
         }
         @keyframes login-fade-up {
           0% { opacity: 0; transform: translateY(12px); }
@@ -251,14 +251,14 @@ export default function LoginScreen({ onSignIn, loading: signingIn, error: authE
           animation: "login-breathe 4s ease-in-out infinite",
           display: "flex", justifyContent: "center",
         }}>
-          <FlowLogo size={120} />
+          <FlowLogo size={120} color="#111111" />
         </div>
 
         {/* Title */}
         <div style={{
           fontSize: "clamp(36px, 8vw, 56px)", fontWeight: 800, letterSpacing: "-0.05em",
           lineHeight: 1.1, marginBottom: 24,
-          background: "linear-gradient(180deg, #0F172A 0%, #475569 100%)",
+          background: "linear-gradient(180deg, #111111 0%, #666666 100%)",
           WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
           animation: "login-fade-up 0.6s ease-out both",
           animationDelay: "0.1s",

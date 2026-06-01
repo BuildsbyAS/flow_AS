@@ -492,6 +492,9 @@ export default function ProjectsView({
     if ((globalFilters.person || []).length > 0) {
       list = list.filter(p => globalFilters.person.some(fp => metrics[p.id]?.people.has(fp)));
     }
+    if ((globalFilters.track || []).length > 0) {
+      list = list.filter(p => globalFilters.track.some(t => (metrics[p.id]?.activeTracks || []).includes(t)));
+    }
     // My Lens: show only followed projects (auto-followed squad + explicit follows)
     if (myLens) {
       list = list.filter(p => followedProjects.includes(p.id));
@@ -546,7 +549,11 @@ export default function ProjectsView({
       trackCounts[t] = active.filter(p => (metrics[p.id]?.activeTracks || []).includes(t)).length;
     });
     const overdueCount = active.filter(p => metrics[p.id]?.overdue).length;
-    return { active: active.length, shipped: shipped.length, depri: depri.length, upcoming: upcomingProjs.length, blocked: blockedProjs.length, overdue: overdueCount, all: filtered.length, atRiskCount, trackCounts };
+    // Projects with Alpha or Beta tracks active count toward "shipping" bucket
+    const alphaActive = active.filter(p => (metrics[p.id]?.activeTracks || []).includes("Alpha")).length;
+    const betaActive = active.filter(p => (metrics[p.id]?.activeTracks || []).includes("Beta")).length;
+    const shippedTotal = shipped.length + alphaActive + betaActive;
+    return { active: active.length, shipped: shipped.length, shippedTotal, alphaActive, betaActive, depri: depri.length, upcoming: upcomingProjs.length, blocked: blockedProjs.length, overdue: overdueCount, all: filtered.length, atRiskCount, trackCounts };
   }, [filtered, metrics, today]);
 
   // ── Gantt-specific filter (separate from registry filters) ──
@@ -829,7 +836,7 @@ export default function ProjectsView({
             active={activeTab === "active"}
           >
             <PillRow>
-              {trackNames.map(t => (
+              {["PRD", "Design", "Dev", "QA"].map(t => (
                 <Pill
                   key={t}
                   count={summary.trackCounts?.[t] || 0}
@@ -842,12 +849,14 @@ export default function ProjectsView({
           <KpiCard
             index={1}
             label="Shipped"
-            value={summary.shipped}
+            value={summary.shippedTotal}
             onClick={() => setActiveTab(activeTab === "shipped" ? "all" : "shipped")}
             active={activeTab === "shipped"}
           >
             <PillRow>
               <Pill count={summary.shipped} label="Shipped" color={c.green} />
+              <Pill count={summary.alphaActive} label="Alpha" color={pc.Alpha} />
+              <Pill count={summary.betaActive} label="Beta" color={pc.Beta} />
             </PillRow>
           </KpiCard>
           <KpiCard
@@ -1362,7 +1371,7 @@ export default function ProjectsView({
         <TableShell minWidth={820}>
             <thead>
                 <tr>
-                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: c.tableHeader || c.surfaceAlt, zIndex: 11, minWidth: 70 }}>Squad</Th>
+                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: "rgba(232, 232, 232, 0.72)", backdropFilter: "blur(16px) saturate(1.3)", WebkitBackdropFilter: "blur(16px) saturate(1.3)", zIndex: 11, minWidth: 70 }}>Squad</Th>
                   <Th col="project" style={{ minWidth: 160 }}>Project</Th>
                   <Th col="priority" style={{ minWidth: 50, textAlign: "center" }}>Pri</Th>
                   <Th col="owner" style={{ minWidth: 80 }}>Owner</Th>
@@ -2678,25 +2687,24 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             <div style={{
               width: 36, height: 36, borderRadius: layout.radiusSm,
               background: `${c.green}18`, display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={c.green} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
+              fontSize: 20, lineHeight: 1,
+            }}>🚀</div>
             <div style={{ flex: 1 }}>
-              <div style={{
-                fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
-                color: c.green, letterSpacing: "0.04em", textTransform: "uppercase",
-              }}>Project Shipped</div>
+              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
+                  color: c.green, letterSpacing: "0.04em", textTransform: "uppercase",
+                }}>Project Shipped</span>
+                {proj.gaFeatureType && (
+                  <Tag color={c.green} bg={c.surface} style={{ fontSize: 10 }}>{proj.gaFeatureType}</Tag>
+                )}
+              </div>
               {(proj.shippedAt || proj.gaEnteredAt) && (
                 <div style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: c.textMid, marginTop: 2 }}>
                   {new Date((proj.shippedAt || proj.gaEnteredAt).slice(0, 10) + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                 </div>
               )}
             </div>
-            {proj.gaFeatureType && (
-              <Tag color={c.green} bg={c.surface} style={{ fontSize: 10 }}>{proj.gaFeatureType}</Tag>
-            )}
             <button type="button" onClick={() => {
               const viewerName = personProfile?.name || "AJ";
               if (isDevSeedMode()) {
@@ -2874,8 +2882,8 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
               )}
             </div>
 
-            {/* Row 4: Active Tracks + quick-actions — hidden for upcoming */}
-            {proj.status !== "upcoming" && <div style={{ marginTop: space[4], display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: space[3] }}>
+            {/* Row 4: Active Tracks + quick-actions — hidden for upcoming and shipped */}
+            {proj.status !== "upcoming" && proj.status !== "shipped" && <div style={{ marginTop: space[4], display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: space[3] }}>
               <div>
                 <span style={{
                   fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
@@ -2904,9 +2912,9 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                               {getTrackActiveDays(proj, t)}d
                             </span>
                           </span>
-                        )) : (
+                        )) : proj.status !== "shipped" ? (
                           <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: c.textDim, fontStyle: "italic" }}>No active tracks</span>
-                        )}
+                        ) : null}
                         {/* + Track button */}
                         {proj.status !== "shipped" && (
                           <button id="add-track-btn" type="button" onClick={() => setStagePickerOpen(v => !v)} style={{

@@ -248,13 +248,13 @@ export const seedProjects = [
   {
     id: "X09", name: "Fraud detection v2",
     owner: "Omar", owner_id: PERSON_OMAR, squad: "T&S",
-    phase: "Alpha", status: "active",
+    phase: "GA", status: "shipped",
     priority: "P1", complexity: "L",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
     startDate: "2026-01-15", endDate: "2026-05-25",
-    actualStartDate: "2026-01-20", actualEndDate: null,
-    gaEnteredAt: null, depriReason: null,
+    actualStartDate: "2026-01-20", actualEndDate: "2026-05-20",
+    gaEnteredAt: "2026-05-20", shippedAt: "2026-05-20", depriReason: null,
     shipNote: "Testing new ML scoring model with 10% of payment transactions.",
     shipPct: 10,
     createdAt: isoAgo(125 * DAY),
@@ -302,13 +302,13 @@ export const seedProjects = [
   {
     id: "X13", name: "Refund automation",
     owner: "Fatima", owner_id: PERSON_FATIMA, squad: "Financial Service",
-    phase: "Beta", status: "active",
+    phase: "GA", status: "shipped",
     priority: "P0", complexity: "M",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
     startDate: "2025-12-01", endDate: "2026-05-30",
-    actualStartDate: "2025-12-10", actualEndDate: null,
-    gaEnteredAt: null, depriReason: null,
+    actualStartDate: "2025-12-10", actualEndDate: "2026-05-28",
+    gaEnteredAt: "2026-05-28", shippedAt: "2026-05-28", depriReason: null,
     createdAt: isoAgo(170 * DAY),
     lastActivityAt: isoAgo(5 * HOUR),
   },
@@ -510,13 +510,13 @@ export const seedProjects = [
   {
     id: "X28", name: "Address Migration",
     owner: "Youssef Saeed", owner_id: PERSON_YSAEED, squad: "Customer",
-    phase: "Alpha", status: "active",
+    phase: "GA", status: "shipped",
     priority: "P1", complexity: "L",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
     startDate: "2025-12-01", endDate: "2026-05-20",
-    actualStartDate: "2025-12-08", actualEndDate: null,
-    gaEnteredAt: null, depriReason: null,
+    actualStartDate: "2025-12-08", actualEndDate: "2026-05-18",
+    gaEnteredAt: "2026-05-18", shippedAt: "2026-05-18", depriReason: null,
     createdAt: isoAgo(170 * DAY),
     lastActivityAt: isoAgo(2 * DAY),
   },
@@ -610,13 +610,13 @@ export const seedProjects = [
   {
     id: "X35", name: "Quara Monet Campaign PDP",
     owner: "Vaibhav Singh", owner_id: PERSON_VAIBHAV, squad: "Storefront",
-    phase: "Beta", status: "active",
+    phase: "GA", status: "shipped",
     priority: "P1", complexity: "M",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
     startDate: "2025-11-01", endDate: "2026-05-30",
-    actualStartDate: "2025-11-05", actualEndDate: null,
-    gaEnteredAt: null, depriReason: null,
+    actualStartDate: "2025-11-05", actualEndDate: "2026-05-25",
+    gaEnteredAt: "2026-05-25", shippedAt: "2026-05-25", depriReason: null,
     createdAt: isoAgo(200 * DAY),
     lastActivityAt: isoAgo(1 * DAY),
   },
@@ -676,13 +676,13 @@ export const seedProjects = [
   {
     id: "X40", name: "Legacy to New models Callout - PDP",
     owner: "Mohammad Elbanna", owner_id: PERSON_MELBANNA, squad: "Storefront",
-    phase: "Alpha", status: "active",
+    phase: "GA", status: "shipped",
     priority: "P2", complexity: "M",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
     startDate: "2025-12-15", endDate: "2026-05-31",
-    actualStartDate: "2025-12-18", actualEndDate: null,
-    gaEnteredAt: null, depriReason: null,
+    actualStartDate: "2025-12-18", actualEndDate: "2026-05-29",
+    gaEnteredAt: "2026-05-29", shippedAt: "2026-05-29", depriReason: null,
     createdAt: isoAgo(156 * DAY),
     lastActivityAt: isoAgo(3 * DAY),
   },
@@ -1265,11 +1265,10 @@ import { migrateProjectToTracks, derivePrimaryPhase } from '../lib/tracks';
 (() => {
   const byId = (id) => seedProjects.find(p => p.id === id);
 
-  // X01 Checkout speedup: PRD (done), Design (done), Dev + QA + Alpha active (3 tracks)
+  // X01 Checkout speedup: PRD (done), Design (done), Dev + QA active (2 tracks)
   const x01 = byId("X01");
   if (x01?.tracks) {
     x01.tracks.QA = { periods: [{ started_at: isoAgo(2 * DAY), completed_at: null }], owner: null };
-    x01.tracks.Alpha = { periods: [{ started_at: isoAgo(1 * DAY), completed_at: null }], owner: null };
   }
 
   // X21 Onboarding Flow Revamp: PRD (done), Design + Dev + QA active (3 tracks)

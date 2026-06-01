@@ -123,7 +123,7 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
         tabIndex={-1}
         style={{
           position: "relative", zIndex: 1, outline: "none",
-          background: c.surface,
+          background: c.surfaceSolid || "#FFFFFF",
           border: accent ? `1px solid ${accent}40` : `1px solid ${c.border}`,
           borderLeft: accent ? `3px solid ${accent}` : undefined,
           borderRadius: layout.radiusLg,
@@ -864,7 +864,9 @@ export const Th = ({ col, sortKey, sortDir, onSort, children, style: s }) => {
         letterSpacing: "0.03em", textTransform: "uppercase",
         cursor: onSort ? "pointer" : "default", userSelect: "none",
         borderBottom: `1px solid ${c.borderMedium || c.border}`,
-        background: c.tableHeader || c.surfaceAlt,
+        background: "rgba(232, 232, 232, 0.72)",
+        backdropFilter: "blur(16px) saturate(1.3)",
+        WebkitBackdropFilter: "blur(16px) saturate(1.3)",
         color: sortKey === col ? c.accent : c.textDim,
         transition: `color ${motion.fast.duration} ${motion.fast.easing}, background ${motion.fast.duration} ${motion.fast.easing}`,
         position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 10,

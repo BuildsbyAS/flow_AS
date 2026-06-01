@@ -1,31 +1,37 @@
 /**
- * Flow Logo — Steel & Orange
+ * Flow Logo — Obsidian
  *
- * Static orange dot mark per DESIGN_SYSTEM.md §7.1:
- * 9px circle (scaled to `size`) in accent color with a soft accentGlow halo.
+ * Organic connected-dots icon from brand SVG.
+ * Three S-shaped molecular forms + standalone circle.
+ * Renders white on dark header, black on light surfaces.
  *
  * Usage:
- *   <FlowLogo size={28} />
+ *   <FlowLogo size={28} />                // auto-color (black)
+ *   <FlowLogo size={28} color="#FFFFFF" /> // white for dark header
  */
 
 import React from "react";
 import useDevLabel from "../hooks/useDevLabel";
 
-const ACCENT = "#E8590C";
-const ACCENT_GLOW = "rgba(232,89,12,0.25)";
+export default function FlowLogo({ size = 28, color = "#111111" }) {
+  const devRef = useDevLabel("FlowLogo", "Connected-dots brand icon (Obsidian)");
 
-export default function FlowLogo({ size = 28, animated = true }) {
-  const devRef = useDevLabel("FlowLogo", "Static orange accent dot with soft glow halo");
-  // `animated` kept in API for call-site compatibility; a gentle halo pulses.
-  const cls = animated ? "flow-accent-pulse" : undefined;
   return (
-    <svg ref={devRef} viewBox="0 0 40 40" width={size} height={size} aria-hidden>
-      {/* Soft halo */}
-      <circle cx="20" cy="20" r="14" fill={ACCENT_GLOW} className={cls} />
-      {/* Solid accent dot */}
-      <circle cx="20" cy="20" r="8" fill={ACCENT} />
-      {/* Faint specular highlight for depth */}
-      <circle cx="17.5" cy="17" r="2.5" fill="#FFFFFF" opacity="0.35" />
+    <svg
+      ref={devRef}
+      viewBox="0 0 134 139"
+      width={size}
+      height={size * (139 / 134)}
+      fill="none"
+      aria-hidden
+      style={{
+        transition: "transform 280ms cubic-bezier(0.16, 1, 0.3, 1)",
+      }}
+    >
+      <path d="M2.40552 57.896C-2.5071 49.4136 0.351646 38.1362 8.73267 33.0318C13.8319 29.9188 19.8867 29.5906 25.0455 31.6299C30.2042 33.6692 36.2282 32.8513 40.9977 29.8909L41.0714 29.8455C45.6397 27.0262 48.6437 22.2217 49.0964 16.855C49.2426 15.086 49.6412 13.3139 50.3518 11.5527C53.2599 4.22975 60.7839 -0.532281 68.6371 0.0476773C81.2715 0.983653 89.1638 13.7998 84.3402 25.4928C81.3327 32.7922 73.7272 37.3671 65.8578 36.6785C63.9696 36.5041 62.2022 36.0856 60.5554 35.4231C55.5754 33.4262 49.9141 33.9524 45.3458 36.7716C40.5318 39.7425 37.0695 44.7111 36.551 50.3558C36.0326 56.0004 33.028 61.1613 27.9193 64.3141C19.1265 69.7404 7.58155 66.8603 2.36579 57.8866L2.40552 57.896Z" fill={color}/>
+      <path d="M50.5774 78.2203C45.6648 69.7378 48.5235 58.4604 56.9045 53.356C62.0038 50.243 68.0586 49.9148 73.2174 51.9541C78.3761 53.9934 84.4001 53.1755 89.1696 50.2151L89.2433 50.1697C93.8116 47.3504 96.8156 42.5459 97.2683 37.1793C97.4145 35.4103 97.813 33.6381 98.5236 31.8769C101.432 24.554 108.956 19.7919 116.809 20.3719C129.443 21.3079 137.336 34.124 132.512 45.817C129.505 53.1164 121.899 57.6914 114.03 57.0027C112.142 56.8283 110.374 56.4099 108.727 55.7473C103.747 53.7504 98.086 54.2766 93.5176 57.0959C88.7037 60.0667 85.2414 65.0354 84.7229 70.68C84.2044 76.3246 81.1999 81.4855 76.0912 84.6383C67.2984 90.0646 55.7534 87.1845 50.5377 78.2109L50.5774 78.2203Z" fill={color}/>
+      <path d="M50.5774 129.22C45.6648 120.738 48.5235 109.46 56.9045 104.356C62.0038 101.243 68.0586 100.915 73.2174 102.954C78.3761 104.993 84.4001 104.176 89.1696 101.215L89.2433 101.17C93.8116 98.3504 96.8156 93.5459 97.2683 88.1793C97.4145 86.4103 97.813 84.6381 98.5236 82.8769C101.432 75.554 108.956 70.7919 116.809 71.3719C129.443 72.3079 137.336 85.124 132.512 96.817C129.505 104.116 121.899 108.691 114.03 108.003C112.142 107.828 110.374 107.41 108.727 106.747C103.747 104.75 98.086 105.277 93.5176 108.096C88.7037 111.067 85.2414 116.035 84.7229 121.68C84.2044 127.325 81.1999 132.486 76.0912 135.638C67.2984 141.065 55.7534 138.185 50.5377 129.211L50.5774 129.22Z" fill={color}/>
+      <circle cx="18.1709" cy="98.3242" r="18" fill={color}/>
     </svg>
   );
 }

@@ -219,10 +219,10 @@ function FlowDashboard({ auth }) {
   }), [playToggleSound]);
 
   // ── Global filters (header bar) ──
-  const [globalFilters, setGlobalFilters] = useState({ owner: [], squad: [], person: [] });
-  const [pendingFilters, setPendingFilters] = useState({ owner: [], squad: [], person: [] });
+  const [globalFilters, setGlobalFilters] = useState({ owner: [], squad: [], person: [], track: [] });
+  const [pendingFilters, setPendingFilters] = useState({ owner: [], squad: [], person: [], track: [] });
   const applyFilters = useCallback(() => setGlobalFilters({ ...pendingFilters }), [pendingFilters]);
-  const clearGlobalFilters = useCallback(() => { const empty = { owner: [], squad: [], person: [] }; setGlobalFilters(empty); setPendingFilters(empty); }, []);
+  const clearGlobalFilters = useCallback(() => { const empty = { owner: [], squad: [], person: [], track: [] }; setGlobalFilters(empty); setPendingFilters(empty); }, []);
   const globalFilterCount = useMemo(() => Object.values(globalFilters).filter(v => v.length > 0).length, [globalFilters]);
   const allSquads = useMemo(() => [...new Set(projects.map(p => p.squad).filter(Boolean))].sort(), [projects]);
   // Contextual options: filter Person/Owner by selected Squad
@@ -535,7 +535,7 @@ function FlowDashboard({ auth }) {
       {activeTab !== "terminal" && (
       <Header
         onLogoClick={() => {
-          handleTabSwitch("pulse");
+          handleTabSwitch("projects");
           // Smooth-scroll to the top — without this, clicking the logo mid-page
           // switches tabs but leaves the user halfway down the new page, which
           // reads as "nothing happened".

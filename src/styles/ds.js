@@ -1,4 +1,7 @@
-// Flow Design System v2 — Steel & Orange
+// Flow Design System v3 — Obsidian
+// Monochrome glass aesthetic: black header, frosted glass cards, warm grey canvas.
+// Inspired by SmartThings glass panels, SugarCRM card hierarchy, Twisty dashboard.
+//
 // Single source of truth for all design tokens (colors, typography, spacing,
 // elevation, radius, motion). `theme.js` consumes these for its light theme;
 // the Terminal/Rant/Admin views keep their own dark theme from theme.js.
@@ -14,44 +17,51 @@ export const fonts = {
 // ── Color system ─────────────────────────────────────────────────
 export const color = {
   // Surfaces
-  page:        "#EDEDF0",   // steel-gray aluminum canvas
-  card:        "#FFFFFF",   // floating white card
-  inset:       "#F3F3F6",   // recessed — inputs, segmented bg, search
-  tableHeader: "#F7F7FA",   // column header row
+  page:        "#E8E8E8",   // warm neutral grey canvas
+  card:        "rgba(255,255,255,0.62)", // frosted glass card
+  cardSolid:   "#FFFFFF",   // when glass isn't suitable (modals, inputs)
+  inset:       "rgba(0,0,0,0.04)",       // recessed — inputs, segmented bg, search
+  tableHeader: "rgba(0,0,0,0.03)",       // column header row
 
-  // Text
-  textPrimary:   "#1A1A1E", // headings, KPI values, names
-  textSecondary: "#4A4A52", // body, table cells
-  textTertiary:  "#7E7E8A", // labels, placeholders, inactive nav
-  textGhost:     "#AEAEB8", // decorative, kbd hints, disabled
+  // Header
+  headerBg:    "#111111",   // solid black header
+  headerText:  "#FFFFFF",   // white text on header
+  headerTextDim: "rgba(255,255,255,0.55)", // secondary text on header
 
-  // Accent — orange
-  accent:        "#E8590C",
-  accentHover:   "#D24E0A",   // slightly darker — primary CTA hover
-  accentSoft:    "rgba(232,89,12,0.08)",
-  accentMid:     "rgba(232,89,12,0.18)",
-  accentGlow:    "rgba(232,89,12,0.25)",
+  // Text — pure monochrome hierarchy
+  textPrimary:   "#111111", // headings, KPI values, names
+  textSecondary: "#555555", // body, table cells
+  textTertiary:  "#999999", // labels, placeholders, inactive nav
+  textGhost:     "#CCCCCC", // decorative, kbd hints, disabled
+
+  // Primary accent — black (monochrome primary CTA)
+  accent:        "#111111",
+  accentHover:   "#333333",
+  accentSoft:    "rgba(0,0,0,0.06)",
+  accentMid:     "rgba(0,0,0,0.12)",
+  accentGlow:    "rgba(0,0,0,0.18)",
+
+  // Secondary accent — none (keeping monochrome). Use semantic colors for pops.
+  coral:         "#E11D48",   // kept for destructive / urgent (rose-600)
+  coralHover:    "#BE123C",
+  coralSoft:     "rgba(225,29,72,0.08)",
+  coralMid:      "rgba(225,29,72,0.14)",
 
   // Text on colored surfaces
   textOnAccent:  "#FFFFFF",   // text on accent bg (primary buttons, etc.)
 
   // Inverted surface family (HealthGauge — the only inverted card)
-  // Text tokens bumped 2026-04 for readability: previous #6B6B78/#4A4A52
-  // had ~3.5:1 / ~1.7:1 contrast against #1A1A1E bg, failing WCAG AA.
-  // New values land at ~6:1 / ~4:1 and keep the three-tier hierarchy.
-  surfaceInverse:       "#1A1A1E",
-  insetInverse:         "#2E2E36",
-  textOnInverse:        "#F0F0F4",
-  textMidOnInverse:     "#A5A5B2",
-  textGhostOnInverse:   "#8F8F9A",
+  surfaceInverse:       "#111111",
+  insetInverse:         "#222222",
+  textOnInverse:        "#F5F5F5",
+  textMidOnInverse:     "#999999",
+  textGhostOnInverse:   "#666666",
 
-  // Borders
+  // Borders — monochrome
   borderSubtle: "rgba(0,0,0,0.07)",
-  borderMedium: "rgba(0,0,0,0.12)",
+  borderMedium: "rgba(0,0,0,0.13)",
 
   // Semantic — data-only
-  // Family: <color> (full), <color>Bg (full light bg), <color>Dim (8% alpha tint),
-  // <color>Mid (18% alpha — phase-tinted cell bg), <color>Border (25% alpha — card border).
   green:  "#059669", greenBg:  "#ECFDF5", greenDim:  "rgba(5,150,105,0.08)",   greenMid:  "rgba(5,150,105,0.18)",   greenBorder:  "rgba(5,150,105,0.25)",
   red:    "#DC2626", redBg:    "#FEF2F2", redDim:    "rgba(220,38,38,0.08)",   redMid:    "rgba(220,38,38,0.18)",   redBorder:    "rgba(220,38,38,0.25)",
   amber:  "#B45309", amberBg:  "#FFFBEB", amberDim:  "rgba(180,83,9,0.08)",    amberMid:  "rgba(180,83,9,0.18)",    amberBorder:  "rgba(180,83,9,0.25)",
@@ -59,40 +69,39 @@ export const color = {
   blue:   "#1D4ED8", blueBg:   "#EFF6FF", blueDim:   "rgba(29,78,216,0.08)",   blueMid:   "rgba(29,78,216,0.18)",   blueBorder:   "rgba(29,78,216,0.25)",
   cyan:   "#0E7490", cyanBg:   "#ECFEFF", cyanDim:   "rgba(14,116,144,0.08)",  cyanMid:   "rgba(14,116,144,0.18)",  cyanBorder:   "rgba(14,116,144,0.25)",
 
-  // Health thresholds — slightly brighter than token semantic
-  healthGood: "#059669", // 75-100
-  healthFair: "#D97706", // 40-74 (brighter amber for bars/numbers)
-  healthLow:  "#DC2626", // 0-39
+  // Health thresholds
+  healthGood: "#059669",
+  healthFair: "#D97706",
+  healthLow:  "#DC2626",
+
+  // Glassmorphism
+  glassBg:      "rgba(255,255,255,0.62)",
+  glassBorder:  "rgba(255,255,255,0.45)",
+  glassOverlay: "rgba(255,255,255,0.82)",
+  glassBlur:    "20px",
+  glassSaturate: "1.4",
+  // Dark glass (for overlays on dark surfaces)
+  glassDark:       "rgba(0,0,0,0.65)",
+  glassDarkBorder: "rgba(255,255,255,0.08)",
 };
 
 // ── Terminal Dark palette ────────────────────────────────────────
-// The Terminal / Rant / Admin views run a dedicated dark theme
-// (DESIGN_SYSTEM.md §12). Retro phosphor aesthetic: pure-black canvas,
-// glowing monochrome accents per view. Tints use hex-alpha suffix,
-// e.g. `${terminal.green}20` = 12% opacity.
 export const terminal = {
-  // Surfaces
-  bg:            "#0D0F0D",   // pure near-black canvas
-  surfaceDeep:   "#060A12",   // recessed panels (log viewer, auth box)
-  gradientStart: "#0a0e14",   // hero gradient start
-  gradientEnd:   "#111820",   // hero gradient end
-
-  // Primary accents — each view elects one as its "phosphor" color
-  green:     "#00ff41",   // Terminal shell, Rant form
-  greenDeep: "#00cc33",   // gradient stop for green hero
-  gold:      "#FBBF24",   // Admin settings, Terminal admin path
-  goldDeep:  "#F59E0B",   // gradient stop for gold hero
-
-  // Semantic accents — chips, category tags, status pills on dark
-  pink:    "#FF2D78",   // rant category
-  coral:   "#FF6B35",   // bug category
-  red:     "#FF4D6A",   // errors, destructive
-  redDeep: "#cc3355",   // gradient stop for red toast
-  success: "#84FF95",   // approved, replied
-  cyan:    "#22D3EE",   // shipped, info
-  purple:  "#A78BFA",   // feature request
-
-  // Text on dark
+  bg:            "#0D0F0D",
+  surfaceDeep:   "#060A12",
+  gradientStart: "#0a0e14",
+  gradientEnd:   "#111820",
+  green:     "#00ff41",
+  greenDeep: "#00cc33",
+  gold:      "#FBBF24",
+  goldDeep:  "#F59E0B",
+  pink:    "#FF2D78",
+  coral:   "#FF6B35",
+  red:     "#FF4D6A",
+  redDeep: "#cc3355",
+  success: "#84FF95",
+  cyan:    "#22D3EE",
+  purple:  "#A78BFA",
   text:      "#FFFFFF",
   textMid:   "#FFFFFFCC",
   textDim:   "#FFFFFFBB",
@@ -100,13 +109,8 @@ export const terminal = {
   textFaint: "#FFFFFF80",
 };
 
-// Terminal Dark uses a tighter radius scale than the main app — the retro
-// phosphor aesthetic reads "sharper" at smaller radii.
 export const terminalRadius = {
-  xs: 3,    // tightest — inline ID/status chips
-  sm: 4,    // chips, inputs, secondary buttons (the default)
-  md: 6,    // cards, primary CTAs, image thumbs
-  lg: 12,   // floating toasts, notification pills
+  xs: 3, sm: 4, md: 6, lg: 12,
 };
 
 // Phase → color map
@@ -120,7 +124,6 @@ export const phaseColorMap = {
   GA:     color.green,
 };
 
-// Phase → tinted background (18% alpha) — for phase-colored cell backgrounds
 export const phaseMidMap = {
   PRD:    color.purpleMid,
   Design: color.blueMid,
@@ -131,7 +134,6 @@ export const phaseMidMap = {
   GA:     color.greenMid,
 };
 
-// Phase → soft background (8% alpha) — for phase-colored pills and tags
 export const phaseDimMap = {
   PRD:    color.purpleDim,
   Design: color.blueDim,
@@ -147,26 +149,27 @@ export const space = {
   1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 7: 32, 8: 40,
 };
 
-// ── Border radius ────────────────────────────────────────────────
+// ── Border radius — rounder for glass feel ───────────────────────
 export const radius = {
-  xs:   5,   // tags, phase pills
-  sm:   8,   // buttons, inputs, small cards
-  md:   12,  // segmented, dropdowns
-  lg:   14,  // KPI cards, tables, commit cards, modals
-  pill: 100, // pill buttons, avatar badges
+  xs:   6,    // tags, phase pills
+  sm:   10,   // buttons, inputs, small cards
+  md:   14,   // segmented, dropdowns
+  lg:   18,   // KPI cards, tables, commit cards, modals
+  xl:   24,   // hero cards, feature panels
+  pill: 100,  // pill buttons, avatar badges
 };
 
-// ── Elevation (4-tier layered shadows) ───────────────────────────
+// ── Elevation (glass-appropriate layered shadows) ────────────────
 export const shadow = {
   none:     "none",
-  sm:       "0 1px 2px rgba(0,0,0,0.04)",
-  card:     "0 1px 3px rgba(0,0,0,0.03), 0 4px 16px rgba(0,0,0,0.05)",
-  elevated: "0 2px 8px rgba(0,0,0,0.04), 0 12px 32px rgba(0,0,0,0.07)",
-  float:    "0 8px 30px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04)",
+  sm:       "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)",
+  card:     "0 2px 8px rgba(0,0,0,0.04), 0 12px 40px rgba(0,0,0,0.06)",
+  elevated: "0 8px 24px rgba(0,0,0,0.08), 0 24px 64px rgba(0,0,0,0.12)",
+  float:    "0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)",
+  glass:    "0 4px 30px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.3)",
 };
 
 // ── Typography ───────────────────────────────────────────────────
-// Hard rule: nothing below 11px.
 export const typography = {
   kpiHero:      { font: fonts.mono, size: 36, weight: 700, tracking: "-0.03em", lineHeight: 1.1 },
   displayLg:    { font: fonts.sans, size: 24, weight: 700, tracking: "-0.02em", lineHeight: 1.15 },
@@ -186,12 +189,13 @@ export const typography = {
   micro:        { font: fonts.sans, size: 11, weight: 600, tracking: "0",       lineHeight: 1.3  },
 };
 
-// ── Motion ───────────────────────────────────────────────────────
+// ── Motion — spring-feel expo.out easing ─────────────────────────
 export const motionTier = {
   instant: { duration: "100ms", easing: "ease-out" },
-  fast:    { duration: "150ms", easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
-  normal:  { duration: "250ms", easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
-  slow:    { duration: "400ms", easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+  fast:    { duration: "180ms", easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+  normal:  { duration: "280ms", easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+  slow:    { duration: "450ms", easing: "cubic-bezier(0.16, 1, 0.3, 1)" },
+  spring:  { duration: "500ms", easing: "cubic-bezier(0.34, 1.56, 0.64, 1)" },
 };
 
 // Convenience bundle
