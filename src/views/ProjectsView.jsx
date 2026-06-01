@@ -4257,7 +4257,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       </Modal>
 
       {/* ═══ ALPHA / BETA — note + optional rollout % ═══ */}
-      <Modal open={!!shipPhaseModal && shipPhaseModal.phase !== "GA"} onClose={() => setShipPhaseModal(null)} title={`Move to ${shipPhaseModal?.phase || ""}`} accent={c.green}>
+      <Modal open={!!shipPhaseModal && shipPhaseModal.phase !== "GA"} onClose={() => setShipPhaseModal(null)} title={`Start ${shipPhaseModal?.phase || ""} Track`} accent={c.green}>
         <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
           <div>
             <Label style={{ marginBottom: space[1] }}>Note</Label>
@@ -4317,7 +4317,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
               }
               setShipPhaseModal(null);
             }}>
-              {shipPhaseModal?.isTrackStart ? `Start ${shipPhaseModal?.phase}` : `Move to ${shipPhaseModal?.phase}`}
+              {`Start ${shipPhaseModal?.phase} Track`}
             </Btn>
           </div>
         </div>

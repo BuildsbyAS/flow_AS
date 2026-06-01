@@ -837,9 +837,11 @@ export default function ProjectActivity({
                 {/* Opaque dot: white backing circle covers the rail, dot sits on top */}
                 {(() => {
                   const isShipEvent = item.data.action === "project_shipped" || (item.data.action === "project_phase_changed" && ["Alpha", "Beta", "GA"].includes(item.data.details?.to));
+                  const isAlphaBetaTrack = ["track_started", "track_completed", "track_reopened"].includes(item.data.action) && ["Alpha", "Beta"].includes(item.data.details?.track);
                   const isTrackEvent = ["track_started", "track_completed", "track_reopened"].includes(item.data.action);
-                  const dotColor = isShipEvent ? c.green : isTrackEvent ? c.accent : c.border;
-                  const textColor = isShipEvent ? c.green : isTrackEvent ? c.textMid : c.textDim;
+                  const isGreenEvent = isShipEvent || isAlphaBetaTrack;
+                  const dotColor = isGreenEvent ? c.green : isTrackEvent ? c.accent : c.border;
+                  const textColor = isGreenEvent ? c.green : isTrackEvent ? c.textMid : c.textDim;
                   return (
                     <>
                       <span aria-hidden="true" style={{
@@ -853,7 +855,7 @@ export default function ProjectActivity({
                       <div style={{
                         fontFamily: body, fontSize: 12, color: textColor,
                         display: "flex", alignItems: "baseline", gap: space[1], flexWrap: "wrap",
-                        lineHeight: 1.4, fontWeight: isShipEvent ? 600 : 400,
+                        lineHeight: 1.4, fontWeight: isGreenEvent ? 600 : 400,
                       }}>
                         <span>{actionLabel(item.data, peopleByLowerName)}</span>
                         <span title={fmtAbsolute(item.data.created_at)} style={{ fontSize: 11, color: c.textGhost || c.textDim, fontWeight: 400 }}>· {timeAgo(item.data.created_at)}</span>

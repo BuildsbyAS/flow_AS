@@ -1331,7 +1331,7 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
       {/* Back link — parent section. On narrow viewports, collapse to chevron only. */}
       <span onClick={onBack} className="flow-breadcrumb" style={{
         fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-        fontWeight: 500, color: "rgba(255,255,255,0.6)", cursor: "pointer", flexShrink: 0,
+        fontWeight: 500, color: "rgba(255,255,255,0.75)", cursor: "pointer", flexShrink: 0,
         display: "flex", alignItems: "center", gap: 5,
         transition: `background ${motion.interaction.duration}, color ${motion.interaction.duration}`,
         padding: `3px ${space[2]}px 3px ${space[2] - 2}px`,
