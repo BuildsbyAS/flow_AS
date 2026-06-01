@@ -66,6 +66,226 @@ function getDayRhythm() {
 
 
 /* ════════════════════════════════════════════════════════════════════
+   TIMEFRAME PICKER — quarter selector + custom range
+   ════════════════════════════════════════════════════════════════════ */
+const QUARTER_MONTHS = [
+  { q: "Q1", months: "Jan - Mar", start: "-01-01", end: "-03-31" },
+  { q: "Q2", months: "Apr - Jun", start: "-04-01", end: "-06-30" },
+  { q: "Q3", months: "Jul - Sep", start: "-07-01", end: "-09-30" },
+  { q: "Q4", months: "Oct - Dec", start: "-10-01", end: "-12-31" },
+];
+
+function TimeframePicker({ timeframe, setTimeframe }) {
+  const [open, setOpen] = React.useState(false);
+  const [customMode, setCustomMode] = React.useState(false);
+  const [customStart, setCustomStart] = React.useState(timeframe.start);
+  const [customEnd, setCustomEnd] = React.useState(timeframe.end);
+  const [yearOffset, setYearOffset] = React.useState(0);
+  const ref = React.useRef(null);
+
+  // Close on outside click
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setCustomMode(false); } };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const baseYear = new Date().getFullYear() + yearOffset;
+  const currentQ = Math.floor(new Date().getMonth() / 3);
+  const currentYear = new Date().getFullYear();
+
+  const selectQuarter = (qi) => {
+    const qm = QUARTER_MONTHS[qi];
+    setTimeframe({
+      label: qm.q,
+      year: baseYear,
+      start: `${baseYear}${qm.start}`,
+      end: `${baseYear}${qm.end}`,
+    });
+    setOpen(false);
+    setCustomMode(false);
+  };
+
+  const applyCustom = () => {
+    if (!customStart || !customEnd || customStart > customEnd) return;
+    const s = new Date(customStart);
+    const e = new Date(customEnd);
+    const sMonth = s.toLocaleDateString("en-US", { month: "short" });
+    const eMonth = e.toLocaleDateString("en-US", { month: "short" });
+    setTimeframe({
+      label: `${sMonth} - ${eMonth}`,
+      year: s.getFullYear() === e.getFullYear() ? s.getFullYear() : `${s.getFullYear()}-${e.getFullYear()}`,
+      start: customStart,
+      end: customEnd,
+    });
+    setOpen(false);
+    setCustomMode(false);
+  };
+
+  // Display label
+  const isCurrentQ = timeframe.year === currentYear && timeframe.label === `Q${currentQ + 1}`;
+  const displayLabel = `${timeframe.label} ${timeframe.year}`;
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        style={{
+          display: "flex", alignItems: "center", gap: 5,
+          borderRadius: layout.radiusSm,
+          border: `1px solid ${isCurrentQ ? c.accent + "40" : c.border}`,
+          background: isCurrentQ ? `${c.accent}08` : c.surfaceAlt,
+          padding: `2px ${space[2]}px 2px ${space[2] + 2}px`,
+          cursor: "pointer",
+          fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
+          fontWeight: 700, color: isCurrentQ ? c.accent : c.textMid,
+          letterSpacing: "0.03em",
+          transition: `border-color 150ms, background 150ms`,
+        }}
+      >
+        {displayLabel}
+        <span style={{ fontSize: 8, lineHeight: 1, color: c.textDim, transform: open ? "rotate(180deg)" : "none", transition: "transform 150ms" }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 200,
+          background: "#fff",
+          borderRadius: layout.radiusMd,
+          border: `1px solid ${c.border}`,
+          boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)",
+          minWidth: 260,
+          overflow: "hidden",
+        }}>
+          {!customMode ? (
+            <>
+              {/* Year selector */}
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                padding: `${space[2]}px ${space[3]}px`,
+                borderBottom: `1px solid ${c.border}`,
+                background: c.surfaceAlt,
+              }}>
+                <button type="button" onClick={() => setYearOffset(y => y - 1)} style={{
+                  border: "none", background: "transparent", cursor: "pointer",
+                  fontFamily: typo.monoSm.font, fontSize: 14, color: c.textMid, padding: "2px 6px",
+                  borderRadius: 4,
+                }} onMouseEnter={e => { e.currentTarget.style.background = `${c.border}60`; }} onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>◂</button>
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: 13, fontWeight: 700, color: c.text,
+                }}>{baseYear}</span>
+                <button type="button" onClick={() => setYearOffset(y => y + 1)} style={{
+                  border: "none", background: "transparent", cursor: "pointer",
+                  fontFamily: typo.monoSm.font, fontSize: 14, color: c.textMid, padding: "2px 6px",
+                  borderRadius: 4,
+                }} onMouseEnter={e => { e.currentTarget.style.background = `${c.border}60`; }} onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>▸</button>
+              </div>
+
+              {/* Quarter grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[1], padding: space[2] }}>
+                {QUARTER_MONTHS.map((qm, qi) => {
+                  const isSelected = timeframe.label === qm.q && timeframe.year === baseYear;
+                  const isCurrent = baseYear === currentYear && qi === currentQ;
+                  return (
+                    <button
+                      key={qm.q}
+                      type="button"
+                      onClick={() => selectQuarter(qi)}
+                      style={{
+                        display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                        padding: `${space[2]}px ${space[2]}px`,
+                        borderRadius: layout.radiusSm,
+                        border: isSelected ? `2px solid ${c.accent}` : isCurrent ? `1px solid ${c.accent}40` : `1px solid transparent`,
+                        background: isSelected ? `${c.accent}10` : "transparent",
+                        cursor: "pointer",
+                        transition: "background 120ms, border-color 120ms",
+                      }}
+                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = c.surfaceAlt; }}
+                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+                    >
+                      <span style={{
+                        fontFamily: typo.monoSm.font, fontSize: 13, fontWeight: 700,
+                        color: isSelected ? c.accent : c.text,
+                      }}>{qm.q}</span>
+                      <span style={{
+                        fontFamily: typo.bodySm.font, fontSize: 10,
+                        color: isSelected ? c.accent : c.textDim,
+                      }}>{qm.months}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Custom range button */}
+              <div style={{ padding: `${space[1]}px ${space[2]}px ${space[2]}px`, borderTop: `1px solid ${c.border}` }}>
+                <button
+                  type="button"
+                  onClick={() => { setCustomMode(true); setCustomStart(timeframe.start); setCustomEnd(timeframe.end); }}
+                  style={{
+                    width: "100%", padding: `${space[2]}px`,
+                    border: "none", background: "transparent",
+                    cursor: "pointer", borderRadius: layout.radiusSm,
+                    fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
+                    fontWeight: 600, color: c.textMid, textAlign: "center",
+                    transition: "background 120ms",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = c.surfaceAlt; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  Custom range...
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Custom date range mode */
+            <div style={{ padding: space[3], display: "flex", flexDirection: "column", gap: space[3] }}>
+              <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 700, color: c.text }}>Custom Range</div>
+              <div style={{ display: "flex", gap: space[2], alignItems: "center" }}>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: c.textDim, textTransform: "uppercase", letterSpacing: "0.06em" }}>From</label>
+                  <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} style={{
+                    fontFamily: typo.monoSm.font, fontSize: 12, color: c.text,
+                    padding: `${space[1]}px ${space[2]}px`, borderRadius: layout.radiusSm,
+                    border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                    outline: "none", width: "100%",
+                  }} />
+                </div>
+                <span style={{ fontFamily: typo.bodySm.font, fontSize: 11, color: c.textDim, paddingTop: 16 }}>to</span>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: c.textDim, textTransform: "uppercase", letterSpacing: "0.06em" }}>To</label>
+                  <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} style={{
+                    fontFamily: typo.monoSm.font, fontSize: 12, color: c.text,
+                    padding: `${space[1]}px ${space[2]}px`, borderRadius: layout.radiusSm,
+                    border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                    outline: "none", width: "100%",
+                  }} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: space[2], justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => setCustomMode(false)} style={{
+                  padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
+                  border: `1px solid ${c.border}`, background: "transparent",
+                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+                  color: c.textMid, cursor: "pointer",
+                }}>Back</button>
+                <button type="button" onClick={applyCustom} style={{
+                  padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
+                  border: "none", background: c.accent, color: "#fff",
+                  fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
+                  cursor: "pointer", opacity: (!customStart || !customEnd || customStart > customEnd) ? 0.4 : 1,
+                }}>Apply</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════
    HEADER — two-layer shell
    Layer 1 (52px): [Logo] | [Nav tabs] ····· [🔍] [◐]
    Layer 2 (38px): [Week ◂ date ▸] | ····· [chips] [Filters btn]
@@ -87,6 +307,8 @@ export function Header({
   projects, people, currentPerson, onNavigate,
   // ── My Lens ──
   myLens = false, toggleMyLens, followedProjects = [],
+  // ── Timeframe ──
+  timeframe, setTimeframe,
 }) {
 
   const devRef = useDevLabel('Header', 'src/components/AppShell.jsx', 'Two-layer app header with nav, week controls, and filters');
@@ -437,18 +659,21 @@ export function Header({
         position: "relative", zIndex: 1,
       }}>
 
-        {/* ── Today's date ── */}
-        <div style={{
-          display: "flex", alignItems: "center",
-          borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-          background: c.surfaceAlt,
-          padding: `2px ${space[2]}px`,
-          flexShrink: 0, gap: 4,
-        }}>
-          <span style={{
-            fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, fontWeight: 600,
-            color: c.textMid, whiteSpace: "nowrap",
-          }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+        {/* ── Today's date + Quarter picker ── */}
+        <div style={{ display: "flex", alignItems: "center", gap: space[2], flexShrink: 0 }}>
+          <div style={{
+            display: "flex", alignItems: "center",
+            borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+            background: c.surfaceAlt,
+            padding: `2px ${space[2]}px`,
+            flexShrink: 0, gap: 4,
+          }}>
+            <span style={{
+              fontFamily: typo.bodyXs.font, fontSize: typo.bodyXs.size, fontWeight: 600,
+              color: c.textMid, whiteSpace: "nowrap",
+            }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+          </div>
+          {timeframe && setTimeframe && <TimeframePicker timeframe={timeframe} setTimeframe={setTimeframe} />}
         </div>
 
         {/* ── Separator ── */}

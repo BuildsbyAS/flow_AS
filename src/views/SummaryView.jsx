@@ -148,6 +148,7 @@ const SummaryView = ({
   globalFilters, onNavigate,
   phaseDurationDefaults,
   myLens = false, followedProjects = [], viewerSquad,
+  timeframe,
 }) => {
   const devRef = useDevLabel('SummaryView', 'src/views/SummaryView.jsx', 'Project-centric dashboard');
 
@@ -157,8 +158,16 @@ const SummaryView = ({
     if (gf.squad?.length) p = p.filter(x => gf.squad.includes(x.squad));
     if (gf.owner?.length) p = p.filter(x => gf.owner.includes(x.owner));
     if (myLens) p = p.filter(x => followedProjects.includes(x.id));
+    if (timeframe?.start && timeframe?.end) {
+      p = p.filter(proj => {
+        const pStart = proj.startDate || proj.tentativeStartDate || proj.createdAt?.slice(0, 10);
+        const pEnd = proj.endDate || proj.shipped_at?.slice(0, 10);
+        if (!pStart) return true;
+        return pStart <= timeframe.end && (pEnd ? pEnd >= timeframe.start : true);
+      });
+    }
     return p;
-  }, [projects, gf.squad, gf.owner, myLens, viewerSquad, followedProjects]);
+  }, [projects, gf.squad, gf.owner, myLens, viewerSquad, followedProjects, timeframe]);
 
   const metrics = useMemo(
     () => computeProjectMetrics(filteredProjects, phaseDurationDefaults),

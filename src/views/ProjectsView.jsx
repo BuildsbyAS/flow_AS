@@ -297,6 +297,7 @@ export default function ProjectsView({
   suppressBackRef,
   projectLinks, setProjectLinks, phaseDurationDefaults,
   myLens = false, followedProjects = [], toggleFollowProject,
+  timeframe,
 }) {
   const devRef = useDevLabel('ProjectsView', 'src/views/ProjectsView.jsx', 'Project registry table with deep dive and Gantt chart');
   const projects = useMemo(() => rawProjects.map(ensureStatus), [rawProjects]);
@@ -503,8 +504,20 @@ export default function ProjectsView({
     if (myLens) {
       list = list.filter(p => followedProjects.includes(p.id));
     }
+    // Timeframe filter: project overlaps with the selected range
+    if (timeframe?.start && timeframe?.end) {
+      list = list.filter(p => {
+        const pStart = p.startDate || p.tentativeStartDate || p.createdAt?.slice(0, 10);
+        const pEnd = p.endDate || p.shipped_at?.slice(0, 10);
+        if (!pStart) return true; // no dates at all, include
+        // Project starts before timeframe ends AND (project ends after timeframe starts OR project has no end and is still active)
+        const startsBeforeEnd = pStart <= timeframe.end;
+        const endsAfterStart = pEnd ? pEnd >= timeframe.start : true; // no end date = still running
+        return startsBeforeEnd && endsAfterStart;
+      });
+    }
     return list;
-  }, [projects, search, globalFilters, metrics, listSquadFilter, myLens, personProfile, followedProjects]);
+  }, [projects, search, globalFilters, metrics, listSquadFilter, myLens, personProfile, followedProjects, timeframe]);
 
   // ── Tab splits ──
   // When a search query is active, bypass the tab filter so results surface
