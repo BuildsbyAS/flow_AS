@@ -548,7 +548,8 @@ export default function ProjectsView({
     const regular = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "in_flight");
     const blocked = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "blocked");
     const depri = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "deprioritized");
-    const upcoming = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "upcoming");
+    const upcoming = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "upcoming")
+      .sort((a, b) => (a.tentativeStartDate || "9999").localeCompare(b.tentativeStartDate || "9999"));
     return [...pinned, ...shipped, ...regular, ...blocked, ...depri, ...upcoming];
   }, [filtered, activeTab, sortKey, sortDir, metrics, today, search, pinnedIds]);
 
