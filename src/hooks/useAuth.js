@@ -7,7 +7,7 @@ import { logLogin, logLogout } from "../lib/activityLog";
 import { setDevSeedSessionFlag } from "../data/devSeed";
 
 const ALLOWED_EMAIL_DOMAIN = "noon.com";
-const OWNER_EMAIL = "ajain@noon.com";
+const OWNER_EMAILS = ["ajain@noon.com", "saugarg@noon.com"];
 
 function isAllowedEmail(email) {
   return typeof email === "string" && email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`);
@@ -185,7 +185,7 @@ export default function useAuth() {
   const isApproved = personProfile?.status === "approved";
   const isPending = personProfile?.status === "pending";
   const isRejected = personProfile?.status === "rejected";
-  const isOwner = (session?.user?.email || "").toLowerCase() === OWNER_EMAIL;
+  const isOwner = OWNER_EMAILS.includes((session?.user?.email || "").toLowerCase());
 
   return {
     // State

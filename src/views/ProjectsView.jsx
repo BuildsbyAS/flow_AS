@@ -77,7 +77,7 @@ function GanttMultiFilter({ label, options, selected, onToggle, onClear }) {
         display: "flex", alignItems: "center", gap: 4,
       }}>
         {active ? `${label} (${selected.length})` : `All ${label}`}
-        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke={active ? c.accent : c.textGhost} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke={active ? c.accent : c.textDim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
           style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${motion.fast.duration} ${motion.fast.easing}` }}>
           <polyline points="4 6 8 10 12 6" />
         </svg>
@@ -86,7 +86,7 @@ function GanttMultiFilter({ label, options, selected, onToggle, onClear }) {
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 900,
           minWidth: 180, maxHeight: 260, overflowY: "auto",
-          background: c.surface, border: `1px solid ${c.border}`,
+          background: c.surfaceSolid, border: `1px solid ${c.border}`,
           borderRadius: layout.radiusMd, boxShadow: c.shadowFloat,
           padding: `${space[1]}px 0`,
           animation: `${anim.visible ? "fadeScaleIn" : "fadeScaleOut"} ${motion.fast.duration} ${motion.fast.easing} both`,
@@ -404,7 +404,7 @@ export default function ProjectsView({
       return next;
     });
   }, []);
-  const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
+  // watchlist filter removed
   const [boardSearch, setBoardSearch] = useState("");
   const [boardSquads, setBoardSquads] = useState([]);
   const [boardOwners, setBoardOwners] = useState([]);
@@ -539,7 +539,6 @@ export default function ProjectsView({
         default: list = filtered;
       }
     }
-    if (showWatchlistOnly) list = list.filter(p => pinnedIds.has(p.id));
     const sorted = sortList(list, sortKey, sortDir, metrics, today);
     const pinned = sorted.filter(p => pinnedIds.has(p.id));
     const shipped = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "shipped");
@@ -548,7 +547,7 @@ export default function ProjectsView({
     const depri = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "deprioritized");
     const upcoming = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "upcoming");
     return [...pinned, ...shipped, ...regular, ...blocked, ...depri, ...upcoming];
-  }, [filtered, activeTab, sortKey, sortDir, metrics, today, search, showWatchlistOnly, pinnedIds]);
+  }, [filtered, activeTab, sortKey, sortDir, metrics, today, search, pinnedIds]);
 
   // ── KPI summary (from filtered data) ──
   // Risk is computed once in `deriveProjectMetrics`; this section
@@ -923,28 +922,6 @@ export default function ProjectsView({
                 </button>
               );
             })}
-            {pinnedIds.size > 0 && (
-              <button
-                className="flow-btn"
-                onClick={() => setShowWatchlistOnly(v => !v)}
-                style={{
-                  padding: `6px ${space[3]}px`,
-                  borderRadius: layout.radiusSm,
-                  border: `1px solid ${showWatchlistOnly ? c.accentMid : c.border}`,
-                  background: showWatchlistOnly ? c.accentDim : c.surface,
-                  color: showWatchlistOnly ? c.accent : c.textDim,
-                  fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-                  cursor: "pointer",
-                  display: "flex", alignItems: "center", gap: 6,
-                }}
-              >
-                📌 Watchlist
-                <span style={{
-                  fontFamily: typo.monoSm.font, fontWeight: 700,
-                  fontVariantNumeric: "tabular-nums",
-                }}>{pinnedIds.size}</span>
-              </button>
-            )}
           </div>
           <SegmentedToggle
             options={[
@@ -1612,6 +1589,7 @@ export default function ProjectsView({
                     <React.Fragment key={proj.id}>
                     <tr
                       ref={el => { if (el) el.__projId = proj.id; }}
+                      {...(fi === 0 ? { "data-tour": "project-row" } : {})}
                       className={isFocused ? "flow-kb-focus" : undefined}
                       onMouseEnter={(e) => { setHoveredProject(proj.id); e.currentTarget.style.transform = "scale(1.008)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.07)"; e.currentTarget.style.zIndex = "2"; e.currentTarget.style.position = "relative"; }}
                       onMouseLeave={(e) => { setHoveredProject(null); e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.zIndex = "auto"; e.currentTarget.style.position = "static"; }}
@@ -1901,7 +1879,7 @@ export default function ProjectsView({
             style={{
               position: "fixed",
               top: r.bottom + 8, left: clampedLeft,
-              background: c.surface, border: `1px solid ${c.border}`,
+              background: c.surfaceSolid, border: `1px solid ${c.border}`,
               borderRadius: layout.radiusSm, boxShadow: c.shadowFloat,
               padding: `${space[2]}px ${space[3]}px`,
               width: tipW, zIndex: 10000,
@@ -1935,7 +1913,7 @@ export default function ProjectsView({
       })()}
 
       {/* FAB — Add Project (hidden in historical mode) */}
-      {<button className="flow-btn" onClick={() => setShowCreate(true)} aria-label="Add project" style={{
+      {<button data-tour="add-project" className="flow-btn" onClick={() => setShowCreate(true)} aria-label="Add project" style={{
         position: "fixed", bottom: space[7], right: space[7], zIndex: 50,
         height: 40, padding: `0 ${space[5]}px`, borderRadius: layout.radiusSm,
         border: "none", cursor: "pointer",
@@ -2092,7 +2070,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
   const inputStyle = {
     width: "100%", height: 40, padding: `0 ${space[3]}px`,
     borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-    background: c.surface, color: c.text,
+    background: c.surfaceSolid, color: c.text,
     fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
     outline: "none", boxSizing: "border-box",
   };
@@ -2339,7 +2317,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
               <div style={{
                 position: "absolute", top: "100%", left: 0, right: 0,
                 marginTop: 4, maxHeight: 180, overflowY: "auto",
-                background: c.surface, border: `1px solid ${c.border}`,
+                background: c.surfaceSolid, border: `1px solid ${c.border}`,
                 borderRadius: layout.radiusSm, boxShadow: c.shadowFloat,
                 zIndex: 20,
               }}>
@@ -2984,7 +2962,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       })()}
 
       {/* ═══ IDENTITY HEADER — project id + name + owner|squad + status + freshness ═══ */}
-      <div style={{
+      <div data-tour="project-hero" style={{
         padding: `${space[5]}px ${space[6]}px`, borderRadius: layout.radiusLg,
         background: c.surface,
         border: `1px solid ${justSaved ? c.green : c.border}`,
@@ -3041,6 +3019,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
               {toggleFollowProject && (
                 <button
                   type="button"
+                  data-tour="follow-project"
                   title={followedProjects.includes(proj.id) ? "Unfollow project" : "Follow project"}
                   onClick={() => toggleFollowProject(proj.id)}
                   style={{
@@ -3132,7 +3111,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                         position: "fixed", zIndex: 100000,
                         top: (() => { const btn = document.getElementById("add-track-btn"); return btn ? btn.getBoundingClientRect().bottom + 4 : 0; })(),
                         left: (() => { const btn = document.getElementById("add-track-btn"); return btn ? btn.getBoundingClientRect().left : 0; })(),
-                        background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusSm,
+                        background: c.surfaceSolid, border: `1px solid ${c.border}`, borderRadius: layout.radiusSm,
                         boxShadow: c.shadowElevated, padding: space[1], minWidth: 140,
                         display: "flex", flexDirection: "column",
                       }}>
@@ -3248,7 +3227,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                   }}
                   style={{
                     height: 32, padding: `0 ${space[2]}px`, borderRadius: layout.radiusXs,
-                    border: `1px solid ${c.border}`, background: c.surface, color: c.text,
+                    border: `1px solid ${c.border}`, background: c.surfaceSolid, color: c.text,
                     fontFamily: typo.monoSm.font, fontSize: 12,
                   }}
                 />
@@ -3507,7 +3486,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                         <button id="res-type-picker-btn" type="button" onClick={() => setResTypeDropOpen(o => !o)} style={{
                           height: 32, padding: `0 ${space[2]}px 0 ${space[2]}px`,
                           borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-                          background: c.surface, color: c.text, cursor: "pointer",
+                          background: c.surfaceSolid, color: c.text, cursor: "pointer",
                           fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
                           display: "flex", alignItems: "center", gap: 6, minWidth: 140,
                           transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
@@ -3529,7 +3508,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                               position: "fixed", zIndex: 100000,
                               top: (() => { const btn = document.getElementById("res-type-picker-btn"); return btn ? btn.getBoundingClientRect().bottom + 4 : 0; })(),
                               left: (() => { const btn = document.getElementById("res-type-picker-btn"); return btn ? btn.getBoundingClientRect().left : 0; })(),
-                              minWidth: 170, background: c.surface, border: `1px solid ${c.border}`,
+                              minWidth: 170, background: c.surfaceSolid, border: `1px solid ${c.border}`,
                               borderRadius: layout.radiusMd, boxShadow: c.shadowFloat,
                               padding: `${space[1]}px 0`, overflow: "hidden",
                             }}>
@@ -3803,7 +3782,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       )}
 
       {/* ═══ TIMELINE — TrackGantt then alerts below ═══ */}
-      {proj.status !== "upcoming" && <div>
+      {proj.status !== "upcoming" && <div data-tour="track-gantt">
         <SectionHead title="Timeline" />
 
         {/* ── Track Gantt (parallel tracks) ── */}
@@ -3919,7 +3898,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       </div>}
 
       {/* ═══ ACTIVITY — composer + comments + auto-events ═══ */}
-      <div>
+      <div data-tour="activity">
         <SectionHead title="Activity" />
         <ProjectActivity
           project={proj}
@@ -4465,7 +4444,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
           <div style={{
             position: "fixed", top: "50%", left: "50%",
             transform: "translate(-50%, -50%)",
-            background: c.surface, borderRadius: layout.radiusLg,
+            background: c.surfaceSolid, borderRadius: layout.radiusLg,
             boxShadow: "0 24px 80px rgba(0,0,0,0.2)", border: `2px solid ${c.green}`,
             padding: `${space[6]}px ${space[7]}px`, textAlign: "center",
             maxWidth: 420, width: "90%",

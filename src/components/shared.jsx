@@ -371,7 +371,7 @@ export const Sel = ({ children, style: s, ...rest }) => (
   <select {...rest} className="flow-input" style={{
     height: 40, padding: `0 ${space[3] + 20}px 0 ${space[3]}px`,
     borderRadius: layout.radiusSm,
-    border: `1px solid ${c.border}`, background: `${c.surface} ${selChevron} no-repeat right ${space[3]}px center / 12px 12px`,
+    border: `1px solid ${c.border}`, background: `${c.surfaceSolid} ${selChevron} no-repeat right ${space[3]}px center / 12px 12px`,
     color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
     cursor: "pointer", appearance: "none", WebkitAppearance: "none",
     boxSizing: "border-box",
@@ -444,7 +444,7 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
       <button onClick={() => setOpen(!open)} className="flow-input" style={{
         width: "100%", height: 40, padding: `0 ${space[3]}px`,
         borderRadius: layout.radiusSm,
-        border: `1px solid ${open ? c.accent : c.border}`, background: c.surface,
+        border: `1px solid ${open ? c.accent : c.border}`, background: c.surfaceSolid,
         color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
         cursor: "pointer", textAlign: "left", boxSizing: "border-box",
         display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -459,7 +459,7 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
       {open && ReactDOM.createPortal(
         <div ref={dropdownRef} style={{
           position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width,
-          background: c.surfaceOverlay, border: `1px solid ${c.border}`,
+          background: c.surfaceSolid, border: `1px solid ${c.border}`,
           borderRadius: layout.radiusSm, boxShadow: c.shadowOverlay,
           zIndex: 10000, maxHeight: 240, display: "flex", flexDirection: "column",
         }}>

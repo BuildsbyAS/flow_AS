@@ -228,7 +228,7 @@ function MentionDropdown({ query, people, onSelect, position }) {
       position: "absolute",
       left: position.left ?? 0, bottom: position.bottom ?? 44,
       zIndex: 50, minWidth: 200, maxWidth: 280,
-      background: c.surface, border: `1px solid ${c.border}`,
+      background: c.surfaceSolid, border: `1px solid ${c.border}`,
       borderRadius: layout.radiusSm, boxShadow: c.shadowElevated,
       padding: space[1], display: "flex", flexDirection: "column",
     }}>
@@ -441,7 +441,7 @@ function CommentMenu({ canEdit, canDelete, busy, onEdit, onDelete }) {
       {open && (
         <div role="menu" style={{
           position: "absolute", top: 28, right: 0, zIndex: 10, minWidth: 120,
-          padding: space[1], background: c.surface,
+          padding: space[1], background: c.surfaceSolid,
           border: `1px solid ${c.border}`, borderRadius: layout.radiusSm,
           boxShadow: c.shadowElevated,
           display: "flex", flexDirection: "column",
@@ -741,7 +741,7 @@ export default function ProjectActivity({
                       <span aria-hidden="true" style={{
                         position: "absolute", left: -29, top: 1,
                         width: 16, height: 16, borderRadius: "50%",
-                        background: c.surface, zIndex: 1,
+                        background: c.surfaceSolid, zIndex: 1,
                         display: "flex", alignItems: "center", justifyContent: "center",
                       }}>
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor }} />
@@ -844,7 +844,7 @@ function RailComment({ comment, author, currentPerson, isProjectOwner, isAppOwne
       <span aria-hidden="true" style={{
         position: "absolute", left: -31, top: 1,
         width: 20, height: 20, borderRadius: "50%",
-        background: c.surface, zIndex: 1,
+        background: c.surfaceSolid, zIndex: 1,
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
         <span style={{

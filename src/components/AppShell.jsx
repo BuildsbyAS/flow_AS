@@ -146,13 +146,16 @@ function TimeframePicker({ timeframe, setTimeframe }) {
         }}
       >
         {displayLabel}
-        <span style={{ fontSize: 8, lineHeight: 1, color: c.textDim, transform: open ? "rotate(180deg)" : "none", transition: "transform 150ms" }}>▼</span>
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 150ms" }}>
+          <polyline points="4 6 8 10 12 6" />
+        </svg>
       </button>
 
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 200,
-          background: "#fff",
+          background: c.surfaceSolid,
           borderRadius: layout.radiusMd,
           border: `1px solid ${c.border}`,
           boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)",
@@ -570,6 +573,7 @@ export function Header({
         {/* ── My Lens toggle switch ── */}
         {toggleMyLens && (
           <div
+            data-tour="my-lens"
             onClick={toggleMyLens}
             style={{
               display: "flex", alignItems: "center", gap: 8,
@@ -640,8 +644,15 @@ export function Header({
         )}
 
         {/* ── User avatar + logout ── */}
-        {currentUser?.user && (
-          <UserBadge user={currentUser.user} personProfile={currentUser.personProfile} onSignOut={currentUser.signOut} onRefreshProfile={currentUser.refreshProfile} />
+        {(currentUser?.user || currentPerson) && (
+          <UserBadge
+            user={currentUser?.user || null}
+            personProfile={currentUser?.personProfile || null}
+            personName={currentPerson?.name || currentUser?.personProfile?.name || currentUser?.user?.user_metadata?.full_name}
+            onSignOut={currentUser?.signOut || (() => {})}
+            onRefreshProfile={currentUser?.refreshProfile}
+            onNavigate={onNavigate}
+          />
         )}
       </div>
     </header>
@@ -1218,7 +1229,7 @@ function DrawerFilterGroup({ label, options, value = [], onChange }) {
         maxHeight: 160, overflowY: "auto",
         borderRadius: layout.radiusSm,
         border: `1px solid ${c.border}`,
-        background: c.surface,
+        background: c.surfaceSolid,
         scrollbarWidth: "thin",
         scrollbarColor: `${c.textDim}30 transparent`,
       }}>
@@ -1735,218 +1746,104 @@ function NotificationBell({ userEmail, onNavigate }) {
 /* ════════════════════════════════════════════════════════════════════
    USER BADGE — avatar + dropdown with logout
    ════════════════════════════════════════════════════════════════════ */
-function UserBadge({ user, personProfile, onSignOut, onRefreshProfile }) {
-  const devRef = useDevLabel('UserBadge', 'src/components/AppShell.jsx', 'User avatar with dropdown menu for profile editing and sign-out');
-  const [open, setOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState(false);
-  const [editName, setEditName] = React.useState("");
-  const [editSquadId, setEditSquadId] = React.useState("");
-  const [editRoleId, setEditRoleId] = React.useState("");
-  const [squads, setSquads] = React.useState([]);
-  const [roles, setRoles] = React.useState([]);
-  const [saving, setSaving] = React.useState(false);
+function UserBadge({ user, personProfile, personName, onSignOut, onRefreshProfile, onNavigate }) {
+  const devRef = useDevLabel('UserBadge', 'src/components/AppShell.jsx', 'User initials avatar — click opens People profile, caret opens account menu');
+  const [menuOpen, setMenuOpen] = React.useState(false);
   const ref = React.useRef(null);
 
-  // Close on outside click
   React.useEffect(() => {
-    if (!open) return;
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    if (!menuOpen) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setMenuOpen(false); };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  }, [menuOpen]);
 
-  // When opening edit mode, fetch squads/roles and populate current values
-  const startEditing = async () => {
-    setEditName(personProfile?.name || "");
-    setEditSquadId(personProfile?.squad_id || "");
-    setEditRoleId(personProfile?.role_id || "");
-    setEditing(true);
-
-    // Lazy-load squads + roles
-    const { supabase } = await import("../lib/supabase");
-    const [sq, ro] = await Promise.all([
-      supabase.from("squads").select("id, name").order("name"),
-      supabase.from("roles").select("id, name").order("name"),
-    ]);
-    if (sq.data) setSquads(sq.data);
-    if (ro.data) setRoles(ro.data);
-  };
-
-  const handleSave = async () => {
-    if (!editName.trim() || !editSquadId || !editRoleId) return;
-    setSaving(true);
-    const { supabase } = await import("../lib/supabase");
-    await supabase
-      .from("people")
-      .update({ name: editName.trim(), squad_id: editSquadId, role_id: editRoleId })
-      .eq("id", personProfile.id);
-    setSaving(false);
-    setEditing(false);
-    if (onRefreshProfile) onRefreshProfile();
-  };
-
+  const displayName = personName || personProfile?.name || user?.user_metadata?.full_name || user?.email || "User";
   const avatar = user?.user_metadata?.avatar_url;
-  const displayName = personProfile?.name || user?.user_metadata?.full_name || user?.email;
 
-  const inputStyle = {
-    width: "100%", padding: "6px 10px",
-    background: c.surface,
-    border: `1px solid ${c.border}`,
-    borderRadius: layout.radiusSm, color: c.text,
-    fontSize: 12, fontFamily: "inherit",
-    outline: "none",
-  };
-
-  const menuBtn = {
-    width: "100%", padding: "8px 14px",
-    background: "transparent", border: "none",
-    textAlign: "left", cursor: "pointer",
-    fontSize: 13, color: c.text, fontFamily: "inherit",
-    transition: "background 0.1s",
+  const goToProfile = () => {
+    if (onNavigate && displayName) onNavigate("people", displayName);
+    setMenuOpen(false);
   };
 
   return (
     <div ref={(el) => { ref.current = el; if (devRef) devRef.current = el; }} style={{ position: "relative" }}>
+      {/* Avatar — tap opens dropdown */}
       <button
-        onClick={() => { setOpen(v => !v); if (open) setEditing(false); }}
+        onClick={() => setMenuOpen(v => !v)}
         style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "3px 3px", background: "transparent", border: "none",
-          cursor: "pointer", borderRadius: 20,
-          transition: "background 0.15s",
+          display: "flex", alignItems: "center", padding: 0,
+          background: "transparent", border: "none",
+          cursor: "pointer", borderRadius: "50%",
         }}
         title={displayName}
+        aria-label="Account menu"
       >
         {avatar ? (
           <img src={avatar} alt="" style={{
-            width: 28, height: 28, borderRadius: "50%",
-            border: "2px solid rgba(255,255,255,0.2)",
+            width: 32, height: 32, borderRadius: "50%",
+            border: "2px solid rgba(255,255,255,0.25)",
             transition: "border-color 0.15s",
           }} />
         ) : (
           <div style={{
-            width: 28, height: 28, borderRadius: "50%",
-            background: "rgba(255,255,255,0.2)",
+            width: 32, height: 32, borderRadius: "50%",
+            background: "#FFFFFF",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 12, fontWeight: 700, color: "#FFFFFF",
-            border: "2px solid rgba(255,255,255,0.15)",
+            fontFamily: mono, fontSize: 12, fontWeight: 700, color: "#111111",
+            letterSpacing: "0.02em",
+            border: "none",
+            transition: "opacity 0.15s",
           }}>
             {initialsOf(displayName)}
           </div>
         )}
       </button>
 
-      {/* Dropdown */}
-      {open && (
+      {/* Account dropdown */}
+      {menuOpen && (
         <div style={{
           position: "absolute", top: "100%", right: 0, marginTop: 6,
-          width: editing ? 260 : 220, padding: "8px 0",
-          background: "rgba(255,255,255,0.88)",
-          backdropFilter: "blur(20px) saturate(1.4)",
-          WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-          border: "1px solid rgba(255,255,255,0.4)",
+          width: 200, padding: "6px 0",
+          background: c.surfaceSolid,
+          border: `1px solid ${c.border}`,
           borderRadius: layout.radiusMd,
           boxShadow: "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
           zIndex: 200,
           animation: "fadeScaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
         }}>
-
-          {!editing ? (
-            <>
-              {/* User info */}
-              <div style={{ padding: "8px 14px 10px", borderBottom: `1px solid ${c.border}` }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{displayName}</div>
-                <div style={{ fontSize: 11, opacity: 0.35 }}>{user?.email}</div>
-                {personProfile?.squads?.name && (
-                  <div style={{ fontSize: 11, opacity: 0.3, marginTop: 2 }}>
-                    {personProfile.squads.name} · {personProfile.roles?.name}
-                  </div>
-                )}
+          {/* User info */}
+          <div style={{ padding: "8px 14px 10px", borderBottom: `1px solid ${c.border}` }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: c.text, marginBottom: 2 }}>{displayName}</div>
+            {user?.email && <div style={{ fontSize: 11, color: c.textDim }}>{user.email}</div>}
+            {personProfile?.squads?.name && (
+              <div style={{ fontSize: 11, color: c.textGhost || c.textDim, marginTop: 2 }}>
+                {personProfile.squads.name}{personProfile.roles?.name ? ` · ${personProfile.roles.name}` : ""}
               </div>
+            )}
+          </div>
 
-              {/* Edit profile */}
-              <button
-                onClick={startEditing}
-                style={menuBtn}
-                onMouseEnter={e => e.target.style.background = "rgba(0,0,0,0.04)"}
-                onMouseLeave={e => e.target.style.background = "transparent"}
-              >
-                Edit profile
-              </button>
+          {/* View profile */}
+          <button
+            onClick={goToProfile}
+            style={{
+              width: "100%", padding: "8px 14px", background: "transparent", border: "none",
+              textAlign: "left", cursor: "pointer", fontSize: 13, color: c.text, fontFamily: "inherit",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = c.surfaceAlt}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          >View profile</button>
 
-              {/* Sign out */}
-              <button
-                onClick={() => { setOpen(false); onSignOut(); }}
-                style={menuBtn}
-                onMouseEnter={e => e.target.style.background = "rgba(0,0,0,0.04)"}
-                onMouseLeave={e => e.target.style.background = "transparent"}
-              >
-                Sign out
-              </button>
-            </>
-          ) : (
-            /* ── Edit mode ── */
-            <div style={{ padding: "10px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", opacity: 0.35 }}>
-                Edit profile
-              </div>
-
-              {/* Name */}
-              <input
-                type="text"
-                value={editName}
-                onChange={e => setEditName(e.target.value)}
-                placeholder="Display name"
-                style={inputStyle}
-                autoFocus
-              />
-
-              {/* Squad */}
-              <select
-                value={editSquadId}
-                onChange={e => setEditSquadId(e.target.value)}
-                style={{ ...inputStyle, cursor: "pointer", appearance: "none", WebkitAppearance: "none", paddingRight: 28, background: `${c.surface} ${selChevron} no-repeat right 8px center / 12px 12px` }}
-              >
-                <option value="" disabled>Squad</option>
-                {squads.map(s => (
-                  <option key={s.id} value={s.id} style={{ background: c.bg, color: c.text }}>{s.name}</option>
-                ))}
-              </select>
-
-              {/* Role */}
-              <select
-                value={editRoleId}
-                onChange={e => setEditRoleId(e.target.value)}
-                style={{ ...inputStyle, cursor: "pointer", appearance: "none", WebkitAppearance: "none", paddingRight: 28, background: `${c.surface} ${selChevron} no-repeat right 8px center / 12px 12px` }}
-              >
-                <option value="" disabled>Role</option>
-                {roles.map(r => (
-                  <option key={r.id} value={r.id} style={{ background: c.bg, color: c.text }}>{r.name}</option>
-                ))}
-              </select>
-
-              {/* Actions */}
-              <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
-                <button
-                  onClick={() => setEditing(false)}
-                  style={{
-                    flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 500, fontFamily: "inherit",
-                    background: "transparent", border: `1px solid ${c.border}`,
-                    borderRadius: layout.radiusSm, color: c.text, cursor: "pointer",
-                  }}
-                >Cancel</button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving || !editName.trim() || !editSquadId || !editRoleId}
-                  style={{
-                    flex: 1, padding: "6px 0", fontSize: 12, fontWeight: 600, fontFamily: "inherit",
-                    background: saving ? c.accentDim : c.accent,
-                    border: "none", borderRadius: layout.radiusSm, color: c.textOnAccent, cursor: saving ? "wait" : "pointer",
-                  }}
-                >{saving ? "Saving…" : "Save"}</button>
-              </div>
-            </div>
-          )}
+          {/* Sign out */}
+          <button
+            onClick={() => { onSignOut(); setTimeout(() => window.location.reload(), 100); }}
+            style={{
+              width: "100%", padding: "8px 14px", background: "transparent", border: "none",
+              textAlign: "left", cursor: "pointer", fontSize: 13, color: c.red, fontFamily: "inherit",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = c.redDim}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+          >Sign out</button>
         </div>
       )}
     </div>
@@ -2640,7 +2537,7 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
                 onChange={e => setSquadFilter(e.target.value)}
                 style={{
                   height: 28, padding: `0 ${space[2] + 20}px 0 ${space[2]}px`, borderRadius: layout.radiusSm,
-                  border: `1px solid ${c.border}`, background: `${c.surface} ${selChevron} no-repeat right ${space[2]}px center / 10px 10px`, color: c.text,
+                  border: `1px solid ${c.border}`, background: `${c.surfaceSolid} ${selChevron} no-repeat right ${space[2]}px center / 12px 12px`, color: c.text,
                   fontFamily: typo.monoSm.font, fontSize: 11, cursor: "pointer", outline: "none",
                   appearance: "none", WebkitAppearance: "none",
                 }}

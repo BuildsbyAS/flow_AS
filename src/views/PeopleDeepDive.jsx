@@ -21,7 +21,7 @@ const firstGlyph = (name) => {
 /*  PEOPLE DEEP DIVE                                         */
 /* ═══════════════════════════════════════════════════════════ */
 
-const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical = false, selectedWeekKey, weekConfig: weekConfigProp, globalFilters = {}, loading, error, viewerSquad }) => {
+const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical = false, selectedWeekKey, weekConfig: weekConfigProp, globalFilters = {}, loading, error, viewerSquad, viewerName, isAppOwner = false }) => {
   const devRef = useDevLabel(
     'PeopleDeepDive',
     'src/views/PeopleDeepDive.jsx',
@@ -403,48 +403,21 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
   const weeksActive = Math.max(1, Math.ceil(activityScore / 3));
   const weeklyAvg = activityScore > 0 ? (activityScore / weeksActive).toFixed(1) : "0";
 
+  // Can edit this person's squad/role? Only if viewing self or admin
+  const canEditProfile = (viewerName && selectedPerson === viewerName) || isAppOwner;
+
   return (
     <div key={selectedPerson} className="flow-enter-slide" style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
 
       {/* ═══ HERO CARD ═══ */}
-      <div style={{
-        padding: space[6], background: c.surface,
-        border: `1px solid ${c.border}`, borderRadius: layout.radiusLg,
-        boxShadow: c.shadowCard,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: space[4], minWidth: 0 }}>
-          <div aria-hidden="true" style={{
-            width: 56, height: 56, borderRadius: "50%",
-            background: c.surfaceAlt,
-            border: `1px solid ${c.border}`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: c.textMid,
-            flexShrink: 0,
-          }}>{initialsOf(selectedPerson)}</div>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{
-              fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight,
-              color: c.text, letterSpacing: typo.displayLg.tracking, lineHeight: typo.displayLg.lineHeight,
-            }}>{selectedPerson}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2], flexWrap: "wrap" }}>
-              {personObj.role && (
-                <span style={{
-                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                  fontWeight: 500, color: c.textMid,
-                }}>{personObj.role}</span>
-              )}
-              {personObj.squad && (
-                <span style={{
-                  fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
-                  letterSpacing: "0.06em", textTransform: "uppercase",
-                  color: c.accent, background: c.accentDim,
-                  padding: `${space[1]}px ${space[2]}px`, borderRadius: layout.radiusXs,
-                }}>{personObj.squad}</span>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      <PersonHeroCard
+        personObj={personObj}
+        selectedPerson={selectedPerson}
+        canEdit={canEditProfile}
+        allSquads={allSquads}
+        allRoles={allRoles}
+        setPeople={setPeople}
+      />
 
       {/* ═══ KPI GRID — In Flight / Shipped / Activity ═══ */}
       <KpiGrid cols="1fr 1fr 1fr">
@@ -475,6 +448,163 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
     </div>
   );
 };
+
+/* ═══ PERSON HERO CARD — with inline squad/role editing ═══ */
+
+function PersonHeroCard({ personObj, selectedPerson, canEdit, allSquads, allRoles, setPeople }) {
+  const [editing, setEditing] = useState(false);
+  const [editSquad, setEditSquad] = useState(personObj.squad || "");
+  const [editRole, setEditRole] = useState(personObj.role || "");
+  const [saving, setSaving] = useState(false);
+
+  const startEdit = () => {
+    setEditSquad(personObj.squad || "");
+    setEditRole(personObj.role || "");
+    setEditing(true);
+  };
+
+  const handleSave = async () => {
+    if (!editSquad || !editRole) return;
+    setSaving(true);
+    if (isDevSeedMode()) {
+      // Dev seed mode — update in-memory store
+      const updated = { ...personObj, squad: editSquad, role: editRole };
+      setPeople(prev => prev.map(p => p.id === personObj.id ? { ...p, squad: editSquad, role: editRole } : p));
+    } else {
+      // Supabase mode — update by matching squad/role names to IDs
+      const { supabase: sb } = await import("../lib/supabase");
+      const [sqRes, roRes] = await Promise.all([
+        sb.from("squads").select("id").eq("name", editSquad).single(),
+        sb.from("roles").select("id").eq("name", editRole).single(),
+      ]);
+      if (sqRes.data && roRes.data) {
+        await sb.from("people")
+          .update({ squad_id: sqRes.data.id, role_id: roRes.data.id })
+          .eq("id", personObj.id);
+        setPeople(prev => prev.map(p => p.id === personObj.id ? { ...p, squad: editSquad, role: editRole, squad_id: sqRes.data.id, role_id: roRes.data.id } : p));
+      }
+    }
+    setSaving(false);
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditing(false);
+    setEditSquad(personObj.squad || "");
+    setEditRole(personObj.role || "");
+  };
+
+  return (
+    <div style={{
+      padding: space[6], background: c.surface,
+      border: `1px solid ${c.border}`, borderRadius: layout.radiusLg,
+      boxShadow: c.shadowCard,
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: space[4], minWidth: 0 }}>
+        <div aria-hidden="true" style={{
+          width: 56, height: 56, borderRadius: "50%",
+          background: c.surfaceAlt,
+          border: `1px solid ${c.border}`,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontFamily: typo.monoLg.font, fontSize: typo.monoLg.size, fontWeight: typo.monoLg.weight, color: c.textMid,
+          flexShrink: 0,
+        }}>{initialsOf(selectedPerson)}</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{
+            fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size, fontWeight: typo.displayLg.weight,
+            color: c.text, letterSpacing: typo.displayLg.tracking, lineHeight: typo.displayLg.lineHeight,
+          }}>{selectedPerson}</div>
+
+          {!editing ? (
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2], flexWrap: "wrap" }}>
+              {personObj.role && (
+                <span style={{
+                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                  fontWeight: 500, color: c.textMid,
+                }}>{personObj.role}</span>
+              )}
+              {personObj.squad && (
+                <span style={{
+                  fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: typo.monoSm.weight,
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  color: c.accent, background: c.accentDim,
+                  padding: `${space[1]}px ${space[2]}px`, borderRadius: layout.radiusXs,
+                }}>{personObj.squad}</span>
+              )}
+              {canEdit && (
+                <button
+                  onClick={startEdit}
+                  className="flow-btn"
+                  style={{
+                    padding: `2px ${space[2]}px`, marginLeft: space[1],
+                    borderRadius: layout.radiusXs,
+                    border: `1px solid ${c.border}`, background: "transparent",
+                    fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 500,
+                    color: c.textDim, cursor: "pointer",
+                    transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
+                  }}
+                >Edit</button>
+              )}
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2], flexWrap: "wrap" }}>
+              <select
+                value={editSquad}
+                onChange={e => setEditSquad(e.target.value)}
+                style={{
+                  height: 30, padding: `0 ${space[2] + 18}px 0 ${space[2]}px`,
+                  borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                  background: `${c.surfaceSolid} ${selChevron} no-repeat right ${space[2]}px center / 12px 12px`,
+                  color: c.text, fontFamily: typo.bodySm.font, fontSize: 13,
+                  appearance: "none", WebkitAppearance: "none", cursor: "pointer", outline: "none",
+                }}
+              >
+                <option value="" disabled>Squad</option>
+                {allSquads.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <select
+                value={editRole}
+                onChange={e => setEditRole(e.target.value)}
+                style={{
+                  height: 30, padding: `0 ${space[2] + 18}px 0 ${space[2]}px`,
+                  borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
+                  background: `${c.surfaceSolid} ${selChevron} no-repeat right ${space[2]}px center / 12px 12px`,
+                  color: c.text, fontFamily: typo.bodySm.font, fontSize: 13,
+                  appearance: "none", WebkitAppearance: "none", cursor: "pointer", outline: "none",
+                }}
+              >
+                <option value="" disabled>Role</option>
+                {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              <button
+                onClick={handleSave}
+                disabled={saving || !editSquad || !editRole}
+                className="flow-btn"
+                style={{
+                  padding: `3px ${space[3]}px`, borderRadius: layout.radiusSm,
+                  border: "none", background: saving ? c.surfaceAlt : c.accent,
+                  color: "#fff", fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                  cursor: saving ? "wait" : "pointer",
+                }}
+              >{saving ? "Saving..." : "Save"}</button>
+              <button
+                onClick={handleCancel}
+                className="flow-btn"
+                style={{
+                  padding: `3px ${space[3]}px`, borderRadius: layout.radiusSm,
+                  border: `1px solid ${c.border}`, background: "transparent",
+                  color: c.textMid, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 500,
+                  cursor: "pointer",
+                }}
+              >Cancel</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 /* ═══ ADD MEMBER FORM ═══════════════════════════════════════ */
 
@@ -540,7 +670,7 @@ function AddMemberForm({ squads, roles, projects, setPeople, onClose, viewerSqua
             style={{
               width: "100%", height: 36, padding: `0 ${space[3] + 20}px 0 ${space[3]}px`,
               borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-              background: `${c.surface} ${selChevron} no-repeat right ${space[3]}px center / 12px 12px`, color: c.text,
+              background: `${c.surfaceSolid} ${selChevron} no-repeat right ${space[3]}px center / 12px 12px`, color: c.text,
               fontFamily: typo.bodyMd.font, fontSize: 14, outline: "none",
               appearance: "none", WebkitAppearance: "none", cursor: "pointer",
             }}
@@ -556,7 +686,7 @@ function AddMemberForm({ squads, roles, projects, setPeople, onClose, viewerSqua
             style={{
               width: "100%", height: 36, padding: `0 ${space[3] + 20}px 0 ${space[3]}px`,
               borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-              background: `${c.surface} ${selChevron} no-repeat right ${space[3]}px center / 12px 12px`, color: c.text,
+              background: `${c.surfaceSolid} ${selChevron} no-repeat right ${space[3]}px center / 12px 12px`, color: c.text,
               fontFamily: typo.bodyMd.font, fontSize: 14, outline: "none",
               appearance: "none", WebkitAppearance: "none", cursor: "pointer",
             }}
@@ -594,7 +724,7 @@ function AddMemberForm({ squads, roles, projects, setPeople, onClose, viewerSqua
       <div style={{ display: "flex", justifyContent: "flex-end", gap: space[3], marginTop: space[2] }}>
         <button className="flow-btn" onClick={onClose} style={{
           padding: `${space[2]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-          border: `1px solid ${c.border}`, background: c.surface, color: c.textMid,
+          border: `1px solid ${c.border}`, background: c.surfaceSolid, color: c.textMid,
           fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, cursor: "pointer",
         }}>Cancel</button>
         <button className="flow-btn" onClick={handleSubmit} disabled={!name.trim()} style={{

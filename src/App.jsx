@@ -26,6 +26,7 @@ import FlowLogo from "./components/FlowLogo";
 import SyncToast from "./components/SyncToast";
 import ActionToast from "./components/ActionToast";
 import DevOverlayProvider from "./components/DevOverlay";
+import WelcomeTutorial from "./components/WelcomeTutorial";
 import { isDevSeedMode, devStore } from "./data/devSeed";
 
 export default function FlowApp() {
@@ -192,6 +193,11 @@ function FlowDashboard({ auth }) {
   });
   // Legacy cleanup — unfollowed-my is no longer used (squad projects can't be unfollowed)
   const unfollowedMy = [];
+
+  // ── Welcome tutorial (first-run onboarding) ──
+  const [showTutorial, setShowTutorial] = useState(() => {
+    try { return !localStorage.getItem("flow_tutorial_seen"); } catch { return false; }
+  });
 
   // ── Toggle sound (Web Audio API — subtle click) ──
   const playToggleSound = useCallback((isOn) => {
@@ -590,7 +596,7 @@ function FlowDashboard({ auth }) {
           {activeTab === "summary" && <SummaryView loading={loading} error={error} projects={projects} people={people} squads={squads} globalFilters={globalFilters} onNavigate={handleNavigate} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} timeframe={timeframe} />}
           {activeTab === "projects" && <ProjectsView key={navPayload || "proj"} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAppOwner={!!auth?.isOwner} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} timeframe={timeframe} />}
 
-          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} timeframe={timeframe} />}
+          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} viewerName={viewerProfile?.name} isAppOwner={!!auth?.isOwner} timeframe={timeframe} />}
           {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} />}
           {activeTab === "guide" && (
             <React.Suspense fallback={<div style={{ padding: 40, color: c.textDim, fontFamily: body, fontSize: 16, textAlign: "center" }}>Loading...</div>}>
@@ -613,6 +619,42 @@ function FlowDashboard({ auth }) {
       />
 
       {showHints && <ShortcutHintBar activeTab={activeTab} hasDetail={!!detailLabel} isLocked={isLocked} visible={showHints} />}
+
+      {/* ═══ WELCOME TUTORIAL (first-run onboarding) ═══ */}
+      {showTutorial && (
+        <WelcomeTutorial
+          userName={viewerProfile?.name || auth?.user?.user_metadata?.full_name}
+          squads={squads}
+          roles={roles}
+          projects={projects}
+          onStartTour={() => {
+            // Switch to Projects tab so tour targets are visible
+            setActiveTab("projects");
+            setNavPayload(null);
+          }}
+          onOpenProject={(id) => {
+            // Navigate to a project detail for tour steps 3-5
+            setActiveTab("projects");
+            setNavPayload(id);
+          }}
+          onBackToList={() => {
+            // Return to project list for list-context steps
+            setActiveTab("projects");
+            setNavPayload(null);
+            setDetailLabel(null);
+            goBackRef.current = null;
+          }}
+          onComplete={() => {
+            setShowTutorial(false);
+            // Turn on My Lens and switch to Projects tab
+            if (!myLens) toggleMyLens();
+            setActiveTab("projects");
+            setNavPayload(null);
+            setDetailLabel(null);
+            goBackRef.current = null;
+          }}
+        />
+      )}
 
       {/* Sync toast — terminal-style notification */}
       <SyncToast />

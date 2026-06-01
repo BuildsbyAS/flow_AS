@@ -223,7 +223,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
         style={{
           width: 600,
           maxHeight: 540,
-          background: c.surface,
+          background: c.surfaceSolid,
           border: `1px solid ${c.border}`,
           borderRadius: layout.radiusLg,
           boxShadow: c.shadowElevated,
