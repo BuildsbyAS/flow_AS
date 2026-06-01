@@ -1,9 +1,10 @@
 // Flow — Settings View (Phase 5+6: Admin Console Design System)
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { c, typo, phaseNames, phaseColors as getPhaseColors, layout, space, motion } from "../styles/theme";
 import { Badge, Tag, Surface, Modal, Btn, Inp, Sel, Label, TelemetryLabel, EmptyState } from "../components/shared";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
+import { PERMISSION_KEYS, ROLES, DEFAULT_PERM_CONFIG } from "../lib/permissions";
 
 /* ── Severity helper for audit ──────────────────────────── */
 const getAuditSeverity = (action) => {
@@ -20,7 +21,7 @@ const getAuditSeverity = (action) => {
 /*  SETTINGS VIEW                                            */
 /* ═══════════════════════════════════════════════════════════ */
 
-const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, projects, setProjects }) => {
+const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, projects, setProjects, permConfig, setPermConfig }) => {
   const devRef = useDevLabel('Admin console for managing squads, roles, and people with audit log');
   const [subTab, setSubTab] = useState("people");
   const subTabKeys = ["people", "squads", "roles", "permissions"];
@@ -693,60 +694,107 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
             </div>
           </div>
 
-          {/* ── Permission Matrix Reference ── */}
-          <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-            <span style={{
-              fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
-              fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
-              color: c.text,
-            }}>Permission Matrix</span>
-            <p style={{
-              fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-              color: c.textMid, lineHeight: 1.6, margin: 0,
-            }}>
-              Permissions are automatically determined by a person's relationship to each project. Admins override all checks.
-            </p>
-            <div className="flow-data-grid">
-              <div className="flow-data-grid-header" style={{ gridTemplateColumns: "2fr 60px 60px 60px 60px" }}>
-                <span>Action</span>
-                <span style={{ textAlign: "center" }}>Admin</span>
-                <span style={{ textAlign: "center" }}>Owner</span>
-                <span style={{ textAlign: "center" }}>Member</span>
-                <span style={{ textAlign: "center" }}>Viewer</span>
-              </div>
-              <div>
-                {[
-                  { action: "Edit project fields",          admin: true, owner: true, member: false, viewer: false },
-                  { action: "Change status (ship, block)",  admin: true, owner: true, member: false, viewer: false },
-                  { action: "Delete project",               admin: true, owner: true, member: false, viewer: false },
-                  { action: "Manage tracks",                admin: true, owner: true, member: false, viewer: false },
-                  { action: "Board drag-and-drop",          admin: true, owner: true, member: false, viewer: false },
-                  { action: "Add/remove resources",         admin: true, owner: true, member: true,  viewer: false },
-                  { action: "Add team members",             admin: true, owner: true, member: true,  viewer: false },
-                  { action: "Remove team members",          admin: true, owner: true, member: false, viewer: false },
-                  { action: "Delete any comment",           admin: true, owner: true, member: false, viewer: false },
-                  { action: "Create project",               admin: true, owner: true, member: true,  viewer: true  },
-                  { action: "Post comments",                admin: true, owner: true, member: true,  viewer: true  },
-                  { action: "View, filter, search",         admin: true, owner: true, member: true,  viewer: true  },
-                ].map((row, i) => (
-                  <div key={i} className="flow-data-grid-row" style={{ gridTemplateColumns: "2fr 60px 60px 60px 60px" }}>
-                    <span style={{
-                      fontFamily: typo.bodySm.font, fontSize: 13, color: c.text,
-                    }}>{row.action}</span>
-                    {["admin", "owner", "member", "viewer"].map(role => (
-                      <span key={role} style={{ textAlign: "center", fontSize: 14 }}>
-                        {row[role] ? (
-                          <span style={{ color: c.green }}>&#10003;</span>
-                        ) : (
-                          <span style={{ color: c.textDim }}>&#8212;</span>
-                        )}
-                      </span>
+          {/* ── Permission Matrix — Interactive ── */}
+          {(() => {
+            const merged = {};
+            PERMISSION_KEYS.forEach(({ key }) => {
+              merged[key] = { ...DEFAULT_PERM_CONFIG[key], ...(permConfig?.[key] || {}) };
+            });
+            const isDefault = (key, role) => {
+              if (!permConfig?.[key]) return true;
+              return permConfig[key][role] === undefined;
+            };
+            const togglePerm = (key, role) => {
+              const current = merged[key][role];
+              const next = { ...permConfig };
+              if (!next[key]) next[key] = {};
+              next[key] = { ...next[key], [role]: !current };
+              setPermConfig({ ...next });
+            };
+            const resetAll = () => setPermConfig(null);
+            const hasCustom = permConfig && Object.keys(permConfig).some(k =>
+              Object.entries(permConfig[k] || {}).some(([role, val]) => val !== DEFAULT_PERM_CONFIG[k]?.[role])
+            );
+
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{
+                    fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
+                    fontWeight: typo.displaySm.weight, letterSpacing: typo.displaySm.tracking,
+                    color: c.text,
+                  }}>Permission Matrix</span>
+                  {hasCustom && (
+                    <button type="button" onClick={resetAll} style={{
+                      background: "transparent", border: `1px solid ${c.border}`,
+                      borderRadius: layout.radiusSm, padding: `4px 12px`,
+                      fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
+                      color: c.textMid, cursor: "pointer",
+                      transition: `color ${motion.fast.duration}, border-color ${motion.fast.duration}`,
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.color = c.accent; e.currentTarget.style.borderColor = c.accent + "40"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = c.textMid; e.currentTarget.style.borderColor = c.border; }}
+                    >Reset to defaults</button>
+                  )}
+                </div>
+                <p style={{
+                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+                  color: c.textMid, lineHeight: 1.6, margin: 0,
+                }}>
+                  Tap any cell to toggle permissions. Changes apply immediately.
+                </p>
+                <div className="flow-data-grid">
+                  <div className="flow-data-grid-header" style={{ gridTemplateColumns: "2fr 60px 60px 60px 60px" }}>
+                    <span>Action</span>
+                    {ROLES.map(r => (
+                      <span key={r} style={{ textAlign: "center", textTransform: "capitalize" }}>{r}</span>
                     ))}
                   </div>
-                ))}
+                  <div>
+                    {PERMISSION_KEYS.map(({ key, label }) => (
+                      <div key={key} className="flow-data-grid-row" style={{ gridTemplateColumns: "2fr 60px 60px 60px 60px" }}>
+                        <span style={{
+                          fontFamily: typo.bodySm.font, fontSize: 13, color: c.text,
+                        }}>{label}</span>
+                        {ROLES.map(role => {
+                          const allowed = merged[key][role];
+                          return (
+                            <div key={role} style={{ display: "flex", justifyContent: "center" }}>
+                              <button
+                                type="button"
+                                onClick={() => togglePerm(key, role)}
+                                title={allowed ? `Revoke "${label}" from ${role}` : `Grant "${label}" to ${role}`}
+                                style={{
+                                  width: 32, height: 28, borderRadius: layout.radiusXs,
+                                  border: "none", cursor: "pointer",
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  background: allowed ? c.green + "14" : "transparent",
+                                  transition: `background ${motion.fast.duration} ${motion.fast.easing}, transform 80ms ease`,
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = allowed ? c.red + "14" : c.green + "14"; e.currentTarget.style.transform = "scale(1.1)"; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = allowed ? c.green + "14" : "transparent"; e.currentTarget.style.transform = "scale(1)"; }}
+                              >
+                                {allowed ? (
+                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="20 6 9 17 4 12" />
+                                  </svg>
+                                ) : (
+                                  <span style={{
+                                    width: 14, height: 2, borderRadius: 1,
+                                    background: c.border,
+                                  }} />
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+            );
+          })()}
 
           {/* ── Role Descriptions ── */}
           <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
