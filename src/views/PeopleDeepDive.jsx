@@ -21,7 +21,7 @@ const firstGlyph = (name) => {
 /*  PEOPLE DEEP DIVE                                         */
 /* ═══════════════════════════════════════════════════════════ */
 
-const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical = false, selectedWeekKey, weekConfig: weekConfigProp, globalFilters = {}, loading, error, viewerSquad, viewerName, isAppOwner = false }) => {
+const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history, onNavigate, initialPerson, setDetailLabel, setGoBack, searchRef, isHistorical = false, selectedWeekKey, weekConfig: weekConfigProp, globalFilters = {}, loading, error, viewerSquad, viewerName, isAdmin = false }) => {
   const devRef = useDevLabel(
     'PeopleDeepDive',
     'src/views/PeopleDeepDive.jsx',
@@ -490,7 +490,7 @@ const PeopleDeepDive = ({ people, setPeople, commitments = [], projects, history
   const weeklyAvg = activityScore > 0 ? (activityScore / weeksActive).toFixed(1) : "0";
 
   // Can edit this person's squad/role? Only if viewing self or admin
-  const canEditProfile = (viewerName && selectedPerson === viewerName) || isAppOwner;
+  const canEditProfile = (viewerName && selectedPerson === viewerName) || isAdmin;
 
   return (
     <div key={selectedPerson} className="flow-enter-slide" style={{ display: "flex", flexDirection: "column", gap: space[4] }}>

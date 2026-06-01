@@ -405,10 +405,13 @@ function FlowDashboard({ auth }) {
       const first = people[0];
       // Include `id` in the dev fallback — comments + members mutations need
       // a real people-row id, not just a name.
-      return { id: first.id, name: first.name, squad: first.squad };
+      return { id: first.id, name: first.name, squad: first.squad, isAdmin: !!first.isAdmin };
     }
     return null;
   }, [auth.personProfile, people]);
+
+  // Global admin flag: person-level isAdmin OR email-based owner list
+  const isAdmin = !!(viewerProfile?.isAdmin || auth?.isOwner);
 
   // ── My Lens: compute "my projects" ──
   // All squad projects + any cross-squad project where viewer is owner or member
@@ -619,9 +622,9 @@ function FlowDashboard({ auth }) {
       <main key={activeTab} className="flow-page" style={{ maxWidth: 1440, margin: "0 auto", padding: `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
         <ErrorCatcher key={activeTab}>
           {activeTab === "summary" && <SummaryView loading={loading} error={error} projects={projects} people={people} squads={squads} globalFilters={globalFilters} onNavigate={handleNavigate} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} timeframe={timeframe} />}
-          {activeTab === "projects" && <ProjectsView key={navPayload || `proj-${projResetKey}`} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAppOwner={!!auth?.isOwner} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} timeframe={timeframe} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || `proj-${projResetKey}`} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAdmin={isAdmin} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} timeframe={timeframe} />}
 
-          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} viewerName={viewerProfile?.name} isAppOwner={!!auth?.isOwner} timeframe={timeframe} />}
+          {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} viewerName={viewerProfile?.name} isAdmin={isAdmin} timeframe={timeframe} />}
           {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} />}
           {activeTab === "guide" && (
             <React.Suspense fallback={<div style={{ padding: 40, color: c.textDim, fontFamily: body, fontSize: 16, textAlign: "center" }}>Loading...</div>}>

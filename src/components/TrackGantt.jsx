@@ -9,7 +9,7 @@ function toDay(iso) {
   return new Date(iso + (iso.length === 10 ? "T00:00:00" : "")).getTime();
 }
 
-export default function TrackGantt({ proj, onStartTrack, onCompleteTrack, onReopenTrack }) {
+export default function TrackGantt({ proj, onStartTrack, onCompleteTrack, onReopenTrack, canManage = true }) {
   const pc = useMemo(() => getPhaseColors(), []);
   const scrollRefs = useRef([]);
   const syncing = useRef(false);
@@ -315,17 +315,17 @@ export default function TrackGantt({ proj, onStartTrack, onCompleteTrack, onReop
               display: "flex", alignItems: "center", justifyContent: "center",
               paddingRight: space[2],
             }}>
-              {tStatus === "active" && onCompleteTrack && (
+              {canManage && tStatus === "active" && onCompleteTrack && (
                 <button type="button" onClick={() => onCompleteTrack(name)} style={{
                   ...btnBase, background: `${color}12`, border: `1px solid ${color}40`, color,
                 }}>Done</button>
               )}
-              {tStatus === "completed" && onReopenTrack && (
+              {canManage && tStatus === "completed" && onReopenTrack && (
                 <button type="button" onClick={() => onReopenTrack(name)} style={{
                   ...btnBase, background: c.surfaceAlt, border: `1px solid ${c.border}`, color: c.textMid,
                 }}>Reopen</button>
               )}
-              {tStatus === "not_started" && onStartTrack && (
+              {canManage && tStatus === "not_started" && onStartTrack && (
                 <button type="button" onClick={() => onStartTrack(name)} style={{
                   ...btnBase, background: "transparent", border: `1px dashed ${color}40`, color: `${color}90`,
                 }}>Start</button>

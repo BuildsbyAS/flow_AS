@@ -13,6 +13,7 @@ import ProjectActivity from "../components/ProjectActivity";
 import ProjectTimeline from "../components/ProjectTimeline";
 import TrackGantt from "../components/TrackGantt";
 import { isDevSeedMode, devStore } from "../data/devSeed";
+import { getProjectRole, can } from "../lib/permissions";
 import { initialsOf } from "../lib/names";
 import { timeAgo, isStale, fmtAbsolute } from "../lib/time";
 import { getProjectDependencies, deleteProjectFromDB, updateProjectInDB, addProjectLinkToDB, deleteProjectLinkFromDB, startTrackInDB, completeTrackInDB, reopenTrackInDB, shipProjectInDB } from "../lib/mutations";
@@ -292,7 +293,7 @@ function sortList(list, key, dir, metrics, today) {
    ══════════════════════════════════════════════════════════════════ */
 export default function ProjectsView({
   projects: rawProjects, setProjects, people, squads, history,
-  personProfile, isAppOwner = false,
+  personProfile, isAdmin = false,
   initialId, onNavigate, setDetailLabel, setGoBack, searchRef, globalFilters = {},
   suppressBackRef,
   projectLinks, setProjectLinks, phaseDurationDefaults,
@@ -721,7 +722,7 @@ export default function ProjectsView({
   if (selectedProject) {
     const proj = projects.find(p => p.id === selectedProject);
     if (!proj) return <EmptyState icon="🔍" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
-    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} isAppOwner={isAppOwner} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} today={today} leaving={detailLeaving} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} />;
+    return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} isAdmin={isAdmin} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} today={today} leaving={detailLeaving} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} />;
   }
 
   // ═══════════════════════════════════════════════════════════
@@ -1050,6 +1051,10 @@ export default function ProjectsView({
           if (!projId || fromTrack === actualTarget) return;
           const proj = projects.find(p => p.id === projId);
           if (!proj) return;
+          // Permission check
+          const dropMemberIds = isDevSeedMode() ? new Set((devStore.listMembers(proj.id) || []).map(m => m.person_id)) : new Set();
+          const dropRole = getProjectRole(personProfile?.id, proj, dropMemberIds, isAdmin);
+          if (!can.manageTracks(dropRole)) return;
 
           // Upcoming project → just start the target track, change status to in_flight
           if (fromTrack === "__upcoming__") {
@@ -1107,6 +1112,9 @@ export default function ProjectsView({
         // Complete a single track on hover-click
         const handleBoardDone = (e, proj, trackName) => {
           e.stopPropagation();
+          const doneMemIds = isDevSeedMode() ? new Set((devStore.listMembers(proj.id) || []).map(m => m.person_id)) : new Set();
+          const doneRole = getProjectRole(personProfile?.id, proj, doneMemIds, isAdmin);
+          if (!can.manageTracks(doneRole)) return;
           completeTrackInDB(proj.id, trackName, projects);
           setProjects(prev => prev.map(p => {
             if (p.id !== proj.id) return p;
@@ -2415,7 +2423,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
    PROJECT DEEP DIVE — PeopleDeepDive structural model
    De-cluttered: hero → history → ledger → supporting metadata
    ══════════════════════════════════════════════════════════════════ */
-function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, people, squads, personProfile, isAppOwner = false, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, today, leaving = false, suppressBackRef, projectLinks = [], setProjectLinks, phaseDurationDefaults, followedProjects = [], toggleFollowProject }) {
+function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, people, squads, personProfile, isAdmin = false, onNavigate, goBack, pc, pcMid, pcDim, sc, tc, ec, today, leaving = false, suppressBackRef, projectLinks = [], setProjectLinks, phaseDurationDefaults, followedProjects = [], toggleFollowProject }) {
   useDevLabel('ProjectDeepDive', 'src/views/ProjectsView.jsx', 'Full project detail view with hero telemetry, timeline, and history');
   const [editing, setEditingRaw] = useState(false);
   const [editName, setEditName] = useState(proj.name);
@@ -2502,6 +2510,15 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
   const [shoutouts, setShoutouts] = useState([]);
   const [feedbackEvents, setFeedbackEvents] = useState([]);
   const feedbackSectionRef = useRef(null);
+
+  const memberIds = useMemo(() => {
+    if (isDevSeedMode()) {
+      return new Set((devStore.listMembers(proj.id) || []).map(m => m.person_id));
+    }
+    return new Set();
+  }, [proj.id]);
+
+  const projRole = getProjectRole(personProfile?.id, proj, memberIds, isAdmin);
 
   useEffect(() => {
     const target = sessionStorage.getItem("flow_scroll_to");
@@ -2823,12 +2840,12 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             return null;
           })()}
           <div style={{ flex: 1 }} />
-          <button type="button" onClick={() => { setStartNowTracks(["PRD"]); setStartNowModal(true); }} style={{
+          {can.changeStatus(projRole) && <button type="button" onClick={() => { setStartNowTracks(["PRD"]); setStartNowModal(true); }} style={{
             padding: `5px 14px`, borderRadius: 999, flexShrink: 0,
             background: c.accent, border: "none",
             color: c.textOnAccent, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
             cursor: "pointer",
-          }}>Start Now</button>
+          }}>Start Now</button>}
         </div>
       )}
       {proj.status === "deprioritized" && (
@@ -2843,7 +2860,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
           <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.5, flex: 1 }}>
             {proj.depriReason || <span style={{ color: c.textDim, fontStyle: "italic" }}>No reason provided.</span>}
           </div>
-          <button type="button" onClick={() => {
+          {can.changeStatus(projRole) && <button type="button" onClick={() => {
             setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: "in_flight", depriReason: null } : p));
             updateProjectInDB(proj.id, { status: "in_flight", depriReason: null });
             recordAction("project_status_changed", { from: "deprioritized", to: "in_flight" }, "Project moved back to in flight");
@@ -2852,7 +2869,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             background: "transparent", border: `1px solid ${c.amber}`,
             color: c.amber, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
             cursor: "pointer",
-          }}>Move to active</button>
+          }}>Move to active</button>}
         </div>
       )}
       {proj.isBlocked && proj.status !== "deprioritized" && (
@@ -2867,7 +2884,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
           <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, flex: 1 }}>
             {proj.blockedReason || <span style={{ color: c.textDim, fontStyle: "italic" }}>No reason provided.</span>}
           </span>
-          <button type="button" onClick={() => {
+          {can.changeStatus(projRole) && <button type="button" onClick={() => {
             setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, isBlocked: false, blockedReason: null, blockedAt: null } : p));
             updateProjectInDB(proj.id, { isBlocked: false, blockedReason: null, blockedAt: null });
             recordAction("project_unblocked", { reason: proj.blockedReason }, "Project unblocked");
@@ -2876,7 +2893,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             background: "transparent", border: `1px solid ${c.red}`,
             color: c.red, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
             cursor: "pointer",
-          }}>Unblock</button>
+          }}>Unblock</button>}
         </div>
       )}
 
@@ -3121,7 +3138,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                           <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: c.textDim, fontStyle: "italic" }}>No active tracks</span>
                         ) : null}
                         {/* + Track button */}
-                        {proj.status !== "shipped" && (
+                        {proj.status !== "shipped" && can.manageTracks(projRole) && (
                           <button id="add-track-btn" type="button" onClick={() => setStagePickerOpen(v => !v)} style={{
                             display: "inline-flex", alignItems: "center", gap: 4,
                             padding: `4px 10px`, borderRadius: 999,
@@ -3203,7 +3220,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                   )}
                 </div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
+              {can.changeStatus(projRole) && <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                 {/* Ship Project */}
                 {proj.status === "in_flight" && (
                   <button type="button" onClick={() => {
@@ -3242,27 +3259,33 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                     onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textDim; }}
                   >Deprioritize</button>
                 )}
-              </div>
+              </div>}
             </div>}
 
             {/* Tentative start date for upcoming projects */}
             {proj.status === "upcoming" && (
               <div style={{ marginTop: space[4], display: "flex", alignItems: "center", gap: space[3] }}>
                 <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: c.textDim }}>Tentative Start</span>
-                <input type="date" value={proj.tentativeStartDate || ""}
-                  onChange={(e) => {
-                    const newDate = e.target.value;
-                    const oldDate = proj.tentativeStartDate || "";
-                    setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, tentativeStartDate: newDate || null } : p));
-                    updateProjectInDB(proj.id, { tentativeStartDate: newDate || null });
-                    recordAction("project_start_date_moved", { from: oldDate, to: newDate }, `Start date moved to ${newDate || "none"}`);
-                  }}
-                  style={{
-                    height: 32, padding: `0 ${space[2]}px`, borderRadius: layout.radiusXs,
-                    border: `1px solid ${c.border}`, background: c.surfaceSolid, color: c.text,
-                    fontFamily: typo.monoSm.font, fontSize: 12,
-                  }}
-                />
+                {can.editProject(projRole) ? (
+                  <input type="date" value={proj.tentativeStartDate || ""}
+                    onChange={(e) => {
+                      const newDate = e.target.value;
+                      const oldDate = proj.tentativeStartDate || "";
+                      setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, tentativeStartDate: newDate || null } : p));
+                      updateProjectInDB(proj.id, { tentativeStartDate: newDate || null });
+                      recordAction("project_start_date_moved", { from: oldDate, to: newDate }, `Start date moved to ${newDate || "none"}`);
+                    }}
+                    style={{
+                      height: 32, padding: `0 ${space[2]}px`, borderRadius: layout.radiusXs,
+                      border: `1px solid ${c.border}`, background: c.surfaceSolid, color: c.text,
+                      fontFamily: typo.monoSm.font, fontSize: 12,
+                    }}
+                  />
+                ) : (
+                  <span style={{ fontFamily: typo.monoSm.font, fontSize: 12, color: c.text }}>
+                    {proj.tentativeStartDate ? fmtDate(proj.tentativeStartDate) : "—"}
+                  </span>
+                )}
               </div>
             )}
 
@@ -3478,13 +3501,13 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                     <span style={{ fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: "nowrap" }}>
                       {link.label || typeLabels[link.type] || link.type}
                     </span>
-                    <button onClick={e => { e.preventDefault(); e.stopPropagation(); removeLink(link.id); }}
+                    {can.addResources(projRole) && <button onClick={e => { e.preventDefault(); e.stopPropagation(); removeLink(link.id); }}
                       style={{ background: "none", border: "none", cursor: "pointer", color: c.textGhost, padding: 0, fontSize: 11, lineHeight: 1, marginLeft: 2 }}
                       title="Remove"
-                    >✕</button>
+                    >✕</button>}
                   </a>
                 ))}
-                {!adding && (
+                {!adding && can.addResources(projRole) && (
                   <button onClick={() => setAdding(true)} style={{
                     display: "inline-flex", alignItems: "center", gap: 4,
                     padding: `6px 12px`, borderRadius: 12,
@@ -3632,10 +3655,12 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
               project={proj}
               people={people}
               currentPerson={personProfile}
-              isAppOwner={isAppOwner}
+              isAppOwner={isAdmin}
               onPersonNavigate={(name) => onNavigate && onNavigate("people", name)}
               membersOnly
               membersInline
+              canManageMembers={can.addMembers(projRole)}
+              canRemoveMembers={can.removeMembers(projRole)}
             />
           </div>
         )}
@@ -3820,6 +3845,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
         {/* ── Track Gantt (parallel tracks) ── */}
         <TrackGantt
           proj={proj}
+          canManage={can.manageTracks(projRole)}
           onStartTrack={(trackName) => {
             if (trackName === "Alpha" || trackName === "Beta") {
               setShipNote(proj.shipNote || "");
@@ -3936,21 +3962,14 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
           project={proj}
           people={people}
           currentPerson={personProfile}
-          isAppOwner={isAppOwner}
+          isAppOwner={isAdmin}
           onPersonNavigate={(name) => onNavigate && onNavigate("people", name)}
           hideMembers
         />
       </div>
 
-      {/* ═══ Edit Project pill — matches "Add project" style. Owner / app-owner only. ═══ */}
-      {!editing && (() => {
-        const devMode = isDevSeedMode();
-        const ownerPerson = proj.owner_id
-          ? (people || []).find(p => p.id === proj.owner_id)
-          : (people || []).find(p => p?.name && proj.owner && p.name.toLowerCase() === proj.owner.toLowerCase());
-        const viewerId = personProfile?.id;
-        const isProjOwner = !!(viewerId && ownerPerson?.id && viewerId === ownerPerson.id);
-        if (!devMode && !isProjOwner && !isAppOwner) return null;
+      {/* ═══ Edit Project pill — matches "Add project" style. Permission-gated. ═══ */}
+      {!editing && can.editProject(projRole) && (() => {
         if (typeof document === "undefined") return null;
         return createPortal(
           <button

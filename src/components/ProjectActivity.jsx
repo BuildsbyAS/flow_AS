@@ -134,7 +134,7 @@ function actionLabel(ev, peopleByLowerName) {
 }
 
 // ── Members row — pill format with initial bubbles + name + designation ──
-function MembersRow({ ownerPerson, memberPeople, canManage, onPersonNavigate, onManage, project }) {
+function MembersRow({ ownerPerson, memberPeople, canManage, canRemove = true, onPersonNavigate, onManage, project }) {
   const allPeople = [ownerPerson, ...memberPeople].filter(Boolean);
   const isEmpty = allPeople.length === 0;
 
@@ -155,7 +155,7 @@ function MembersRow({ ownerPerson, memberPeople, canManage, onPersonNavigate, on
 
   const MemberPill = ({ person, isOwner }) => {
     const [hovered, setHovered] = useState(false);
-    const showRemove = hovered && canManage && !isOwner;
+    const showRemove = hovered && canRemove && !isOwner;
 
     return (
       <div
@@ -622,6 +622,7 @@ function InlineEditor({ value, onSave, onCancel, busy }) {
 export default function ProjectActivity({
   project, people, currentPerson, isAppOwner = false,
   onPersonNavigate, membersOnly = false, membersInline = false, hideMembers = false,
+  canManageMembers: canManageMembersProp, canRemoveMembers: canRemoveMembersProp,
 }) {
   const projectId = project?.id;
   const { comments, members, events, loading, error } = useProjectActivity(projectId);
@@ -656,7 +657,8 @@ export default function ProjectActivity({
   const isProjectOwner = !!(currentPerson?.id && ownerPerson?.id && currentPerson.id === ownerPerson.id);
   const isMember = !!(currentPerson?.id && (members || []).some(m => m.person_id === currentPerson.id));
   const canPost = true;
-  const canManageMembers = true;
+  const canManageMembers = canManageMembersProp !== undefined ? canManageMembersProp : true;
+  const canRemoveMembers = canRemoveMembersProp !== undefined ? canRemoveMembersProp : true;
 
   const feed = useMemo(() => {
     const items = [];
@@ -708,6 +710,7 @@ export default function ProjectActivity({
           ownerPerson={ownerPerson}
           memberPeople={memberPeople}
           canManage={canManageMembers}
+          canRemove={canRemoveMembers}
           onPersonNavigate={onPersonNavigate}
           onManage={() => setMembersModalOpen(true)}
           project={project}
@@ -751,6 +754,7 @@ export default function ProjectActivity({
           ownerPerson={ownerPerson}
           memberPeople={memberPeople}
           canManage={canManageMembers}
+          canRemove={canRemoveMembers}
           onPersonNavigate={onPersonNavigate}
           onManage={() => setMembersModalOpen(true)}
           project={project}

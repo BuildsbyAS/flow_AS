@@ -107,7 +107,7 @@ export const seedRoles = [
 ];
 
 export const seedPeople = [
-  { id: PERSON_AJ,      name: "AJ",      squad: "Storefront", role: "Product Manager", squad_id: SQUAD_STOREFRONT, role_id: ROLE_PM },
+  { id: PERSON_AJ,      name: "AJ",      squad: "Storefront", role: "Product Manager", squad_id: SQUAD_STOREFRONT, role_id: ROLE_PM, isAdmin: true },
   { id: PERSON_MARIAM,  name: "Mariam",  squad: "Platform",   role: "Engineer",        squad_id: SQUAD_PLATFORM,   role_id: ROLE_ENG },
   { id: PERSON_RANIA,   name: "Rania",   squad: "UGC",        role: "Engineer",        squad_id: SQUAD_UGC,        role_id: ROLE_ENG },
   { id: PERSON_KHALID,  name: "Khalid Anwer",  squad: "Customer",   role: "Product Manager",  squad_id: SQUAD_CUSTOMER,   role_id: ROLE_PM },
