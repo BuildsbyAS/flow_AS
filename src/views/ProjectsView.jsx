@@ -1563,7 +1563,7 @@ export default function ProjectsView({
                   <Th col="people" style={{ minWidth: 70, textAlign: "center" }}>Team</Th>
                   <Th col="last" style={{ minWidth: 80, textAlign: "center" }}>Updated</Th>
                   <Th col="timeline" style={{ minWidth: colWidths.timeline?.min || 110, textAlign: "center" }}>Timeline</Th>
-                  {toggleFollowProject && <th style={{ width: 32, padding: 0 }} />}
+                  {toggleFollowProject && <th style={{ width: 32, padding: 0, position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 10, background: "rgba(232, 232, 232, 0.72)", backdropFilter: "blur(16px) saturate(1.3)", WebkitBackdropFilter: "blur(16px) saturate(1.3)", borderBottom: `1px solid rgba(0,0,0,0.13)` }} />}
                 </tr>
               </thead>
               <tbody>
