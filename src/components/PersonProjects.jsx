@@ -55,21 +55,6 @@ function ProjectRow({ proj, onNavigate, label }) {
             }}>{label}</span>
           )}
         </div>
-        {/* Active tracks sub-line */}
-        {proj.status !== "shipped" && active.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            {active.map((t, i) => (
-              <React.Fragment key={t}>
-                {i > 0 && <span style={{ color: c.textDim, fontSize: 10 }}>·</span>}
-                <span style={{
-                  fontFamily: mono, fontSize: 10, fontWeight: 700,
-                  letterSpacing: "0.05em", color: pc[t] || c.textMid,
-                  textTransform: "uppercase",
-                }}>{t}</span>
-              </React.Fragment>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Status badge (right side) */}
