@@ -14,6 +14,9 @@ import { timeAgo, isStale, fmtAbsolute } from "../lib/time";
 
 function ProjectRow({ proj, onNavigate, label }) {
   const stale = isStale(proj.lastActivityAt);
+  const active = getActiveTracks(proj);
+  const pc = getPhaseColors();
+
   return (
     <button
       type="button"
@@ -29,37 +32,56 @@ function ProjectRow({ proj, onNavigate, label }) {
       onMouseEnter={e => { e.currentTarget.style.background = c.surfaceAlt; }}
       onMouseLeave={e => { e.currentTarget.style.background = c.surface; }}
     >
+      {/* ID */}
       <span style={{
         fontFamily: mono, fontSize: 12, fontWeight: 700,
         color: c.amber, letterSpacing: "0.04em",
-        minWidth: 36,
+        minWidth: 36, flexShrink: 0,
       }}>{proj.id}</span>
-      <span style={{
-        fontFamily: body, fontSize: 14, fontWeight: 600, color: c.text,
-        flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-      }}>{proj.name}</span>
-      {(() => {
-        const active = getActiveTracks(proj);
-        const pc = getPhaseColors();
-        if (proj.status === "shipped") return (
-          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: c.green, textTransform: "uppercase" }}>Shipped</span>
-        );
-        if (active.length > 0) return (
-          <span style={{ display: "flex", gap: 4 }}>
-            {active.map(t => (
-              <span key={t} style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: pc[t] || c.textMid, textTransform: "uppercase" }}>{t}</span>
+
+      {/* Name + owner label + tracks sub-line */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: space[2], minWidth: 0 }}>
+          <span style={{
+            fontFamily: body, fontSize: 14, fontWeight: 600, color: c.text,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          }}>{proj.name}</span>
+          {label && (
+            <span style={{
+              fontFamily: mono, fontSize: 10, fontWeight: 700,
+              color: c.accent, letterSpacing: "0.08em",
+              background: c.accentDim, padding: `1px 5px`, borderRadius: layout.radiusXs,
+              textTransform: "uppercase", flexShrink: 0,
+            }}>{label}</span>
+          )}
+        </div>
+        {/* Active tracks sub-line */}
+        {proj.status !== "shipped" && active.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            {active.map((t, i) => (
+              <React.Fragment key={t}>
+                {i > 0 && <span style={{ color: c.textDim, fontSize: 10 }}>·</span>}
+                <span style={{
+                  fontFamily: mono, fontSize: 10, fontWeight: 700,
+                  letterSpacing: "0.05em", color: pc[t] || c.textMid,
+                  textTransform: "uppercase",
+                }}>{t}</span>
+              </React.Fragment>
             ))}
-          </span>
-        );
-        if (proj.phase) return (
-          <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: c.textMid, textTransform: "uppercase" }}>{proj.phase}</span>
-        );
-        return null;
-      })()}
+          </div>
+        )}
+      </div>
+
+      {/* Status badge (right side) */}
+      {proj.status === "shipped" && (
+        <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", color: c.green, textTransform: "uppercase", flexShrink: 0 }}>Shipped</span>
+      )}
+
+      {/* Last activity */}
       <span
         title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : "No activity yet"}
         style={{
-          fontFamily: body, fontSize: 12, fontWeight: 600,
+          fontFamily: body, fontSize: 12, fontWeight: 600, flexShrink: 0,
           color: !proj.lastActivityAt ? c.textDim : stale ? c.red : c.textMid,
           padding: stale && proj.lastActivityAt ? `2px 8px` : "2px 0",
           borderRadius: 999,
@@ -69,14 +91,6 @@ function ProjectRow({ proj, onNavigate, label }) {
       >
         {proj.lastActivityAt ? `${stale ? "⚠ " : ""}${timeAgo(proj.lastActivityAt)}` : "no activity"}
       </span>
-      {label && (
-        <span style={{
-          fontFamily: mono, fontSize: 10, fontWeight: 700,
-          color: c.accent, letterSpacing: "0.08em",
-          background: c.accentDim, padding: `2px 6px`, borderRadius: layout.radiusXs,
-          textTransform: "uppercase",
-        }}>{label}</span>
-      )}
     </button>
   );
 }
