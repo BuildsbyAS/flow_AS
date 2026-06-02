@@ -89,11 +89,6 @@ function generateWeeklyDigest(projects, allEvents) {
     lines.push(`**P0 Watch:** ${p0Projects.length} critical project${p0Projects.length > 1 ? "s" : ""} active — ${p0Names.join(", ")}${p0Projects.length > 3 ? ` +${p0Projects.length - 3} more` : ""}.${p0Blocked.length > 0 ? ` ⚠ ${p0Blocked.length} blocked.` : " All moving."}`);
   }
 
-  if (phaseChanges.length > 0) {
-    lines.push(`**Phase Movement:** ${phaseChanges.length} phase transition${phaseChanges.length > 1 ? "s" : ""} this week.${shipEvents.length > 0 ? ` ${shipEvents.length} entered shipping phases.` : ""}`);
-  } else {
-    lines.push("**Phase Movement:** No phase transitions this week — review if any projects are stuck.");
-  }
 
   if (shipEvents.length > 0) {
     const shipped = shipEvents.map(e => {
