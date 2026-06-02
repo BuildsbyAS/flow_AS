@@ -295,31 +295,6 @@ const SummaryView = ({
         </Surface>
       </div>
 
-      {/* ═══ TIMELINE PICKER ═══ */}
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
-        <div style={{
-          display: "flex", gap: 2,
-          background: c.surfaceAlt, borderRadius: layout.radiusSm, padding: 3,
-          border: `1px solid ${c.border}`,
-        }}>
-          {TIMELINE_OPTIONS.map(opt => {
-            const active = timelineRange === opt.key;
-            return (
-              <button key={opt.key} onClick={() => setTimelineRange(opt.key)} style={{
-                padding: `${space[1]}px ${space[3]}px`,
-                borderRadius: layout.radiusXs, border: "none", cursor: "pointer",
-                background: active ? c.surface : "transparent",
-                fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
-                color: active ? c.text : c.textDim,
-                boxShadow: active ? c.shadowSm : "none",
-                outline: "none",
-                transition: `all ${motion.fast.duration} ${motion.fast.easing}`,
-              }}>{opt.label}</button>
-            );
-          })}
-        </div>
-      </div>
-
       {/* ═══ HEATMAP + BAR CHART ROW ═══ */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[4] }}>
 
@@ -412,30 +387,54 @@ const SummaryView = ({
       <div style={{ display: "flex", flexDirection: "column", gap: space[7] }}>
 
         {/* ── Recently Shipped ── */}
-        {metrics.shipped.length > 0 && (
-          <div>
-            <SectionHead title={`Recently Shipped (${metrics.shipped.length})`} />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
-              {metrics.shipped.slice(0, 12).map(p => (
-                <button key={p.id} type="button" onClick={() => onNavigate?.("projects", p.id)} style={{
-                  display: "inline-flex", alignItems: "center", gap: space[2],
-                  padding: `${space[1] + 2}px ${space[3]}px`,
-                  borderRadius: layout.radiusSm, background: c.greenDim,
-                  border: `1px solid ${c.green}25`, cursor: "pointer",
-                  fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, color: c.text,
-                  transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
-                }}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = c.green}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = `${c.green}25`}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={c.green} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                  <span style={{ fontFamily: typo.monoSm.font, color: c.amber, fontSize: 11 }}>{p.id}</span>
-                  {p.name}
-                </button>
-              ))}
+        {(() => {
+          // Alpha: in_flight with Alpha track active
+          const alphaProjects = filteredProjects.filter(p => p.status === "in_flight" && (p.tracks ? Object.keys(p.tracks).some(t => t === "Alpha" && p.tracks[t]?.periods?.some(per => per.completed_at === null)) : p.phase === "Alpha"));
+          // Beta: in_flight with Beta track active
+          const betaProjects = filteredProjects.filter(p => p.status === "in_flight" && (p.tracks ? Object.keys(p.tracks).some(t => t === "Beta" && p.tracks[t]?.periods?.some(per => per.completed_at === null)) : p.phase === "Beta"));
+          const shippedProjects = metrics.shipped;
+          const total = alphaProjects.length + betaProjects.length + shippedProjects.length;
+          if (total === 0) return null;
+
+          const Chip = ({ p, label, labelColor, accentColor, rolloutPct }) => (
+            <button key={p.id} type="button" onClick={() => onNavigate?.("projects", p.id)} style={{
+              display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
+              padding: `${space[2]}px ${space[3]}px`,
+              borderRadius: layout.radiusSm,
+              background: `${accentColor}10`,
+              border: `1px solid ${accentColor}25`, cursor: "pointer",
+              transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
+            }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = accentColor}
+              onMouseLeave={e => e.currentTarget.style.borderColor = `${accentColor}25`}
+            >
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, color: labelColor, letterSpacing: "0.05em" }}>
+                {label}{rolloutPct != null ? ` | ${rolloutPct}% rollout` : ""}
+              </span>
+              <span style={{ display: "flex", alignItems: "center", gap: space[1] }}>
+                <span style={{ fontFamily: typo.monoSm.font, color: c.amber, fontSize: 11 }}>{p.id}</span>
+                <span style={{ fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, color: c.text }}>{p.name}</span>
+              </span>
+            </button>
+          );
+
+          return (
+            <div>
+              <SectionHead title={`Recently Shipped (${total})`} />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
+                {alphaProjects.slice(0, 6).map(p => (
+                  <Chip key={p.id} p={p} label="Alpha Release" labelColor="#6D28D9" accentColor="#6D28D9" rolloutPct={p.shipPct ?? null} />
+                ))}
+                {betaProjects.slice(0, 6).map(p => (
+                  <Chip key={p.id} p={p} label="Beta Release" labelColor="#0E7490" accentColor="#0E7490" rolloutPct={p.shipPct ?? null} />
+                ))}
+                {shippedProjects.slice(0, 12).map(p => (
+                  <Chip key={p.id} p={p} label="Shipped" labelColor={c.green} accentColor={c.green} rolloutPct={null} />
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── Needs Attention ── */}
         {metrics.needsAttention > 0 && (

@@ -1821,13 +1821,19 @@ function UserBadge({ user, personProfile, personName, onSignOut, onRefreshProfil
         }}>
           {/* User info */}
           <div style={{ padding: "8px 14px 10px", borderBottom: `1px solid ${c.border}` }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: c.text, marginBottom: 2 }}>{displayName}</div>
-            {user?.email && <div style={{ fontSize: 11, color: c.textDim }}>{user.email}</div>}
-            {personProfile?.squads?.name && (
-              <div style={{ fontSize: 11, color: c.textGhost || c.textDim, marginTop: 2 }}>
-                {personProfile.squads.name}{personProfile.roles?.name ? ` · ${personProfile.roles.name}` : ""}
-              </div>
-            )}
+            <div style={{ fontSize: 13, fontWeight: 600, color: c.text, marginBottom: 3 }}>{displayName}</div>
+            {(() => {
+              const email = user?.email || personProfile?.email;
+              const role = personProfile?.role || personProfile?.roles?.name;
+              const squad = personProfile?.squad || personProfile?.squads?.name;
+              const meta = [role, squad].filter(Boolean).join(" · ");
+              return (
+                <>
+                  {email && <div style={{ fontSize: 11, color: c.textDim, marginBottom: meta ? 2 : 0 }}>{email}</div>}
+                  {meta && <div style={{ fontSize: 11, color: c.textDim }}>{meta}</div>}
+                </>
+              );
+            })()}
           </div>
 
           {/* View profile */}
