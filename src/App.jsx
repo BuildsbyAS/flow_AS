@@ -406,7 +406,7 @@ function FlowDashboard({ auth }) {
       const first = people[0];
       // Include `id` in the dev fallback — comments + members mutations need
       // a real people-row id, not just a name.
-      return { id: first.id, name: first.name, squad: first.squad, isAdmin: !!first.isAdmin };
+      return { id: first.id, name: first.name, squad: first.squad, role: first.role, isAdmin: !!first.isAdmin };
     }
     return null;
   }, [auth.personProfile, people]);

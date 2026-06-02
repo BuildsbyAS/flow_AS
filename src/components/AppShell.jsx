@@ -656,7 +656,7 @@ export function Header({
         {(currentUser?.user || currentPerson) && (
           <UserBadge
             user={currentUser?.user || null}
-            personProfile={currentUser?.personProfile || null}
+            personProfile={currentUser?.personProfile || currentPerson || null}
             personName={currentPerson?.name || currentUser?.personProfile?.name || currentUser?.user?.user_metadata?.full_name}
             onSignOut={currentUser?.signOut || (() => {})}
             onRefreshProfile={currentUser?.refreshProfile}
