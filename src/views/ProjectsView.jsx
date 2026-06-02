@@ -1823,7 +1823,8 @@ export default function ProjectsView({
                             </span>
                           ) : <span style={{ color: c.textDim, fontSize: 11 }}>—</span>
                         ) : (() => {
-                          const allocated = daysBetween(proj.startDate, proj.endDate);
+                          const displayEnd = isShipped && proj.shipped_at ? proj.shipped_at.slice(0, 10) : proj.endDate;
+                          const allocated = daysBetween(proj.startDate, displayEnd);
                           const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, today), allocated));
                           const pct = allocated > 0 ? Math.round((elapsed / allocated) * 100) : 0;
                           return (
@@ -1833,8 +1834,8 @@ export default function ProjectsView({
                                   {fmtDate(proj.startDate)}
                                 </span>
                                 <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>→</span>
-                                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
-                                  {fmtDate(proj.endDate)}
+                                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: isShipped ? c.green : c.textMid }}>
+                                  {fmtDate(displayEnd)}
                                 </span>
                               </div>
                               <div style={{ height: 3, borderRadius: 2, background: c.border, overflow: "hidden", width: "100%" }}>
