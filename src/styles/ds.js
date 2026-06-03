@@ -10,78 +10,77 @@
 
 // ── Fonts ────────────────────────────────────────────────────────
 export const fonts = {
-  sans: "'Inter', system-ui, -apple-system, sans-serif",
-  mono: "'JetBrains Mono', 'Menlo', monospace",
+  sans: "'Geist', system-ui, -apple-system, sans-serif",
+  mono: "'Geist', system-ui, -apple-system, sans-serif",
 };
 
 // ── Color system ─────────────────────────────────────────────────
+// Field design tokens (Noon) — applied product-wide.
 export const color = {
   // Surfaces
-  page:        "#E8E8E8",   // warm neutral grey canvas
-  card:        "rgba(255,255,255,0.62)", // frosted glass card
-  cardSolid:   "#FFFFFF",   // when glass isn't suitable (modals, inputs)
-  inset:       "rgba(0,0,0,0.04)",       // recessed — inputs, segmented bg, search
-  tableHeader: "rgba(0,0,0,0.03)",       // column header row
+  page:        "#f2f3f7",   // grey app canvas (surface/tertiary)
+  card:        "#ffffff",   // solid white container
+  cardSolid:   "#ffffff",
+  inset:       "#f9f9fb",   // recessed — inputs, table header (surface/secondary)
+  tableHeader: "#f9f9fb",
 
-  // Header
-  headerBg:    "#111111",   // solid black header
-  headerText:  "#FFFFFF",   // white text on header
-  headerTextDim: "rgba(255,255,255,0.55)", // secondary text on header
+  // Header / inverted dark (terminal + dark buttons)
+  headerBg:    "#101628",
+  headerText:  "#ffffff",
+  headerTextDim: "rgba(255,255,255,0.55)",
 
-  // Text — pure monochrome hierarchy
-  textPrimary:   "#111111", // headings, KPI values, names
-  textSecondary: "#555555", // body, table cells
-  textTertiary:  "#999999", // labels, placeholders, inactive nav
-  textGhost:     "#CCCCCC", // decorative, kbd hints, disabled
+  // Text — Field neutral ramp
+  textPrimary:   "#1d2539", // text-n-icon/primary
+  textSecondary: "#475067", // text-n-icon/secondary
+  textTertiary:  "#666d85", // text-n-icon/tertiary
+  textGhost:     "#989fb3", // text-n-icon/muted
 
-  // Primary accent — black (monochrome primary CTA)
-  accent:        "#111111",
-  accentHover:   "#333333",
-  accentSoft:    "rgba(0,0,0,0.06)",
-  accentMid:     "rgba(0,0,0,0.12)",
-  accentGlow:    "rgba(0,0,0,0.18)",
+  // Primary accent — NEUTRAL (actions/toggles/selected states use neutral tones)
+  accent:        "#1d2539",
+  accentHover:   "#344054",
+  accentSoft:    "#f2f3f7",            // neutral light fill for selected/active
+  accentMid:     "rgba(29,37,57,0.16)",
+  accentGlow:    "rgba(29,37,57,0.12)",
 
-  // Secondary accent — none (keeping monochrome). Use semantic colors for pops.
-  coral:         "#E11D48",   // kept for destructive / urgent (rose-600)
-  coralHover:    "#BE123C",
-  coralSoft:     "rgba(225,29,72,0.08)",
-  coralMid:      "rgba(225,29,72,0.14)",
+  // Secondary accent — error/destructive
+  coral:         "#d92626",
+  coralHover:    "#b91c1c",
+  coralSoft:     "#fff0f0",
+  coralMid:      "rgba(217,38,38,0.14)",
 
-  // Text on colored surfaces
-  textOnAccent:  "#FFFFFF",   // text on accent bg (primary buttons, etc.)
+  textOnAccent:  "#ffffff",
 
-  // Inverted surface family (HealthGauge — the only inverted card)
-  surfaceInverse:       "#111111",
-  insetInverse:         "#222222",
-  textOnInverse:        "#F5F5F5",
-  textMidOnInverse:     "#999999",
-  textGhostOnInverse:   "#666666",
+  // Inverted surface family (HealthGauge / dark)
+  surfaceInverse:       "#101628",
+  insetInverse:         "#1d2539",
+  textOnInverse:        "#ffffff",
+  textMidOnInverse:     "#989fb3",
+  textGhostOnInverse:   "#666d85",
 
-  // Borders — monochrome
-  borderSubtle: "rgba(0,0,0,0.07)",
-  borderMedium: "rgba(0,0,0,0.13)",
+  // Borders — Field
+  borderSubtle: "#eaecf0",  // border/primary
+  borderMedium: "#d0d5dd",
 
-  // Semantic — data-only
-  green:  "#059669", greenBg:  "#ECFDF5", greenDim:  "rgba(5,150,105,0.08)",   greenMid:  "rgba(5,150,105,0.18)",   greenBorder:  "rgba(5,150,105,0.25)",
-  red:    "#DC2626", redBg:    "#FEF2F2", redDim:    "rgba(220,38,38,0.08)",   redMid:    "rgba(220,38,38,0.18)",   redBorder:    "rgba(220,38,38,0.25)",
-  amber:  "#B45309", amberBg:  "#FFFBEB", amberDim:  "rgba(180,83,9,0.08)",    amberMid:  "rgba(180,83,9,0.18)",    amberBorder:  "rgba(180,83,9,0.25)",
-  purple: "#6D28D9", purpleBg: "#F5F3FF", purpleDim: "rgba(109,40,217,0.08)",  purpleMid: "rgba(109,40,217,0.18)",  purpleBorder: "rgba(109,40,217,0.25)",
-  blue:   "#1D4ED8", blueBg:   "#EFF6FF", blueDim:   "rgba(29,78,216,0.08)",   blueMid:   "rgba(29,78,216,0.18)",   blueBorder:   "rgba(29,78,216,0.25)",
-  cyan:   "#0E7490", cyanBg:   "#ECFEFF", cyanDim:   "rgba(14,116,144,0.08)",  cyanMid:   "rgba(14,116,144,0.18)",  cyanBorder:   "rgba(14,116,144,0.25)",
+  // Semantic — Field tokens
+  green:  "#0f8857", greenBg:  "#e3fcf2", greenDim:  "#e3fcf2",                  greenMid:  "rgba(15,136,87,0.18)",   greenBorder:  "rgba(15,136,87,0.25)",
+  red:    "#d92626", redBg:    "#fff0f0", redDim:    "#fff0f0",                  redMid:    "rgba(217,38,38,0.18)",   redBorder:    "rgba(217,38,38,0.25)",
+  amber:  "#e5641a", amberBg:  "#fff1e0", amberDim:  "#fff1e0",                  amberMid:  "rgba(229,100,26,0.18)",  amberBorder:  "rgba(229,100,26,0.25)",
+  purple: "#6d28d9", purpleBg: "#f5f3ff", purpleDim: "rgba(109,40,217,0.10)",   purpleMid: "rgba(109,40,217,0.18)",  purpleBorder: "rgba(109,40,217,0.25)",
+  blue:   "#0f61ff", blueBg:   "#ebf4ff", blueDim:   "#ebf4ff",                 blueMid:   "rgba(15,97,255,0.18)",   blueBorder:   "rgba(15,97,255,0.25)",
+  cyan:   "#0e7490", cyanBg:   "#ecfeff", cyanDim:   "rgba(14,116,144,0.10)",   cyanMid:   "rgba(14,116,144,0.18)",  cyanBorder:   "rgba(14,116,144,0.25)",
 
   // Health thresholds
-  healthGood: "#059669",
-  healthFair: "#D97706",
-  healthLow:  "#DC2626",
+  healthGood: "#0f8857",
+  healthFair: "#e5641a",
+  healthLow:  "#d92626",
 
-  // Glassmorphism
-  glassBg:      "rgba(255,255,255,0.62)",
-  glassBorder:  "rgba(255,255,255,0.45)",
-  glassOverlay: "rgba(255,255,255,0.82)",
-  glassBlur:    "20px",
-  glassSaturate: "1.4",
-  // Dark glass (for overlays on dark surfaces)
-  glassDark:       "rgba(0,0,0,0.65)",
+  // Glass — flattened to solid white on the Field theme
+  glassBg:      "#ffffff",
+  glassBorder:  "#eaecf0",
+  glassOverlay: "#ffffff",
+  glassBlur:    "0px",
+  glassSaturate: "1",
+  glassDark:       "rgba(16,22,40,0.65)",
   glassDarkBorder: "rgba(255,255,255,0.08)",
 };
 
@@ -160,13 +159,14 @@ export const radius = {
 };
 
 // ── Elevation (glass-appropriate layered shadows) ────────────────
+// Field look is flat / border-based — cards carry no shadow.
 export const shadow = {
   none:     "none",
-  sm:       "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.03)",
-  card:     "0 2px 8px rgba(0,0,0,0.04), 0 12px 40px rgba(0,0,0,0.06)",
-  elevated: "0 8px 24px rgba(0,0,0,0.08), 0 24px 64px rgba(0,0,0,0.12)",
-  float:    "0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)",
-  glass:    "0 4px 30px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.3)",
+  sm:       "none",
+  card:     "none",
+  elevated: "0 8px 24px rgba(16,22,40,0.10), 0 2px 8px rgba(16,22,40,0.06)",
+  float:    "0 12px 32px rgba(16,22,40,0.12), 0 4px 12px rgba(16,22,40,0.06)",
+  glass:    "none",
 };
 
 // ── Typography ───────────────────────────────────────────────────

@@ -3,6 +3,7 @@ import ReactDOM from "react-dom";
 import { c, typo, layout, space, motion, btnVariants, entityColors } from "../styles/theme";
 import useDevLabel from "../hooks/useDevLabel";
 import useExitAnimation from "../hooks/useExitAnimation";
+import { Icon } from "./icons";
 
 // ══════════════════════════════════════════════════════════════
 // Modal — accessible centered dialog with focus trap
@@ -148,6 +149,146 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
       </div>
     </div>,
     document.body
+  );
+};
+
+// ══════════════════════════════════════════════════════════════
+// SideSheet — right-sliding panel (drop-in alternative to Modal)
+// Props: open, onClose, title?, accent?, width=460, children, style,
+//        headerless? (omit the built-in header bar — content has its own)
+// ══════════════════════════════════════════════════════════════
+export const SideSheet = ({ open, onClose, title, accent, width = 460, children, style: s, headerless = false }) => {
+  const panelRef = React.useRef(null);
+  const previousFocusRef = React.useRef(null);
+  const { mounted, visible } = useExitAnimation(open, 300);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, onClose]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prevBody; document.documentElement.style.overflow = prevHtml; };
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    previousFocusRef.current = document.activeElement;
+    const t = setTimeout(() => {
+      if (!panelRef.current) return;
+      const auto = panelRef.current.querySelector('[autofocus],[data-autofocus]');
+      const focusable = panelRef.current.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
+      (auto || focusable[0] || panelRef.current).focus?.();
+    }, 40);
+    return () => clearTimeout(t);
+  }, [open]);
+  React.useEffect(() => {
+    if (open) return;
+    if (previousFocusRef.current?.focus) { previousFocusRef.current.focus(); previousFocusRef.current = null; }
+  }, [open]);
+
+  if (!mounted) return null;
+
+  return ReactDOM.createPortal(
+    <div style={{ position: "fixed", inset: 0, zIndex: 999 }}>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        aria-hidden="true"
+        style={{
+          position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)",
+          opacity: visible ? 1 : 0,
+          transition: `opacity ${motion.normal.duration} ${motion.normal.easing}`,
+        }}
+      />
+      {/* Panel */}
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        tabIndex={-1}
+        onClick={e => e.stopPropagation()}
+        style={{
+          position: "absolute", top: 0, right: 0, bottom: 0,
+          width: `min(${width}px, calc(100vw - ${space[7]}px))`,
+          background: c.surfaceSolid || "#FFFFFF",
+          borderLeft: accent ? `3px solid ${accent}` : `1px solid ${c.border}`,
+          boxShadow: c.shadowElevated || c.shadowOverlay,
+          display: "flex", flexDirection: "column", outline: "none",
+          transform: visible ? "translateX(0)" : "translateX(100%)",
+          transition: `transform ${motion.normal.duration} ${motion.normal.easing}`,
+          ...s,
+        }}
+      >
+        {!headerless && (
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[3],
+            padding: `${space[4]}px ${space[5]}px`, borderBottom: `1px solid ${c.border}`, flexShrink: 0,
+          }}>
+            <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{title || ""}</span>
+            <button onClick={onClose} aria-label="Close" style={{
+              width: 30, height: 30, borderRadius: layout.radiusSm, flexShrink: 0,
+              border: `1px solid ${c.border}`, background: c.surfaceAlt, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", color: c.textMid,
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
+            </button>
+          </div>
+        )}
+        <div style={{ flex: 1, overflowY: "auto", padding: `${space[5]}px` }}>
+          {children}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+// ══════════════════════════════════════════════════════════════
+// Tooltip — hover label rendered to a body portal so it is never
+// clipped by overflow:auto/hidden ancestors (e.g. scrollable tables).
+// Wrap any element: <Tooltip label="Shipped"><Icon/></Tooltip>
+// ══════════════════════════════════════════════════════════════
+export const Tooltip = ({ label, children, style: s }) => {
+  const ref = React.useRef(null);
+  const [pos, setPos] = React.useState(null);
+  const show = () => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({ x: r.left + r.width / 2, y: r.top });
+  };
+  const hide = () => setPos(null);
+  return (
+    <span
+      ref={ref}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+      style={{ display: "inline-flex", ...s }}
+    >
+      {children}
+      {pos && label != null && label !== "" && ReactDOM.createPortal(
+        <span style={{
+          position: "fixed", left: pos.x, top: pos.y - 8,
+          transform: "translate(-50%, -100%)",
+          background: "#1d2539", color: "#ffffff",
+          fontSize: 12, fontWeight: 500, lineHeight: 1.4, letterSpacing: "-0.1px",
+          padding: "5px 9px", borderRadius: 7, whiteSpace: "nowrap", pointerEvents: "none",
+          boxShadow: "0 6px 18px rgba(16,22,40,0.28)", border: "1px solid rgba(255,255,255,0.10)",
+          zIndex: 10000,
+        }}>{label}</span>,
+        document.body
+      )}
+    </span>
   );
 };
 
@@ -502,7 +643,7 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
 // ══════════════════════════════════════════════════════════════
 // EmptyState — with explicit next-action
 // ══════════════════════════════════════════════════════════════
-export const EmptyState = ({ icon = "📭", title, message, action, onAction }) => {
+export const EmptyState = ({ icon = "inbox", title, message, action, onAction }) => {
   const devRef = useDevLabel('Empty state placeholder with icon, message, and action button');
   return (
     <div ref={devRef} style={{
@@ -512,7 +653,7 @@ export const EmptyState = ({ icon = "📭", title, message, action, onAction }) 
       background: c.surface, textAlign: "center",
       maxWidth: 420, margin: "0 auto",
     }}>
-      <span style={{ fontSize: 32, marginBottom: space[3], color: c.textGhost || c.textDim, opacity: 0.8 }}>{icon}</span>
+      <span style={{ marginBottom: space[3], color: c.textGhost || c.textDim, opacity: 0.8, display: "inline-flex" }}><Icon name={icon} size={32} strokeWidth={1.5} /></span>
       <div style={{
         fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,
         fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2],

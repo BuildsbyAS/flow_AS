@@ -1,6 +1,7 @@
 // Flow — Main App Shell
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { setTheme, c, body, space, layout } from "./styles/theme";
+import { motion } from "framer-motion";
+import { setTheme, c, body, space, layout, isDark, themes } from "./styles/theme";
 import AnimStyles from "./components/AnimStyles";
 import CommandPalette from "./components/CommandPalette";
 import ShortcutHintBar from "./components/ShortcutHintBar";
@@ -14,7 +15,7 @@ import LoginScreen from "./components/LoginScreen";
 import PendingApprovalScreen from "./components/PendingApprovalScreen";
 import QAReviewView from "./views/QAReviewView";
 import OnboardingScreen from "./components/OnboardingScreen";
-import { Header, NAV } from "./components/AppShell";
+import { Sidebar, NAV } from "./components/AppShell";
 import SummaryView from "./views/SummaryView";
 import ProjectsView from "./views/ProjectsView";
 import PeopleDeepDive from "./views/PeopleDeepDive";
@@ -149,7 +150,17 @@ function FlowDashboard({ auth }) {
     } catch { /* ignore */ }
     return null;
   });
-  const darkMode = false;
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem("flow_dark") === "1"; } catch { return false; }
+  });
+  const toggleDark = useCallback(() => {
+    try {
+      const el = document.documentElement;
+      el.classList.add("flow-theme-anim");
+      window.setTimeout(() => el.classList.remove("flow-theme-anim"), 450);
+    } catch {}
+    setDarkMode(v => { const n = !v; try { localStorage.setItem("flow_dark", n ? "1" : "0"); } catch {} return n; });
+  }, []);
   const [terminalUnlocked, setTerminalUnlocked] = useState(() => sessionStorage.getItem("flow_terminal_unlocked") === "true");
 
   // ── Supabase data (replaces seed.js) ──
@@ -187,6 +198,12 @@ function FlowDashboard({ auth }) {
   });
 
   const [detailLabel, setDetailLabel] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("flow_sidebar_collapsed") === "1"; } catch { return false; }
+  });
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed(v => { const n = !v; try { localStorage.setItem("flow_sidebar_collapsed", n ? "1" : "0"); } catch {} return n; });
+  }, []);
   const [isLocked, setIsLocked] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const goBackRef = useRef(null);
@@ -567,12 +584,12 @@ function FlowDashboard({ auth }) {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: c.bg, color: c.text, fontFamily: body, position: "relative" }}>
+    <div style={{ height: "100vh", background: themes.dark.bg, color: c.text, fontFamily: body, position: "relative", display: "flex", gap: 8, padding: activeTab === "terminal" ? 0 : 8, boxSizing: "border-box" }}>
       <AnimStyles />
 
-      {/* ═══ SINGLE HEADER ═══ (hidden for dark-themed Terminal view) */}
+      {/* ═══ SIDEBAR ═══ (hidden for dark-themed Terminal view) */}
       {activeTab !== "terminal" && (
-      <Header
+      <Sidebar
         onLogoClick={() => {
           handleTabSwitch("projects");
           setNavPayload(null);
@@ -597,6 +614,10 @@ function FlowDashboard({ auth }) {
         detailLabel={detailLabel}
         onBack={handleBack}
         breadcrumbLabel={activeNavItem?.label}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
+        darkMode={darkMode}
+        onToggleDark={toggleDark}
         activeTab={activeTab}
         onTabSwitch={handleTabSwitch}
         onCmdOpen={() => { setCmdOpen(true); tactile.cmdOpen(); }}
@@ -623,15 +644,35 @@ function FlowDashboard({ auth }) {
       />
       )}
 
+      {/* ═══ CONTENT COLUMN — white rounded container on the grey app canvas ═══ */}
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRadius: activeTab === "terminal" ? 0 : 16, background: activeTab === "terminal" ? "transparent" : c.surface, border: activeTab === "terminal" ? "none" : `1px solid ${c.border}`, overflow: "hidden", ["--flow-sticky-top"]: "0px", ["--flow-header-h"]: "0px" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+
+      {/* Detail back-bar (project / person deep-dive) */}
+      {activeTab !== "terminal" && detailLabel && (
+        <div style={{ position: "sticky", top: 0, zIndex: 30, display: "flex", alignItems: "center", gap: 12, padding: "12px 28px", background: c.surface, borderBottom: `1px solid ${c.border}` }}>
+          <button onClick={handleBack} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", borderRadius: 8, border: `1px solid ${c.border}`, background: c.surfaceAlt, color: c.textMid, cursor: "pointer", fontFamily: body, fontSize: 13, fontWeight: 600 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <span style={{ fontFamily: body, fontSize: 14, color: c.textMid, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {activeNavItem?.label}<span style={{ color: c.textDim, margin: "0 6px" }}>/</span><span style={{ color: c.text, fontWeight: 600 }}>{detailLabel}</span>
+          </span>
+        </div>
+      )}
+
       {/* ═══ TERMINAL VIEW (full-bleed, outside main) ═══ */}
       {activeTab === "terminal" && <TerminalView onUnlock={handleTerminalUnlock} unlockedSections={terminalUnlocked} auth={auth} appSettings={appSettings} setAppSettings={setAppSettings} resetKey={terminalResetKey} initialModule={navPayload} onConsumePayload={() => setNavPayload(null)} onExit={() => handleTabSwitch(prevNonTerminalTabRef.current || "summary")} />}
 
       {/* ═══ MAIN CANVAS ═══ */}
       {activeTab !== "terminal" && (
-      <main key={activeTab} className="flow-page" style={{ maxWidth: 1440, margin: "0 auto", padding: `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
+      <motion.main key={activeTab} className="flow-page"
+        initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+        style={{ width: "100%", maxWidth: activeTab === "projects" ? "none" : 1440, margin: "0 auto", padding: activeTab === "projects" ? "24px" : `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
         <ErrorCatcher key={activeTab}>
           {activeTab === "summary" && <SummaryView loading={loading} error={error} projects={projects} people={people} squads={squads} globalFilters={globalFilters} onNavigate={handleNavigate} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} timeframe={timeframe} />}
-          {activeTab === "projects" && <ProjectsView key={navPayload || `proj-${projResetKey}`} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAdmin={isAdmin} permCan={permCan} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} timeframe={timeframe} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || `proj-${projResetKey}`} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAdmin={isAdmin} permCan={permCan} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} timeframe={timeframe} setTimeframe={setTimeframe} />}
 
           {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} viewerName={viewerProfile?.name} isAdmin={isAdmin} timeframe={timeframe} />}
           {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} permConfig={permConfig} setPermConfig={handleSetPermConfig} />}
@@ -642,8 +683,11 @@ function FlowDashboard({ auth }) {
           )}
           {activeTab === "logs" && <LogsView />}
         </ErrorCatcher>
-      </main>
+      </motion.main>
       )}
+
+      </div>{/* end inner scroll */}
+      </div>{/* ═══ END CONTENT COLUMN ═══ */}
 
       {/* ═══ COMMAND PALETTE — Cmd/Ctrl+K ═══ */}
       <CommandPalette

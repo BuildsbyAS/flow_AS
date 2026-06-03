@@ -3,6 +3,7 @@
 import React from "react";
 import { c, typo, space, layout, motion, entityColors, phaseColors, typeConfig, trackNames } from "../styles/theme";
 import { Surface, Btn } from "../components/shared";
+import { Icon } from "../components/icons";
 import FlowLogo from "../components/FlowLogo";
 import useDevLabel from "../hooks/useDevLabel";
 
@@ -53,7 +54,7 @@ const Callout = ({ icon, title, children, color = c.accent }) => (
     background: `${color}06`, border: `1px solid ${color}20`,
     borderRadius: layout.radiusSm,
   }}>
-    <span style={{ fontSize: 18, lineHeight: 1.4, flexShrink: 0 }}>{icon}</span>
+    <span style={{ flexShrink: 0, display: "inline-flex", color }}><Icon name={icon} size={18} /></span>
     <div>
       {title && <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 700, color: c.text, marginBottom: 4 }}>{title}</div>}
       <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid, lineHeight: 1.6 }}>{children}</div>
@@ -378,7 +379,7 @@ const GuideView = ({ onNavigate }) => {
             </ExampleCard>
           </div>
 
-          <Callout icon="👤" title="Person Deep-Dive" color={c.cyan}>
+          <Callout icon="user" title="Person Deep-Dive" color={c.cyan}>
             Click any person to see their full project list, activity timeline, and role details. Great for 1:1 prep, workload reviews, and understanding who touches which projects.
           </Callout>
         </Surface>
@@ -417,14 +418,14 @@ const GuideView = ({ onNavigate }) => {
             <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[2] }}>What's in Summary</div>
             <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
               {[
-                { icon: "📊", title: "Project KPIs", desc: "In-flight, shipped, at-risk counts with week-over-week deltas." },
-                { icon: "🔥", title: "Needs Attention", desc: "Projects that are overdue, blocked, or frozen (no updates). Sorted by urgency." },
-                { icon: "📰", title: "Weekly Digest", desc: "Auto-generated summary: phase transitions, new projects, blockers, and squad activity." },
-                { icon: "🚀", title: "Recently Shipped", desc: "Quick-access chips for all recently shipped projects." },
-                { icon: "📋", title: "Squad Breakdown", desc: "Per-squad metrics table. See which squads are shipping and which are stuck." },
+                { icon: "bar-chart", title: "Project KPIs", desc: "In-flight, shipped, at-risk counts with week-over-week deltas." },
+                { icon: "flame", title: "Needs Attention", desc: "Projects that are overdue, blocked, or frozen (no updates). Sorted by urgency." },
+                { icon: "newspaper", title: "Weekly Digest", desc: "Auto-generated summary: phase transitions, new projects, blockers, and squad activity." },
+                { icon: "rocket", title: "Recently Shipped", desc: "Quick-access chips for all recently shipped projects." },
+                { icon: "clipboard", title: "Squad Breakdown", desc: "Per-squad metrics table. See which squads are shipping and which are stuck." },
               ].map(s => (
                 <div key={s.title} style={{ display: "flex", gap: space[2], alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 14, lineHeight: 1.6 }}>{s.icon}</span>
+                  <span style={{ display: "inline-flex", marginTop: 2, color: c.textMid }}><Icon name={s.icon} size={15} /></span>
                   <div>
                     <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 700, color: c.text }}>{s.title}: </span>
                     <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textMid }}>{s.desc}</span>
@@ -464,7 +465,7 @@ const GuideView = ({ onNavigate }) => {
             <span style={{ fontFamily: typo.bodySm.font, fontSize: 11, color: c.textDim, marginLeft: "auto" }}>Showing your squad + followed projects</span>
           </ExampleCard>
 
-          <Callout icon="💡" color={c.accent}>
+          <Callout icon="lightbulb" color={c.accent}>
             My Lens only filters the project registry view. Announcements (shipped projects) and mentions are always visible regardless of lens, so you never miss important org-wide updates.
           </Callout>
 
@@ -488,13 +489,13 @@ const GuideView = ({ onNavigate }) => {
 
           <ExampleCard style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ color: c.accent, fontSize: 14 }}>📌</span>
+              <span style={{ color: c.accent, display: "inline-flex" }}><Icon name="pin" size={14} /></span>
               <ProjectId id="X07" />
               <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text }}>Payment Gateway Migration</span>
               <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: 10, color: c.accent, fontWeight: 600 }}>PINNED</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-              <span style={{ color: c.accent, fontSize: 14 }}>📌</span>
+              <span style={{ color: c.accent, display: "inline-flex" }}><Icon name="pin" size={14} /></span>
               <ProjectId id="X12" />
               <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600, color: c.text }}>Driver Allocation ML</span>
               <span style={{ marginLeft: "auto", fontFamily: typo.monoSm.font, fontSize: 10, color: c.accent, fontWeight: 600 }}>PINNED</span>
@@ -503,7 +504,7 @@ const GuideView = ({ onNavigate }) => {
             <div style={{ fontFamily: typo.bodySm.font, fontSize: 11, color: c.textDim, textAlign: "center" }}>Other projects follow below</div>
           </ExampleCard>
 
-          <Callout icon="⭐" color={c.orange}>
+          <Callout icon="star" color={c.orange}>
             Pin and unpin from the project deep-dive page. Use pins for the 2-3 projects you check daily.
           </Callout>
         </Surface>
@@ -534,7 +535,7 @@ const GuideView = ({ onNavigate }) => {
             ))}
           </ExampleCard>
 
-          <Callout icon="✏️" title="Post Updates" color={c.cyan}>
+          <Callout icon="pencil" title="Post Updates" color={c.cyan}>
             Click into any project and use the update box to post what you're working on. Mention blockers, share wins, or flag risks. Everyone on the project gets visibility.
           </Callout>
         </Surface>
@@ -590,13 +591,13 @@ const GuideView = ({ onNavigate }) => {
             <div style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text, marginBottom: space[3] }}>Drag-and-drop</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
               {[
-                { icon: "↔", title: "Track to track", desc: "Drag a card between columns. The source track completes and the target track starts.", color: c.accent },
-                { icon: "🚀", title: "Upcoming to track", desc: "Drag an upcoming project onto any column. It moves to In Flight and the track starts.", color: c.green },
-                { icon: "🔄", title: "Reopen a track", desc: "Drop onto a previously completed track. A modal asks for an optional reason.", color: c.amber },
-                { icon: "⚠", title: "Already active", desc: "Drop onto a track the project already has open. Shows a warning toast.", color: c.red },
+                { icon: "move-horizontal", title: "Track to track", desc: "Drag a card between columns. The source track completes and the target track starts.", color: c.accent },
+                { icon: "rocket", title: "Upcoming to track", desc: "Drag an upcoming project onto any column. It moves to In Flight and the track starts.", color: c.green },
+                { icon: "refresh-cw", title: "Reopen a track", desc: "Drop onto a previously completed track. A modal asks for an optional reason.", color: c.amber },
+                { icon: "alert-triangle", title: "Already active", desc: "Drop onto a track the project already has open. Shows a warning toast.", color: c.red },
               ].map(a => (
                 <ExampleCard key={a.title} style={{ display: "flex", gap: space[2], alignItems: "flex-start" }}>
-                  <span style={{ fontSize: 16, lineHeight: 1.3, flexShrink: 0 }}>{a.icon}</span>
+                  <span style={{ flexShrink: 0, display: "inline-flex", color: a.color }}><Icon name={a.icon} size={16} /></span>
                   <div>
                     <div style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 700, color: a.color, marginBottom: 2 }}>{a.title}</div>
                     <div style={{ fontFamily: typo.bodySm.font, fontSize: 11, color: c.textMid, lineHeight: 1.5 }}>{a.desc}</div>
@@ -608,10 +609,10 @@ const GuideView = ({ onNavigate }) => {
 
           {/* Hover actions */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
-            <Callout icon="✓" title="Hover Done" color={c.green}>
+            <Callout icon="check" title="Hover Done" color={c.green}>
               Hover any card to reveal a green <B color={c.green}>Done</B> button in the top-right corner. Click it to complete that track instantly.
             </Callout>
-            <Callout icon="🔗" title="Also active" color={c.cyan}>
+            <Callout icon="link" title="Also active" color={c.cyan}>
               Each card shows an "also:" row listing the project's other active tracks, so you always know what else is running in parallel.
             </Callout>
           </div>
@@ -642,10 +643,10 @@ const GuideView = ({ onNavigate }) => {
           </ExampleCard>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
-            <Callout icon="🎉" title="Shoutouts" color={c.green}>
+            <Callout icon="party" title="Shoutouts" color={c.green}>
               Celebrate teammates who made it happen. Give shoutouts from the shipped project banner or the announcement feed.
             </Callout>
-            <Callout icon="💬" title="Feedback" color={c.purple}>
+            <Callout icon="message-circle" title="Feedback" color={c.purple}>
               Share constructive feedback on shipped projects. Both shoutouts and feedback are visible on the project's timeline.
             </Callout>
           </div>
@@ -712,13 +713,13 @@ const GuideView = ({ onNavigate }) => {
 
         <Surface variant="panel" style={{ padding: `${space[4] + 2}px ${space[5]}px`, display: "flex", flexDirection: "column", gap: space[2], ...indented }}>
           {[
-            { day: "Sunday",    icon: "◎",  label: "Focus day",   desc: "Deep work and planning. Prepare for the week.", color: c.purple },
-            { day: "Monday",    icon: "◎",  label: "Focus day",   desc: "Kick off the week with focused execution.", color: c.purple },
-            { day: "Tuesday",   icon: "⚡", label: "Sprint day",  desc: "Heads-down building. Maximize output.", color: c.green },
-            { day: "Wednesday", icon: "⚡", label: "Sprint day",  desc: "Continue the sprint momentum. Unblock and push.", color: c.green },
-            { day: "Thursday",  icon: "🚀", label: "Release day", desc: "Ship what's ready. Move work to Done.", color: c.orange },
-            { day: "Friday",    icon: "✓",  label: "Review day",  desc: "Close the week. Update feeds and flag stale work.", color: c.cyan },
-            { day: "Saturday",  icon: "💤", label: "Rest day",    desc: "Recharge. Come back stronger.", color: c.textDim },
+            { day: "Sunday",    icon: "target",  label: "Focus day",   desc: "Deep work and planning. Prepare for the week.", color: c.purple },
+            { day: "Monday",    icon: "target",  label: "Focus day",   desc: "Kick off the week with focused execution.", color: c.purple },
+            { day: "Tuesday",   icon: "zap", label: "Sprint day",  desc: "Heads-down building. Maximize output.", color: c.green },
+            { day: "Wednesday", icon: "zap", label: "Sprint day",  desc: "Continue the sprint momentum. Unblock and push.", color: c.green },
+            { day: "Thursday",  icon: "rocket", label: "Release day", desc: "Ship what's ready. Move work to Done.", color: c.orange },
+            { day: "Friday",    icon: "check",  label: "Review day",  desc: "Close the week. Update feeds and flag stale work.", color: c.cyan },
+            { day: "Saturday",  icon: "moon", label: "Rest day",    desc: "Recharge. Come back stronger.", color: c.textDim },
           ].map((r, i) => {
             const isToday = new Date().getDay() === i;
             return (
@@ -734,7 +735,7 @@ const GuideView = ({ onNavigate }) => {
                   background: `${r.color}15`, border: `1px solid ${r.color}30`,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, flexShrink: 0, lineHeight: 1,
-                }}>{r.icon}</div>
+                }}><Icon name={r.icon} size={13} color={r.color} /></div>
                 <span style={{
                   fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
                   fontWeight: 600, color: isToday ? r.color : c.text, width: 80, flexShrink: 0,

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { c, typo, space, layout, motion } from "../styles/theme";
 import { Tag, Sel } from "../components/shared";
+import { Icon } from "../components/icons";
 import { SectionHead } from "../components/kpi";
 
 const FEATURE_TYPE_COLORS = {
@@ -84,7 +85,7 @@ export default function WhatsNewView({ projects, people, onNavigate }) {
           borderRadius: layout.radiusLg, background: c.surface,
           border: `1px solid ${c.border}`,
         }}>
-          <div style={{ fontSize: 36, marginBottom: space[3] }}>🚀</div>
+          <div style={{ marginBottom: space[3], color: c.textGhost || c.textDim }}><Icon name="rocket" size={36} strokeWidth={1.5} /></div>
           <div style={{ fontFamily: typo.bodyMd.font, fontSize: 14, color: c.textDim }}>
             No shipped projects yet. When a project reaches GA, it'll appear here.
           </div>
@@ -155,9 +156,9 @@ export default function WhatsNewView({ projects, people, onNavigate }) {
                     {/* Actions */}
                     <div style={{ display: "flex", gap: space[2], marginTop: space[3] }}>
                       {[
-                        { label: "Shoutout", icon: "👏", action: () => window.__flowToast?.(`🎉 Shoutout sent to ${proj.owner}!`) },
-                        { label: "Feedback", icon: "💬", action: () => onNavigate?.("projects", proj.id) },
-                        { label: "View Project", icon: "→", action: () => onNavigate?.("projects", proj.id) },
+                        { label: "Shoutout", icon: "clap", action: () => window.__flowToast?.(`Shoutout sent to ${proj.owner}!`) },
+                        { label: "Feedback", icon: "message-circle", action: () => onNavigate?.("projects", proj.id) },
+                        { label: "View Project", icon: "arrow", action: () => onNavigate?.("projects", proj.id) },
                       ].map(btn => (
                         <button key={btn.label} type="button" onClick={btn.action} style={{
                           display: "inline-flex", alignItems: "center", gap: 4,
@@ -169,7 +170,7 @@ export default function WhatsNewView({ projects, people, onNavigate }) {
                           onMouseEnter={e => { e.currentTarget.style.borderColor = c.accent; e.currentTarget.style.color = c.accent; }}
                           onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textMid; }}
                         >
-                          <span style={{ fontSize: 11, lineHeight: 1 }}>{btn.icon}</span>
+                          {btn.icon === "arrow" ? <span style={{ fontSize: 11, lineHeight: 1 }}>→</span> : <Icon name={btn.icon} size={12} />}
                           {btn.label}
                         </button>
                       ))}

@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { c, typo, phaseNames, phaseColors as getPhaseColors, layout, space, motion } from "../styles/theme";
 import { Badge, Tag, Surface, Modal, Btn, Inp, Sel, Label, TelemetryLabel, EmptyState } from "../components/shared";
+import { Icon } from "../components/icons";
 import useKeyboard from "../hooks/useKeyboard";
 import useDevLabel from "../hooks/useDevLabel";
 import { PERMISSION_KEYS, ROLES, DEFAULT_PERM_CONFIG } from "../lib/permissions";
@@ -320,7 +321,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
               })}
               {squads.length === 0 && (
                 <EmptyState
-                  icon="📂"
+                  icon="folder"
                   title="No squads defined"
                   message="Create a squad to organize your team."
                   action="Add Squad"
@@ -394,7 +395,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
               })}
               {roles.length === 0 && (
                 <EmptyState
-                  icon="🏷"
+                  icon="tag"
                   title="No roles defined"
                   message="Create a role to define team designations."
                   action="Add Role"
@@ -534,7 +535,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
 
           {people.length === 0 && (
             <EmptyState
-              icon="👥"
+              icon="users"
               title="No people added"
               message="Add team members to get started."
               action="Add Person"
@@ -1059,7 +1060,7 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
         const isDelete = confirmAction.kind === "delete";
         const isDone = confirmAction.kind === "done";
         const accentColor = isDelete ? c.red : c.green;
-        const icon = confirmAction.blocked ? "🚫" : isDelete ? "🗑" : "✓";
+        const iconName = confirmAction.blocked ? "ban" : isDelete ? "trash" : "check";
         const title = confirmAction.blocked
           ? `Cannot delete ${confirmAction.type}`
           : isDelete
@@ -1072,8 +1073,9 @@ const SettingsView = ({ squads, setSquads, roles, setRoles, people, setPeople, p
                 <div style={{
                   width: 36, height: 36, borderRadius: layout.radiusMd + 2,
                   background: confirmAction.blocked ? c.redDim : isDone ? c.greenDim : c.orangeDim,
-                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18,
-                }}>{icon}</div>
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: confirmAction.blocked ? c.red : isDone ? c.green : c.orange,
+                }}><Icon name={iconName} size={18} /></div>
                 <div>
                   <div style={{
                     fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size,

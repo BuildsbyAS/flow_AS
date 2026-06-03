@@ -5,6 +5,7 @@ import React, { useState, useMemo } from "react";
 import { c, typo, space, layout, motion, shipPhases, phaseColors, allPhases, phaseNames, trackNames } from "../styles/theme";
 import { getActiveTracks, getTrackActiveDays } from "../lib/tracks";
 import { Surface, Label, EmptyState } from "../components/shared";
+import { Icon } from "../components/icons";
 import { KpiGrid, KpiCard, SectionHead, Pill, PillRow } from "../components/kpi";
 import { isDevSeedMode, devStore } from "../data/devSeed";
 import useDevLabel from "../hooks/useDevLabel";
@@ -268,7 +269,7 @@ const SummaryView = ({
         } />
         <Surface variant="data" compact style={{ padding: space[6], borderLeft: `3px solid ${c.accent}` }}>
           <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[3] }}>
-            <span style={{ fontSize: 18 }}>📊</span>
+            <span style={{ display: "inline-flex", color: c.accent }}><Icon name="bar-chart" size={18} /></span>
             <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>
               This Week at a Glance
             </span>
@@ -282,7 +283,7 @@ const SummaryView = ({
                 dangerouslySetInnerHTML={{
                   __html: line
                     .replace(/\*\*(.*?)\*\*/g, `<span style="font-weight:700;color:${c.text}">$1</span>`)
-                    .replace(/⚠/g, `<span style="color:${c.red}">⚠</span>`)
+                    .replace(/⚠/g, `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${c.red}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`)
                 }}
               />
             ))}

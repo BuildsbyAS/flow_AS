@@ -672,7 +672,7 @@ const AnimStyles = () => (
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Geist', system-ui, sans-serif;
       font-size: 11px;
       font-weight: 700;
       transition: background 0.3s ${motion.interaction.easing}, color 0.3s ${motion.interaction.easing}, border-color 0.3s ${motion.interaction.easing}, box-shadow 0.3s ${motion.interaction.easing}, transform 0.3s ${motion.interaction.easing};
@@ -747,7 +747,7 @@ const AnimStyles = () => (
       background: ${c.surfaceSolid};
       border: 1px solid ${c.border};
       box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Geist', system-ui, sans-serif;
       font-size: 11px;
       color: ${c.text};
       white-space: nowrap;
@@ -802,7 +802,7 @@ const AnimStyles = () => (
       border-radius: 6px;
       background: ${c.red}20;
       border: 1px solid ${c.red}40;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Geist', system-ui, sans-serif;
       font-size: 11px;
       font-weight: 700;
       color: ${c.red};
@@ -920,7 +920,7 @@ const AnimStyles = () => (
     .flow-energy-bar-pct {
       opacity: 0;
       transition: opacity 0.15s;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Geist', system-ui, sans-serif;
       font-size: 11px;
       font-weight: 700;
       color: ${c.bg};
@@ -964,7 +964,7 @@ const AnimStyles = () => (
       background: ${c.bg};
       border: 1px solid ${c.border};
       overflow: hidden;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Geist', system-ui, sans-serif;
     }
     .flow-terminal-log::before {
       content: '';
@@ -1624,7 +1624,7 @@ const AnimStyles = () => (
       right: 10px;
       top: 50%;
       transform: translateY(-50%);
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Geist', system-ui, sans-serif;
       font-size: 11px;
       font-weight: 600;
       color: ${c.textMid};
@@ -1772,7 +1772,7 @@ const AnimStyles = () => (
       display: inline-flex;
       align-items: center;
       gap: 3px;
-      font-family: 'JetBrains Mono', monospace;
+      font-family: 'Geist', system-ui, sans-serif;
       font-size: 11px;
       color: ${c.textMid};
       opacity: 0;

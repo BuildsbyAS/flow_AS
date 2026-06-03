@@ -5,6 +5,7 @@ import { c, space, body, terminal, terminalRadius } from "../styles/theme";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
 import AccessRequestsAdmin from "../components/AccessRequestsAdmin";
+import { Icon } from "../components/icons";
 
 const MONO = body;
 
@@ -12,33 +13,37 @@ const MONO = body;
 const ACTION_CONFIG = {
   login:              { icon: "→", color: () => c.cyan, label: "signed in" },
   logout:             { icon: "←", color: () => c.textDim, label: "signed out" },
-  lock_commitment:    { icon: "\u{1F512}", color: () => c.green, label: "locked commitment" },
-  unlock_commitment:  { icon: "\u{1F513}", color: () => c.orange, label: "unlocked commitment" },
-  edit_commitment:    { icon: "\u270E", color: () => c.purple, label: "edited commitment" },
-  edit_project:       { icon: "\u270E", color: () => c.accent, label: "edited project" },
+  lock_commitment:    { icon: "lock", color: () => c.green, label: "locked commitment" },
+  unlock_commitment:  { icon: "unlock", color: () => c.orange, label: "unlocked commitment" },
+  edit_commitment:    { icon: "pencil", color: () => c.purple, label: "edited commitment" },
+  edit_project:       { icon: "pencil", color: () => c.accent, label: "edited project" },
   create_project:     { icon: "+", color: () => c.green, label: "created project" },
   add_person:         { icon: "+", color: () => c.cyan, label: "added person" },
-  settings_change:    { icon: "\u2699", color: () => c.orange, label: "changed settings" },
-  onboard:            { icon: "\u2605", color: () => c.orange, label: "joined Flow" },
-  terminal_unlock:    { icon: "\u{1F513}", color: () => c.green, label: "unlocked terminal" },
-  terminal_attempt:   { icon: "\u26A0", color: () => c.red, label: "failed terminal attempt" },
-  admin_unlock:       { icon: "\u{1F513}", color: () => c.orange, label: "unlocked admin" },
-  admin_attempt:      { icon: "\u26A0", color: () => c.red, label: "failed admin attempt" },
+  settings_change:    { icon: "settings", color: () => c.orange, label: "changed settings" },
+  onboard:            { icon: "star", color: () => c.orange, label: "joined Flow" },
+  terminal_unlock:    { icon: "unlock", color: () => c.green, label: "unlocked terminal" },
+  terminal_attempt:   { icon: "alert-triangle", color: () => c.red, label: "failed terminal attempt" },
+  admin_unlock:       { icon: "unlock", color: () => c.orange, label: "unlocked admin" },
+  admin_attempt:      { icon: "alert-triangle", color: () => c.red, label: "failed admin attempt" },
 };
 const DEFAULT_ACTION = { icon: "\u00B7", color: () => c.textDim, label: "action" };
 
 const CATEGORIES = [
-  { key: "feature", label: "Feature Request", icon: "✦", color: () => c.purple },
-  { key: "bug", label: "Bug Report", icon: "⚠", color: () => c.red },
-  { key: "rant", label: "General Rant", icon: "🔥", color: () => c.red },
+  { key: "feature", label: "Feature Request", icon: "feature", color: () => c.purple },
+  { key: "bug", label: "Bug Report", icon: "alert-triangle", color: () => c.red },
+  { key: "rant", label: "General Rant", icon: "flame", color: () => c.red },
 ];
 
 const STATUSES = [
   { key: "pending", label: "Pending", color: () => c.orange, icon: "◷" },
   { key: "approved", label: "Approved", color: () => c.green, icon: "✓" },
   { key: "rejected", label: "Rejected", color: () => c.red, icon: "✗" },
-  { key: "shipped", label: "Shipped", color: () => c.cyan, icon: "🚀" },
+  { key: "shipped", label: "Shipped", color: () => c.cyan, icon: "rocket" },
 ];
+
+// Icon-name values render as SVG; arrows/+/·/check glyphs stay as text.
+const ICON_NAMES = new Set(["lock", "unlock", "pencil", "settings", "star", "alert-triangle", "feature", "flame", "rocket"]);
+const glyph = (g, size = 13) => ICON_NAMES.has(g) ? <Icon name={g} size={size} /> : g;
 
 const timeAgo = (ts) => {
   const d = new Date(ts);
@@ -286,9 +291,9 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
             width: 32, height: 32, borderRadius: terminalRadius.md,
             background: cat.color() + "18", border: `1px solid ${cat.color()}30`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 16, flexShrink: 0,
+            flexShrink: 0, color: cat.color(),
           }}>
-            {cat.icon}
+            {glyph(cat.icon, 16)}
           </span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 17, fontWeight: 700, color: c.text, lineHeight: 1.2 }}>{selected.title}</div>
@@ -306,7 +311,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
             background: st.color() + "15", border: `1px solid ${st.color()}35`,
             borderRadius: terminalRadius.sm,
           }}>
-            {st.icon} {st.label.toUpperCase()}
+            {glyph(st.icon)} {st.label.toUpperCase()}
           </span>
           <span style={{
             fontSize: 11, fontWeight: 700, letterSpacing: "0.05em",
@@ -386,7 +391,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                     fontWeight: newStatus === s.key ? 700 : 400,
                   }}
                 >
-                  {s.icon} {s.label}
+                  {glyph(s.icon)} {s.label}
                 </button>
               ))}
             </div>
@@ -616,7 +621,7 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                 cursor: "pointer",
               }}
             >
-              {s.icon} {s.label} ({count})
+              {glyph(s.icon)} {s.label} ({count})
             </button>
           );
         })}
@@ -652,8 +657,8 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                 onMouseEnter={e => { e.currentTarget.style.background = hasReply ? `${terminal.success}12` : `${terminal.gold}10`; e.currentTarget.style.borderColor = hasReply ? `${terminal.success}50` : `${terminal.gold}30`; }}
                 onMouseLeave={e => { e.currentTarget.style.background = bgBase; e.currentTarget.style.borderColor = borderCol; }}
               >
-                <span style={{ fontSize: 11, color: st.color(), minWidth: 20, textAlign: "center" }}>{st.icon}</span>
-                <span style={{ fontSize: 12, color: cat.color(), minWidth: 14 }}>{cat.icon}</span>
+                <span style={{ color: st.color(), minWidth: 20, display: "inline-flex", justifyContent: "center" }}>{glyph(st.icon, 12)}</span>
+                <span style={{ color: cat.color(), minWidth: 14, display: "inline-flex" }}>{glyph(cat.icon, 13)}</span>
                 <span style={{ flex: 1, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {r.title}
                 </span>
@@ -848,8 +853,8 @@ export default function AdminSettingsView({ onBack, appSettings = {}, setAppSett
                   <span style={{ color: "rgba(0,0,0,0.38)", width: 65, textAlign: "right", flexShrink: 0 }}>
                     {timeAgo(log.created_at)}
                   </span>
-                  <span style={{ color: cfg.color(), width: 16, textAlign: "center", flexShrink: 0 }}>
-                    {cfg.icon}
+                  <span style={{ color: cfg.color(), width: 16, flexShrink: 0, display: "inline-flex", justifyContent: "center" }}>
+                    {glyph(cfg.icon, 12)}
                   </span>
                   <span style={{ color: terminal.cyan, minWidth: 100, maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flexShrink: 0 }}
                     title={log.user_email}>

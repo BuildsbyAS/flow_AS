@@ -6,6 +6,7 @@
  */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { c, typo, layout, space } from "../styles/theme";
+import { Icon } from "./icons";
 
 const DURATION = 2500;
 const EXIT_MS = 180;
@@ -92,8 +93,8 @@ export default function ActionToast() {
           boxShadow: "0 8px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.12)",
           whiteSpace: "nowrap",
         }}>
-          <span style={{ color: icon === "warn" ? "#fbbf24" : "#4ade80", fontSize: 14, lineHeight: 1 }}>
-            {icon === "warn" ? "⚠" : "✓"}
+          <span style={{ color: icon === "warn" ? "#fbbf24" : "#4ade80", display: "inline-flex" }}>
+            <Icon name={icon === "warn" ? "alert-triangle" : "check"} size={14} />
           </span>
           {typeof message === "string" && message.includes("<") ? (
             <span dangerouslySetInnerHTML={{ __html: message }} />

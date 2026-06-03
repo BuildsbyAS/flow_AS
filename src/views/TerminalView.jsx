@@ -227,7 +227,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
         {/* Admin content */}
         <div style={{
           flex: 1, overflow: "auto", padding: `${space[5]}px ${space[6]}px`,
-          fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
+          fontFamily: "'Geist', system-ui, sans-serif",
           fontSize: 13, lineHeight: 1.8, color: terminal.gold,
           scrollbarWidth: "none", position: "relative", zIndex: 5,
         }}>
@@ -265,7 +265,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
         {/* Rant content */}
         <div style={{
           flex: 1, overflow: "auto", padding: `${space[5]}px ${space[6]}px`,
-          fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
+          fontFamily: "'Geist', system-ui, sans-serif",
           fontSize: 13, lineHeight: 1.8, color: terminal.green,
           scrollbarWidth: "none", position: "relative", zIndex: 5,
         }}>
@@ -299,7 +299,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
             background: "rgba(0,255,65,0.06)",
             border: "1px solid rgba(0,255,65,0.25)",
             color: terminal.green, cursor: "pointer",
-            fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
+            fontFamily: "'Geist', system-ui, sans-serif",
             fontSize: 14, fontWeight: 700,
             display: "flex", alignItems: "center", justifyContent: "center",
             transition: "background 0.15s ease, border-color 0.15s ease",
@@ -324,7 +324,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
       {/* Terminal content */}
       <div ref={terminalRef} style={{
         flex: 1, overflow: "auto", padding: `${space[5]}px ${space[6]}px`,
-        fontFamily: "'JetBrains Mono', 'SF Mono', monospace",
+        fontFamily: "'Geist', system-ui, sans-serif",
         fontSize: 13, lineHeight: 1.8, color: terminal.green,
         scrollbarWidth: "none", position: "relative", zIndex: 5,
       }}>
@@ -540,7 +540,7 @@ function TerminalView({ onUnlock, unlockedSections, auth, appSettings, setAppSet
           display: "flex", alignItems: "center", gap: 12,
           boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 20px rgba(0,255,65,0.1)",
           animation: "flow-load-fade-in 0.4s ease-out",
-          fontFamily: "'SF Mono', 'Fira Code', monospace",
+          fontFamily: "'Geist', system-ui, sans-serif",
         }}>
           <span style={{
             width: 28, height: 28, borderRadius: "50%",

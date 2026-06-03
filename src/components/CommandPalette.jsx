@@ -4,6 +4,12 @@ import { getActiveTracks } from "../lib/tracks";
 import { NAV } from "./AppShell";
 import useDevLabel from "../hooks/useDevLabel";
 import { initialsOf } from "../lib/names";
+import { Icon } from "./icons";
+
+// Icon-name values rendered as SVG; anything else is a plain text glyph.
+const ICON_NAMES = new Set(["settings", "circle-dot", "flame"]);
+const renderGlyph = (g, size = 14) =>
+  ICON_NAMES.has(g) ? <Icon name={g} size={size} /> : g;
 
 // ═══════════════════════════════════════════════════════════════
 // UNIVERSAL SEARCH — F / Cmd+K
@@ -15,7 +21,7 @@ const CATEGORIES = [
   { key: "people",     label: "People",     icon: "●" },
   { key: "projects",   label: "Projects",   icon: "◆" },
   { key: "navigation", label: "Navigate",   icon: "→" },
-  { key: "settings",   label: "Settings",   icon: "⚙" },
+  { key: "settings",   label: "Settings",   icon: "settings" },
 ];
 
 const SECTION_ORDER = ["People", "Projects", "Navigation", "Actions", "Settings"];
@@ -69,11 +75,11 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
     NAV.filter(tab => !tab.separator).forEach(tab => {
       cmds.push({
         id: `nav-${tab.key}`,
-        label: tab.label.replace("⚙️ ", ""),
+        label: tab.label,
         hint: "",
         section: "Navigation",
         cat: "navigation",
-        icon: tab.num != null ? String(tab.num) : tab.key === "settings" ? "⚙" : tab.key === "logs" ? "◉" : tab.key === "rant" ? "🔥" : "·",
+        icon: tab.num != null ? String(tab.num) : tab.key === "settings" ? "settings" : tab.key === "logs" ? "circle-dot" : tab.key === "rant" ? "flame" : "·",
         kbd: tab.num != null ? String(tab.num) : "",
         action: () => { onTabSwitch(tab.key); onClose(); },
       });
@@ -248,8 +254,9 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
             <span style={{
               fontFamily: typo.monoMd.font, fontSize: typo.monoMd.size,
               lineHeight: 1, color: query ? c.accent : c.textDim,
+              display: "inline-flex", alignItems: "center",
             }}>
-              {query ? "◉" : "⊙"}
+              {query ? <Icon name="circle-dot" size={13} /> : "⊙"}
             </span>
           </div>
 
@@ -308,7 +315,8 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
                 <span style={{
                   marginRight: 5,
                   opacity: active ? 1 : 0.7,
-                }}>{cat.icon}</span>
+                  display: "inline-flex", alignItems: "center", verticalAlign: "middle",
+                }}>{renderGlyph(cat.icon, 13)}</span>
                 {cat.label}
               </button>
             );
@@ -386,7 +394,7 @@ const CommandPalette = ({ open, onClose, onTabSwitch, projects, people, onNaviga
                   color: isActive ? c.accent : c.textMid,
                   flexShrink: 0,
                   transition: trans,
-                }}>{cmd.icon}</div>
+                }}>{renderGlyph(cmd.icon, 15)}</div>
 
                 {/* Label + hint */}
                 <div style={{ flex: 1, minWidth: 0 }}>

@@ -1,10 +1,12 @@
 // Flow — Projects View (Rebuild v2: Pulse structural model + PeopleDeepDive history model)
 // Two states: Registry (Pulse-style table with tabs) → Project Deep Dive (PeopleDeepDive-style)
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { motion as Motion } from "framer-motion";
 import { createPortal } from "react-dom";
-import { c, typo, space, layout, motion, phaseNames, shipPhases, allPhases, trackNames, typeConfig, phaseColors as getPhaseColors, phaseMids as getPhaseMids, phaseDims as getPhaseDims, statusColors, statusConfig, entityColors, colWidths } from "../styles/theme";
-import { Badge, Tag, Modal, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, Th as SharedTh, TableShell, StickyLeftTd } from "../components/shared";
+import { c, isDark, typo, space, layout, motion, phaseNames, shipPhases, allPhases, trackNames, typeConfig, phaseColors as getPhaseColors, phaseMids as getPhaseMids, phaseDims as getPhaseDims, statusColors, statusConfig, entityColors, colWidths } from "../styles/theme";
+import { Badge, Tag, Modal, SideSheet, Tooltip, Label, Btn, Inp, Sel, SearchSelect, EmptyState, TelemetryLabel, Th as SharedTh, TableShell, StickyLeftTd } from "../components/shared";
 import { KpiGrid, KpiCard, SectionHead, SegmentedToggle, Pill, PillRow } from "../components/kpi";
+import { Icon } from "../components/icons";
 import useKeyboard from "../hooks/useKeyboard";
 import useExitAnimation from "../hooks/useExitAnimation";
 import GanttChart from "../components/GanttChart";
@@ -289,6 +291,420 @@ function sortList(list, key, dir, metrics, today) {
 }
 
 /* ══════════════════════════════════════════════════════════════════
+   FIELD DESIGN SYSTEM — tokens + helpers for the Projects page
+   (pixel-matched to Figma node 152:5047). Geist type throughout.
+   ══════════════════════════════════════════════════════════════════ */
+// Convert a hex/rgb color to an rgba() string with the given alpha (used for
+// the prairie background gradient so it fades cleanly into the surface color).
+function rgbaFromColor(col, a) {
+  if (typeof col !== "string") return `rgba(255,255,255,${a})`;
+  let h = col.trim();
+  if (h.startsWith("rgb")) {
+    const n = h.replace(/rgba?\(|\)/g, "").split(",").map(s => s.trim());
+    return `rgba(${n[0]},${n[1]},${n[2]},${a})`;
+  }
+  h = h.replace("#", "");
+  if (h.length === 3) h = h.split("").map(x => x + x).join("");
+  const r = parseInt(h.slice(0, 2), 16) || 0;
+  const g = parseInt(h.slice(2, 4), 16) || 0;
+  const b = parseInt(h.slice(4, 6), 16) || 0;
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+// Field tokens, resolved from the live theme (`c`) so the Projects tab follows
+// light/dark mode automatically. In light these equal the Field palette exactly.
+const FD = {
+  get textPrimary() { return c.text; },
+  get textSecondary() { return c.textMid; },
+  get textTertiary() { return c.textDim; },
+  get textMuted() { return c.textGhost || c.textDim; },
+  get action() { return c.blue; },
+  get actionSubtle() { return c.blueDim; },
+  get success() { return c.green; },
+  get successSubtle() { return c.greenDim; },
+  get error() { return c.red; },
+  get errorSubtle() { return c.redDim; },
+  get warning() { return c.amber; },
+  get warningSubtle() { return c.amberDim; },
+  get surface() { return c.surface; },
+  get surface2() { return c.surfaceAlt; },
+  get surface3() { return c.surfaceAlt; },
+  get border() { return c.border; },
+  get borderDark() { return c.text; },
+};
+
+// ── Project deep-dive sidebar card (Figma): header (title + Add) · divider · body ──
+function SidebarCard({ title, onAdd, children }) {
+  return (
+    <div style={{ width: "100%", background: FD.surface, border: `1px solid ${FD.border}`, borderRadius: 16, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: 16 }}>
+        <span style={{ fontSize: 16, fontWeight: 700, color: FD.textPrimary }}>{title}</span>
+        {onAdd && (
+          <button type="button" onClick={onAdd} style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            background: "none", border: "none", cursor: "pointer",
+            color: FD.textSecondary, fontSize: 14, fontWeight: 500, padding: 0,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" />
+            </svg>
+            Add
+          </button>
+        )}
+      </div>
+      <div style={{ height: 1, background: FD.border, width: "100%" }} />
+      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 20 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// Phase code → display label per the Noon Field design (Design→UXD, QA→DQA)
+const FD_PHASE_LABEL = { PRD: "PRD", Design: "UXD", Dev: "DEV", QA: "DQA", Alpha: "Alpha", Beta: "Beta", GA: "GA" };
+// Priority → { color, bg } — getters so they resolve against the live theme (dark/light)
+const FD_PRIORITY = {
+  get P0() { return { color: FD.error, bg: FD.errorSubtle }; },
+  get P1() { return { color: FD.textTertiary, bg: FD.surface3 }; },
+  get P2() { return { color: FD.textTertiary, bg: FD.surface3 }; },
+  get P3() { return { color: FD.textTertiary, bg: FD.surface3 }; },
+};
+
+const FD_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function fdDate(d) {
+  if (!d) return "—";
+  const dt = new Date(String(d).slice(0, 10) + "T00:00:00");
+  if (isNaN(dt)) return "—";
+  return `${FD_MONTHS[dt.getMonth()]} ${dt.getDate()}`;
+}
+
+// Status icons (18px) — FILLED. "progress" renders a dynamic donut by % complete.
+const FdStatusIcon = ({ kind, pct = 0 }) => {
+  if (kind === "shipped") return (
+    <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="10" fill={FD.success} />
+      <path d="M7.4 12.4l2.9 2.9 6.2-6.6" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+  if (kind === "blocked") return (
+    <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="12" r="10" fill={FD.error} />
+      <path d="M8.4 8.4l7.2 7.2M15.6 8.4l-7.2 7.2" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
+    </svg>
+  );
+  if (kind === "atrisk") return (
+    <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+      <path d="M12 2.8l9.63 16.7a1.05 1.05 0 0 1-.9 1.57H3.27a1.05 1.05 0 0 1-.9-1.57z" fill={FD.warning} />
+      <path d="M12 8.8v4.4" stroke="#fff" strokeWidth="2.1" strokeLinecap="round" />
+      <circle cx="12" cy="16.8" r="1.15" fill="#fff" />
+    </svg>
+  );
+  // In progress — dynamic donut sized to the project's progress
+  const r = 8, C = 2 * Math.PI * r, p = Math.max(0, Math.min(1, (Number(pct) || 0) / 100));
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+      <circle cx="12" cy="12" r={r} fill="none" stroke={FD.action} strokeOpacity="0.25" strokeWidth="3.4" />
+      <circle cx="12" cy="12" r={r} fill="none" stroke={FD.action} strokeWidth="3.4" strokeLinecap="round"
+        strokeDasharray={`${(C * p).toFixed(2)} ${C.toFixed(2)}`} transform="rotate(-90 12 12)" />
+    </svg>
+  );
+};
+
+// Derive the Field status from a Flow project + metrics
+function fdStatus(proj, m) {
+  m = m || {};
+  if (proj.status === "blocked" || m.isBlocked) return { kind: "blocked", label: "Blocked" };
+  if (proj.status === "shipped" || ["Alpha", "Beta", "GA"].includes(proj.phase)) return { kind: "shipped", label: "Shipped" };
+  if (m.atRisk || m.overdue) return { kind: "atrisk", label: "At Risk" };
+  return { kind: "progress", label: "In progress" };
+}
+
+// Status → display + colour + which filter tab it maps to.
+// One source of truth shared by the table status icon AND the overview widget.
+const FD_STATUS_META = {
+  progress:      { label: "In progress",  tab: "active",         get color() { return FD.action; } },
+  shipped:       { label: "Shipped",       tab: "shipped",        get color() { return FD.success; } },
+  atrisk:        { label: "At Risk",       tab: "at_risk",        get color() { return FD.warning; } },
+  blocked:       { label: "Blocked",       tab: "blocked",        get color() { return FD.error; } },
+  deprioritized: { label: "Deprioritised", tab: "deprioritized",  get color() { return FD.textTertiary; } },
+};
+const FD_STATUS_ORDER = ["progress", "shipped", "atrisk", "blocked", "deprioritized"];
+
+// Full status key for the overview widget (adds the Paused/deprioritised bucket)
+function projStatusKey(proj, m) {
+  if (proj.status === "deprioritized") return "deprioritized";
+  return fdStatus(proj, m).kind;
+}
+
+// GitHub-style overview: one square per project, coloured by status, grouped.
+// Hover a square → tooltip with the status + its total; click → filter the table.
+function FdStatusGrid({ projects, metrics, onPick }) {
+  const buckets = {};
+  FD_STATUS_ORDER.forEach(k => { buckets[k] = []; });
+  (projects || []).forEach(p => {
+    const k = projStatusKey(p, metrics[p.id] || {});
+    (buckets[k] || (buckets[k] = [])).push(p);
+  });
+  const total = (projects || []).length;
+  const present = FD_STATUS_ORDER.filter(k => buckets[k] && buckets[k].length);
+
+  return (
+    <div style={{ width: "100%", background: FD.surface, border: `1px solid ${FD.border}`, borderRadius: 16, padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
+      {/* Legend */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: FD.textTertiary }}>{total} projects</span>
+        <div style={{ flex: 1 }} />
+        {present.map(k => {
+          const meta = FD_STATUS_META[k];
+          return (
+            <button key={k} onClick={() => onPick(meta.tab)} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 3, background: meta.color }} />
+              <span style={{ fontSize: 13, fontWeight: 500, color: FD.textSecondary }}>{meta.label}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: FD.textTertiary }}>{buckets[k].length}</span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Squares — one per project, grouped by status */}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+        {FD_STATUS_ORDER.flatMap(k => buckets[k].map((p, i) => {
+          const meta = FD_STATUS_META[k];
+          return (
+            <Tooltip key={p.id || `${k}-${i}`} label={`${meta.label} • ${buckets[k].length} project${buckets[k].length !== 1 ? "s" : ""}`}>
+              <button
+                onClick={() => onPick(meta.tab)}
+                aria-label={`${p.name} — ${meta.label}`}
+                style={{ width: 16, height: 16, borderRadius: 4, border: "none", padding: 0, cursor: "pointer", background: meta.color, transition: "transform 120ms ease, box-shadow 120ms ease" }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.18)"; e.currentTarget.style.boxShadow = `0 0 0 2px ${FD.surface}, 0 0 0 3px ${meta.color}`; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; }}
+              />
+            </Tooltip>
+          );
+        }))}
+        {total === 0 && <span style={{ fontSize: 13, color: FD.textTertiary }}>No projects</span>}
+      </div>
+    </div>
+  );
+}
+
+const FD_RHYTHM = [
+  { d: "Sun", label: "Focus day", icon: "target" },
+  { d: "Mon", label: "Focus day", icon: "target" },
+  { d: "Tue", label: "Sprint day", icon: "zap" },
+  { d: "Wed", label: "Sprint day", icon: "zap" },
+  { d: "Thu", label: "Release day", icon: "rocket" },
+  { d: "Fri", label: "Review day", icon: "check" },
+  { d: "Sat", label: "Rest day", icon: "moon" },
+];
+
+// Sprint-day pill with the weekly-rhythm dropdown (from the initial build)
+function FdSprintDayPill() {
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const today = new Date().getDay();
+  const cur = FD_RHYTHM[today] || FD_RHYTHM[2];
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button onClick={() => setOpen(v => !v)} style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+        height: 44, padding: "0 16px", borderRadius: 8, background: FD.surface,
+        border: `1px solid ${FD.border}`, cursor: "pointer", minWidth: 160,
+      }}>
+        <span style={{ fontSize: 14, fontWeight: 500, color: FD.textPrimary }}>Today's {cur.label}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={FD.textTertiary} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 150ms" }}><polyline points="6 9 12 15 18 9" /></svg>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 900, minWidth: 224, background: FD.surface, border: `1px solid ${FD.border}`, borderRadius: 12, boxShadow: "0 8px 24px rgba(16,22,40,0.12)", padding: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", color: FD.textTertiary, padding: "4px 8px" }}>Weekly rhythm</div>
+          {FD_RHYTHM.map((r, i) => {
+            const isToday = i === today;
+            return (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 8, background: isToday ? FD.surface2 : "transparent" }}>
+                <span style={{ width: 34, fontSize: 12, fontWeight: isToday ? 600 : 400, color: isToday ? FD.textPrimary : FD.textTertiary }}>{r.d}</span>
+                <span style={{ display: "inline-flex", color: isToday ? FD.textPrimary : FD.textTertiary }}><Icon name={r.icon} size={13} /></span>
+                <span style={{ flex: 1, fontSize: 13, fontWeight: isToday ? 600 : 500, color: isToday ? FD.textPrimary : FD.textSecondary }}>{r.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// KPI card — white card, 28px value, grey footer with colored count pills.
+// Getters so colors resolve against the live theme (light/dark).
+const FD_TONE = {
+  get action() { return { c: FD.action, bg: FD.actionSubtle }; },
+  get success() { return { c: FD.success, bg: FD.successSubtle }; },
+  get error() { return { c: FD.error, bg: FD.errorSubtle }; },
+  get warning() { return { c: FD.warning, bg: FD.warningSubtle }; },
+};
+function FdKpiCard({ label, value, onClick, active }) {
+  return (
+    <div onClick={onClick} style={{
+      flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8,
+      justifyContent: "center", alignItems: "flex-start",
+      background: FD.surface, border: `1px solid ${active ? FD.borderDark : FD.border}`,
+      borderRadius: 16, padding: 24, overflow: "hidden",
+      cursor: onClick ? "pointer" : "default",
+    }}>
+      <span style={{ minWidth: "100%", fontSize: 28, fontWeight: 700, lineHeight: "36px", letterSpacing: "-0.25px", color: FD.textPrimary }}>{value}</span>
+      <span style={{ fontSize: 13, fontWeight: 500, lineHeight: "16px", letterSpacing: "3px", textTransform: "uppercase", whiteSpace: "nowrap", color: FD.textTertiary }}>{label}</span>
+    </div>
+  );
+}
+
+/* ── Quarter / timeframe picker — functional dropdown (theme-aware) ── */
+const FD_QUARTERS = [
+  { q: "Q1", months: "Jan – Mar", start: "-01-01", end: "-03-31" },
+  { q: "Q2", months: "Apr – Jun", start: "-04-01", end: "-06-30" },
+  { q: "Q3", months: "Jul – Sep", start: "-07-01", end: "-09-30" },
+  { q: "Q4", months: "Oct – Dec", start: "-10-01", end: "-12-31" },
+];
+
+function FdQuarterPicker({ timeframe, setTimeframe }) {
+  const [open, setOpen] = useState(false);
+  const [customMode, setCustomMode] = useState(false);
+  const [yearOffset, setYearOffset] = useState(0);
+  const [cStart, setCStart] = useState(timeframe?.start || "");
+  const [cEnd, setCEnd] = useState(timeframe?.end || "");
+  const ref = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setCustomMode(false); } };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentQ = Math.floor(now.getMonth() / 3);
+  const baseYear = currentYear + yearOffset;
+
+  const pick = (qi) => {
+    const qm = FD_QUARTERS[qi];
+    setTimeframe?.({ label: qm.q, year: baseYear, start: `${baseYear}${qm.start}`, end: `${baseYear}${qm.end}` });
+    setOpen(false); setCustomMode(false);
+  };
+  const applyCustom = () => {
+    if (!cStart || !cEnd || cStart > cEnd) return;
+    const s = new Date(cStart), e = new Date(cEnd);
+    const sM = s.toLocaleDateString("en-US", { month: "short" });
+    const eM = e.toLocaleDateString("en-US", { month: "short" });
+    setTimeframe?.({
+      label: `${sM} – ${eM}`,
+      year: s.getFullYear() === e.getFullYear() ? s.getFullYear() : `${s.getFullYear()}–${e.getFullYear()}`,
+      start: cStart, end: cEnd,
+    });
+    setOpen(false); setCustomMode(false);
+  };
+
+  const navBtn = {
+    border: "none", background: "transparent", cursor: "pointer",
+    fontSize: 16, lineHeight: 1, color: FD.textSecondary, padding: "2px 8px", borderRadius: 6,
+  };
+  const dateInput = {
+    fontSize: 12, color: FD.textPrimary, padding: "6px 8px", borderRadius: 8,
+    border: `1px solid ${FD.border}`, background: FD.surface2, outline: "none", width: "100%",
+  };
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" onClick={() => setOpen(o => !o)} style={{
+        display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 12px",
+        borderRadius: 8, background: FD.surface, border: `1px solid ${FD.border}`, cursor: "pointer",
+      }}>
+        <span style={{ fontSize: 14, fontWeight: 500, color: FD.textPrimary }}>{timeframe.label} {timeframe.year}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={FD.textTertiary} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 150ms" }}>
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 200,
+          background: FD.surface, border: `1px solid ${FD.border}`, borderRadius: 12,
+          boxShadow: c.shadowFloat || "0 12px 40px rgba(0,0,0,0.18)", minWidth: 264, overflow: "hidden",
+        }}>
+          {!customMode ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderBottom: `1px solid ${FD.border}`, background: FD.surface2 }}>
+                <button type="button" onClick={() => setYearOffset(y => y - 1)} style={navBtn}>‹</button>
+                <span style={{ fontSize: 13, fontWeight: 700, color: FD.textPrimary }}>{baseYear}</span>
+                <button type="button" onClick={() => setYearOffset(y => y + 1)} style={navBtn}>›</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: 8 }}>
+                {FD_QUARTERS.map((qm, qi) => {
+                  const sel = timeframe.label === qm.q && timeframe.year === baseYear;
+                  const cur = baseYear === currentYear && qi === currentQ;
+                  return (
+                    <button key={qm.q} type="button" onClick={() => pick(qi)} style={{
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "10px 8px",
+                      borderRadius: 8, cursor: "pointer",
+                      border: sel ? `1.5px solid ${FD.action}` : cur ? `1px solid ${FD.border}` : "1px solid transparent",
+                      background: sel ? FD.actionSubtle : "transparent",
+                    }}
+                      onMouseEnter={e => { if (!sel) e.currentTarget.style.background = FD.surface2; }}
+                      onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "transparent"; }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: sel ? FD.action : FD.textPrimary }}>{qm.q}</span>
+                      <span style={{ fontSize: 11, color: sel ? FD.action : FD.textTertiary }}>{qm.months}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ padding: "4px 8px 8px", borderTop: `1px solid ${FD.border}` }}>
+                <button type="button" onClick={() => { setCustomMode(true); setCStart(timeframe.start); setCEnd(timeframe.end); }} style={{
+                  width: "100%", padding: 8, border: "none", background: "transparent", cursor: "pointer", borderRadius: 8,
+                  fontSize: 13, fontWeight: 600, color: FD.textSecondary, textAlign: "center",
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = FD.surface2; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+                  Custom range…
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: FD.textPrimary }}>Custom range</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: FD.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>From</label>
+                  <input type="date" value={cStart} onChange={e => setCStart(e.target.value)} style={dateInput} />
+                </div>
+                <span style={{ fontSize: 11, color: FD.textTertiary, paddingBottom: 8 }}>to</span>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ fontSize: 10, fontWeight: 600, color: FD.textTertiary, textTransform: "uppercase", letterSpacing: "0.06em" }}>To</label>
+                  <input type="date" value={cEnd} onChange={e => setCEnd(e.target.value)} style={dateInput} />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button type="button" onClick={() => setCustomMode(false)} style={{
+                  padding: "6px 14px", borderRadius: 8, border: `1px solid ${FD.border}`, background: "transparent",
+                  fontSize: 13, fontWeight: 600, color: FD.textSecondary, cursor: "pointer",
+                }}>Back</button>
+                <button type="button" onClick={applyCustom} style={{
+                  padding: "6px 14px", borderRadius: 8, border: "none", background: FD.action, color: c.textOnAccent || "#fff",
+                  fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: (!cStart || !cEnd || cStart > cEnd) ? 0.4 : 1,
+                }}>Apply</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════
    MAIN EXPORT
    ══════════════════════════════════════════════════════════════════ */
 export default function ProjectsView({
@@ -298,7 +714,7 @@ export default function ProjectsView({
   suppressBackRef,
   projectLinks, setProjectLinks, phaseDurationDefaults,
   myLens = false, followedProjects = [], toggleFollowProject,
-  timeframe,
+  timeframe, setTimeframe,
 }) {
   const can = permCan || defaultCan;
   const devRef = useDevLabel('ProjectsView', 'src/views/ProjectsView.jsx', 'Project registry table with deep dive and Gantt chart');
@@ -575,7 +991,7 @@ export default function ProjectsView({
     const alphaActive = active.filter(p => (metrics[p.id]?.activeTracks || []).includes("Alpha")).length;
     const betaActive = active.filter(p => (metrics[p.id]?.activeTracks || []).includes("Beta")).length;
     const shippedTotal = shipped.length + alphaActive + betaActive;
-    return { active: active.length, shipped: shipped.length, shippedTotal, alphaActive, betaActive, depri: depri.length, upcoming: upcomingProjs.length, blocked: blockedProjs.length, overdue: overdueCount, all: filtered.length, atRiskCount, trackCounts };
+    return { active: active.length, shipped: shipped.length, shippedTotal, alphaActive, betaActive, depri: depri.length, upcoming: upcomingProjs.length, blocked: blockedProjs.length, overdue: overdueCount, all: filtered.length, atRiskCount, atRisk: filtered.filter(p => metrics[p.id]?.atRisk).length, trackCounts };
   }, [filtered, metrics, today]);
 
   // ── Gantt-specific filter (separate from registry filters) ──
@@ -717,12 +1133,28 @@ export default function ProjectsView({
     return map;
   }, [projects, peopleById]);
 
+  // ── Parallax: drift the prairie background slower than the foreground ──
+  const bgRef = useRef(null);
+  useEffect(() => {
+    const el = bgRef.current;
+    if (!el) return;
+    let scroller = el.parentElement;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement;
+    if (!scroller) return;
+    let raf = 0;
+    const apply = () => { raf = 0; el.style.transform = `translate3d(0, ${scroller.scrollTop * 0.4}px, 0)`; };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    scroller.addEventListener("scroll", onScroll, { passive: true });
+    apply();
+    return () => { scroller.removeEventListener("scroll", onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, [selectedProject, viewMode]);
+
   // ═══════════════════════════════════════════════════════════
   // DETAIL STATE — Project Deep Dive
   // ═══════════════════════════════════════════════════════════
   if (selectedProject) {
     const proj = projects.find(p => p.id === selectedProject);
-    if (!proj) return <EmptyState icon="🔍" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
+    if (!proj) return <EmptyState icon="search" title="Project not found" message="This project may have been removed." action="Back to overview" onAction={goBackToList} />;
     return <ProjectDeepDive proj={proj} metrics={metrics[proj.id]} history={history} projects={projects} setProjects={setProjects} people={people} squads={squads} personProfile={personProfile} isAdmin={isAdmin} can={can} onNavigate={onNavigate} goBack={goBackToList} pc={pc} pcMid={pcMid} pcDim={pcDim} sc={sc} tc={tc} ec={ec} today={today} leaving={detailLeaving} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} />;
   }
 
@@ -750,7 +1182,25 @@ export default function ProjectsView({
   );
 
   return (
-    <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
+    <div ref={devRef} style={{ position: "relative", display: "flex", flexDirection: "column", gap: space[3] }}>
+
+      {/* ── PRAIRIE BACKGROUND (Figma 175:2272) — top-of-page landscape fading into the surface ── */}
+      {viewMode !== "board" && viewMode !== "gantt" && (
+        <div ref={bgRef} aria-hidden="true" style={{
+          position: "absolute", top: -24, left: -24, right: -24,
+          overflow: "hidden", pointerEvents: "none", zIndex: 0, lineHeight: 0,
+          willChange: "transform",
+        }}>
+          <img src={isDark ? "/prairie-dark.png" : "/prairie.png"} alt="" style={{
+            width: "100%", height: "auto", display: "block", transform: "scaleX(-1)",
+            opacity: 1,
+          }} />
+          <div style={{
+            position: "absolute", inset: 0,
+            background: `linear-gradient(to bottom, ${rgbaFromColor(c.surface, 0)} 0%, ${rgbaFromColor(c.surface, 0)} 50%, ${c.surface} 95%)`,
+          }} />
+        </div>
+      )}
 
       {toastAnim.mounted && (
         <div role="alert" aria-live="assertive" style={{
@@ -782,7 +1232,7 @@ export default function ProjectsView({
           animation: `${successToastAnim.visible ? "slideUp" : "slideDownOut"} ${successToastAnim.visible ? motion.slow.duration : motion.fast.duration} ${successToastAnim.visible ? motion.slow.easing : "cubic-bezier(0.4, 0, 1, 1)"} both`,
         }}>
           <div style={{
-            background: "#FFFFFF",
+            background: c.surfaceSolid,
             border: `1.5px solid ${c.green}`,
             borderLeft: `6px solid ${c.green}`,
             borderRadius: layout.radiusMd,
@@ -842,140 +1292,99 @@ export default function ProjectsView({
           Summary + tabs — scrolls with the page
           ═══════════════════════════════════════════════════════════ */}
       <div style={{
-        display: "flex", flexDirection: "column", gap: space[3],
+        position: "relative", zIndex: 1,
+        display: "flex", flexDirection: "column", gap: 24,
       }}>
 
-        {/* ═══════════════════════════════════════════════════════════
-            KPI GRID — 4 cards (Active / At Risk / Overdue / Shipped)
-            Steel & Orange pattern per design-directions.html §KPI CARDS
-            ═══════════════════════════════════════════════════════════ */}
-        {viewMode !== "board" && viewMode !== "gantt" && <KpiGrid cols="1fr 1fr 1fr">
-          <KpiCard
-            index={0}
-            label="In Flight"
-            value={summary.active}
-            onClick={() => setActiveTab("active")}
-            active={activeTab === "active"}
-          >
-            <PillRow>
-              {["PRD", "Design", "Dev", "QA"].map(t => (
-                <Pill
-                  key={t}
-                  count={summary.trackCounts?.[t] || 0}
-                  label={t}
-                  color={pc[t] || c.textDim}
-                />
-              ))}
-            </PillRow>
-          </KpiCard>
-          <KpiCard
-            index={1}
-            label="Shipped"
-            value={summary.shippedTotal}
-            onClick={() => setActiveTab(activeTab === "shipped" ? "all" : "shipped")}
-            active={activeTab === "shipped"}
-          >
-            <PillRow>
-              <Pill count={summary.shipped} label="Shipped" color={c.green} />
-              <Pill count={summary.alphaActive} label="Alpha" color={pc.Alpha} />
-              <Pill count={summary.betaActive} label="Beta" color={pc.Beta} />
-            </PillRow>
-          </KpiCard>
-          <KpiCard
-            index={2}
-            label="At Risk"
-            value={summary.atRiskCount}
-            onClick={() => setActiveTab(activeTab === "blocked" ? "all" : "blocked")}
-            active={activeTab === "blocked"}
-          >
-            <PillRow>
-              <Pill count={summary.blocked} label="Blocked" color={c.red} />
-              <Pill count={summary.overdue} label="Overdue" color={c.amber} />
-            </PillRow>
-          </KpiCard>
-        </KpiGrid>}
+        {/* ── TOP BAR — Quarter (left) · Release day (right) ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          {timeframe ? (
+            <FdQuarterPicker timeframe={timeframe} setTimeframe={setTimeframe} />
+          ) : <span />}
+          <FdSprintDayPill />
+        </div>
 
-        {/* VIEW-SCOPE PILLS + view-mode toggle — replaces the old "Projects" section head.
-            Left: 4 canonical scopes (In Flight / Shipped / Deprioritized / All) plus
-            a "Showing: …" chip when a synthetic tab (at_risk / overdue) is active.
-            Right: Table / Board / Gantt. */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[3], flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: space[2], alignItems: "center", flexWrap: "wrap" }}>
-            {TABS.map(opt => {
-              const parentScope = activeTab === "at_risk" ? "active" : activeTab;
-              const isActive = parentScope === opt.key;
+        {/* ── PAGE TITLE ── */}
+        <h1 style={{ margin: 0, marginTop: 4, fontSize: 60, fontWeight: 500, lineHeight: "72px", letterSpacing: "-0.03em", color: FD.textPrimary }}>Projects</h1>
+
+        {/* ── KPI CARDS — Active · Shipped · At risk (Figma 175:2692) ── */}
+        {viewMode !== "board" && viewMode !== "gantt" && (
+          <div style={{ display: "flex", gap: 16, marginTop: 36 }}>
+            <FdKpiCard
+              label="Active" value={summary.active}
+              onClick={() => setActiveTab(activeTab === "in_flight" ? "all" : "in_flight")}
+              active={activeTab === "in_flight"}
+            />
+            <FdKpiCard
+              label="Shipped" value={summary.shipped}
+              onClick={() => setActiveTab(activeTab === "shipped" ? "all" : "shipped")}
+              active={activeTab === "shipped"}
+            />
+            <FdKpiCard
+              label="At risk" value={summary.atRiskCount}
+              onClick={() => setActiveTab(activeTab === "blocked" ? "all" : "blocked")}
+              active={activeTab === "blocked"}
+            />
+            <div style={{ flex: 1, minWidth: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }} />
+          </div>
+        )}
+
+        {/* ── FILTER TABS + view switch + Filter + Add Project (Figma 152:5143) ── */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 36 }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            {[
+              { key: "all", label: "All", count: summary.all },
+              { key: "active", label: "In flight", count: summary.active },
+              { key: "shipped", label: "Shipped", count: summary.shipped },
+              { key: "blocked", label: "Blocked", count: summary.blocked },
+              { key: "at_risk", label: "At risk", count: summary.atRisk },
+              { key: "deprioritized", label: "Deprioritised", count: summary.depri },
+              { key: "overdue", label: "Overdue", count: summary.overdue },
+            ].map(opt => {
+              const isActive = activeTab === opt.key;
               return (
-                <button
-                  key={opt.key}
-                  className="flow-btn"
-                  onClick={() => setActiveTab(opt.key)}
-                  style={{
-                    padding: `6px ${space[3]}px`,
-                    borderRadius: layout.radiusSm,
-                    border: `1px solid ${isActive ? c.accentMid : c.border}`,
-                    background: isActive ? c.accentDim : c.surface,
-                    color: isActive ? c.accent : c.textDim,
-                    fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-                    cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 6,
-                  }}
-                >
+                <button key={opt.key} onClick={() => setActiveTab(opt.key)} style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "8px 8px 8px 12px", borderRadius: 9999, cursor: "pointer",
+                  border: `1px solid ${isActive ? FD.borderDark : FD.border}`,
+                  background: FD.surface,
+                  fontSize: 14, fontWeight: isActive ? 600 : 500, letterSpacing: "-0.1px",
+                  color: FD.textSecondary,
+                }}>
                   {opt.label}
-                  <span style={{
-                    fontFamily: typo.monoSm.font, fontWeight: 700,
-                    fontVariantNumeric: "tabular-nums",
-                  }}>{opt.count}</span>
+                  <span style={{ padding: "2px 8px", borderRadius: 9999, background: FD.surface3, fontSize: 13, fontWeight: 500, color: isActive ? FD.textSecondary : FD.textTertiary }}>{opt.count}</span>
                 </button>
               );
             })}
           </div>
-          <SegmentedToggle
-            options={[
-              { key: "registry", label: <span style={{ display: "flex", alignItems: "center", gap: 5 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>List</span> },
-              { key: "board", label: <span style={{ display: "flex", alignItems: "center", gap: 5 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Board</span> },
-              { key: "gantt", label: <span style={{ display: "flex", alignItems: "center", gap: 5 }}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="12" height="3" rx="1"/><rect x="7" y="10" width="14" height="3" rx="1"/><rect x="5" y="16" width="10" height="3" rx="1"/></svg>Timeline</span> },
-            ]}
-            value={viewMode}
-            onChange={(k) => {
-              setViewMode(k);
-              if (k === "registry") { setBoardFullscreen(false); setGanttFullscreen(false); }
-              else if (k === "board") { setBoardFullscreen(false); setGanttFullscreen(false); }
-              else if (k === "gantt") { /* inline now, no fullscreen */ }
-            }}
-          />
-        </div>
-
-        {/* SEARCH ROW */}
-        <div style={{ display: "flex", alignItems: "center", gap: space[3] }}>
-          <div style={{ position: "relative", flex: 1, minWidth: 200 }}>
-            <input ref={localSearchRef} value={search}
-              onChange={e => { setSearch(e.target.value); setFocusIdx(0); }}
-              onBlur={() => { setSearchGlow(false); if (searchGlowTimerRef.current) { clearTimeout(searchGlowTimerRef.current); searchGlowTimerRef.current = null; } }}
-              placeholder="Search projects by name, ID, owner, or squad..."
-              style={{
-                width: "100%", height: 40,
-                padding: `0 ${space[4]}px 0 38px`,
-                borderRadius: layout.radiusSm,
-                border: `1px solid ${searchGlow ? c.accent : c.border}`,
-                background: c.surfaceAlt, color: c.text,
-                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                outline: "none", boxSizing: "border-box",
-                boxShadow: searchGlow ? `0 0 0 3px ${c.accentDim}` : "none",
-                transition: `border-color ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
-              }} />
-            <svg style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", transition: `stroke ${motion.fast.duration} ${motion.fast.easing}` }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={searchGlow ? c.accent : c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" />
-            </svg>
-            {!search && <span style={{
-              position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
-              fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 600,
-              color: c.textDim, lineHeight: 1,
-              padding: `3px 7px 4px`, borderRadius: layout.radiusXs,
-              background: `linear-gradient(180deg, ${c.surfaceAlt} 0%, ${c.bg} 100%)`,
-              border: `1px solid ${c.border}`,
-              boxShadow: `0 2px 0 ${c.border}, 0 2px 3px ${c.shadow}`,
-              pointerEvents: "none",
-            }}>/</span>}
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {/* View switch */}
+            <div style={{ display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 8, background: FD.surface2, border: `1px solid ${FD.surface3}` }}>
+              {[
+                { key: "registry", icon: <><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></> },
+                { key: "board", icon: <><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></> },
+                { key: "gantt", icon: <><line x1="6" y1="20" x2="6" y2="11"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></> },
+              ].map(v => {
+                const on = viewMode === v.key;
+                return (
+                  <button key={v.key} onClick={() => { setViewMode(v.key); setBoardFullscreen(false); setGanttFullscreen(false); }}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 8, borderRadius: 6, border: on ? `1px solid ${FD.border}` : "1px solid transparent", cursor: "pointer",
+                      background: on ? FD.surface : "transparent" }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={on ? FD.textPrimary : FD.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{v.icon}</svg>
+                  </button>
+                );
+              })}
+            </div>
+            {/* Filter */}
+            <button onClick={() => localSearchRef.current?.focus()} style={{ display: "flex", alignItems: "center", gap: 4, padding: "10px 12px 10px 10px", borderRadius: 8, border: `1px solid ${FD.border}`, background: FD.surface, cursor: "pointer", fontSize: 12, fontWeight: 600, color: FD.textPrimary }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              Filter
+            </button>
+            {/* Add Project */}
+            <button onClick={() => setShowCreate(true)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "10px 12px", borderRadius: 8, border: "none", background: FD.borderDark, cursor: "pointer", fontSize: 12, fontWeight: 600, color: FD.surface }}>
+              Add Project
+            </button>
           </div>
         </div>
       </div>
@@ -988,13 +1397,6 @@ export default function ProjectsView({
 
       {/* ── INLINE BOARD VIEW ── */}
       {viewMode === "board" ? (() => {
-        const PASTEL_BG = {
-          PRD: "#F5EEFF", Design: "#EDF5FF", Dev: "#FFF8E1", QA: "#E8F6F8", Alpha: "#EEF9FF", Beta: "#FFF5E6",
-        };
-        const PASTEL_BORDER = {
-          PRD: "#D8B4FE", Design: "#A5C8FF", Dev: "#FDE68A", QA: "#99D5DB", Alpha: "#A5D8FF", Beta: "#FCD34D",
-        };
-
         // Columns = the 6 tracks (no GA)
         const columns = trackNames;
         // Build column data: a project appears in every column where it has an active track
@@ -1154,33 +1556,32 @@ export default function ProjectsView({
                   onDrop={(e) => handleDrop(e, track)}
                   style={{
                     flex: 1, minWidth: 180, display: "flex", flexDirection: "column",
-                    borderRadius: layout.radiusLg,
-                    background: isOver ? `${c.accent}12` : c.surface,
-                    border: `1px solid ${isOver ? c.accent : c.border}`,
-                    boxShadow: isOver ? `inset 0 0 0 2px ${c.accent}40, 0 0 16px ${c.accent}15` : "none",
-                    transform: isOver ? "scale(1.02)" : "scale(1)",
-                    transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                    borderRadius: 16,
+                    background: isOver ? FD.surface2 : FD.surface,
+                    border: `1px solid ${isOver ? FD.borderDark : FD.border}`,
+                    boxShadow: "none",
+                    transform: isOver ? "scale(1.01)" : "scale(1)",
+                    transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
                   }}
                 >
                   {/* Column header */}
                   <div style={{
                     padding: `${space[3]}px ${space[4]}px`,
-                    borderBottom: `1px solid ${c.border}`,
+                    borderBottom: `1px solid ${FD.border}`,
                     display: "flex", alignItems: "center", justifyContent: "space-between",
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: phColor }} />
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: phColor }} />
                       <span style={{
-                        fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                        fontWeight: 700, letterSpacing: "0.06em",
-                        color: phColor, textTransform: "uppercase",
+                        fontSize: 14, fontWeight: 600, letterSpacing: "-0.1px",
+                        color: FD.textPrimary,
                       }}>{track}</span>
                     </div>
                     <span style={{
                       fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                      fontWeight: 700, color: c.textMid,
-                      background: c.surfaceAlt, padding: "2px 8px",
-                      borderRadius: layout.radiusPill, border: `1px solid ${c.border}`,
+                      fontWeight: 600, color: FD.textTertiary,
+                      background: FD.surface2, padding: "2px 8px",
+                      borderRadius: layout.radiusPill,
                     }}>{cards.length}</span>
                   </div>
 
@@ -1196,15 +1597,13 @@ export default function ProjectsView({
                         padding: `${space[6]}px ${space[3]}px`,
                         textAlign: "center",
                         fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                        color: c.textGhost,
-                        border: `2px dashed ${c.border}`, borderRadius: layout.radiusMd,
+                        color: FD.textTertiary,
+                        border: `2px dashed ${FD.border}`, borderRadius: 12,
                         pointerEvents: "none",
                       }}>Drop here</div>
                     )}
                     {cards.map(proj => {
                       const m = metrics[proj.id] || {};
-                      const pastelBg = PASTEL_BG[track] || "#F9FAFB";
-                      const pastelBorder = PASTEL_BORDER[track] || c.border;
                       const active = getActiveTracks(proj);
                       const otherTracks = active.filter(t => t !== track);
                       const isHovered = boardHoverId === `${proj.id}-${track}`;
@@ -1219,17 +1618,18 @@ export default function ProjectsView({
                           onDragEnd={handleDragEnd}
                           onClick={() => openProject(proj.id)}
                           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProject(proj.id); } }}
-                          onMouseEnter={(e) => { setBoardHoverId(`${proj.id}-${track}`); const el = e.currentTarget; el.style.transform = "translateY(-2px) scale(1.02)"; el.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)"; }}
-                          onMouseLeave={(e) => { setBoardHoverId(null); const el = e.currentTarget; el.style.transform = "translateY(0) scale(1)"; el.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}
+                          onMouseEnter={(e) => { setBoardHoverId(`${proj.id}-${track}`); const el = e.currentTarget; el.style.transform = "scale(1.01)"; el.style.borderColor = FD.textSecondary; }}
+                          onMouseLeave={(e) => { setBoardHoverId(null); const el = e.currentTarget; el.style.transform = "scale(1)"; el.style.borderColor = FD.border; }}
                           style={{
-                            padding: 14, position: "relative",
-                            borderRadius: layout.radiusMd,
-                            background: pastelBg,
-                            border: `1px solid ${pastelBorder}60`,
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                            padding: 14, position: "relative", overflow: "hidden",
+                            borderRadius: 12,
+                            background: FD.surface,
+                            border: `1px solid ${FD.border}`,
+                            borderLeft: `3px solid ${phColor}`,
+                            boxShadow: "none",
                             cursor: "grab",
                             display: "flex", flexDirection: "column", gap: space[2],
-                            transition: `box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                            transition: `border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
                           }}
                         >
                           {/* Done button — appears on hover */}
@@ -1240,15 +1640,15 @@ export default function ProjectsView({
                               style={{
                                 position: "absolute", top: 6, right: 6, zIndex: 2,
                                 width: 22, height: 22, borderRadius: 6,
-                                background: c.green, border: "none",
+                                background: FD.success, border: "none",
                                 color: "#fff", cursor: "pointer",
                                 display: "flex", alignItems: "center", justifyContent: "center",
                                 fontSize: 12, lineHeight: 1, fontWeight: 700,
                                 transition: `opacity ${motion.fast.duration}`,
-                                opacity: 0.9,
+                                opacity: 0.95,
                               }}
                               onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.9"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.95"; }}
                             >✓</button>
                           )}
 
@@ -1257,35 +1657,33 @@ export default function ProjectsView({
                             <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
                               <span style={{
                                 fontFamily: typo.monoMd.font, fontSize: 11,
-                                fontWeight: 700, letterSpacing: "0.02em",
-                                color: ec.project,
+                                fontWeight: 600, letterSpacing: "0.02em",
+                                color: FD.textTertiary,
                               }}>{proj.id}</span>
                               {proj.priority && (() => {
-                                const pColors = { P0: c.red, P1: c.amber, P2: c.textDim, P3: c.textGhost };
-                                const pBg = { P0: c.redDim, P1: c.amberDim, P2: c.surfaceAlt, P3: c.surfaceAlt };
-                                return <Tag color={pColors[proj.priority] || c.textDim} bg={pBg[proj.priority] || c.surfaceAlt} style={{ fontSize: 9, padding: "1px 5px" }}>{proj.priority}</Tag>;
+                                const pri = FD_PRIORITY[proj.priority] || FD_PRIORITY.P2;
+                                return <Tag color={pri.color} bg={pri.bg} style={{ fontSize: 9, padding: "1px 5px" }}>{proj.priority}</Tag>;
                               })()}
                             </div>
-                            {m.overdue && <span title="Overdue" style={{ fontSize: 11, lineHeight: 1 }}>⚠️</span>}
-                            {m.isBlocked && <Tag color="#fff" bg={c.red} style={{ fontSize: 9, padding: "1px 5px", fontWeight: 700 }}>BLOCKED</Tag>}
+                            {m.overdue && <span title="Overdue" style={{ display: "inline-flex", color: FD.warning }}><Icon name="alert-triangle" size={12} /></span>}
+                            {m.isBlocked && <Tag color={FD.error} bg={FD.errorSubtle} style={{ fontSize: 9, padding: "1px 5px", fontWeight: 700 }}>BLOCKED</Tag>}
                           </div>
 
                           {/* Name */}
                           <div style={{
-                            fontFamily: typo.bodySm.font, fontSize: 13,
-                            fontWeight: 600, color: c.text, lineHeight: 1.4,
+                            fontSize: 14, fontWeight: 600, color: FD.textPrimary, lineHeight: 1.4,
                           }}>{proj.name}</div>
 
                           {/* Owner + squad */}
                           <div style={{
                             display: "flex", alignItems: "center", justifyContent: "space-between",
-                            fontFamily: typo.bodySm.font, fontSize: 11, color: c.textMid,
+                            fontSize: 12, color: FD.textSecondary,
                           }}>
                             <span style={{ fontWeight: 500 }}>{proj.owner || "—"}</span>
                             <span style={{
-                              padding: "1px 6px", borderRadius: 999,
-                              background: "rgba(255,255,255,0.6)", border: `1px solid ${pastelBorder}40`,
-                              fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: c.textDim,
+                              padding: "1px 7px", borderRadius: 999,
+                              background: FD.surface2,
+                              fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: FD.textTertiary,
                             }}>{proj.squad}</span>
                           </div>
 
@@ -1293,17 +1691,21 @@ export default function ProjectsView({
                           {otherTracks.length > 0 && (
                             <div style={{
                               display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap",
-                              borderTop: `1px solid ${pastelBorder}40`,
+                              borderTop: `1px solid ${FD.border}`,
                               paddingTop: space[2], marginTop: 2,
                             }}>
-                              <span style={{ fontFamily: typo.monoSm.font, fontSize: 9, color: c.textDim, fontWeight: 600 }}>also:</span>
+                              <span style={{ fontFamily: typo.monoSm.font, fontSize: 9, color: FD.textTertiary, fontWeight: 600 }}>also:</span>
                               {otherTracks.map(t => (
                                 <span key={t} style={{
-                                  padding: "1px 5px", borderRadius: layout.radiusXs,
-                                  background: pcMid[t] || c.surfaceAlt,
-                                  color: pc[t] || c.textDim,
-                                  fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
-                                }}>{t}</span>
+                                  display: "inline-flex", alignItems: "center", gap: 4,
+                                  padding: "1px 6px", borderRadius: layout.radiusXs,
+                                  background: FD.surface2,
+                                  color: FD.textTertiary,
+                                  fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600,
+                                }}>
+                                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: pc[t] || c.textDim }} />
+                                  {t}
+                                </span>
                               ))}
                             </div>
                           )}
@@ -1320,26 +1722,25 @@ export default function ProjectsView({
             {/* Shipped — horizontal strip */}
             {shippedBoardProjects.length > 0 && (
               <div style={{
-                background: c.surface,
-                borderRadius: layout.radiusLg,
-                border: `1px solid ${c.green}25`,
+                background: FD.surface,
+                borderRadius: 16,
+                border: `1px solid ${FD.border}`,
               }}>
                 <div style={{
-                  padding: `${space[2]}px ${space[4]}px`,
-                  borderBottom: `1px solid ${c.green}15`,
+                  padding: `${space[3]}px ${space[4]}px`,
+                  borderBottom: `1px solid ${FD.border}`,
                   display: "flex", alignItems: "center", gap: space[2],
                 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.green }} />
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: FD.success }} />
                   <span style={{
-                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                    fontWeight: 700, letterSpacing: "0.06em",
-                    color: c.green, textTransform: "uppercase",
+                    fontSize: 14, fontWeight: 600, letterSpacing: "-0.1px",
+                    color: FD.textPrimary,
                   }}>Shipped</span>
                   <span style={{
                     fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                    fontWeight: 700, color: c.textMid,
-                    background: c.surfaceAlt, padding: "1px 7px",
-                    borderRadius: layout.radiusPill, border: `1px solid ${c.border}`,
+                    fontWeight: 600, color: FD.textTertiary,
+                    background: FD.surface2, padding: "2px 8px",
+                    borderRadius: layout.radiusPill,
                   }}>{shippedBoardProjects.length}</span>
                 </div>
                 <div style={{
@@ -1351,31 +1752,28 @@ export default function ProjectsView({
                     <div key={proj.id} role="button" tabIndex={0}
                       onClick={() => openProject(proj.id)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProject(proj.id); } }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(5,150,105,0.12)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.01)"; e.currentTarget.style.borderColor = FD.textSecondary; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.borderColor = FD.border; }}
                       style={{
-                        minWidth: 220, maxWidth: 260, padding: 14, borderRadius: layout.radiusMd,
-                        background: "#dcfce7", border: `1px solid #86efac`,
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.04)", cursor: "pointer",
+                        minWidth: 220, maxWidth: 260, padding: 14, borderRadius: 12,
+                        background: FD.surface, border: `1px solid ${FD.border}`,
+                        borderLeft: `3px solid ${FD.success}`,
+                        boxShadow: "none", cursor: "pointer",
                         display: "flex", flexDirection: "column", gap: space[2], flexShrink: 0,
-                        transition: `box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                        transition: `border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                        <span style={{ fontFamily: typo.monoMd.font, fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", color: ec.project }}>{proj.id}</span>
-                        <span style={{
-                          fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
-                          color: "#166534", background: "#bbf7d0",
-                          padding: "1px 6px", borderRadius: layout.radiusXs,
-                        }}>SHIPPED</span>
+                        <span style={{ fontFamily: typo.monoMd.font, fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", color: FD.textTertiary }}>{proj.id}</span>
+                        <Tag color={FD.success} bg={FD.successSubtle} style={{ fontSize: 9, padding: "1px 6px", fontWeight: 700 }}>SHIPPED</Tag>
                       </div>
-                      <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 600, color: "#14532d", lineHeight: 1.4 }}>{proj.name}</div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: typo.bodySm.font, fontSize: 11, color: "#166534" }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: FD.textPrimary, lineHeight: 1.4 }}>{proj.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: FD.textSecondary }}>
                         <span style={{ fontWeight: 500 }}>{proj.owner || "—"}</span>
-                        <span style={{ padding: "1px 6px", borderRadius: 999, background: "rgba(255,255,255,0.5)", border: `1px solid #86efac60`, fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: "#166534" }}>{proj.squad}</span>
+                        <span style={{ padding: "1px 7px", borderRadius: 999, background: FD.surface2, fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: FD.textTertiary }}>{proj.squad}</span>
                       </div>
                       {proj.shipped_at && (
-                        <div style={{ fontFamily: typo.monoSm.font, fontSize: 9, color: "#15803d", borderTop: "1px solid #86efac60", paddingTop: space[1], marginTop: 2 }}>
+                        <div style={{ fontFamily: typo.monoSm.font, fontSize: 9, color: FD.textTertiary, borderTop: `1px solid ${FD.border}`, paddingTop: space[1], marginTop: 2 }}>
                           Shipped {fmtDate(proj.shipped_at)}
                         </div>
                       )}
@@ -1388,26 +1786,25 @@ export default function ProjectsView({
             {/* Upcoming — horizontal strip at bottom */}
             {upcomingBoardProjects.length > 0 && (
               <div style={{
-                background: c.surface,
-                borderRadius: layout.radiusLg,
-                border: `1px solid ${c.border}`,
+                background: FD.surface,
+                borderRadius: 16,
+                border: `1px solid ${FD.border}`,
               }}>
                 <div style={{
-                  padding: `${space[2]}px ${space[4]}px`,
-                  borderBottom: `1px solid ${c.border}`,
+                  padding: `${space[3]}px ${space[4]}px`,
+                  borderBottom: `1px solid ${FD.border}`,
                   display: "flex", alignItems: "center", gap: space[2],
                 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.textDim }} />
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: FD.textTertiary }} />
                   <span style={{
-                    fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                    fontWeight: 700, letterSpacing: "0.06em",
-                    color: c.textDim, textTransform: "uppercase",
+                    fontSize: 14, fontWeight: 600, letterSpacing: "-0.1px",
+                    color: FD.textPrimary,
                   }}>Upcoming</span>
                   <span style={{
                     fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size,
-                    fontWeight: 700, color: c.textMid,
-                    background: c.surfaceAlt, padding: "1px 7px",
-                    borderRadius: layout.radiusPill, border: `1px solid ${c.border}`,
+                    fontWeight: 600, color: FD.textTertiary,
+                    background: FD.surface2, padding: "2px 8px",
+                    borderRadius: layout.radiusPill,
                   }}>{upcomingBoardProjects.length}</span>
                 </div>
                 <div style={{
@@ -1422,31 +1819,30 @@ export default function ProjectsView({
                       onDragEnd={handleDragEnd}
                       onClick={() => openProject(proj.id)}
                       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openProject(proj.id); } }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.10)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.04)"; }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.01)"; e.currentTarget.style.borderColor = FD.textSecondary; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.borderColor = FD.border; }}
                       style={{
-                        minWidth: 220, maxWidth: 260, padding: 14, borderRadius: layout.radiusMd,
-                        background: c.surfaceAlt, border: `1px solid ${c.border}`,
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.04)", cursor: "pointer",
+                        minWidth: 220, maxWidth: 260, padding: 14, borderRadius: 12,
+                        background: FD.surface2, border: `1px solid ${FD.border}`,
+                        boxShadow: "none", cursor: "pointer",
                         display: "flex", flexDirection: "column", gap: space[2], flexShrink: 0,
-                        transition: `box-shadow ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
+                        transition: `border-color ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}`,
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                        <span style={{ fontFamily: typo.monoMd.font, fontSize: 11, fontWeight: 700, letterSpacing: "0.02em", color: ec.project }}>{proj.id}</span>
+                        <span style={{ fontFamily: typo.monoMd.font, fontSize: 11, fontWeight: 600, letterSpacing: "0.02em", color: FD.textTertiary }}>{proj.id}</span>
                         {proj.priority && (() => {
-                          const pColors = { P0: c.red, P1: c.amber, P2: c.textDim, P3: c.textGhost };
-                          const pBg = { P0: c.redDim, P1: c.amberDim, P2: c.surfaceAlt, P3: c.surfaceAlt };
-                          return <Tag color={pColors[proj.priority] || c.textDim} bg={pBg[proj.priority] || c.surfaceAlt} style={{ fontSize: 9, padding: "1px 5px" }}>{proj.priority}</Tag>;
+                          const pri = FD_PRIORITY[proj.priority] || FD_PRIORITY.P2;
+                          return <Tag color={pri.color} bg={pri.bg} style={{ fontSize: 9, padding: "1px 5px" }}>{proj.priority}</Tag>;
                         })()}
                       </div>
-                      <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, fontWeight: 600, color: c.text, lineHeight: 1.4 }}>{proj.name}</div>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontFamily: typo.bodySm.font, fontSize: 11, color: c.textMid }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: FD.textPrimary, lineHeight: 1.4 }}>{proj.name}</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 12, color: FD.textSecondary }}>
                         <span style={{ fontWeight: 500 }}>{proj.owner || "—"}</span>
-                        <span style={{ padding: "1px 6px", borderRadius: 999, background: "rgba(255,255,255,0.6)", border: `1px solid ${c.border}`, fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: c.textDim }}>{proj.squad}</span>
+                        <span style={{ padding: "1px 7px", borderRadius: 999, background: FD.surface, fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 600, color: FD.textTertiary }}>{proj.squad}</span>
                       </div>
                       {proj.tentativeStartDate && (
-                        <div style={{ fontFamily: typo.monoSm.font, fontSize: 9, color: c.textDim, borderTop: `1px solid ${c.border}`, paddingTop: space[1], marginTop: 2 }}>
+                        <div style={{ fontFamily: typo.monoSm.font, fontSize: 9, color: FD.textTertiary, borderTop: `1px solid ${FD.border}`, paddingTop: space[1], marginTop: 2 }}>
                           Starts {fmtDate(proj.tentativeStartDate)}
                         </div>
                       )}
@@ -1550,20 +1946,36 @@ export default function ProjectsView({
         } else if (projects.length === 0) {
           message = "Add your first project to start tracking work.";
         }
-        return <EmptyState icon="📂" title={title} message={message} action={action} onAction={onAction} />;
+        return <EmptyState icon="folder" title={title} message={message} action={action} onAction={onAction} />;
       })() : (
-        <TableShell minWidth={820}>
+        <div style={{ marginTop: 12, overflow: "visible", borderRadius: 12 }}>
+          <table style={{ width: "100%", minWidth: 1080, borderCollapse: "collapse" }}>
             <thead>
                 <tr>
-                  <Th col="squad" style={{ position: "sticky", left: 0, top: "var(--flow-sticky-top, 0px)", background: "rgba(232, 232, 232, 0.72)", backdropFilter: "blur(16px) saturate(1.3)", WebkitBackdropFilter: "blur(16px) saturate(1.3)", zIndex: 11, minWidth: 70 }}>Squad</Th>
-                  <Th col="project" style={{ minWidth: 160 }}>Project</Th>
-                  <Th col="priority" style={{ minWidth: 50, textAlign: "center" }}>Pri</Th>
-                  <Th col="owner" style={{ minWidth: 80 }}>Owner</Th>
-                  <Th col="tracks" style={{ minWidth: 90, textAlign: "center" }}>Tracks</Th>
-                  <Th col="people" style={{ minWidth: 70, textAlign: "center" }}>Team</Th>
-                  <Th col="last" style={{ minWidth: 80, textAlign: "center" }}>Updated</Th>
-                  <Th col="timeline" style={{ minWidth: colWidths.timeline?.min || 110, textAlign: "center" }}>Timeline</Th>
-                  {toggleFollowProject && <th style={{ width: 32, padding: 0, position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 10, background: "rgba(232, 232, 232, 0.72)", backdropFilter: "blur(16px) saturate(1.3)", WebkitBackdropFilter: "blur(16px) saturate(1.3)", borderBottom: `1px solid rgba(0,0,0,0.13)` }} />}
+                  {[
+                    { label: "Name", w: null, col: "project" },
+                    { label: "Squad", w: 148, col: "squad" },
+                    { label: "Priority", w: 69, col: "priority" },
+                    { label: "Active Tracks", w: 152, col: "tracks" },
+                    { label: "Team", w: 184, col: "people" },
+                    { label: "Timeline", w: 168, col: "timeline" },
+                    { label: "", w: 52, col: null },
+                  ].map((h, hi) => {
+                    const sortable = !!h.col;
+                    const sorted = sortable && sortKey === h.col;
+                    return (
+                    <th key={h.col || `c${hi}`} onClick={sortable ? () => toggleSort(h.col) : undefined} style={{
+                      position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 50,
+                      width: h.w || undefined, textAlign: "left", padding: "12px 10px",
+                      background: FD.surface2, color: sorted ? FD.textPrimary : FD.textTertiary,
+                      fontSize: 13, fontWeight: 600, letterSpacing: "-0.1px",
+                      whiteSpace: "nowrap", cursor: sortable ? "pointer" : "default", userSelect: "none",
+                    }}>
+                      {h.label}
+                      {sortable && <span style={{ marginLeft: 4, opacity: sorted ? 1 : 0.25 }}>{sorted ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>}
+                    </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -1572,17 +1984,19 @@ export default function ProjectsView({
                   const isFocused = kbActive && fi === focusIdx;
                   const isHovered = hoveredProject === proj.id;
                   const isDimmed = proj.status === "deprioritized";
-                  const isUpcoming = proj.status === "upcoming";
-                  const isPinned = pinnedIds.has(proj.id);
-                  const isShipped = proj.status === "shipped";
-                  const isBlockedProj = proj.status === "blocked" || m.isBlocked;
-                  const isBlockedOrOverdue = isBlockedProj || m.overdue;
-                  const leftBarColor = isShipped ? c.green : isBlockedOrOverdue ? c.red : null;
+                  const st = fdStatus(proj, m);
+                  const pri = proj.priority || "P2";
+                  const priStyle = FD_PRIORITY[pri] || FD_PRIORITY.P2;
+                  const isShipped = proj.status === "shipped" || ["Alpha", "Beta", "GA"].includes(proj.phase);
+                  const displayEnd = isShipped && proj.shipped_at ? proj.shipped_at.slice(0, 10) : proj.endDate;
+                  const tracks = (m.activeTracks && m.activeTracks.length ? m.activeTracks : getActiveTracks(proj)) || [];
+                  const stale = isStale(proj.lastActivityAt);
+                  // Project progress (elapsed share of the timeline) — drives the in-progress donut
+                  const allocatedDays = daysBetween(proj.startDate, displayEnd);
+                  const elapsedDays = Math.max(0, Math.min(daysBetween(proj.startDate, today), allocatedDays));
+                  const progressPct = allocatedDays > 0 ? Math.round((elapsedDays / allocatedDays) * 100) : 0;
 
-                  const cellBorder = "1px solid rgba(0,0,0,0.03)";
-                  const rowBg = isFocused ? `${c.accent}10` : isHovered ? "rgba(0,0,0,0.012)" : c.surface;
-
-                  // Build team members list: owner + members
+                  // Team = owner + members
                   const ownerPerson = (people || []).find(p => p.id === proj.owner_id);
                   const memberIds = m.teamMembers || [];
                   const allTeam = [];
@@ -1593,292 +2007,153 @@ export default function ProjectsView({
                       if (p) allTeam.push(p);
                     }
                   });
-                  const showTeam = allTeam.slice(0, 3);
-                  const extraCount = allTeam.length;
+                  const showTeam = allTeam.slice(0, 4);
+                  const extra = allTeam.length - showTeam.length;
 
-                  const lastActivity = latestActivity[proj.id];
+                  const rowBg = isFocused ? FD.actionSubtle : isHovered ? FD.surface2 : FD.surface;
+                  const cell = { padding: "0 10px", height: 60, color: FD.textSecondary, fontSize: 14, letterSpacing: "-0.1px", verticalAlign: "middle" };
+                  const isWatched = (followedProjects || []).includes(proj.id);
 
                   return (
-                    <React.Fragment key={proj.id}>
                     <tr
+                      key={proj.id}
                       ref={el => { if (el) el.__projId = proj.id; }}
                       {...(fi === 0 ? { "data-tour": "project-row" } : {})}
                       className={isFocused ? "flow-kb-focus" : undefined}
-                      onMouseEnter={(e) => { setHoveredProject(proj.id); e.currentTarget.style.transform = "scale(1.008)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.07)"; e.currentTarget.style.zIndex = "2"; e.currentTarget.style.position = "relative"; }}
-                      onMouseLeave={(e) => { setHoveredProject(null); e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.zIndex = "auto"; e.currentTarget.style.position = "static"; }}
+                      onMouseEnter={() => setHoveredProject(proj.id)}
+                      onMouseLeave={() => setHoveredProject(null)}
                       onClick={() => openProject(proj.id)}
-                      style={{
-                        cursor: "pointer",
-                        background: rowBg,
-                        opacity: isDimmed ? 0.5 : 1,
-                        filter: isDimmed ? "grayscale(0.6)" : "none",
-                        borderLeft: leftBarColor ? `4px solid ${leftBarColor}` : "4px solid transparent",
-                        transition: `background ${motion.fast.duration} ${motion.fast.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}, transform ${motion.fast.duration} ${motion.fast.easing}, box-shadow ${motion.fast.duration} ${motion.fast.easing}`,
-                      }}
+                      style={{ cursor: "pointer", background: rowBg, opacity: isDimmed ? 0.55 : 1, transition: `background ${motion.fast.duration} ${motion.fast.easing}` }}
                     >
-                      {/* Squad — sticky left + pin */}
-                      <td style={{
-                        padding: `${space[3]}px ${space[4]}px`,
-                        fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size,
-                        fontWeight: 500, color: isDimmed ? c.textGhost : c.textMid,
-                        borderBottom: cellBorder,
-                        position: "sticky", left: 0, background: rowBg, zIndex: 1,
-                        transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                          <button
-                            type="button"
-                            title={isPinned ? "Unpin from watchlist" : "Pin to watchlist"}
-                            onClick={(e) => togglePin(proj.id, e)}
-                            style={{
-                              background: "none", border: "none", padding: 0, cursor: "pointer",
-                              fontSize: 12, lineHeight: 1, flexShrink: 0,
-                              opacity: isPinned ? 1 : isHovered ? 0.5 : 0,
-                              color: isPinned ? c.accent : c.textDim,
-                              transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
-                            }}
-                          >{isPinned ? "📌" : "📌"}</button>
-                          {proj.squad}
-                        </div>
+                      {/* Name = status icon + ID + project name */}
+                      <td style={cell}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 10, whiteSpace: "nowrap" }}>
+                          <Tooltip label={st.label}>
+                            <FdStatusIcon kind={st.kind} pct={progressPct} />
+                          </Tooltip>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600, color: FD.textPrimary }}>
+                            <span>{proj.id}</span>
+                            <span>{proj.name}</span>
+                          </span>
+                        </span>
                       </td>
 
-                      {/* Project — ID + Name + status/phase labels */}
-                      <td style={{
-                        padding: `${space[3]}px ${space[4]}px`,
-                        borderBottom: cellBorder,
-                      }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                          <span style={{
-                            fontFamily: typo.monoMd.font, fontSize: 12,
-                            fontWeight: 700, letterSpacing: "0.02em",
-                            color: ec.project, flexShrink: 0,
-                          }}>{proj.id}</span>
-                          <span style={{
-                            fontFamily: typo.bodyMd.font, fontSize: 14,
-                            fontWeight: 600, color: c.text,
-                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                          }}>{proj.name}</span>
-                          {m.overdue && <span title={`Overdue by ${Math.abs(daysBetween(today, proj.endDate))}d`} style={{ flexShrink: 0, fontSize: 13, lineHeight: 1 }}>⚠️</span>}
-                          {m.isBlocked && <Tag color={c.red} bg={c.redDim} style={{ flexShrink: 0 }}>BLOCKED</Tag>}
-                          {proj.status === "deprioritized" && <Tag color={c.textDim} bg={c.surfaceAlt} style={{ flexShrink: 0 }}>DEPRIORITIZED</Tag>}
-                          {isUpcoming && <Tag color={c.textDim} bg={c.surfaceAlt} style={{ flexShrink: 0 }}>UPCOMING</Tag>}
-                          {SHIPPED_PHASES.includes(proj.phase) && <Tag color={c.green} bg={c.greenDim} style={{ flexShrink: 0 }}>SHIPPED</Tag>}
-                        </div>
-                      </td>
+                      {/* Squad */}
+                      <td style={cell}>{proj.squad || "—"}</td>
 
                       {/* Priority */}
-                      <td style={{
-                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                        borderBottom: cellBorder,
-                      }}>
-                        {(() => {
-                          const pri = proj.priority || "P2";
-                          const pColors = { P0: c.red, P1: c.amber, P2: c.textMid, P3: c.textGhost };
-                          const pBg = { P0: c.redDim, P1: c.amberDim, P2: c.surfaceAlt, P3: c.surfaceAlt };
-                          return <Tag color={pColors[pri]} bg={pBg[pri]} style={{ fontSize: 10, padding: "2px 7px" }}>{pri}</Tag>;
-                        })()}
+                      <td style={cell}>
+                        <span style={{ display: "inline-flex", alignItems: "center", padding: "4px 6px", borderRadius: 8, background: priStyle.bg, color: priStyle.color, fontSize: 14, fontWeight: 600 }}>{pri}</span>
                       </td>
-
-                      {/* Owner */}
-                      <td style={{
-                        padding: `${space[3]}px ${space[4]}px`,
-                        borderBottom: cellBorder,
-                        fontFamily: typo.bodyMd.font, fontSize: 14,
-                        fontWeight: 500, color: proj.owner ? c.cyan : c.textDim,
-                        whiteSpace: "nowrap",
-                      }}>{proj.owner || "Unassigned"}</td>
 
                       {/* Active Tracks */}
-                      <td style={{
-                        padding: `${space[3]}px ${space[4]}px`,
-                        textAlign: "center",
-                        borderBottom: cellBorder,
-                      }}>
-                        {isUpcoming ? <span style={{ color: c.textDim, fontSize: 11 }}>—</span>
-                         : isShipped ? (
-                          <span style={{
-                            padding: "1px 5px", borderRadius: layout.radiusXs,
-                            background: `${c.green}15`, color: c.green,
-                            fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
-                            letterSpacing: "0.04em",
-                          }}>Shipped</span>
-                        ) : (() => {
-                          const active = m.activeTracks || getActiveTracks(proj);
-                          if (active.length === 0) return <span style={{ color: c.textDim, fontSize: 11 }}>—</span>;
-                          return (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 4, flexWrap: "wrap", justifyContent: "center" }}>
-                              {active.map(t => (
-                                <span key={t} style={{
-                                  padding: "1px 5px", borderRadius: layout.radiusXs,
-                                  background: `${pc[t] || c.textDim}15`,
-                                  color: pc[t] || c.textDim,
-                                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
-                                  letterSpacing: "0.04em",
-                                  border: "none",
-                                }}>{t}</span>
-                              ))}
-                            </span>
-                          );
-                        })()}
+                      <td style={cell}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
+                          {tracks.length === 0 && <span style={{ color: FD.textTertiary }}>—</span>}
+                          {tracks.slice(0, 3).map(t => (
+                            <span key={t} style={{ flexShrink: 0, padding: "2px 6px", borderRadius: 8, background: FD.surface2, color: FD.textTertiary, fontSize: 14, fontWeight: 500 }}>{t}</span>
+                          ))}
+                        </div>
                       </td>
 
-                      {/* Team — solid filled avatar bubbles */}
-                      <td style={{
-                        padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                        borderBottom: cellBorder,
-                      }}>
-                        {isUpcoming ? <span style={{ color: c.textDim, fontSize: 11 }}>—</span> : (() => {
-                          const SOLID_COLORS = ["#0E7490", "#B45309", "#6D28D9", "#059669", "#DC2626", "#E8590C"];
-                          return (
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                              {showTeam.map((person, idx) => (
-                                  <div key={person.id} title={person.name} style={{
-                                    width: 28, height: 28, borderRadius: 8,
-                                    background: SOLID_COLORS[idx % SOLID_COLORS.length], color: "#fff",
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                    fontFamily: typo.monoSm.font, fontSize: 9, fontWeight: 700,
-                                    border: "2px solid #fff",
-                                    marginLeft: idx > 0 ? -6 : 0,
-                                    position: "relative", zIndex: idx + 1,
-                                  }}>{initialsOf(person.name)}</div>
-                              ))}
-                              {extraCount > 0 && (
-                                <div style={{
-                                  width: 28, height: 28, borderRadius: 8,
-                                  background: "#EDEDF0", color: c.textMid,
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
-                                  border: "2px solid #fff",
-                                  marginLeft: showTeam.length > 0 ? -6 : 0,
-                                  position: "relative", zIndex: showTeam.length + 1,
-                                }}>{extraCount}</div>
-                              )}
-                              {allTeam.length === 0 && <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: c.textDim }}>—</span>}
-                            </div>
-                          );
-                        })()}
+                      {/* Team — overlapping avatars (owner highlighted first) + overflow */}
+                      <td style={cell}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ display: "flex", alignItems: "center" }}>
+                            {showTeam.map((person, idx) => {
+                              const isOwner = ownerPerson && person.id === ownerPerson.id;
+                              return (
+                                <Tooltip key={person.id} style={{ marginLeft: idx > 0 ? -9 : 0, position: "relative", zIndex: isOwner ? 20 : 10 - idx }} label={
+                                  <span style={{ display: "flex", flexDirection: "column", gap: 1, textAlign: "left" }}>
+                                    <span style={{ fontWeight: 600 }}>{person.name}{isOwner ? " · Owner" : ""}</span>
+                                    {person.role && <span style={{ fontWeight: 400, opacity: 0.7 }}>{person.role}</span>}
+                                  </span>
+                                }>
+                                  <span
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.transform = "scale(1.18)";
+                                      e.currentTarget.style.borderColor = FD.textPrimary;
+                                      e.currentTarget.style.color = FD.textPrimary;
+                                      if (e.currentTarget.parentElement) e.currentTarget.parentElement.style.zIndex = "30";
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.transform = "scale(1)";
+                                      e.currentTarget.style.borderColor = isOwner ? FD.textPrimary : FD.surface;
+                                      e.currentTarget.style.color = isOwner ? FD.textPrimary : FD.textTertiary;
+                                      if (e.currentTarget.parentElement) e.currentTarget.parentElement.style.zIndex = String(isOwner ? 20 : 10 - idx);
+                                    }}
+                                    style={{
+                                      boxSizing: "border-box", cursor: "pointer",
+                                      width: 32, height: 32, borderRadius: "50%",
+                                      background: FD.surface3,
+                                      border: `1px solid ${isOwner ? FD.textPrimary : FD.surface}`,
+                                      display: "flex", alignItems: "center", justifyContent: "center",
+                                      fontSize: 12, fontWeight: 600, color: isOwner ? FD.textPrimary : FD.textTertiary,
+                                      transition: `transform ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+                                    }}>{initialsOf(person.name)}</span>
+                                </Tooltip>
+                              );
+                            })}
+                          </div>
+                          {extra > 0 && <span style={{ fontSize: 13, fontWeight: 600, color: FD.textMuted }}>+{extra}</span>}
+                          {allTeam.length === 0 && <span style={{ color: FD.textTertiary }}>—</span>}
+                        </div>
                       </td>
 
-                      {/* Updated + activity peek icon */}
-                      {isUpcoming ? (
-                        <td style={{ padding: `${space[3]}px ${space[4]}px`, textAlign: "center", borderBottom: cellBorder }}>
-                          <span style={{ color: c.textDim, fontSize: 11 }}>—</span>
-                        </td>
-                      ) : (() => {
-                        const stale = isStale(proj.lastActivityAt);
-                        return (
-                          <td
-                            style={{
-                              padding: `${space[3]}px ${space[4]}px`, textAlign: "center",
-                              borderBottom: cellBorder,
-                              fontFamily: typo.bodySm.font, fontSize: 12,
-                              color: !proj.lastActivityAt ? c.textDim : stale ? c.red : c.textMid,
-                              fontWeight: 500,
-                              fontVariantNumeric: "tabular-nums",
-                            }}
-                          >
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
-                              <span title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : "No activity yet"}>
-                                {proj.lastActivityAt ? timeAgo(proj.lastActivityAt) : "—"}
-                              </span>
-                              {lastActivity && (
+                      {/* Timeline + Updated combined — dates show first; recency reveals on hover */}
+                      <td style={cell}>
+                        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 1, whiteSpace: "nowrap", height: "100%" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: FD.textPrimary, fontWeight: 500 }}>
+                            <span>{fdDate(proj.startDate)} – {fdDate(displayEnd)}</span>
+                            {stale && !isHovered && <span title="Stale — no recent activity" style={{ width: 6, height: 6, borderRadius: "50%", background: FD.error, flexShrink: 0 }} />}
+                          </span>
+                          {isHovered && (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, color: stale ? FD.error : FD.textTertiary }}>
+                              <span title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : "No activity yet"}>Updated {proj.lastActivityAt ? timeAgo(proj.lastActivityAt) : "—"}</span>
+                              {latestActivity[proj.id] && (
                                 <span
-                                  style={{
-                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
-                                    width: 16, height: 16, cursor: "default", flexShrink: 0,
-                                    opacity: 0.35,
-                                    transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
-                                  }}
-                                  onMouseEnter={(e) => {
-                                    e.currentTarget.style.opacity = "0.7";
-                                    const rect = e.currentTarget.getBoundingClientRect();
-                                    showActivityTip({ projId: proj.id, rect });
-                                  }}
-                                  onMouseLeave={(e) => {
-                                    e.currentTarget.style.opacity = "0.35";
-                                    hideActivityTip();
-                                  }}
+                                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 15, height: 15, opacity: 0.55, cursor: "default", flexShrink: 0 }}
+                                  onMouseEnter={(e) => { e.stopPropagation(); e.currentTarget.style.opacity = "0.9"; showActivityTip({ projId: proj.id, rect: e.currentTarget.getBoundingClientRect() }); }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.55"; hideActivityTip(); }}
                                 >
-                                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <circle cx="8" cy="8" r="6.5" />
-                                    <line x1="8" y1="7" x2="8" y2="11" />
-                                    <circle cx="8" cy="5" r="0.5" fill={c.textDim} stroke="none" />
-                                  </svg>
+                                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6.5" /><line x1="8" y1="7" x2="8" y2="11" /><circle cx="8" cy="5" r="0.5" fill="currentColor" stroke="none" /></svg>
                                 </span>
                               )}
-                            </div>
-                          </td>
-                        );
-                      })()}
-
-                      {/* Timeline — start→end with progress bar */}
-                      <td style={{
-                        padding: `${space[3]}px ${space[4]}px`,
-                        borderBottom: cellBorder,
-                      }}>
-                        {isUpcoming ? (
-                          proj.tentativeStartDate ? (
-                            <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>
-                              Starts {fmtDate(proj.tentativeStartDate)}
                             </span>
-                          ) : <span style={{ color: c.textDim, fontSize: 11 }}>—</span>
-                        ) : (() => {
-                          const displayEnd = isShipped && proj.shipped_at ? proj.shipped_at.slice(0, 10) : proj.endDate;
-                          const allocated = daysBetween(proj.startDate, displayEnd);
-                          const elapsed = Math.max(0, Math.min(daysBetween(proj.startDate, today), allocated));
-                          const pct = allocated > 0 ? Math.round((elapsed / allocated) * 100) : 0;
-                          return (
-                            <div style={{ display: "flex", flexDirection: "column", gap: 3, alignItems: "center" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums" }}>
-                                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textMid }}>
-                                  {fmtDate(proj.startDate)}
-                                </span>
-                                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: c.textDim }}>→</span>
-                                <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: isShipped ? c.green : c.textMid }}>
-                                  {fmtDate(displayEnd)}
-                                </span>
-                              </div>
-                              <div style={{ height: 3, borderRadius: 2, background: c.border, overflow: "hidden", width: "100%" }}>
-                                <div style={{
-                                  height: "100%", borderRadius: 2, width: `${Math.min(pct, 100)}%`,
-                                  background: m.overdue ? c.red : pct > 85 ? c.amber : c.green,
-                                  transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
-                                }} />
-                              </div>
-                            </div>
-                          );
-                        })()}
+                          )}
+                        </div>
                       </td>
 
-                      {/* Follow bookmark — right end */}
-                      {toggleFollowProject && (
-                        <td style={{
-                          padding: `0 ${space[3]}px`, borderBottom: cellBorder,
-                          textAlign: "center", width: 32,
-                        }}>
+                      {/* Bookmark / watchlist toggle — end of row */}
+                      <td style={{ ...cell, textAlign: "right", padding: "0 14px 0 0" }}>
+                        {toggleFollowProject && (
                           <button
                             type="button"
-                            title={followedProjects.includes(proj.id) ? "Unfollow project" : "Follow project"}
+                            title={isWatched ? "Remove from watchlist" : "Save to watchlist"}
                             onClick={(e) => { e.stopPropagation(); toggleFollowProject(proj.id); }}
                             style={{
-                              background: "none", border: "none", padding: 2, cursor: "pointer",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              opacity: followedProjects.includes(proj.id) ? 1 : isHovered ? 0.35 : 0,
-                              transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
+                              display: "inline-flex", alignItems: "center", justifyContent: "center",
+                              background: "none", border: "none", cursor: "pointer", padding: 4, borderRadius: 6,
+                              transition: `transform ${motion.fast.duration} ${motion.fast.easing}`,
                             }}
+                            onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.18)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
                           >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill={followedProjects.includes(proj.id) ? c.accent : "none"} stroke={followedProjects.includes(proj.id) ? c.accent : c.textDim} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="17" height="17" viewBox="0 0 24 24"
+                              fill={isWatched ? FD.textPrimary : "none"}
+                              stroke={isWatched ? FD.textPrimary : FD.textTertiary}
+                              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
                             </svg>
                           </button>
-                        </td>
-                      )}
+                        )}
+                      </td>
                     </tr>
-                    </React.Fragment>
                   );
                 })}
               </tbody>
-        </TableShell>
+          </table>
+        </div>
       )}
       <div style={{ flexShrink: 0, height: space[8] }} />
       </div>
@@ -1915,7 +2190,7 @@ export default function ProjectsView({
             }} />
             {act.kind === "comment" ? (<>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 11, flexShrink: 0 }}>💬</span>
+                <span style={{ display: "inline-flex", flexShrink: 0, color: c.textMid }}><Icon name="message-circle" size={12} /></span>
                 <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.text }}>{act.author}</span>
               </div>
               <div style={{
@@ -1934,19 +2209,20 @@ export default function ProjectsView({
       })()}
 
       {/* FAB — Add Project (hidden in historical mode) */}
-      {<button data-tour="add-project" className="flow-btn" onClick={() => setShowCreate(true)} aria-label="Add project" style={{
-        position: "fixed", bottom: space[7], right: space[7], zIndex: 50,
-        height: 40, padding: `0 ${space[5]}px`, borderRadius: layout.radiusSm,
-        border: "none", cursor: "pointer",
-        background: c.accent, color: c.textOnAccent,
-        fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600,
-        display: "flex", alignItems: "center", justifyContent: "center", gap: space[1],
-        boxShadow: c.shadowFloat,
-        transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
-      }}
-      onMouseEnter={e => { e.currentTarget.style.background = c.accentHover; }}
-      onMouseLeave={e => { e.currentTarget.style.background = c.accent; }}
-      >Add project</button>}
+      {<Motion.button data-tour="add-project" onClick={() => setShowCreate(true)} aria-label="Add project" title="Add project"
+        initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 420, damping: 24, delay: 0.15 }}
+        whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.94 }}
+        style={{
+          position: "fixed", bottom: 28, right: 28, zIndex: 50,
+          width: 60, height: 60, borderRadius: "50%", border: "none", cursor: "pointer",
+          background: c.accent, color: c.textOnAccent,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: c.shadowFloat,
+        }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+      </Motion.button>}
 
       {/* Create Project Overlay */}
       {showCreate && <CreateProjectOverlay
@@ -2184,7 +2460,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
   }, [depOpen]);
 
   return (
-    <Modal open onClose={onClose} blur={8} width={540} title="New project">
+    <SideSheet open onClose={onClose} width={540} title="New project">
       <div data-suppress-shortcuts style={{ width: "100%" }}>
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: space[4] }}>
           <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.textMid }}>
@@ -2418,7 +2694,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
           </div>
         </div>
       </div>
-    </Modal>
+    </SideSheet>
   );
 }
 
@@ -2814,6 +3090,118 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
     : `${remaining}d`;
   const fmtShort = (d) => { if (!d) return "—"; const dt = new Date(d + "T00:00:00"); return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
 
+  // ── Figma deep-dive: long date "May 12, 2026" ──
+  const fmtLong = (d) => {
+    if (!d) return null;
+    const dt = new Date(String(d).slice(0, 10) + "T00:00:00");
+    if (isNaN(dt)) return null;
+    return dt.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  };
+
+  // ── Figma deep-dive hero: status pill spec (blocked / deprioritized / shipped / upcoming) ──
+  const heroPill = (() => {
+    if (proj.isBlocked && proj.status !== "deprioritized" && proj.status !== "shipped") {
+      return { tone: "error", text: proj.blockedReason || "Blocked", icon: "error" };
+    }
+    if (proj.status === "deprioritized") {
+      return { tone: "warning", text: proj.depriReason || "Deprioritised", icon: "warning" };
+    }
+    if (proj.status === "shipped") {
+      const when = proj.shippedAt || proj.gaEnteredAt;
+      const whenLabel = when ? fmtLong(when) : null;
+      return { tone: "success", text: whenLabel ? `Project shipped ${whenLabel}` : "Project shipped", icon: "rocket" };
+    }
+    if (proj.status === "upcoming") {
+      return { tone: "neutral", text: "Upcoming", icon: null };
+    }
+    return null;
+  })();
+
+  // ── Figma deep-dive hero: primary action button (maps to existing handlers) ──
+  const heroPrimary = (() => {
+    if (!can.changeStatus(projRole)) {
+      // viewers can still Edit if permitted
+      if (!editing && can.editProject(projRole)) return { label: "Edit project", fn: enterEdit };
+      return null;
+    }
+    if (proj.isBlocked && proj.status !== "deprioritized" && proj.status !== "shipped") {
+      return {
+        label: "Unblock",
+        fn: () => {
+          setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, isBlocked: false, blockedReason: null, blockedAt: null } : p));
+          updateProjectInDB(proj.id, { isBlocked: false, blockedReason: null, blockedAt: null });
+          recordAction("project_unblocked", { reason: proj.blockedReason }, "Project unblocked");
+        },
+      };
+    }
+    if (proj.status === "deprioritized") {
+      return {
+        label: "Move to active",
+        fn: () => {
+          setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: "in_flight", depriReason: null } : p));
+          updateProjectInDB(proj.id, { status: "in_flight", depriReason: null });
+          recordAction("project_status_changed", { from: "deprioritized", to: "in_flight" }, "Project moved back to in flight");
+        },
+      };
+    }
+    if (proj.status === "upcoming") {
+      return { label: "Start now", fn: () => { setStartNowTracks(["PRD"]); setStartNowModal(true); } };
+    }
+    if (can.editProject(projRole)) return { label: "Edit project", fn: enterEdit };
+    return null;
+  })();
+
+  // ── Figma deep-dive: meta fields row (only render fields with values) ──
+  const complexityLabel = { S: "Low", M: "Med", L: "High", XL: "High" }[proj.complexity] || null;
+  const heroFields = [
+    proj.priority && { label: "Priority", value: proj.priority, accent: proj.priority === "P0" },
+    proj.owner && { label: "Owner", value: proj.owner },
+    proj.squad && { label: "Squad", value: proj.squad },
+    complexityLabel && { label: "Complexity", value: complexityLabel },
+    proj.createdAt && fmtLong(proj.createdAt) && { label: "Created on", value: fmtLong(proj.createdAt) },
+  ].filter(Boolean);
+
+  // ── Figma deep-dive sidebar: derive milestones from track period dates ──
+  const heroMilestones = (() => {
+    const trackStart = (t) => {
+      const periods = proj.tracks?.[t]?.periods;
+      if (!periods || !periods.length) return null;
+      return periods[0].started_at;
+    };
+    const trackDone = (t) => getTrackStatus(proj, t) === "completed";
+    const defs = [
+      { label: "Kickoff", date: trackStart("PRD") || proj.startDate, done: !!trackStart("PRD") },
+      { label: "PRD sign-off", date: proj.tracks?.PRD?.periods?.[0]?.completed_at, done: trackDone("PRD") },
+      { label: "Design review", date: trackStart("Design"), done: trackDone("Design"), atRisk: getTrackStatus(proj, "Design") === "active" },
+      { label: "Dev complete", date: proj.tracks?.Dev?.periods?.slice(-1)[0]?.completed_at, done: trackDone("Dev") },
+      { label: "Launch readiness", date: proj.endDate, done: proj.status === "shipped" },
+    ];
+    return defs.map(d => ({
+      label: d.label,
+      date: d.date ? fdDate(d.date) : null,
+      state: d.done ? "done" : d.atRisk ? "atrisk" : "future",
+    }));
+  })();
+
+  // ── Resource link handlers (lifted to component scope so the sidebar card can use them) ──
+  const RES_TYPE_OPTIONS = [
+    { value: "prd", label: "PRD", icon: "file-text" },
+    { value: "figma", label: "Figma", icon: "image" },
+    { value: "qa_testcases", label: "QA Testcases", icon: "check-square" },
+    { value: "gchat", label: "GChat Space", icon: "message-circle" },
+    { value: "jira", label: "Jira Board", icon: "ticket" },
+    { value: "custom", label: "Custom", icon: "link" },
+  ];
+  const RES_TYPE_LABELS = { prd: "PRD", figma: "Figma", qa_testcases: "QA Testcases", gchat: "GChat Space", jira: "Jira Board", custom: "Custom" };
+  const addResourceLink = async () => {
+    if (!resNewUrl.trim()) return;
+    const result = await addProjectLinkToDB(proj.id, resNewType, resNewType === "custom" ? resNewLabel : null, resNewUrl.trim());
+    if (result.ok && result.row && setProjectLinks) setProjectLinks(prev => [...prev, result.row]);
+    const label = resNewType === "custom" && resNewLabel ? resNewLabel : RES_TYPE_LABELS[resNewType] || resNewType;
+    recordAction("resource_added", { type: resNewType, label, url: resNewUrl.trim() }, `${label} resource added`);
+    setResNewType("prd"); setResNewLabel(""); setResNewUrl(""); setResAdding(false);
+  };
+
   // ── Risk tier derived from metrics ──
   return (
     <div style={{
@@ -2824,143 +3212,8 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       transformOrigin: "center top",
     }}>
 
-      {/* ═══ STATE BANNERS — upcoming / deprioritized / blocked ═══ */}
-      {proj.status === "upcoming" && (
-        <div style={{
-          padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-          background: c.surfaceAlt, border: `1px solid ${c.border}`,
-          display: "flex", alignItems: "center", gap: space[3],
-        }}>
-          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.textDim, letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0 }}>
-            Upcoming Project
-          </span>
-          {proj.tentativeStartDate && (() => {
-            const daysOver = Math.round((new Date(today + "T00:00:00") - new Date(proj.tentativeStartDate + "T00:00:00")) / 86400000);
-            if (daysOver > 0) return (
-              <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600, color: c.amber }}>
-                Tentative start date passed by {daysOver}d
-              </span>
-            );
-            return null;
-          })()}
-          <div style={{ flex: 1 }} />
-          {can.changeStatus(projRole) && <button type="button" onClick={() => { setStartNowTracks(["PRD"]); setStartNowModal(true); }} style={{
-            padding: `5px 14px`, borderRadius: 999, flexShrink: 0,
-            background: c.accent, border: "none",
-            color: c.textOnAccent, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-            cursor: "pointer",
-          }}>Start Now</button>}
-        </div>
-      )}
-      {proj.status === "deprioritized" && (
-        <div style={{
-          padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-          background: c.amberDim, border: `1px solid ${c.amberBorder}`,
-          display: "flex", alignItems: "center", gap: space[3],
-        }}>
-          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.amber, letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0 }}>
-            Deprioritized
-          </span>
-          <div style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, lineHeight: 1.5, flex: 1 }}>
-            {proj.depriReason || <span style={{ color: c.textDim, fontStyle: "italic" }}>No reason provided.</span>}
-          </div>
-          {can.changeStatus(projRole) && <button type="button" onClick={() => {
-            setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, status: "in_flight", depriReason: null } : p));
-            updateProjectInDB(proj.id, { status: "in_flight", depriReason: null });
-            recordAction("project_status_changed", { from: "deprioritized", to: "in_flight" }, "Project moved back to in flight");
-          }} style={{
-            padding: `4px 12px`, borderRadius: 999, flexShrink: 0,
-            background: "transparent", border: `1px solid ${c.amber}`,
-            color: c.amber, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-            cursor: "pointer",
-          }}>Move to active</button>}
-        </div>
-      )}
-      {proj.isBlocked && proj.status !== "deprioritized" && (
-        <div style={{
-          padding: `${space[3]}px ${space[4]}px`, borderRadius: layout.radiusSm,
-          background: c.redDim, border: `1px solid ${c.redBorder}`,
-          display: "flex", alignItems: "center", gap: space[3],
-        }}>
-          <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, fontWeight: 700, color: c.red, letterSpacing: "0.08em", textTransform: "uppercase", flexShrink: 0 }}>
-            Blocked
-          </span>
-          <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid, flex: 1 }}>
-            {proj.blockedReason || <span style={{ color: c.textDim, fontStyle: "italic" }}>No reason provided.</span>}
-          </span>
-          {can.changeStatus(projRole) && <button type="button" onClick={() => {
-            setProjects(prev => prev.map(p => p.id === proj.id ? { ...p, isBlocked: false, blockedReason: null, blockedAt: null } : p));
-            updateProjectInDB(proj.id, { isBlocked: false, blockedReason: null, blockedAt: null });
-            recordAction("project_unblocked", { reason: proj.blockedReason }, "Project unblocked");
-          }} style={{
-            padding: `4px 12px`, borderRadius: 999, flexShrink: 0,
-            background: "transparent", border: `1px solid ${c.red}`,
-            color: c.red, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-            cursor: "pointer",
-          }}>Unblock</button>}
-        </div>
-      )}
-
-      {/* ═══ SHIPPED BANNER — above hero card ═══ */}
-      {proj.status === "shipped" && (
-        <div style={{
-          padding: `${space[5]}px ${space[6]}px`,
-          borderRadius: layout.radiusLg, background: c.greenDim,
-          border: `1px solid ${c.green}25`,
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[3], marginBottom: proj.gaReleaseNote ? space[3] : 0 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: layout.radiusSm,
-              background: `${c.green}18`, display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 20, lineHeight: 1,
-            }}>🚀</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                <span style={{
-                  fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
-                  color: c.green, letterSpacing: "0.04em", textTransform: "uppercase",
-                }}>Project Shipped</span>
-                {proj.gaFeatureType && (
-                  <Tag color={c.green} bg={c.surface} style={{ fontSize: 10 }}>{proj.gaFeatureType}</Tag>
-                )}
-              </div>
-              {(proj.shippedAt || proj.gaEnteredAt) && (
-                <div style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: c.textMid, marginTop: 2 }}>
-                  {new Date((proj.shippedAt || proj.gaEnteredAt).slice(0, 10) + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-                </div>
-              )}
-            </div>
-            <button type="button" onClick={() => {
-              const viewerName = personProfile?.name || "AJ";
-              if (isDevSeedMode()) {
-                devStore.logEvent({ projectId: proj.id, action: "shoutout", userName: viewerName, details: { from: viewerName, projectName: proj.name } });
-              }
-              window.__flowToast?.(`🎉 Shoutout sent for ${proj.name}!`);
-            }} style={{
-              display: "inline-flex", alignItems: "center", gap: 6,
-              padding: `5px 12px`, borderRadius: layout.radiusSm,
-              background: "transparent", border: `1px solid ${c.green}30`,
-              color: c.green, fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 600,
-              cursor: "pointer", marginLeft: "auto",
-              transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = `${c.green}12`; e.currentTarget.style.borderColor = c.green; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = `${c.green}30`; }}
-            >
-              <span style={{ fontSize: 14, lineHeight: 1 }}>👏</span>
-              Give shoutout
-            </button>
-          </div>
-          {proj.gaReleaseNote && (
-            <div style={{
-              fontFamily: typo.bodyMd.font, fontSize: 14, color: c.textMid, lineHeight: 1.6,
-              paddingLeft: 36 + space[3], marginTop: space[1],
-            }}>
-              {proj.gaReleaseNote}
-            </div>
-          )}
-        </div>
-      )}
+      {/* State (blocked / deprioritized / shipped / upcoming) is shown as the
+          inline hero pill + primary action button — no separate top banners. */}
 
       {/* ═══ ALPHA / BETA RELEASE NOTE — above hero card ═══ */}
       {(() => {
@@ -3015,96 +3268,151 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       })()}
 
       {/* ═══ IDENTITY HEADER — project id + name + owner|squad + status + freshness ═══ */}
-      <div data-tour="project-hero" style={{
+      {/* In read mode the hero sits on the bare page background (Figma); in edit mode it keeps card chrome. */}
+      <div data-tour="project-hero" style={editing ? {
         padding: `${space[5]}px ${space[6]}px`, borderRadius: layout.radiusLg,
         background: c.surface,
         border: `1px solid ${justSaved ? c.green : c.border}`,
         boxShadow: justSaved ? `${c.shadowCard || ""}, 0 0 0 3px ${c.greenDim}` : c.shadowCard,
         transition: `border-color ${motion.normal.duration} ${motion.normal.easing}, box-shadow ${motion.normal.duration} ${motion.normal.easing}`,
         position: "relative", zIndex: 10,
+      } : {
+        position: "relative", zIndex: 10,
       }}>
         {!editing ? (
           <div key="read" style={{
             animation: `fadeIn ${motion.fast.duration} ${motion.fast.easing} both`,
           }}>
-            {/* Row 1: ID + Priority · Updated */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[3] }}>
-              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                <span style={{
-                  fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
-                  letterSpacing: "0.06em", color: ec.project,
-                  padding: `2px 6px`, borderRadius: layout.radiusXs,
-                  background: c.amberDim,
-                }}>{proj.id}</span>
-                {proj.priority && (() => {
-                  const pColors = { P0: c.red, P1: c.amber, P2: c.textDim, P3: c.textGhost };
-                  const pBg = { P0: c.redDim, P1: c.amberDim, P2: c.surfaceAlt, P3: c.surfaceAlt };
-                  return <Tag color={pColors[proj.priority] || c.textDim} bg={pBg[proj.priority] || c.surfaceAlt}>{proj.priority === "P0" ? "Critical" : proj.priority}</Tag>;
-                })()}
-                {proj.complexity && (() => {
-                  const cLabels = { S: "Low", M: "Med", L: "High", XL: "High" };
-                  return <Tag color={c.textMid} bg={c.surfaceAlt}>{cLabels[proj.complexity] || proj.complexity}</Tag>;
+            {/* ── Figma hero: meta line · title + status pill + actions · meta fields ── */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+              {/* Meta line: id · squad/category · updated */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 14, fontWeight: 500, color: FD.textTertiary }}>{proj.id}</span>
+                {(proj.squad || proj.category) && (
+                  <>
+                    <span style={{ width: 3, height: 3, borderRadius: "50%", background: FD.textTertiary, flexShrink: 0 }} />
+                    <span style={{ fontSize: 14, fontWeight: 500, color: FD.textPrimary }}>{proj.squad || proj.category}</span>
+                  </>
+                )}
+                <span style={{ width: 3, height: 3, borderRadius: "50%", background: FD.textTertiary, flexShrink: 0 }} />
+                {(() => {
+                  const stale = isStale(proj.lastActivityAt);
+                  const label = proj.lastActivityAt ? `Updated ${timeAgo(proj.lastActivityAt)}` : "No activity yet";
+                  return (
+                    <span title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : ""}
+                      style={{ fontSize: 14, fontWeight: 500, color: stale ? FD.error : FD.textTertiary, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                      {stale && proj.lastActivityAt && <Icon name="alert-triangle" size={13} />}{label}
+                    </span>
+                  );
                 })()}
               </div>
-              {(() => {
-                const stale = isStale(proj.lastActivityAt);
-                const label = proj.lastActivityAt ? `Updated ${timeAgo(proj.lastActivityAt)}` : "No activity yet";
-                return (
-                  <span title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : ""}
-                    style={{
-                      fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 500,
-                      color: stale ? c.red : c.textDim,
+
+              {/* Title row: name + follow toggle + status pill — actions pinned right */}
+              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                <h1 style={{
+                  margin: 0, fontFamily: typo.displayLg.font,
+                  fontSize: 40, fontWeight: 500, letterSpacing: "-1px", lineHeight: 1.1,
+                  color: FD.textPrimary,
+                }}>{proj.name}</h1>
+                {heroPill && (() => {
+                  const toneMap = {
+                    error: { bg: FD.errorSubtle, fg: FD.error },
+                    warning: { bg: FD.warningSubtle, fg: FD.warning },
+                    success: { bg: FD.successSubtle, fg: FD.success },
+                    neutral: { bg: FD.surface2, fg: FD.textSecondary },
+                  };
+                  const t = toneMap[heroPill.tone];
+                  return (
+                    <span style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "8px 10px 8px 8px", borderRadius: 8,
+                      background: t.bg, color: t.fg,
+                      fontSize: 14, fontWeight: 500, maxWidth: 460,
+                    }}>
+                      {heroPill.icon === "error" && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.fg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                          <circle cx="12" cy="12" r="10" /><line x1="15" y1="9" x2="9" y2="15" /><line x1="9" y1="9" x2="15" y2="15" />
+                        </svg>
+                      )}
+                      {heroPill.icon === "warning" && (
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={t.fg} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+                        </svg>
+                      )}
+                      {heroPill.icon === "rocket" && <span style={{ display: "inline-flex", flexShrink: 0 }}><Icon name="rocket" size={16} color={t.fg} /></span>}
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{heroPill.text}</span>
+                    </span>
+                  );
+                })()}
+
+                {/* Action buttons pinned right */}
+                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+                  {proj.status === "shipped" && (
+                    <button type="button" onClick={() => {
+                      const viewerName = personProfile?.name || "AJ";
+                      if (isDevSeedMode()) {
+                        devStore.logEvent({ projectId: proj.id, action: "shoutout", userName: viewerName, details: { from: viewerName, projectName: proj.name } });
+                      }
+                      window.__flowToast?.(`Shoutout sent for ${proj.name}!`);
+                    }} style={{
+                      display: "inline-flex", alignItems: "center", gap: 8,
+                      height: 40, padding: "0 16px", borderRadius: 10,
+                      background: FD.surface, border: `1px solid ${FD.border}`,
+                      color: FD.textPrimary, fontSize: 14, fontWeight: 500, cursor: "pointer",
+                      transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
                     }}
-                  >
-                    {stale && proj.lastActivityAt && "⚠ "}{label}
-                  </span>
-                );
-              })()}
-            </div>
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = FD.textSecondary; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = FD.border; }}
+                    >
+                      <span style={{ display: "inline-flex" }}><Icon name="clap" size={15} /></span>
+                      Give shoutout
+                    </button>
+                  )}
+                  {toggleFollowProject && (() => {
+                    const watching = followedProjects.includes(proj.id);
+                    return (
+                      <button type="button" onClick={() => toggleFollowProject(proj.id)} style={{
+                        display: "inline-flex", alignItems: "center", gap: 8,
+                        height: 40, padding: "0 16px", borderRadius: 10,
+                        background: FD.surface, border: `1px solid ${FD.border}`,
+                        color: FD.textPrimary, fontSize: 14, fontWeight: 500, cursor: "pointer",
+                        transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
+                      }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = FD.textSecondary; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = FD.border; }}
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+                        </svg>
+                        {watching ? "Watching" : "Watch this project"}
+                      </button>
+                    );
+                  })()}
+                  {heroPrimary && (
+                    <button type="button" onClick={heroPrimary.fn} style={{
+                      display: "inline-flex", alignItems: "center", justifyContent: "center",
+                      height: 40, padding: "0 18px", borderRadius: 10,
+                      background: FD.textPrimary, border: "none",
+                      color: c.textOnAccent || c.surface, fontSize: 14, fontWeight: 500, cursor: "pointer",
+                      transition: `opacity ${motion.fast.duration} ${motion.fast.easing}`,
+                    }}
+                      onMouseEnter={e => { e.currentTarget.style.opacity = "0.88"; }}
+                      onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
+                    >{heroPrimary.label}</button>
+                  )}
+                </div>
+              </div>
 
-            {/* Row 2: Project Name */}
-            <div style={{
-              fontFamily: typo.displayLg.font, fontSize: typo.displayLg.size,
-              fontWeight: typo.displayLg.weight, color: c.text,
-              letterSpacing: typo.displayLg.tracking, lineHeight: 1.15,
-              marginTop: space[2],
-            }}>{proj.name}
-              {toggleFollowProject && (
-                <button
-                  type="button"
-                  data-tour="follow-project"
-                  title={followedProjects.includes(proj.id) ? "Unfollow project" : "Follow project"}
-                  onClick={() => toggleFollowProject(proj.id)}
-                  style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    display: "inline-flex", alignItems: "center", verticalAlign: "middle",
-                    marginLeft: space[3], padding: 4,
-                  }}
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill={followedProjects.includes(proj.id) ? c.accent : "none"} stroke={followedProjects.includes(proj.id) ? c.accent : c.textGhost} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                  </svg>
-                </button>
-              )}
-            </div>
-
-            {/* Row 3: Owner | Squad */}
-            <div style={{ display: "flex", alignItems: "center", gap: space[2], marginTop: space[2] }}>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600, color: c.textDim, textTransform: "uppercase", letterSpacing: "0.08em" }}>Owner</span>
-              <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 600, color: proj.owner ? c.text : c.textMid, fontStyle: proj.owner ? "normal" : "italic" }}>{proj.owner || "Unassigned"}</span>
-              {proj.squad && (
-                <>
-                  <span style={{ color: c.border, fontSize: 11, margin: `0 ${space[1]}px` }}>|</span>
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600, color: c.textDim, textTransform: "uppercase", letterSpacing: "0.08em" }}>Squad</span>
-                  <span style={{ fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, fontWeight: 500, color: c.textMid }}>{proj.squad}</span>
-                </>
-              )}
-              {proj.createdAt && (
-                <>
-                  <span style={{ color: c.border, fontSize: 11, margin: `0 ${space[1]}px` }}>|</span>
-                  <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600, color: c.textDim, textTransform: "uppercase", letterSpacing: "0.08em" }}>Created</span>
-                  <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, fontWeight: 500, color: c.textDim }}>{fmtShort(proj.createdAt.split("T")[0])}</span>
-                </>
+              {/* Meta fields row */}
+              {heroFields.length > 0 && (
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 64, flexWrap: "wrap" }}>
+                  {heroFields.map(f => (
+                    <div key={f.label} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <span style={{ fontSize: 14, fontWeight: 400, color: FD.textTertiary }}>{f.label}</span>
+                      <span style={{ fontSize: 16, fontWeight: f.accent ? 700 : 500, color: f.accent ? FD.error : FD.textPrimary }}>{f.value}</span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
@@ -3472,14 +3780,14 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
           </div>
         )}
 
-        {/* ═══ RESOURCES — pill-format links subsection inside header card ═══ */}
-        {(() => {
+        {/* ═══ RESOURCES — relocated to the right sidebar card (Figma redesign) ═══ */}
+        {false && (() => {
           const links = (projectLinks || []).filter(l => l.project_id === proj.id);
           const adding = resAdding, setAdding = setResAdding;
           const newType = resNewType, setNewType = setResNewType;
           const newLabel = resNewLabel, setNewLabel = setResNewLabel;
           const newUrl = resNewUrl, setNewUrl = setResNewUrl;
-          const typeIcons = { prd: "📄", figma: "🎨", qa_testcases: "✅", gchat: "💬", jira: "🎫", custom: "🔗" };
+          const typeIcons = { prd: "file-text", figma: "palette", qa_testcases: "check-square", gchat: "message-circle", jira: "ticket", custom: "link" };
           const typeLabels = { prd: "PRD", figma: "Figma", qa_testcases: "QA", gchat: "GChat Space", jira: "Jira Board", custom: "Custom" };
           const addLink = async () => {
             if (!newUrl.trim()) return;
@@ -3521,7 +3829,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                     onMouseEnter={e => { e.currentTarget.style.borderColor = c.textMid; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; }}
                   >
-                    <span style={{ fontSize: 14, lineHeight: 1, flexShrink: 0 }}>{typeIcons[link.type] || "🔗"}</span>
+                    <span style={{ display: "inline-flex", flexShrink: 0, color: c.textMid }}><Icon name={typeIcons[link.type] || "link"} size={14} /></span>
                     <span style={{ fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: "nowrap" }}>
                       {link.label || typeLabels[link.type] || link.type}
                     </span>
@@ -3552,12 +3860,12 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                   {/* Custom styled type selector */}
                   {(() => {
                     const TYPE_OPTIONS = [
-                      { value: "prd", label: "PRD", icon: "📄" },
-                      { value: "figma", label: "Figma", icon: "🎨" },
-                      { value: "qa_testcases", label: "QA Testcases", icon: "✅" },
-                      { value: "gchat", label: "GChat Space", icon: "💬" },
-                      { value: "jira", label: "Jira Board", icon: "🎫" },
-                      { value: "custom", label: "Custom", icon: "🔗" },
+                      { value: "prd", label: "PRD", icon: "file-text" },
+                      { value: "figma", label: "Figma", icon: "palette" },
+                      { value: "qa_testcases", label: "QA Testcases", icon: "check-square" },
+                      { value: "gchat", label: "GChat Space", icon: "message-circle" },
+                      { value: "jira", label: "Jira Board", icon: "ticket" },
+                      { value: "custom", label: "Custom", icon: "link" },
                     ];
                     const selected = TYPE_OPTIONS.find(o => o.value === newType) || TYPE_OPTIONS[0];
                     return (
@@ -3573,7 +3881,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                         onMouseEnter={e => { e.currentTarget.style.borderColor = c.textMid; }}
                         onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; }}
                         >
-                          <span style={{ fontSize: 13, lineHeight: 1 }}>{selected.icon}</span>
+                          <span style={{ display: "inline-flex", color: c.textMid }}><Icon name={selected.icon} size={14} /></span>
                           <span style={{ flex: 1, textAlign: "left" }}>{selected.label}</span>
                           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
                             style={{ flexShrink: 0, transform: resTypeDropOpen ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${motion.fast.duration} ${motion.fast.easing}` }}>
@@ -3604,7 +3912,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                                 onMouseEnter={e => { if (opt.value !== newType) e.currentTarget.style.background = c.surfaceAlt; }}
                                 onMouseLeave={e => { if (opt.value !== newType) e.currentTarget.style.background = "transparent"; }}
                                 >
-                                  <span style={{ fontSize: 13, lineHeight: 1, width: 18, textAlign: "center" }}>{opt.icon}</span>
+                                  <span style={{ display: "inline-flex", justifyContent: "center", width: 18, color: c.textMid }}><Icon name={opt.icon} size={14} /></span>
                                   {opt.label}
                                 </button>
                               ))}
@@ -3690,6 +3998,9 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
         )}
       </div>
 
+      {/* ═══ Divider under hero (Figma) ═══ */}
+      {!editing && <div style={{ height: 1, background: FD.border, width: "100%" }} />}
+
       {/* Team section moved into hero card below */}
 
       {/* ═══ SHOUTOUTS — displayed for shipped projects ═══ */}
@@ -3704,7 +4015,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                   borderRadius: layout.radiusSm,
                   background: c.surfaceAlt, border: `1px solid ${c.border}`,
                 }}>
-                  <span style={{ fontSize: 18, lineHeight: 1, flexShrink: 0 }}>👏</span>
+                  <span style={{ display: "inline-flex", flexShrink: 0, color: c.textMid }}><Icon name="clap" size={18} /></span>
                   <div style={{ flex: 1, fontFamily: typo.bodyMd.font, fontSize: 13, color: c.text }}>
                     <span style={{ fontWeight: 600 }}>{s.details?.from || s.user_name || "Someone"}</span>
                     {" gave a shoutout!"}
@@ -3862,8 +4173,12 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
         </div>
       )}
 
+      {/* ═══ TWO-COLUMN: timeline (left) + sidebar cards (right) ═══ */}
+      {!editing && (
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 24 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
       {/* ═══ TIMELINE — TrackGantt then alerts below ═══ */}
-      {proj.status !== "upcoming" && <div data-tour="track-gantt">
+      {proj.status !== "upcoming" ? <div data-tour="track-gantt">
         <SectionHead title="Timeline" />
 
         {/* ── Track Gantt (parallel tracks) ── */}
@@ -3970,14 +4285,135 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                     fontWeight: 600, lineHeight: 1.45,
                   }}
                 >
-                  <span style={{ flexShrink: 0, fontSize: 13, lineHeight: 1.3 }}>⚠️</span>
+                  <span style={{ flexShrink: 0, display: "inline-flex", color: c.amber }}><Icon name="alert-triangle" size={14} /></span>
                   <span>{a.message}</span>
                 </div>
               ))}
             </div>
           );
         })()}
-      </div>}
+      </div> : <div style={{ fontSize: 14, color: FD.textTertiary, padding: "8px 0" }}>Timeline begins once the project is started.</div>}
+        </div>{/* end left column */}
+
+        {/* ── RIGHT SIDEBAR: Resources / Milestones / External resources ── */}
+        <div style={{ width: 320, flexShrink: 0, display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Resources card */}
+          {(() => {
+            const links = (projectLinks || []).filter(l => l.project_id === proj.id);
+            const typeIcons = { prd: "file-text", figma: "image", qa_testcases: "check-square", gchat: "message-circle", jira: "ticket", custom: "link" };
+            const typeLabels = { prd: "PRD", figma: "Figma", qa_testcases: "QA Testcases", gchat: "GChat Space", jira: "Jira Board", custom: "Custom" };
+            const canAdd = can.addResources(projRole);
+            return (
+              <SidebarCard title="Resources" onAdd={canAdd && !resAdding ? () => setResAdding(true) : null}>
+                {links.length === 0 && !resAdding ? (
+                  <span style={{ fontSize: 14, color: FD.textTertiary }}>No resources yet.</span>
+                ) : links.map((link, i) => (
+                  <div key={link.id} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <a href={link.url} target="_blank" rel="noopener noreferrer"
+                      style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none", cursor: "pointer", flex: 1, minWidth: 0 }}>
+                      <span style={{ display: "inline-flex", justifyContent: "center", width: 18, flexShrink: 0, color: c.textMid }}><Icon name={typeIcons[link.type] || "link"} size={16} /></span>
+                      <span style={{ flex: 1, fontSize: 14, fontWeight: 500, color: FD.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {link.label || typeLabels[link.type] || link.type}
+                      </span>
+                      {i === 0 && (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={FD.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                        </svg>
+                      )}
+                    </a>
+                    {canAdd && (
+                      <button type="button" onClick={async () => {
+                        const result = await deleteProjectLinkFromDB(link.id);
+                        if (result.ok && setProjectLinks) setProjectLinks(prev => prev.filter(l => l.id !== link.id));
+                        recordAction("resource_removed", { type: link.type }, "Resource removed");
+                      }} title="Remove" style={{ background: "none", border: "none", cursor: "pointer", color: FD.textTertiary, padding: 0, fontSize: 13, lineHeight: 1, flexShrink: 0 }}>✕</button>
+                    )}
+                  </div>
+                ))}
+                {resAdding && canAdd && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingTop: links.length ? 4 : 0 }}>
+                    <select value={resNewType} onChange={e => setResNewType(e.target.value)} style={{
+                      height: 34, padding: "0 8px", borderRadius: 8, border: `1px solid ${FD.border}`,
+                      background: FD.surface2, color: FD.textPrimary, fontSize: 13, outline: "none",
+                    }}>
+                      {RES_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    {resNewType === "custom" && (
+                      <input value={resNewLabel} onChange={e => setResNewLabel(e.target.value)} placeholder="Label" style={{
+                        height: 34, padding: "0 10px", borderRadius: 8, border: `1px solid ${FD.border}`,
+                        background: FD.surface2, color: FD.textPrimary, fontSize: 13, outline: "none",
+                      }} />
+                    )}
+                    <input value={resNewUrl} onChange={e => setResNewUrl(e.target.value)} placeholder="URL" style={{
+                      height: 34, padding: "0 10px", borderRadius: 8, border: `1px solid ${FD.border}`,
+                      background: FD.surface2, color: FD.textPrimary, fontSize: 13, outline: "none",
+                    }} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" onClick={addResourceLink} disabled={!resNewUrl.trim()} style={{
+                        flex: 1, height: 34, borderRadius: 8, border: "none", cursor: resNewUrl.trim() ? "pointer" : "not-allowed",
+                        background: FD.textPrimary, color: c.textOnAccent || c.surface, fontSize: 13, fontWeight: 500, opacity: resNewUrl.trim() ? 1 : 0.5,
+                      }}>Add</button>
+                      <button type="button" onClick={() => { setResAdding(false); setResNewUrl(""); setResNewLabel(""); }} style={{
+                        flex: 1, height: 34, borderRadius: 8, border: `1px solid ${FD.border}`, cursor: "pointer",
+                        background: "transparent", color: FD.textSecondary, fontSize: 13, fontWeight: 500,
+                      }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </SidebarCard>
+            );
+          })()}
+
+          {/* Milestones card */}
+          <SidebarCard title="Milestones">
+            {heroMilestones.map((mile, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <span style={{
+                    width: 7, height: 7, transform: "rotate(45deg)", flexShrink: 0,
+                    background: mile.state === "done" ? FD.textPrimary : mile.state === "atrisk" ? FD.warning : FD.border,
+                  }} />
+                  <span style={{ fontSize: 14, fontWeight: 500, color: mile.state === "future" ? FD.textTertiary : FD.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mile.label}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  {mile.state === "done" && (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={FD.success} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                  )}
+                  {mile.state === "atrisk" && (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={FD.warning} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                  )}
+                  {mile.date && <span style={{ fontSize: 14, color: FD.textTertiary }}>{mile.date}</span>}
+                </div>
+              </div>
+            ))}
+          </SidebarCard>
+
+          {/* External resources card (same renderer as Milestones for now) */}
+          <SidebarCard title="External resources">
+            {heroMilestones.map((mile, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                  <span style={{
+                    width: 7, height: 7, transform: "rotate(45deg)", flexShrink: 0,
+                    background: mile.state === "done" ? FD.textPrimary : mile.state === "atrisk" ? FD.warning : FD.border,
+                  }} />
+                  <span style={{ fontSize: 14, fontWeight: 500, color: mile.state === "future" ? FD.textTertiary : FD.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{mile.label}</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                  {mile.state === "done" && (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={FD.success} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+                  )}
+                  {mile.state === "atrisk" && (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={FD.warning} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+                  )}
+                  {mile.date && <span style={{ fontSize: 14, color: FD.textTertiary }}>{mile.date}</span>}
+                </div>
+              </div>
+            ))}
+          </SidebarCard>
+        </div>{/* end right sidebar */}
+      </div>
+      )}
 
       {/* ═══ ACTIVITY — composer + comments + auto-events ═══ */}
       <div data-tour="activity">
@@ -4348,7 +4784,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
       </Modal>
 
       {/* ═══ GA — release note + feature type + confetti ═══ */}
-      <Modal open={!!shipPhaseModal && shipPhaseModal?.phase === "GA"} onClose={() => setShipPhaseModal(null)} title="Ship to GA 🚀" accent={c.green}>
+      <Modal open={!!shipPhaseModal && shipPhaseModal?.phase === "GA"} onClose={() => setShipPhaseModal(null)} title="Ship to GA" accent={c.green}>
         <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
           <div>
             <Label style={{ marginBottom: space[1] }}>Release note</Label>
@@ -4391,7 +4827,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
                 from: oldPhase, to: "GA",
                 releaseNote: gaReleaseNote.trim() || null,
                 featureType: gaFeatureType,
-              }, `🚀 ${proj.name} shipped to GA!`);
+              }, `${proj.name} shipped to GA!`);
               setShipPhaseModal(null);
               setShowConfetti(true);
               setTimeout(() => setShowConfetti(false), 4000);
@@ -4548,7 +4984,7 @@ function ProjectDeepDive({ proj, metrics: m, history, projects, setProjects, peo
             animation: "celebration-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both, celebration-out 0.4s cubic-bezier(0.4, 0, 1, 1) 3s both",
             pointerEvents: "auto",
           }}>
-            <div style={{ fontSize: 48, marginBottom: space[3] }}>🚀</div>
+            <div style={{ marginBottom: space[3], color: c.textGhost || c.textDim }}><Icon name="rocket" size={48} strokeWidth={1.5} /></div>
             <div style={{
               fontFamily: typo.displayLg.font, fontSize: 22, fontWeight: 700,
               color: c.text, marginBottom: space[2],

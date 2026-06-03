@@ -65,7 +65,7 @@ function drawCell(ctx, cell, drawX, drawY, smoothX, smoothY) {
     ctx.shadowBlur = 0;
   }
   // Day label
-  ctx.font = `600 ${8 + prox * 2}px Inter`;
+  ctx.font = `600 ${8 + prox * 2}px Geist`;
   ctx.fillStyle = `rgba(0,0,0,${0.08 + prox * 0.3})`;
   ctx.fillText(cell.day, drawX + 7, drawY + 14);
   // Progress bar
@@ -78,7 +78,7 @@ function drawCell(ctx, cell, drawX, drawY, smoothX, smoothY) {
   }
   // Status indicators
   if (cell.status === "done") {
-    ctx.font = `700 ${12 + prox * 4}px Inter`;
+    ctx.font = `700 ${12 + prox * 4}px Geist`;
     ctx.fillStyle = `rgba(${r},${g},${b},${0.07 + prox * 0.35})`;
     ctx.fillText("\u2713", drawX + CW - 18, drawY + 16);
   } else if (cell.status === "active") {

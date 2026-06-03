@@ -32,33 +32,46 @@ export const density = {
 export const themes = {
 
   dark: {
-    // Backgrounds — deep navy with blue undertone
-    bg: "#06090F", surface: "#0B1322", surfaceAlt: "#0A1020",
-    surfaceSolid: "#0A0E17",
-    surfaceHero: "#0D1729",
-    surfaceData: "#0A111E",
-    surfaceOverlay: "#0D1324",
-    glass: "#0C1628", glassData: "#091018",
-    border: "rgba(255,255,255,0.10)", borderHover: "rgba(255,255,255,0.18)",
-    text: "#ECF0F6", textMid: "#A8B0C6", textDim: "#6E7894",
+    // Absolute neutrals — pure greyscale, no blue/navy undertone
+    bg: "#0a0a0a", surface: "#161616", surfaceAlt: "#202020",
+    surfaceSolid: "#161616",
+    surfaceHero: "#161616",
+    surfaceData: "#161616",
+    surfaceOverlay: "#1c1c1c",
+    tableHeader: "#202020",
+    glass: "#161616", glassData: "#202020",
+    glassBg: "#161616", glassBorder: "rgba(255,255,255,0.05)",
+    glassOverlay: "#1c1c1c", glassDark: "rgba(0,0,0,0.7)", glassDarkBorder: "rgba(255,255,255,0.05)",
+    headerBg: "#000000", headerText: "#fafafa", headerTextDim: "rgba(255,255,255,0.55)",
+    // Low-contrast borders — barely separated from surfaces
+    border: "rgba(255,255,255,0.05)", borderHover: "rgba(255,255,255,0.09)", borderMedium: "rgba(255,255,255,0.08)",
+    text: "#fafafa", textMid: "#a3a3a3", textDim: "#737373", textGhost: "#525252",
     textCrit: "#FFFFFF",
-    accent: "#3B82F6", accentDim: "rgba(59,130,246,0.12)", accentMid: "rgba(59,130,246,0.30)",
-    green: "#84FF95", greenDim: "rgba(132,255,149,0.12)",
-    blue: "#22D3EE", blueDim: "rgba(34,211,238,0.12)",
-    cyan: "#22D3EE", cyanDim: "rgba(34,211,238,0.12)",
-    purple: "#A78BFA", purpleDim: "rgba(167,139,250,0.12)",
-    red: "#FF6B6B", redDim: "rgba(255,107,107,0.12)",
-    orange: "#FBBF24", orangeDim: "rgba(251,191,36,0.12)",
-    projectGold: "#FFCC33", projectGoldDim: "rgba(255,204,51,0.12)",
-    glow1: "rgba(59,130,246,0.08)",
-    glow2: "rgba(34,211,238,0.05)",
-    glow3: "rgba(167,139,250,0.04)",
-    gradient: "linear-gradient(145deg, #04070D 0%, #080C16 35%, #0A0F1A 65%, #04070D 100%)",
+    // Neutral accent (no Field blue) — light grey on dark
+    accent: "#e5e5e5", accentHover: "#ffffff",
+    accentDim: "rgba(255,255,255,0.10)", accentMid: "rgba(255,255,255,0.20)", accentGlow: "rgba(255,255,255,0.14)",
+    textOnAccent: "#0a0a0a",
+    coral: "#f87171", coralHover: "#ef4444", coralDim: "rgba(248,113,113,0.14)", coralMid: "rgba(248,113,113,0.22)",
+    surfaceInverse: "#fafafa", insetInverse: "#e5e5e5", textOnInverse: "#0a0a0a", textMidOnInverse: "#525252", textGhostOnInverse: "#737373",
+    // Semantic (kept for data/status legibility, brightened for dark)
+    green: "#34d399", greenBg: "rgba(52,211,153,0.12)", greenDim: "rgba(52,211,153,0.14)", greenMid: "rgba(52,211,153,0.22)", greenBorder: "rgba(52,211,153,0.30)",
+    red: "#f87171", redBg: "rgba(248,113,113,0.12)", redDim: "rgba(248,113,113,0.14)", redMid: "rgba(248,113,113,0.22)", redBorder: "rgba(248,113,113,0.30)",
+    amber: "#fbbf24", amberBg: "rgba(251,191,36,0.12)", amberDim: "rgba(251,191,36,0.14)", amberMid: "rgba(251,191,36,0.22)", amberBorder: "rgba(251,191,36,0.30)",
+    orange: "#fbbf24", orangeDim: "rgba(251,191,36,0.14)",
+    blue: "#60a5fa", blueBg: "rgba(96,165,250,0.12)", blueDim: "rgba(96,165,250,0.14)", blueMid: "rgba(96,165,250,0.22)", blueBorder: "rgba(96,165,250,0.30)",
+    cyan: "#22d3ee", cyanDim: "rgba(34,211,238,0.14)", cyanMid: "rgba(34,211,238,0.22)", cyanBorder: "rgba(34,211,238,0.30)",
+    purple: "#a78bfa", purpleDim: "rgba(167,139,250,0.14)", purpleMid: "rgba(167,139,250,0.22)", purpleBorder: "rgba(167,139,250,0.30)",
+    projectGold: "#fbbf24", projectGoldDim: "rgba(251,191,36,0.14)",
+    healthGood: "#34d399", healthFair: "#fbbf24", healthLow: "#f87171",
+    glow1: "rgba(255,255,255,0.03)", glow2: "rgba(255,255,255,0.02)", glow3: "rgba(255,255,255,0.015)",
+    gradient: "linear-gradient(145deg, #0a0a0a 0%, #0a0a0a 100%)",
     inputScheme: "dark",
     shadow: "rgba(0,0,0,0.5)",
-    shadowOverlay: "0 8px 30px rgba(0,0,0,0.5)",
+    shadowSm: "none", shadowGlass: "none",
+    shadowOverlay: "0 8px 30px rgba(0,0,0,0.55)",
+    shadowElevated: "0 8px 24px rgba(0,0,0,0.55)", shadowFloat: "0 12px 32px rgba(0,0,0,0.55)",
     shadowCard: "none",
-    shadowHero: "0 4px 20px rgba(0,0,0,0.35)",
+    shadowHero: "none",
   },
 
   // ── Obsidian light theme (default, consumed by everything except Terminal) ──
@@ -148,8 +161,10 @@ export const trackNames = ["PRD", "Design", "Dev", "QA", "Alpha", "Beta"];
 
 // Mutable color reference - updated on theme change.
 export let c = themes.light;
-export function setTheme(isDark) {
-  c = isDark ? themes.dark : themes.light;
+export let isDark = false;
+export function setTheme(dark) {
+  isDark = !!dark;
+  c = dark ? themes.dark : themes.light;
   return c;
 }
 
@@ -249,7 +264,7 @@ export const layout = {
 
 // ── Button variant tokens ──
 export const btnVariants = () => ({
-  primary:   { bg: c.accent,      color: "#FFFFFF",    border: "none",                              hoverBg: c.accentHover },
+  primary:   { bg: c.accent,      color: c.textOnAccent, border: "none",                            hoverBg: c.accentHover },
   secondary: { bg: c.surfaceSolid, color: c.textMid,   border: `1px solid ${c.border}`,             hoverBg: c.surfaceAlt },
   ghost:     { bg: "transparent", color: c.textDim,    border: "1px solid transparent",             hoverBg: c.surfaceAlt },
   danger:    { bg: c.redDim,      color: c.red,        border: `1px solid ${c.red}30`,              hoverBg: `${c.red}18` },

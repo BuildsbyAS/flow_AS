@@ -4,21 +4,26 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { space, terminal, terminalRadius } from "../styles/theme";
 import { supabase } from "../lib/supabase";
 import useDevLabel from "../hooks/useDevLabel";
+import { Icon } from "../components/icons";
 
 const CATEGORIES = [
-  { key: "feature", label: "Feature Request", icon: "✦", color: terminal.purple },
-  { key: "bug", label: "Bug Report", icon: "⚠", color: terminal.coral },
-  { key: "rant", label: "General Rant", icon: "🔥", color: terminal.pink },
+  { key: "feature", label: "Feature Request", icon: "feature", color: terminal.purple },
+  { key: "bug", label: "Bug Report", icon: "alert-triangle", color: terminal.coral },
+  { key: "rant", label: "General Rant", icon: "flame", color: terminal.pink },
 ];
 
 const STATUS_CONFIG = {
   pending:  { label: "Pending", color: terminal.gold, icon: "◷" },
   approved: { label: "Approved", color: terminal.success, icon: "✓" },
   rejected: { label: "Rejected", color: terminal.red, icon: "✗" },
-  shipped:  { label: "Shipped", color: terminal.cyan, icon: "🚀" },
+  shipped:  { label: "Shipped", color: terminal.cyan, icon: "rocket" },
 };
 
-const MONO = "'JetBrains Mono', 'SF Mono', monospace";
+// Icon-name values render as SVG; geometric/check glyphs stay as text.
+const ICON_NAMES = new Set(["feature", "alert-triangle", "flame", "rocket"]);
+const glyph = (g, size = 13) => ICON_NAMES.has(g) ? <Icon name={g} size={size} /> : g;
+
+const MONO = "'Geist', system-ui, sans-serif";
 
 export default function RantView({ onBack, auth }) {
   const devRef = useDevLabel('Feature request and bug report submission with list and detail views');
@@ -205,13 +210,13 @@ export default function RantView({ onBack, auth }) {
               color: status.color, padding: "3px 10px",
               border: `1px solid ${status.color}40`, borderRadius: terminalRadius.sm,
             }}>
-              {status.icon} {status.label.toUpperCase()}
+              {glyph(status.icon)} {status.label.toUpperCase()}
             </span>
             <span style={{
               fontSize: 11, color: cat.color, padding: "3px 10px",
               border: `1px solid ${cat.color}40`, borderRadius: terminalRadius.sm,
             }}>
-              {cat.icon} {cat.label}
+              {glyph(cat.icon)} {cat.label}
             </span>
           </div>
 
@@ -301,7 +306,7 @@ export default function RantView({ onBack, auth }) {
                   transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
                 }}
               >
-                {cat.icon} {cat.label}
+                {glyph(cat.icon)} {cat.label}
               </button>
             ))}
           </div>
@@ -431,7 +436,7 @@ export default function RantView({ onBack, auth }) {
             e.currentTarget.style.boxShadow = "none";
           }}
         >
-          {submitting ? "SUBMITTING..." : "🔥 RANT"}
+          {submitting ? "SUBMITTING..." : <><Icon name="flame" size={13} /> RANT</>}
         </button>
       </div>
     );
@@ -505,7 +510,7 @@ export default function RantView({ onBack, auth }) {
                 transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease", fontWeight: active ? 700 : 500,
               }}
             >
-              {cat.icon} {cat.label} <span style={{ opacity: 0.6 }}>({count})</span>
+              {glyph(cat.icon)} {cat.label} <span style={{ opacity: 0.6 }}>({count})</span>
             </button>
           );
         })}
@@ -533,7 +538,7 @@ export default function RantView({ onBack, auth }) {
                 transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease", fontWeight: active ? 600 : 400,
               }}
             >
-              {st.icon || "◈"} {st.label} ({count})
+              {glyph(st.icon) || "◈"} {st.label} ({count})
             </button>
           );
         })}
@@ -549,7 +554,7 @@ export default function RantView({ onBack, auth }) {
           textAlign: "center", padding: `${space[8]}px ${space[5]}px`,
           color: `${terminal.green}80`,
         }}>
-          <div style={{ fontSize: 32, marginBottom: space[3] }}>🔥</div>
+          <div style={{ marginBottom: space[3], color: terminal.pink, display: "flex", justifyContent: "center" }}><Icon name="flame" size={32} strokeWidth={1.5} /></div>
           <div style={{ fontSize: 13, marginBottom: space[2] }}>
             {rants.length === 0 ? "No rants yet" : "No rants match filters"}
           </div>
@@ -594,12 +599,12 @@ export default function RantView({ onBack, auth }) {
               >
                 {/* Category icon */}
                 <span style={{
-                  fontSize: 14, flexShrink: 0, width: 28, height: 28,
+                  flexShrink: 0, width: 28, height: 28,
                   display: "flex", alignItems: "center", justifyContent: "center",
                   borderRadius: terminalRadius.md, background: cat.color + "12",
-                  border: `1px solid ${cat.color}20`,
+                  border: `1px solid ${cat.color}20`, color: cat.color,
                 }}>
-                  {cat.icon}
+                  {glyph(cat.icon, 15)}
                 </span>
 
                 {/* Title + meta */}
@@ -614,7 +619,7 @@ export default function RantView({ onBack, auth }) {
                     <span>{r.user_name}</span>
                     <span style={{ opacity: 0.4 }}>·</span>
                     <span>{timeAgo(r.created_at)}</span>
-                    {r.image_url && <span style={{ opacity: 0.5 }}>📎</span>}
+                    {r.image_url && <span style={{ opacity: 0.5, display: "inline-flex" }}><Icon name="paperclip" size={12} /></span>}
                   </div>
                 </div>
 
@@ -626,7 +631,7 @@ export default function RantView({ onBack, auth }) {
                   border: `1px solid ${status.color}30`, borderRadius: terminalRadius.sm,
                   flexShrink: 0,
                 }}>
-                  {status.icon} {status.label.toUpperCase()}
+                  {glyph(status.icon)} {status.label.toUpperCase()}
                 </span>
 
                 {/* Reply indicator */}

@@ -24,6 +24,7 @@ import {
 } from "../lib/mutations";
 import { timeAgo, fmtAbsolute } from "../lib/time";
 import { Modal } from "./shared";
+import { Icon } from "./icons";
 
 const EDIT_WINDOW_MS = 15 * 60 * 1000;
 const WEEKLY_UPDATE_TAG = "[weekly-update]";
@@ -995,17 +996,17 @@ function RailComment({ comment, author, currentPerson, isProjectOwner, isAppOwne
                 width: 24, height: 24, padding: 0, border: "none", borderRadius: layout.radiusXs,
                 background: thumbed ? c.accentDim : "transparent", cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13, color: thumbed ? c.accent : c.textDim,
+                color: thumbed ? c.accent : c.textDim,
               }}
-            >👍</button>
+            ><Icon name="thumbs-up" size={14} /></button>
             <button type="button" onClick={() => setHearted(l => !l)} title="Heart"
               style={{
                 width: 24, height: 24, padding: 0, border: "none", borderRadius: layout.radiusXs,
                 background: hearted ? c.accentDim : "transparent", cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 13,
+                color: hearted ? c.red : c.textDim,
               }}
-            >❤️</button>
+            ><Icon name="heart" size={14} fill={hearted} /></button>
             <button type="button" onClick={copyAsRef} title={copied ? "Copied!" : "Quote in reply"}
               style={{
                 width: 24, height: 24, padding: 0, border: "none", borderRadius: layout.radiusXs,
@@ -1092,7 +1093,7 @@ function RailComment({ comment, author, currentPerson, isProjectOwner, isAppOwne
               background: c.surfaceAlt, border: `1px solid ${c.border}`,
               fontSize: 12, color: c.textMid, cursor: "pointer",
             }} onClick={() => setThumbed(false)}>
-              👍 <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600 }}>1</span>
+              <Icon name="thumbs-up" size={12} /> <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600 }}>1</span>
             </div>
           )}
           {hearted && (
@@ -1102,7 +1103,7 @@ function RailComment({ comment, author, currentPerson, isProjectOwner, isAppOwne
               background: c.surfaceAlt, border: `1px solid ${c.border}`,
               fontSize: 12, color: c.textMid, cursor: "pointer",
             }} onClick={() => setHearted(false)}>
-              ❤️ <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600 }}>1</span>
+              <Icon name="heart" size={12} fill color={c.red} /> <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 600 }}>1</span>
             </div>
           )}
         </div>

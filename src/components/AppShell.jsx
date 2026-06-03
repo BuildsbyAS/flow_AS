@@ -3,8 +3,13 @@
 // Layer 2: Week controls · Filter trigger · Applied chips
 // Filter drawer slides from right when triggered
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { c, typo, layout, space, motion, mono } from "../styles/theme";
-import { FilterChip, Btn, Modal, selChevron } from "./shared";
+import { c, typo, layout, space, motion, mono, isDark, themes } from "../styles/theme";
+
+// Chrome (sidebar + outer gutter) is ALWAYS dark — dark sidebar in light mode,
+// and stays dark in dark mode too.
+const chromeC = () => themes.dark;
+import { FilterChip, Btn, Modal, SideSheet, selChevron } from "./shared";
+import { Icon } from "./icons";
 import { ANNOUNCEMENTS } from "../data/announcements";
 import { isDevSeedMode, devStore } from "../data/devSeed";
 import { addProjectCommentToDB } from "../lib/mutations";
@@ -50,13 +55,13 @@ const TerminalIcon = ({ size = 18, color = c.textMid }) => (
    Mon=Focus · Tue/Wed=Sprint · Thu=Release · Fri=Review
    ════════════════════════════════════════════════════════════════════ */
 const DAY_RHYTHM = [
-  { label: "Focus day",   color: () => c.purple, icon: "◎" },  // 0 = Sunday
-  { label: "Focus day",   color: () => c.purple, icon: "◎" },  // 1 = Monday
-  { label: "Sprint day",  color: () => c.green,  icon: "⚡" }, // 2 = Tuesday
-  { label: "Sprint day",  color: () => c.green,  icon: "⚡" }, // 3 = Wednesday
-  { label: "Release day", color: () => c.orange, icon: "🚀" }, // 4 = Thursday
-  { label: "Review day",  color: () => c.cyan,   icon: "✓" },  // 5 = Friday
-  { label: "Rest day",    color: () => c.textDim, icon: "💤" }, // 6 = Saturday
+  { label: "Focus day",   color: () => c.purple, icon: "target" },  // 0 = Sunday
+  { label: "Focus day",   color: () => c.purple, icon: "target" },  // 1 = Monday
+  { label: "Sprint day",  color: () => c.green,  icon: "zap" }, // 2 = Tuesday
+  { label: "Sprint day",  color: () => c.green,  icon: "zap" }, // 3 = Wednesday
+  { label: "Release day", color: () => c.orange, icon: "rocket" }, // 4 = Thursday
+  { label: "Review day",  color: () => c.cyan,   icon: "check" },  // 5 = Friday
+  { label: "Rest day",    color: () => c.textDim, icon: "moon" }, // 6 = Saturday
 ];
 
 function getDayRhythm() {
@@ -275,7 +280,7 @@ function TimeframePicker({ timeframe, setTimeframe }) {
                 }}>Back</button>
                 <button type="button" onClick={applyCustom} style={{
                   padding: `${space[1]}px ${space[3]}px`, borderRadius: layout.radiusSm,
-                  border: "none", background: c.accent, color: "#fff",
+                  border: "none", background: c.accent, color: c.textOnAccent,
                   fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, fontWeight: 600,
                   cursor: "pointer", opacity: (!customStart || !customEnd || customStart > customEnd) ? 0.4 : 1,
                 }}>Apply</button>
@@ -547,7 +552,7 @@ export function Header({
                   color: active ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.3)",
                   lineHeight: 1, flexShrink: 0,
                   padding: "2px 5px",
-                  border: "1px solid rgba(255,255,255,0.15)",
+                  border: ("1px solid " + c.border),
                   borderRadius: 3,
                   transition: `background ${motion.fast.duration}, border-color ${motion.fast.duration}, color ${motion.fast.duration}, opacity ${motion.fast.duration}`,
                   position: "relative", top: -1,
@@ -784,6 +789,353 @@ export function Header({
       allSquads={allSquads || []}
       allPeople={allPeople || []}
     />
+    </>
+  );
+}
+
+
+/* ════════════════════════════════════════════════════════════════════
+   SIDEBAR — vertical navigation rail (replaces the top Header)
+   Top:    logo · Summary · Projects · People · ─── · Guide
+   Bottom: My Lens · Timeframe · Filters · ─── · Settings · Logs ·
+           Terminal · mentions/announcements · user card
+   ════════════════════════════════════════════════════════════════════ */
+export const SIDEBAR_WIDTH = 220;
+
+const NAV_ICON_PATHS = {
+  summary:  <><path d="M3 10.7 12 3l9 7.7" /><path d="M5 9.5V21h14V9.5" /></>,
+  projects: <><rect x="5" y="3" width="14" height="18" rx="2" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="9" y1="12" x2="15" y2="12" /><line x1="9" y1="16" x2="13" y2="16" /></>,
+  people:   <><circle cx="12" cy="12" r="9.2" /><circle cx="12" cy="10" r="3" /><path d="M6.5 18.8a6 6 0 0 1 11 0" /></>,
+  mylens:   <><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" /></>,
+  guide:    <><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z" /></>,
+  settings: <><line x1="4" y1="8" x2="20" y2="8" /><line x1="4" y1="16" x2="20" y2="16" /><circle cx="10" cy="8" r="2.4" /><circle cx="15" cy="16" r="2.4" /></>,
+  logs:     <><path d="M14 3v5h5" /><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M8 13h8M8 17h6" /></>,
+  terminal: <><polyline points="5 8 9 12 5 16" /><line x1="12" y1="17" x2="19" y2="17" /></>,
+};
+
+const SidebarIcon = ({ name, color }) => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    {NAV_ICON_PATHS[name]}
+  </svg>
+);
+
+function SidebarRow({ navKey, label, active, onClick, href, alertDot, collapsed }) {
+  const c = chromeC();
+  const color = active ? c.accent : c.textMid;
+  return (
+    <a
+      href={href}
+      title={collapsed ? label : undefined}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
+        e.preventDefault();
+        onClick();
+      }}
+      style={{
+        display: "flex", alignItems: "center", gap: space[3],
+        justifyContent: collapsed ? "center" : "flex-start",
+        padding: collapsed ? "9px 0" : `9px ${space[3]}px`, borderRadius: layout.radiusSm,
+        textDecoration: "none", cursor: "pointer", position: "relative",
+        background: active ? c.accentDim : "transparent",
+        color, fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: active ? 600 : 500,
+        transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = c.surfaceAlt; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+    >
+      <SidebarIcon name={navKey} color={active ? c.accent : c.textDim} />
+      {!collapsed && <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>}
+      {alertDot && <span style={{ position: collapsed ? "absolute" : "static", top: collapsed ? 7 : undefined, right: collapsed ? 14 : undefined, width: 8, height: 8, borderRadius: "50%", background: c.accent, flexShrink: 0 }} />}
+    </a>
+  );
+}
+
+function SidebarUserCard({ user, personProfile, personName, onSignOut, onNavigate }) {
+  const c = chromeC();
+  const [open, setOpen] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const displayName = personName || personProfile?.name || user?.user_metadata?.full_name || user?.email || "User";
+  const email = user?.email || personProfile?.email || "";
+  const avatar = user?.user_metadata?.avatar_url;
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: space[3],
+        padding: space[2], borderRadius: layout.radiusMd,
+        border: `1px solid ${c.border}`, background: c.surfaceSolid,
+      }}>
+        {avatar ? (
+          <img src={avatar} alt="" style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0 }} />
+        ) : (
+          <div style={{
+            width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+            background: c.accent, color: c.textOnAccent,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontFamily: mono, fontSize: 13, fontWeight: 700,
+          }}>{initialsOf(displayName)}</div>
+        )}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, color: c.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayName}</div>
+          {email && <div style={{ fontSize: 12, color: c.textDim, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email}</div>}
+        </div>
+        <button
+          onClick={() => setOpen(v => !v)}
+          aria-label="Account menu"
+          style={{ flexShrink: 0, width: 28, height: 28, borderRadius: layout.radiusSm, border: "none", background: "transparent", cursor: "pointer", color: c.textDim, display: "flex", alignItems: "center", justifyContent: "center" }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = c.surfaceAlt; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="5" r="1.4" /><circle cx="12" cy="12" r="1.4" /><circle cx="12" cy="19" r="1.4" /></svg>
+        </button>
+      </div>
+      {open && (
+        <div style={{
+          position: "absolute", bottom: "calc(100% + 6px)", left: 0, right: 0,
+          padding: "6px 0", background: c.surfaceSolid,
+          border: `1px solid ${c.border}`, borderRadius: layout.radiusMd,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)", zIndex: 200,
+          animation: "fadeScaleIn 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}>
+          <button onClick={() => { onNavigate && displayName && onNavigate("people", displayName); setOpen(false); }}
+            style={{ width: "100%", padding: "8px 14px", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", fontSize: 13, color: c.text, fontFamily: "inherit" }}
+            onMouseEnter={(e) => e.currentTarget.style.background = c.surfaceAlt}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >View profile</button>
+          <button onClick={() => { onSignOut && onSignOut(); setTimeout(() => window.location.reload(), 100); }}
+            style={{ width: "100%", padding: "8px 14px", background: "transparent", border: "none", textAlign: "left", cursor: "pointer", fontSize: 13, color: c.red, fontFamily: "inherit" }}
+            onMouseEnter={(e) => e.currentTarget.style.background = c.redDim}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >Sign out</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Sidebar({
+  onLogoClick,
+  activeTab, onTabSwitch,
+  onCmdOpen,
+  collapsed = false, onToggleCollapse,
+  darkMode = false, onToggleDark,
+  globalFilters, pendingFilters, setPendingFilters,
+  applyFilters, clearGlobalFilters, globalFilterCount,
+  allOwners, allSquads, allPeople,
+  currentUser, alertCount = 0,
+  projects, people, currentPerson, onNavigate,
+  myLens = false, toggleMyLens, followedProjects = [],
+  timeframe, setTimeframe,
+}) {
+  const c = chromeC(); // sidebar renders in the inverse palette
+  const [drawerOpen, setDrawerOpen] = React.useState(false);
+  const [draft, setDraft] = React.useState({ owner: [], squad: [], person: [] });
+  const applyNextRef = React.useRef(false);
+  React.useEffect(() => {
+    if (applyNextRef.current) { applyNextRef.current = false; applyFilters(); }
+  }, [pendingFilters, applyFilters]);
+
+  const openDrawer = () => { setDraft({ ...pendingFilters }); setDrawerOpen(true); };
+  const handleApply = () => { setPendingFilters({ ...draft }); applyNextRef.current = true; setDrawerOpen(false); };
+  const handleClearAll = () => { setDraft({ owner: [], squad: [], person: [] }); clearGlobalFilters(); setDrawerOpen(false); };
+  const draftCount = Object.values(draft).filter(v => v.length > 0).length;
+  const draftChanged = JSON.stringify(draft) !== JSON.stringify(globalFilters);
+
+  const lensDisabled = activeTab === "people" || activeTab === "guide";
+
+  const TOP = [
+    { key: "summary", label: "Summary" },
+    { key: "projects", label: "Projects" },
+    { key: "people", label: "People" },
+  ];
+  const BOTTOM = [
+    { key: "settings", label: "Settings" },
+    { key: "logs", label: "Logs" },
+    { key: "terminal", label: "Terminal" },
+  ];
+
+  return (
+    <>
+      <aside style={{
+        width: collapsed ? 76 : SIDEBAR_WIDTH, flexShrink: 0,
+        height: "100%", boxSizing: "border-box",
+        background: "transparent", border: "none",
+        display: "flex", flexDirection: "column",
+        padding: `${space[5]}px ${space[2]}px ${space[4]}px`,
+        gap: space[3], overflowY: "auto", scrollbarWidth: "none", zIndex: 40,
+        transition: "width 180ms cubic-bezier(0.16,1,0.3,1)",
+      }}>
+        {/* Logo + collapse toggle */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", gap: space[2], marginBottom: space[1] }}>
+          <div onClick={onLogoClick} style={{ display: "flex", alignItems: "center", gap: space[2] + 2, cursor: "pointer", padding: collapsed ? 0 : `0 ${space[2]}px` }}>
+            <FlowLogo size={26} color={c.text} />
+            {!collapsed && <span style={{ fontFamily: mono, fontSize: 17, fontWeight: 700, color: c.text, letterSpacing: "0.02em" }}>FLOW</span>}
+          </div>
+          {!collapsed && onToggleCollapse && (
+            <button onClick={onToggleCollapse} title="Collapse sidebar" aria-label="Collapse sidebar" style={{ flexShrink: 0, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", borderRadius: layout.radiusSm, cursor: "pointer", color: c.textDim }}
+              onMouseEnter={e => e.currentTarget.style.background = c.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+            </button>
+          )}
+        </div>
+
+        {collapsed && onToggleCollapse && (
+          <button onClick={onToggleCollapse} title="Expand sidebar" aria-label="Expand sidebar" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "9px 0", border: "none", background: "transparent", borderRadius: layout.radiusSm, cursor: "pointer", color: c.textDim }}
+            onMouseEnter={e => e.currentTarget.style.background = c.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+          </button>
+        )}
+
+        {/* Search — white card */}
+        <button onClick={onCmdOpen} title="Search (⌘K)" style={{
+          display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: space[2], width: "100%",
+          padding: collapsed ? "10px 0" : `8px ${space[2]}px`, borderRadius: layout.radiusSm,
+          border: `1px solid ${c.border}`, background: c.surface, cursor: "pointer",
+          fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textMid,
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round"><circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" /></svg>
+          {!collapsed && <span style={{ flex: 1, textAlign: "left" }}>Search</span>}
+          {!collapsed && <span style={{ display: "flex", alignItems: "center", gap: 2, fontFamily: mono, fontSize: 11, fontWeight: 600, color: c.textGhost, borderRadius: layout.radiusXs, padding: "2px 5px", background: c.surfaceAlt }}>⌘K</span>}
+        </button>
+
+        {/* Primary nav */}
+        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {TOP.map(t => (
+            <SidebarRow key={t.key} navKey={t.key} label={t.label} href={`?tab=${t.key}`} collapsed={collapsed}
+              active={activeTab === t.key} onClick={() => onTabSwitch(t.key)}
+              alertDot={t.key === "summary" && alertCount > 0} />
+          ))}
+
+          {/* My Lens — nav row with eye icon + toggle */}
+          {toggleMyLens && !collapsed && (
+            <div
+              onClick={lensDisabled ? undefined : toggleMyLens}
+              title={lensDisabled ? "My Lens is not available on this tab" : "My Lens — filter to your squad + followed projects"}
+              style={{
+                display: "flex", alignItems: "center", gap: space[3],
+                padding: `9px ${space[3]}px`, borderRadius: layout.radiusSm,
+                cursor: lensDisabled ? "default" : "pointer", opacity: lensDisabled ? 0.4 : 1, userSelect: "none",
+              }}
+              onMouseEnter={(e) => { if (!lensDisabled) e.currentTarget.style.background = c.surfaceAlt; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+            >
+              <SidebarIcon name="mylens" color={myLens ? c.accent : c.textDim} />
+              <span style={{ flex: 1, fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 500, color: myLens ? c.accent : c.textMid }}>My Lens</span>
+              <div style={{ width: 34, height: 20, borderRadius: 10, background: myLens ? c.accent : c.borderMedium, position: "relative", transition: `background ${motion.fast.duration} ${motion.fast.easing}`, flexShrink: 0 }}>
+                <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: myLens ? 16 : 2, transition: `left ${motion.fast.duration} ${motion.fast.easing}` }} />
+              </div>
+            </div>
+          )}
+          {toggleMyLens && collapsed && (
+            <SidebarRow navKey="mylens" label="My Lens" collapsed onClick={lensDisabled ? () => {} : toggleMyLens} active={myLens} />
+          )}
+        </nav>
+
+        {/* Separator */}
+        <div style={{ height: 1, background: c.border, margin: `${space[1]}px ${space[2]}px` }} />
+
+        {/* Guide */}
+        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <SidebarRow navKey="guide" label="Guide" href={`?tab=guide`} collapsed={collapsed}
+            active={activeTab === "guide"} onClick={() => onTabSwitch("guide")} />
+        </nav>
+
+        {/* Spacer */}
+        <div style={{ flex: 1, minHeight: space[4] }} />
+
+        {/* ── BOTTOM ── */}
+        {/* Mentions · announcements · dark mode — 3 equal boxes */}
+        {(() => {
+          const darkBtn = (
+            <button
+              onClick={onToggleDark}
+              title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label="Toggle dark mode"
+              style={{
+                flex: collapsed ? undefined : 1, width: collapsed ? "100%" : undefined,
+                height: 44, borderRadius: layout.radiusSm,
+                border: `1px solid ${c.border}`, background: c.surfaceAlt,
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                color: c.textMid,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = c.border; }}
+              onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; }}
+            >
+              {darkMode ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
+              )}
+            </button>
+          );
+          return collapsed ? darkBtn : (
+            <div style={{ display: "flex", alignItems: "stretch", gap: 6 }}>
+              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
+                <InboxBell projects={projects} people={people} currentPerson={currentPerson} onNavigate={onNavigate} myLens={myLens} tone={{ surface: c.surfaceAlt, border: c.border, icon: c.textMid }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
+                <AnnouncementsBell projects={projects} people={people} currentPerson={currentPerson} onNavigate={onNavigate} tone={{ surface: c.surfaceAlt, border: c.border, icon: c.textMid }} />
+              </div>
+              {darkBtn}
+            </div>
+          );
+        })()}
+
+        {/* Separator */}
+        <div style={{ height: 1, background: c.border, margin: `${space[1]}px ${space[2]}px` }} />
+
+        {/* Utility nav */}
+        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {BOTTOM.map(t => (
+            <SidebarRow key={t.key} navKey={t.key} label={t.label} href={`?tab=${t.key}`} collapsed={collapsed}
+              active={activeTab === t.key || (t.key === "terminal" && ["terminal", "rant"].includes(activeTab))}
+              onClick={() => onTabSwitch(t.key)} />
+          ))}
+        </nav>
+
+        {/* User card */}
+        {(currentUser?.user || currentPerson) && (
+          collapsed ? (
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <div title={currentPerson?.name || currentUser?.user?.email || "Account"} onClick={() => onNavigate && (currentPerson?.name) && onNavigate("people", currentPerson.name)} style={{
+                width: 36, height: 36, borderRadius: "50%", cursor: "pointer", flexShrink: 0,
+                background: c.accent, color: c.textOnAccent, display: "flex", alignItems: "center", justifyContent: "center",
+                fontFamily: mono, fontSize: 13, fontWeight: 700,
+              }}>{initialsOf(currentPerson?.name || currentUser?.personProfile?.name || currentUser?.user?.user_metadata?.full_name || currentUser?.user?.email || "U")}</div>
+            </div>
+          ) : (
+            <SidebarUserCard
+              user={currentUser?.user || null}
+              personProfile={currentUser?.personProfile || currentPerson || null}
+              personName={currentPerson?.name || currentUser?.personProfile?.name || currentUser?.user?.user_metadata?.full_name}
+              onSignOut={currentUser?.signOut || (() => {})}
+              onNavigate={onNavigate}
+            />
+          )
+        )}
+      </aside>
+
+      <FilterDrawer
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        draft={draft}
+        setDraft={setDraft}
+        onApply={handleApply}
+        onClearAll={handleClearAll}
+        draftCount={draftCount}
+        draftChanged={draftChanged}
+        globalFilterCount={globalFilterCount}
+        allOwners={allOwners || []}
+        allSquads={allSquads || []}
+        allPeople={allPeople || []}
+      />
     </>
   );
 }
@@ -1355,7 +1707,7 @@ function DetailBreadcrumb({ breadcrumbLabel, detailLabel, onBack }) {
         padding: `3px ${space[3]}px`,
         borderRadius: layout.radiusSm,
         background: "rgba(255,255,255,0.1)",
-        border: "1px solid rgba(255,255,255,0.15)",
+        border: ("1px solid " + c.border),
         minWidth: 0, flex: 1,
       }}>
         <div style={{
@@ -1480,7 +1832,7 @@ function DayRhythmPill({ onNavigateToGuide }) {
         onMouseEnter={(e) => { e.currentTarget.style.background = `${color}20`; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = `${color}12`; }}
       >
-        <span style={{ fontSize: 11, lineHeight: 1 }}>{rhythm.icon}</span>
+        <Icon name={rhythm.icon} size={12} color={color} />
         {rhythm.label}
       </span>
 
@@ -1521,7 +1873,7 @@ function DayRhythmPill({ onNavigateToGuide }) {
                 }}>
                   {DAY_NAMES[i]}
                 </span>
-                <span style={{ fontSize: 11, lineHeight: 1 }}>{r.icon}</span>
+                <Icon name={r.icon} size={12} color={isToday ? rc : c.textDim} />
                 <span style={{
                   fontSize: 12, color: isToday ? rc : c.textMid,
                   fontWeight: isToday ? 600 : 400,
@@ -1874,8 +2226,8 @@ function CompactSearch({ onClick }) {
       display: "flex", alignItems: "center",
       padding: `8px ${space[3] + 2}px`, gap: 9,
       borderRadius: layout.radiusMd,
-      border: "1px solid rgba(255,255,255,0.15)",
-      background: "rgba(255,255,255,0.08)",
+      border: ("1px solid " + c.border),
+      background: c.surfaceAlt,
       transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, border-color ${motion.interaction.duration} ${motion.interaction.easing}`,
     }}>
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ opacity: 0.55, flexShrink: 0 }}>
@@ -1892,8 +2244,8 @@ function CompactSearch({ onClick }) {
         fontFamily: typo.monoSm.font, fontSize: 11,
         fontWeight: 600,
         color: "rgba(255,255,255,0.4)",
-        background: "rgba(255,255,255,0.08)",
-        border: "1px solid rgba(255,255,255,0.15)",
+        background: c.surfaceAlt,
+        border: ("1px solid " + c.border),
         padding: "1px 5px",
         borderRadius: layout.radiusTag + 1,
         lineHeight: 1.4, flexShrink: 0,
@@ -1920,7 +2272,7 @@ function extractMentionsFromBody(text) {
   return [...mentions];
 }
 
-function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false }) {
+function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false, tone }) {
   const [open, setOpen] = React.useState(false);
   const [readIds, setReadIds] = React.useState(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem("flow_inbox_read") || "[]")); }
@@ -1984,14 +2336,14 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
         const d = ev.details || {};
         if (ev.action === "project_created") {
           updates.push({
-            id: ev.id, icon: "🆕", who: ev.user_name || "Someone",
+            id: ev.id, icon: "sparkle", who: ev.user_name || "Someone",
             label: "created a new project ",
             projectName: proj.name, projectId: proj.id,
             squad: proj.squad, ts: ev.created_at,
           });
         } else if (ev.action === "project_phase_changed") {
           updates.push({
-            id: ev.id, icon: "📦", who: ev.user_name || "Someone",
+            id: ev.id, icon: "package", who: ev.user_name || "Someone",
             label: "moved ",
             projectName: proj.name,
             phaseText: `from ${d.from || "?"} → ${d.to || "?"}`,
@@ -1999,14 +2351,14 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
           });
         } else if (ev.action === "shoutout") {
           updates.push({
-            id: ev.id, icon: "👏", who: d.from || ev.user_name || "Someone",
+            id: ev.id, icon: "clap", who: d.from || ev.user_name || "Someone",
             label: "gave a shoutout for ",
             projectName: proj.name, projectId: proj.id,
             squad: proj.squad, ts: ev.created_at,
           });
         } else if (ev.action === "feedback") {
           updates.push({
-            id: ev.id, icon: "💬", who: d.from || ev.user_name || "Someone",
+            id: ev.id, icon: "message-circle", who: d.from || ev.user_name || "Someone",
             label: "left feedback on ",
             projectName: proj.name, projectId: proj.id,
             squad: proj.squad, ts: ev.created_at,
@@ -2075,40 +2427,36 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
         aria-label={displayUnread > 0 ? `Inbox — ${displayUnread} unread` : "Inbox"}
         title="Inbox"
         style={{
-          width: 34, height: 34, borderRadius: layout.radiusSm,
-          border: "1px solid rgba(255,255,255,0.15)",
-          background: "rgba(255,255,255,0.08)",
+          width: "100%", height: 44, borderRadius: layout.radiusSm,
+          border: ("1px solid " + (tone?.border || c.border)),
+          background: tone?.surface || c.surfaceAlt,
           cursor: "pointer", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
           outline: "none",
           transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; }}
-        onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+        onMouseEnter={e => { e.currentTarget.style.background = (tone?.border || c.border); }}
+        onMouseLeave={e => { e.currentTarget.style.background = (tone?.surface || c.surfaceAlt); }}
       >
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={tone?.icon || c.textMid} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="4" width="20" height="16" rx="2" />
           <path d="M22 7l-10 7L2 7" />
         </svg>
         {displayUnread > 0 && (
           <span aria-hidden="true" style={{
-            position: "absolute", top: 3, right: 3,
+            position: "absolute", top: 7, right: "calc(50% - 18px)",
             minWidth: 16, height: 16, borderRadius: 999,
-            background: "#FFFFFF", color: "#111111",
+            background: c.blue, color: "#FFFFFF",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontFamily: mono, fontSize: 9, fontWeight: 700,
             padding: "0 4px", boxSizing: "border-box",
-            boxShadow: "0 0 0 2px #111111",
+            boxShadow: `0 0 0 2px ${c.surface}`,
           }}>{displayUnread > 9 ? "9+" : displayUnread}</span>
         )}
       </button>
 
-      <Modal open={open} onClose={() => { setOpen(false); setReplyingTo(null); setSquadFilter(null); }} accent={c.accent} width={580}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[3] }}>
-          <span style={{
-            fontFamily: typo.displayMd.font, fontSize: typo.displayMd.size,
-            fontWeight: typo.displayMd.weight, color: c.text,
-          }}>Inbox</span>
+      <SideSheet open={open} onClose={() => { setOpen(false); setReplyingTo(null); setSquadFilter(null); }} title="Inbox" accent={c.accent} width={580}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: space[3] }}>
           {!myLens && (() => {
             const allSquads = [...new Set((projects || []).map(p => p.squad).filter(Boolean))].sort();
             if (allSquads.length < 2) return null;
@@ -2364,10 +2712,11 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
                     }}>
                       <span style={{
                         width: 28, height: 28, borderRadius: layout.radiusXs,
-                        background: upd.icon === "🆕" ? c.greenDim : upd.icon === "👏" ? c.accentDim || c.amberDim : upd.icon === "💬" ? c.cyanDim || c.surfaceAlt : c.amberDim,
+                        background: upd.icon === "sparkle" ? c.greenDim : upd.icon === "clap" ? c.accentDim || c.amberDim : upd.icon === "message-circle" ? c.cyanDim || c.surfaceAlt : c.amberDim,
                         display: "flex", alignItems: "center", justifyContent: "center",
-                        fontSize: 14, flexShrink: 0,
-                      }}>{upd.icon}</span>
+                        flexShrink: 0,
+                        color: upd.icon === "sparkle" ? c.green : upd.icon === "clap" ? (c.accent || c.amber) : upd.icon === "message-circle" ? c.cyan : c.amber,
+                      }}><Icon name={upd.icon} size={15} /></span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{
                           fontFamily: typo.bodyMd.font, fontSize: 13, color: c.text, lineHeight: 1.5,
@@ -2405,7 +2754,7 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
           );
         })()}
         </div>
-      </Modal>
+      </SideSheet>
     </>
   );
 }
@@ -2420,7 +2769,7 @@ function InboxBell({ projects, people, currentPerson, onNavigate, myLens = false
    schema + how to publish a new entry. */
 const LAST_SEEN_KEY = "flow_announcements_last_seen";
 
-function AnnouncementsBell({ projects = [], people = [], currentPerson, onNavigate }) {
+function AnnouncementsBell({ projects = [], people = [], currentPerson, onNavigate, tone }) {
   const devRef = useDevLabel('AnnouncementsBell', 'src/components/AppShell.jsx', 'Megaphone button in header; opens a modal with the announcement timeline.');
   const [open, setOpen] = React.useState(false);
   const [lastSeen, setLastSeen] = React.useState(() => {
@@ -2509,20 +2858,18 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
         aria-label={hasUnread ? "Announcements — unread updates" : "Announcements"}
         title="Announcements"
         style={{
-          width: 34, height: 34, borderRadius: layout.radiusSm,
-          border: "1px solid rgba(255,255,255,0.15)",
-          background: "rgba(255,255,255,0.08)",
+          width: "100%", height: 44, borderRadius: layout.radiusSm,
+          border: ("1px solid " + (tone?.border || c.border)),
+          background: tone?.surface || c.surfaceAlt,
           cursor: "pointer", position: "relative",
           display: "flex", alignItems: "center", justifyContent: "center",
           outline: "none",
           transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}`,
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.15)"; }}
-        onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
-        onFocus={e => { e.currentTarget.style.boxShadow = "0 0 0 2px rgba(255,255,255,0.3)"; }}
-        onBlur={e => { e.currentTarget.style.boxShadow = "none"; }}
+        onMouseEnter={e => { e.currentTarget.style.background = (tone?.border || c.border); }}
+        onMouseLeave={e => { e.currentTarget.style.background = (tone?.surface || c.surfaceAlt); }}
       >
-        <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={tone?.icon || c.textMid} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
           <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           <line x1="12" y1="2" x2="12" y2="4" />
@@ -2537,7 +2884,7 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
         )}
       </button>
 
-      <Modal open={open} onClose={closePanel} title="What's New" accent={c.accent} width={560}>
+      <SideSheet open={open} onClose={closePanel} title="What's New" accent={c.accent} width={560}>
         <div style={{ maxHeight: 520, overflowY: "auto", marginRight: -space[2], paddingRight: space[2] }}>
           {/* ── Squad filter ── */}
           {squads.length > 0 && (
@@ -2563,7 +2910,7 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
               padding: `${space[5]}px`, textAlign: "center",
               borderRadius: layout.radiusSm, background: c.surfaceAlt,
             }}>
-              <div style={{ fontSize: 28, marginBottom: space[2] }}>🚀</div>
+              <div style={{ marginBottom: space[2], color: c.textGhost || c.textDim }}><Icon name="rocket" size={28} strokeWidth={1.5} /></div>
               <div style={{ fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textDim }}>
                 No shipped projects yet. When a project is shipped, it'll appear here.
               </div>
@@ -2651,15 +2998,15 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
                         {/* Row 4: Action buttons */}
                         <div style={{ display: "flex", gap: space[2] }}>
                           {[
-                            { label: "Shoutout", icon: "👏", action: () => {
+                            { label: "Shoutout", icon: "clap", action: () => {
                               const viewerName = currentPerson?.name || people?.[0]?.name || "AJ";
                               if (isDevSeedMode()) {
                                 devStore.logEvent({ projectId: proj.id, action: "shoutout", userName: viewerName, details: { from: viewerName, projectName: proj.name } });
                               }
-                              window.__flowToast?.(`🎉 Shoutout sent for ${proj.name}!`);
+                              window.__flowToast?.(`Shoutout sent for ${proj.name}!`);
                             }},
-                            { label: "Feedback", icon: "💬", action: () => { closePanel(); sessionStorage.setItem("flow_scroll_to", "feedback"); setTimeout(() => onNavigate?.("projects", proj.id), 100); } },
-                            { label: "View", icon: "→", action: () => { closePanel(); setTimeout(() => onNavigate?.("projects", proj.id), 100); } },
+                            { label: "Feedback", icon: "message-circle", action: () => { closePanel(); sessionStorage.setItem("flow_scroll_to", "feedback"); setTimeout(() => onNavigate?.("projects", proj.id), 100); } },
+                            { label: "View", icon: "arrow", action: () => { closePanel(); setTimeout(() => onNavigate?.("projects", proj.id), 100); } },
                           ].map(btn => (
                             <button key={btn.label} type="button" onClick={btn.action} style={{
                               display: "inline-flex", alignItems: "center", gap: 4,
@@ -2671,7 +3018,7 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
                               onMouseEnter={e => { e.currentTarget.style.borderColor = c.accent; e.currentTarget.style.color = c.accent; }}
                               onMouseLeave={e => { e.currentTarget.style.borderColor = c.border; e.currentTarget.style.color = c.textMid; }}
                             >
-                              <span style={{ fontSize: 11, lineHeight: 1 }}>{btn.icon}</span>
+                              {btn.icon === "arrow" ? <span style={{ fontSize: 11, lineHeight: 1 }}>→</span> : <Icon name={btn.icon} size={12} />}
                               {btn.label}
                             </button>
                           ))}
@@ -2687,7 +3034,7 @@ function AnnouncementsBell({ projects = [], people = [], currentPerson, onNaviga
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: space[4], paddingTop: space[3], borderTop: `1px solid ${c.border}` }}>
           <Btn variant="ghost" onClick={closePanel}>Close</Btn>
         </div>
-      </Modal>
+      </SideSheet>
     </>
   );
 }

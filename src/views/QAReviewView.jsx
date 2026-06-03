@@ -11,6 +11,7 @@
 import React, { useState, useEffect } from "react";
 import { c, space, typo, layout, motion, typeConfig } from "../styles/theme";
 import { Surface, Badge, Btn } from "../components/shared";
+import { Icon } from "../components/icons";
 
 const STORAGE_KEY = "flow-qa-decisions-v1";
 const body = typo.bodyMd.font;
@@ -402,7 +403,7 @@ const HeaderCurrent = () => (
     }}>
       <span style={{ fontFamily: mono, fontSize: 11, fontWeight: 700 }}>FLOW</span>
       <span style={{ fontFamily: body, fontSize: 11, color: c.textMid }}>Summary · Projects · People · Pulse · Commit · Guide</span>
-      <span style={{ marginLeft: "auto", fontFamily: body, fontSize: 11, color: c.textDim }}>🔍</span>
+      <span style={{ marginLeft: "auto", display: "inline-flex", color: c.textDim }}><Icon name="search" size={13} /></span>
       <span style={{ fontFamily: body, fontSize: 11, color: c.textDim, border: `1px solid ${c.border}`, padding: "2px 6px", borderRadius: 4 }}>Terminal</span>
     </div>
     <div style={{
@@ -470,7 +471,7 @@ const RestDayA = () => (
     <div style={{ padding: space[3], background: c.surface, border: `1px solid ${c.border}`, borderRadius: layout.radiusSm, display: "flex", alignItems: "center", gap: space[2] }}>
       <div style={{ width: 28, height: 28, borderRadius: "50%", background: c.accentDim, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: mono, fontSize: 11, fontWeight: 700, color: c.accent }}>AJ</div>
       <span style={{ fontFamily: body, fontSize: 12, color: c.text }}>Anmol Jain</span>
-      <Badge color={c.orange} bg={c.orangeDim}>💤 Rest day</Badge>
+      <Badge color={c.orange} bg={c.orangeDim}><span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><Icon name="moon" size={11} /> Rest day</span></Badge>
     </div>
     <div style={{ fontFamily: body, fontSize: 11, color: c.textDim, marginTop: 4 }}>Marks you out for the week. Your 3 slots zero out.</div>
   </div>

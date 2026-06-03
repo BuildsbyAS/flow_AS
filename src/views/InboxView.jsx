@@ -9,6 +9,7 @@
 import React, { useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { c, space, layout, typo, body, mono } from "../styles/theme";
 import { timeAgo, fmtAbsolute } from "../lib/time";
+import { Icon } from "../components/icons";
 import { addProjectCommentToDB } from "../lib/mutations";
 import { isDevSeedMode, devStore } from "../data/devSeed";
 
@@ -249,7 +250,7 @@ export default function InboxView({ projects, people, currentPerson, onNavigate 
           background: c.surface, border: `1px solid ${c.border}`,
           borderRadius: layout.radiusLg, boxShadow: c.shadowCard,
         }}>
-          <div style={{ fontSize: 32, marginBottom: space[3] }}>📭</div>
+          <div style={{ marginBottom: space[3], color: c.textGhost || c.textDim }}><Icon name="inbox" size={32} strokeWidth={1.5} /></div>
           <div style={{ fontFamily: body, fontSize: 15, fontWeight: 600, color: c.text, marginBottom: space[1] }}>
             No mentions yet
           </div>

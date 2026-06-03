@@ -3,6 +3,7 @@
 import React, { useMemo, useRef, useEffect, useState, useCallback } from "react";
 import { c, typo, space, layout, motion, phaseColors as getPhaseColors, phaseMids as getPhaseMids } from "../styles/theme";
 import { getActiveTracks } from "../lib/tracks";
+import { Icon } from "./icons";
 import useDevLabel from "../hooks/useDevLabel";
 
 /* ── Helpers ── */
@@ -20,11 +21,12 @@ const HDR_H = 52;
 const TOOLBAR_H = 40;
 const LEFT_W = 260;
 
-const BAR_COLOR = "#111111";
-const SHIPPED_BAR_COLOR = "#166534";
-const ALPHABETA_BAR_COLOR = "#86efac";
-const BLOCKED_BAR_COLOR = "#fca5a5";
-const priorityColorMap = { P0: () => c.red, P1: () => c.orange, P2: () => c.blue, P3: () => c.textDim };
+// Bar fills resolve against the live theme so they invert in dark mode.
+const barColor = () => c.text;          // normal — neutral near-black / near-white
+const shippedBarColor = () => c.green;  // shipped
+const alphaBetaBarColor = () => `color-mix(in srgb, ${c.green} 45%, ${c.surface})`; // alpha/beta — lighter green
+const blockedBarColor = () => c.red;    // blocked
+const priorityColorMap = { P0: () => c.red, P1: () => c.amber, P2: () => c.textDim, P3: () => c.textGhost };
 
 
 /* ══════════════════════════════════════════════════════════════════
@@ -189,13 +191,13 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
             <div key={p.id + "-left"} onClick={() => scrollToProject(p)}
               style={{
                 height: ROW_H, display: "flex", alignItems: "center", padding: `0 ${space[4]}px`,
-                gap: space[2], cursor: "pointer", borderBottom: `1px solid rgba(0,0,0,0.04)`,
+                gap: space[2], cursor: "pointer", borderBottom: `1px solid ${c.border}`,
                 transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
-                background: highlightId === p.id ? "rgba(0,0,0,0.04)" : "transparent",
+                background: highlightId === p.id ? c.surfaceAlt : "transparent",
               }}
-              onMouseEnter={(e) => { if (highlightId !== p.id) e.currentTarget.style.background = `rgba(0,0,0,0.03)`; }}
+              onMouseEnter={(e) => { if (highlightId !== p.id) e.currentTarget.style.background = c.surfaceAlt; }}
               onMouseLeave={(e) => { if (highlightId !== p.id) e.currentTarget.style.background = "transparent"; }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: c.orange, letterSpacing: "0.3px",
+              <span style={{ fontSize: 12, fontWeight: 600, color: c.textDim, letterSpacing: "0.3px",
                 fontFamily: typo.monoSm.font, flexShrink: 0, minWidth: 32 }}>{p.id}</span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: c.text,
@@ -204,8 +206,8 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: 1.3 }}>{p.squad}</div>
               </div>
               {p.priority && <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 3,
-                background: p.priority === "P0" ? c.redDim : p.priority === "P1" ? c.orangeDim : p.priority === "P3" ? "rgba(0,0,0,0.05)" : `${c.blue}15`,
-                color: p.priority === "P0" ? c.red : p.priority === "P1" ? c.orange : p.priority === "P3" ? c.textDim : c.blue,
+                background: p.priority === "P0" ? c.redDim : c.surfaceAlt,
+                color: p.priority === "P0" ? c.red : p.priority === "P1" ? c.amber : p.priority === "P2" ? c.textDim : c.textGhost,
                 fontFamily: typo.monoSm.font, letterSpacing: "0.3px", flexShrink: 0 }}>{p.priority}</span>}
             </div>
           );
@@ -225,7 +227,7 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
             {monthSpans.map((ms, i) => (
               <div key={i} style={{ width: ms.width, flexShrink: 0, fontSize: 12, fontWeight: 700,
                 color: c.textMid, padding: "5px 0 0 0", textAlign: "center",
-                borderLeft: `1px solid rgba(0,0,0,0.06)`, letterSpacing: "0.2px",
+                borderLeft: `1px solid ${c.border}`, letterSpacing: "0.2px",
                 overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>{ms.label}</div>
             ))}
           </div>
@@ -236,7 +238,7 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
               return (
                 <div key={i} style={{ width: COL_W, flexShrink: 0, fontSize: 11, color: c.textDim,
                   textAlign: "center", padding: "3px 0",
-                  borderLeft: `1px solid ${isMonthStart ? "rgba(0,0,0,0.06)" : "rgba(0,0,0,0.03)"}` }}>
+                  borderLeft: `1px solid ${isMonthStart ? c.border : "transparent"}` }}>
                   {fmtShort(w)}
                 </div>
               );
@@ -252,7 +254,7 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
             return (
               <div key={`g-${i}`} style={{ position: "absolute", top: 0, bottom: 0,
                 left: i * COL_W, width: 1, pointerEvents: "none", zIndex: 0,
-                background: isMonthStart ? "rgba(0,0,0,0.04)" : "rgba(0,0,0,0.02)" }} />
+                background: isMonthStart ? c.border : "transparent" }} />
             );
           })}
 
@@ -274,12 +276,12 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
             const isBlocked = p.status === "blocked" || p.isBlocked;
             const active = getActiveTracks(p);
             const hasAlphaBeta = active.some(t => t === "Alpha" || t === "Beta");
-            const barFill = isBlocked ? BLOCKED_BAR_COLOR : isShipped ? SHIPPED_BAR_COLOR : hasAlphaBeta ? ALPHABETA_BAR_COLOR : BAR_COLOR;
+            const barFill = isBlocked ? blockedBarColor() : isShipped ? shippedBarColor() : hasAlphaBeta ? alphaBetaBarColor() : barColor();
 
             return (
               <div key={p.id + "-bar"} style={{ height: ROW_H, position: "relative",
-                borderBottom: "1px solid rgba(0,0,0,0.04)",
-                background: highlightId === p.id ? "rgba(0,0,0,0.04)" : "transparent",
+                borderBottom: `1px solid ${c.border}`,
+                background: highlightId === p.id ? c.surfaceAlt : "transparent",
                 transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
               }}>
 
@@ -320,7 +322,7 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
                       position: "relative", zIndex: 1, paddingLeft: 8,
                       fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 600,
                       letterSpacing: "0.03em",
-                      color: isBlocked ? "#7f1d1d" : hasAlphaBeta ? "#14532d" : "#ffffff",
+                      color: hasAlphaBeta ? c.green : c.textOnInverse,
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                       lineHeight: "24px", pointerEvents: "none",
                     }}>
@@ -332,9 +334,9 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
                 {/* Shipped rocket marker — positioned at the end of the bar */}
                 {(p.phase === "GA" || p.status === "complete") && (
                   <div style={{
-                    position: "absolute", top: 10, left: left + width + 4,
-                    fontSize: 14, lineHeight: 1, pointerEvents: "none", zIndex: 2,
-                  }}>🚀</div>
+                    position: "absolute", top: 8, left: left + width + 4,
+                    lineHeight: 1, pointerEvents: "none", zIndex: 2, color: c.green,
+                  }}><Icon name="rocket" size={14} /></div>
                 )}
               </div>
             );
@@ -352,11 +354,9 @@ export default function GanttChart({ projects, today: todayProp, onProjectClick 
         return (
           <div ref={tooltipRef} style={{
             position: "fixed", left: tooltip.x, top: tooltip.y, zIndex: 100,
-            background: "rgba(255,255,255,0.92)",
-            backdropFilter: "blur(20px) saturate(1.4)",
-            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-            border: `1px solid rgba(255,255,255,0.5)`, borderRadius: 10,
-            padding: "14px 18px", minWidth: 220, maxWidth: 280, boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 4px 12px rgba(0,0,0,0.06)",
+            background: c.surfaceSolid,
+            border: `1px solid ${c.border}`, borderRadius: 12,
+            padding: "14px 18px", minWidth: 220, maxWidth: 280, boxShadow: c.shadowFloat,
             cursor: "pointer", pointerEvents: "auto",
           }}
           onClick={() => { setTooltip(null); if (onProjectClick) onProjectClick(p.id); }}

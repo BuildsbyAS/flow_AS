@@ -15,7 +15,7 @@ const S = {
     padding: "6px 14px", borderRadius: 20,
     background: "rgba(15, 23, 42, 0.92)", border: "1px solid rgba(232, 89, 12, 0.3)",
     backdropFilter: "blur(12px)",
-    fontFamily: "'Inter', system-ui, sans-serif", fontSize: 11, fontWeight: 600,
+    fontFamily: "'Geist', system-ui, sans-serif", fontSize: 11, fontWeight: 600,
     color: "rgba(255,255,255,0.7)", letterSpacing: "0.04em",
     cursor: "pointer", userSelect: "none",
     transition: "background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, opacity 0.15s ease",
@@ -36,7 +36,7 @@ const S = {
     padding: "10px 14px", borderRadius: 8,
     background: "rgba(15, 23, 42, 0.95)", border: "1px solid rgba(232, 89, 12, 0.25)",
     backdropFilter: "blur(12px)",
-    fontFamily: "'Inter', system-ui, sans-serif", fontSize: 12,
+    fontFamily: "'Geist', system-ui, sans-serif", fontSize: 12,
     color: "rgba(255,255,255,0.85)",
     maxWidth: 320, lineHeight: 1.5,
     boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
@@ -45,7 +45,7 @@ const S = {
     position: "absolute", top: 0, left: 0, zIndex: 99997,
     padding: "2px 8px", borderRadius: "0 0 6px 0",
     background: "rgba(232, 89, 12, 0.85)",
-    fontFamily: "'JetBrains Mono', monospace", fontSize: 9, fontWeight: 600,
+    fontFamily: "'Geist', system-ui, sans-serif", fontSize: 9, fontWeight: 600,
     color: "#fff", letterSpacing: "0.02em",
     pointerEvents: "none", whiteSpace: "nowrap",
   },
@@ -64,7 +64,7 @@ function Tooltip({ entry, x, y }) {
       <div style={{ fontWeight: 700, fontSize: 13, color: "#E8590C", marginBottom: 4 }}>
         {entry.name}
       </div>
-      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: entry.description ? 4 : 0 }}>
+      <div style={{ fontFamily: "'Geist', system-ui, sans-serif", fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: entry.description ? 4 : 0 }}>
         {entry.filePath}
       </div>
       {entry.description && (

@@ -11,6 +11,7 @@ import { c, typo, space, layout, body, mono, phaseColors as getPhaseColors } fro
 import { getActiveTracks } from "../lib/tracks";
 import usePersonActivity from "../hooks/usePersonActivity";
 import { timeAgo, isStale, fmtAbsolute } from "../lib/time";
+import { Icon } from "./icons";
 
 function ProjectRow({ proj, onNavigate, label }) {
   const stale = isStale(proj.lastActivityAt);
@@ -72,9 +73,15 @@ function ProjectRow({ proj, onNavigate, label }) {
           borderRadius: 999,
           background: stale && proj.lastActivityAt ? c.redDim : "transparent",
           border: stale && proj.lastActivityAt ? `1px solid ${c.red}30` : "none",
+          display: "inline-flex", alignItems: "center", gap: 4,
         }}
       >
-        {proj.lastActivityAt ? `${stale ? "⚠ " : ""}${timeAgo(proj.lastActivityAt)}` : "no activity"}
+        {proj.lastActivityAt ? (
+          <>
+            {stale && <Icon name="alert-triangle" size={12} />}
+            {timeAgo(proj.lastActivityAt)}
+          </>
+        ) : "no activity"}
       </span>
     </button>
   );
