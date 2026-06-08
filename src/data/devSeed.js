@@ -356,11 +356,11 @@ export const seedProjects = [
   {
     id: "X17", name: "Loyalty program v2",
     owner: "Khalid Anwer", owner_id: PERSON_KHALID, squad: "Customer",
-    phase: null, status: "upcoming",
+    phase: "Dev", status: "active",
     priority: "P1", complexity: "L",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
-    startDate: null, endDate: null,
+    startDate: "2026-04-01", endDate: "2026-08-15",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
     tentativeStartDate: "2026-05-10",
@@ -371,11 +371,11 @@ export const seedProjects = [
   {
     id: "X18", name: "Voice search integration",
     owner: "Fatima", owner_id: PERSON_FATIMA, squad: "Platform",
-    phase: null, status: "upcoming",
+    phase: "PRD", status: "active",
     priority: "P2", complexity: "M",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
-    startDate: null, endDate: null,
+    startDate: "2026-05-01", endDate: "2026-09-10",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
     tentativeStartDate: "2026-06-15",
@@ -385,11 +385,11 @@ export const seedProjects = [
   {
     id: "X19", name: "Seller analytics dashboard",
     owner: "Hassan", owner_id: PERSON_HASSAN, squad: "Sales",
-    phase: null, status: "upcoming",
-    priority: "P2", complexity: null,
+    phase: "Design", status: "active",
+    priority: "P2", complexity: "M",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
-    startDate: null, endDate: null,
+    startDate: "2026-04-15", endDate: "2026-07-30",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
     tentativeStartDate: null,
@@ -399,11 +399,11 @@ export const seedProjects = [
   {
     id: "X20", name: "Live chat support widget",
     owner: "Mariam", owner_id: PERSON_MARIAM, squad: "Customer",
-    phase: null, status: "upcoming",
+    phase: "Dev", status: "active",
     priority: "P1", complexity: "M",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
-    startDate: null, endDate: null,
+    startDate: "2026-03-20", endDate: "2026-07-10",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
     tentativeStartDate: "2026-05-01",
@@ -469,11 +469,11 @@ export const seedProjects = [
   {
     id: "X25", name: "Account Page Revamp",
     owner: "Hesham Elalamy", owner_id: PERSON_HESHAM, squad: "Customer",
-    phase: null, status: "upcoming",
+    phase: "PRD", status: "active",
     priority: "P1", complexity: "L",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
-    startDate: null, endDate: null,
+    startDate: "2026-05-05", endDate: "2026-08-25",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
     tentativeStartDate: "2026-06-01",
@@ -496,11 +496,11 @@ export const seedProjects = [
   {
     id: "X27", name: "Address Nickname Suggestion",
     owner: "Mohammad Saffidiene", owner_id: PERSON_MSAFFIDIENE, squad: "Customer",
-    phase: null, status: "upcoming",
+    phase: "QA", status: "active",
     priority: "P2", complexity: "S",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
-    startDate: null, endDate: null,
+    startDate: "2026-04-25", endDate: "2026-06-30",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
     tentativeStartDate: "2026-07-01",
@@ -540,11 +540,11 @@ export const seedProjects = [
   {
     id: "X30", name: "Golazo 2026 FIFA",
     owner: "Pavneet Kaur", owner_id: PERSON_PAVNEET, squad: "Gaming",
-    phase: null, status: "upcoming",
+    phase: "Design", status: "active",
     priority: "P0", complexity: "XL",
     isBlocked: false, blockedReason: null, blockedAt: null,
     phaseDurationOverrides: null,
-    startDate: null, endDate: null,
+    startDate: "2026-04-01", endDate: "2026-09-15",
     actualStartDate: null, actualEndDate: null,
     gaEnteredAt: null, depriReason: null,
     tentativeStartDate: "2026-06-15",
@@ -1488,6 +1488,41 @@ import { migrateProjectToTracks, derivePrimaryPhase } from '../lib/tracks';
   }
 })();
 
+// ── Assign collaborating squads (cross-team work) to ~60% of projects ──
+(() => {
+  const allSquads = [...new Set(seedProjects.map(p => p.squad).filter(Boolean))];
+  seedProjects.forEach((p, i) => {
+    if (!p.squad || i % 5 === 0) return; // ~20% solo, rest collaborate
+    const others = allSquads.filter(s => s !== p.squad);
+    // Deterministic pick of 1–2 collaborating squads based on index
+    const count = (i % 3 === 0) ? 2 : 1;
+    const picks = [];
+    for (let k = 0; k < count; k++) {
+      picks.push(others[(i * 7 + k * 3) % others.length]);
+    }
+    p.collabSquads = [...new Set(picks)];
+  });
+})();
+
+// ── Keep only 2 shipped projects; flip the rest back to active in-flight ──
+(() => {
+  const KEEP_SHIPPED = new Set(["X28", "X13"]);
+  const flipPhase = { X09: "Dev", X35: "Design", X40: "QA" };
+  const now = Date.now();
+  const DAY_MS = 86_400_000;
+  for (const p of seedProjects) {
+    if (p.status !== "shipped" || KEEP_SHIPPED.has(p.id)) continue;
+    const ph = flipPhase[p.id] || "Dev";
+    p.status = "active";
+    p.phase = ph;
+    p.shippedAt = null;
+    p.gaEnteredAt = null;
+    p.actualEndDate = null;
+    // Reset to a single active track in the chosen phase
+    p.tracks = { [ph]: { periods: [{ started_at: new Date(now - 20 * DAY_MS).toISOString(), completed_at: null }], owner: null } };
+  }
+})();
+
 // Bump every project's last_activity_at to its actual most-recent event.
 (() => {
   for (const p of seedProjects) {
@@ -1496,6 +1531,47 @@ import { migrateProjectToTracks, derivePrimaryPhase } from '../lib/tracks';
       ..._state.events.filter(e => e.entity_id === p.id).map(e => e.created_at),
     ].map(s => new Date(s).getTime()).filter(t => Number.isFinite(t));
     if (allTs.length) p.lastActivityAt = new Date(Math.max(...allTs)).toISOString();
+  }
+})();
+
+// ── Cap "At Risk" to ~15% of active projects ──
+// At-risk fires on overdue OR no activity in 7 days OR blocked.
+// We refresh activity, push out past end dates, and unblock — except for a small risk cohort.
+(() => {
+  const HOUR_MS = 60 * 60 * 1000;
+  const DAY_MS = 24 * HOUR_MS;
+  const now = Date.now();
+  const todayShort = new Date(now).toISOString().slice(0, 10);
+  const inDays = (n) => new Date(now + n * DAY_MS).toISOString().slice(0, 10);
+
+  const active = seedProjects.filter(p => p.status !== "shipped" && p.status !== "deprioritized" && p.status !== "upcoming");
+  // Deterministic risk cohort: ~15% of active projects stay at-risk.
+  const riskTarget = Math.max(1, Math.round(active.length * 0.15));
+  const sorted = [...active].sort((a, b) => a.id.localeCompare(b.id));
+  const riskCohort = new Set(sorted.slice(0, riskTarget).map(p => p.id));
+
+  let activityCounter = 1;
+  for (const p of active) {
+    if (riskCohort.has(p.id)) continue; // leave stale / overdue / blocked state intact
+    // Push a fresh synthetic activity event so getSeedProjects() derives a recent lastActivityAt.
+    const tsIso = new Date(now - (1 + (activityCounter % 5)) * HOUR_MS).toISOString();
+    _state.events.push({
+      id: `ev-fresh-${p.id}-${activityCounter++}`,
+      entity_type: "project",
+      entity_id: p.id,
+      action: "track_update",
+      user_name: p.owner || "system",
+      user_email: "system@noon.com",
+      details: { auto: true },
+      created_at: tsIso,
+    });
+    p.lastActivityAt = tsIso;
+    p.isBlocked = false;
+    p.blockedReason = null;
+    p.blockedAt = null;
+    if (p.endDate && p.endDate < todayShort) {
+      p.endDate = inDays(45 + (activityCounter % 60));
+    }
   }
 })();
 

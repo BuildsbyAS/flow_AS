@@ -821,31 +821,37 @@ const SidebarIcon = ({ name, color }) => (
 
 function SidebarRow({ navKey, label, active, onClick, href, alertDot, collapsed }) {
   const c = chromeC();
-  const color = active ? c.accent : c.textMid;
+  const color = active ? "#FFFFFF" : "rgba(255,255,255,0.5)";
+  const iconColor = active ? "#FFFFFF" : "rgba(255,255,255,0.5)";
   return (
     <a
       href={href}
-      title={collapsed ? label : undefined}
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1) return;
         e.preventDefault();
         onClick();
       }}
       style={{
-        display: "flex", alignItems: "center", gap: space[3],
+        display: "flex",
+        flexDirection: collapsed ? "column" : "row",
+        alignItems: "center", gap: collapsed ? 6 : space[3],
         justifyContent: collapsed ? "center" : "flex-start",
-        padding: collapsed ? "9px 0" : `9px ${space[3]}px`, borderRadius: layout.radiusSm,
+        padding: collapsed ? "12px 4px" : `9px ${space[3]}px`, borderRadius: layout.radiusSm,
         textDecoration: "none", cursor: "pointer", position: "relative",
-        background: active ? c.accentDim : "transparent",
-        color, fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: active ? 600 : 500,
+        background: active && !collapsed ? "rgba(255,255,255,0.08)" : "transparent",
+        color, fontFamily: typo.bodyMd.font, fontSize: collapsed ? 12 : 14, fontWeight: active ? 600 : 400,
         transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
       }}
-      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = c.surfaceAlt; }}
-      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+      onMouseEnter={(e) => { if (!active || collapsed) e.currentTarget.style.opacity = "0.8"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}
     >
-      <SidebarIcon name={navKey} color={active ? c.accent : c.textDim} />
-      {!collapsed && <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>}
-      {alertDot && <span style={{ position: collapsed ? "absolute" : "static", top: collapsed ? 7 : undefined, right: collapsed ? 14 : undefined, width: 8, height: 8, borderRadius: "50%", background: c.accent, flexShrink: 0 }} />}
+      <SidebarIcon name={navKey} color={iconColor} />
+      <span style={{
+        ...(collapsed
+          ? { fontSize: 12, fontWeight: active ? 600 : 400, letterSpacing: "0.01em", lineHeight: 1 }
+          : { flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }),
+      }}>{label}</span>
+      {alertDot && <span style={{ position: collapsed ? "absolute" : "static", top: collapsed ? 4 : undefined, right: collapsed ? 10 : undefined, width: 7, height: 7, borderRadius: "50%", background: c.accent, flexShrink: 0 }} />}
     </a>
   );
 }
@@ -964,7 +970,7 @@ export function Sidebar({
   return (
     <>
       <aside style={{
-        width: collapsed ? 76 : SIDEBAR_WIDTH, flexShrink: 0,
+        width: collapsed ? 84 : SIDEBAR_WIDTH, flexShrink: 0,
         height: "100%", boxSizing: "border-box",
         background: "transparent", border: "none",
         display: "flex", flexDirection: "column",
@@ -972,133 +978,80 @@ export function Sidebar({
         gap: space[3], overflowY: "auto", scrollbarWidth: "none", zIndex: 40,
         transition: "width 180ms cubic-bezier(0.16,1,0.3,1)",
       }}>
-        {/* Logo + collapse toggle */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "space-between", gap: space[2], marginBottom: space[1] }}>
+        {/* Logo */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: space[2], marginBottom: space[1] }}>
           <div onClick={onLogoClick} style={{ display: "flex", alignItems: "center", gap: space[2] + 2, cursor: "pointer", padding: collapsed ? 0 : `0 ${space[2]}px` }}>
             <FlowLogo size={26} color={c.text} />
             {!collapsed && <span style={{ fontFamily: mono, fontSize: 17, fontWeight: 700, color: c.text, letterSpacing: "0.02em" }}>FLOW</span>}
           </div>
-          {!collapsed && onToggleCollapse && (
-            <button onClick={onToggleCollapse} title="Collapse sidebar" aria-label="Collapse sidebar" style={{ flexShrink: 0, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", borderRadius: layout.radiusSm, cursor: "pointer", color: c.textDim }}
-              onMouseEnter={e => e.currentTarget.style.background = c.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
-            </button>
-          )}
         </div>
 
-        {collapsed && onToggleCollapse && (
-          <button onClick={onToggleCollapse} title="Expand sidebar" aria-label="Expand sidebar" style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "9px 0", border: "none", background: "transparent", borderRadius: layout.radiusSm, cursor: "pointer", color: c.textDim }}
-            onMouseEnter={e => e.currentTarget.style.background = c.surfaceAlt} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg>
+        {/* Search */}
+        {collapsed ? (
+          <button onClick={onCmdOpen} title="Search (⌘K)" style={{
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", gap: 6, width: "100%",
+            padding: "12px 4px", borderRadius: layout.radiusSm,
+            border: "none", background: "transparent", cursor: "pointer",
+            fontFamily: typo.bodyMd.font, color: c.textMid,
+          }}
+            onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round"><circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" /></svg>
+            <span style={{ fontSize: 12, fontWeight: 400, letterSpacing: "0.01em", lineHeight: 1, color: c.textMid }}>Search</span>
+          </button>
+        ) : (
+          <button onClick={onCmdOpen} title="Search (⌘K)" style={{
+            display: "flex", alignItems: "center", justifyContent: "flex-start", gap: space[2], width: "100%",
+            padding: `8px ${space[2]}px`, borderRadius: layout.radiusSm,
+            border: `1px solid ${c.border}`, background: c.surface, cursor: "pointer",
+            fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textMid,
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round"><circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" /></svg>
+            <span style={{ flex: 1, textAlign: "left" }}>Search</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 2, fontFamily: mono, fontSize: 11, fontWeight: 600, color: c.textGhost, borderRadius: layout.radiusXs, padding: "2px 5px", background: c.surfaceAlt }}>⌘K</span>
           </button>
         )}
 
-        {/* Search — white card */}
-        <button onClick={onCmdOpen} title="Search (⌘K)" style={{
-          display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: space[2], width: "100%",
-          padding: collapsed ? "10px 0" : `8px ${space[2]}px`, borderRadius: layout.radiusSm,
-          border: `1px solid ${c.border}`, background: c.surface, cursor: "pointer",
-          fontFamily: typo.bodyMd.font, fontSize: 13, color: c.textMid,
-        }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={c.textDim} strokeWidth="2" strokeLinecap="round"><circle cx="10.5" cy="10.5" r="7" /><line x1="15.5" y1="15.5" x2="21" y2="21" /></svg>
-          {!collapsed && <span style={{ flex: 1, textAlign: "left" }}>Search</span>}
-          {!collapsed && <span style={{ display: "flex", alignItems: "center", gap: 2, fontFamily: mono, fontSize: 11, fontWeight: 600, color: c.textGhost, borderRadius: layout.radiusXs, padding: "2px 5px", background: c.surfaceAlt }}>⌘K</span>}
-        </button>
-
-        {/* Primary nav */}
-        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {/* Primary nav + Guide (no separator) */}
+        <nav style={{ display: "flex", flexDirection: "column", gap: collapsed ? 4 : 2 }}>
           {TOP.map(t => (
             <SidebarRow key={t.key} navKey={t.key} label={t.label} href={`?tab=${t.key}`} collapsed={collapsed}
               active={activeTab === t.key} onClick={() => onTabSwitch(t.key)}
               alertDot={t.key === "summary" && alertCount > 0} />
           ))}
-
-          {/* My Lens — nav row with eye icon + toggle */}
-          {toggleMyLens && !collapsed && (
-            <div
-              onClick={lensDisabled ? undefined : toggleMyLens}
-              title={lensDisabled ? "My Lens is not available on this tab" : "My Lens — filter to your squad + followed projects"}
-              style={{
-                display: "flex", alignItems: "center", gap: space[3],
-                padding: `9px ${space[3]}px`, borderRadius: layout.radiusSm,
-                cursor: lensDisabled ? "default" : "pointer", opacity: lensDisabled ? 0.4 : 1, userSelect: "none",
-              }}
-              onMouseEnter={(e) => { if (!lensDisabled) e.currentTarget.style.background = c.surfaceAlt; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-            >
-              <SidebarIcon name="mylens" color={myLens ? c.accent : c.textDim} />
-              <span style={{ flex: 1, fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 500, color: myLens ? c.accent : c.textMid }}>My Lens</span>
-              <div style={{ width: 34, height: 20, borderRadius: 10, background: myLens ? c.accent : c.borderMedium, position: "relative", transition: `background ${motion.fast.duration} ${motion.fast.easing}`, flexShrink: 0 }}>
-                <div style={{ width: 16, height: 16, borderRadius: "50%", background: "#fff", position: "absolute", top: 2, left: myLens ? 16 : 2, transition: `left ${motion.fast.duration} ${motion.fast.easing}` }} />
-              </div>
-            </div>
-          )}
-          {toggleMyLens && collapsed && (
-            <SidebarRow navKey="mylens" label="My Lens" collapsed onClick={lensDisabled ? () => {} : toggleMyLens} active={myLens} />
-          )}
-        </nav>
-
-        {/* Separator */}
-        <div style={{ height: 1, background: c.border, margin: `${space[1]}px ${space[2]}px` }} />
-
-        {/* Guide */}
-        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <SidebarRow navKey="guide" label="Guide" href={`?tab=guide`} collapsed={collapsed}
             active={activeTab === "guide"} onClick={() => onTabSwitch("guide")} />
         </nav>
 
-        {/* Spacer */}
-        <div style={{ flex: 1, minHeight: space[4] }} />
-
-        {/* ── BOTTOM ── */}
-        {/* Mentions · announcements · dark mode — 3 equal boxes */}
-        {(() => {
-          const darkBtn = (
-            <button
-              onClick={onToggleDark}
-              title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-              aria-label="Toggle dark mode"
-              style={{
-                flex: collapsed ? undefined : 1, width: collapsed ? "100%" : undefined,
-                height: 44, borderRadius: layout.radiusSm,
-                border: `1px solid ${c.border}`, background: c.surfaceAlt,
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                color: c.textMid,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = c.border; }}
-              onMouseLeave={e => { e.currentTarget.style.background = c.surfaceAlt; }}
-            >
-              {darkMode ? (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
-              ) : (
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
-              )}
-            </button>
-          );
-          return collapsed ? darkBtn : (
-            <div style={{ display: "flex", alignItems: "stretch", gap: 6 }}>
-              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
-                <InboxBell projects={projects} people={people} currentPerson={currentPerson} onNavigate={onNavigate} myLens={myLens} tone={{ surface: c.surfaceAlt, border: c.border, icon: c.textMid }} />
-              </div>
-              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>
-                <AnnouncementsBell projects={projects} people={people} currentPerson={currentPerson} onNavigate={onNavigate} tone={{ surface: c.surfaceAlt, border: c.border, icon: c.textMid }} />
-              </div>
-              {darkBtn}
-            </div>
-          );
-        })()}
-
-        {/* Separator */}
-        <div style={{ height: 1, background: c.border, margin: `${space[1]}px ${space[2]}px` }} />
-
-        {/* Utility nav */}
-        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {/* Utility nav (Settings · Logs · Terminal) */}
+        <nav style={{ display: "flex", flexDirection: "column", gap: collapsed ? 4 : 2 }}>
           {BOTTOM.map(t => (
             <SidebarRow key={t.key} navKey={t.key} label={t.label} href={`?tab=${t.key}`} collapsed={collapsed}
               active={activeTab === t.key || (t.key === "terminal" && ["terminal", "rant"].includes(activeTab))}
               onClick={() => onTabSwitch(t.key)} />
           ))}
         </nav>
+
+        {/* Spacer */}
+        <div style={{ flex: 1, minHeight: space[4] }} />
+
+        {/* ── BOTTOM CLUSTER — Messages · Notifications · Dark mode ── */}
+        {(() => {
+          const noTone = { surface: "transparent", border: "transparent", icon: c.text };
+          const messages = <InboxBell projects={projects} people={people} currentPerson={currentPerson} onNavigate={onNavigate} myLens={myLens} tone={noTone} />;
+          const notifications = <AnnouncementsBell projects={projects} people={people} currentPerson={currentPerson} onNavigate={onNavigate} tone={noTone} />;
+          return collapsed ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ width: "100%", display: "flex" }}>{messages}</div>
+              <div style={{ width: "100%", display: "flex" }}>{notifications}</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "stretch", gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>{messages}</div>
+              <div style={{ flex: 1, minWidth: 0, display: "flex" }}>{notifications}</div>
+            </div>
+          );
+        })()}
 
         {/* User card */}
         {(currentUser?.user || currentPerson) && (

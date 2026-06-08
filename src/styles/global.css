@@ -105,6 +105,13 @@ body::before {
 /* Keep main view content above the noise overlay */
 .flow-page, main { position: relative; z-index: 1; }
 
+/* Animated app-canvas gradient — replaces the background video (lighter, no asset) */
+@keyframes flow-bg-gradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
 /* ── Glass utility classes ── */
 .flow-glass {
   background: var(--flow-glass-bg);
@@ -156,6 +163,9 @@ body::before {
   border-color: var(--flow-accent);
   box-shadow: 0 0 0 3px var(--flow-accent-soft);
 }
+
+/* Global search placeholder — branded brown instead of muted gray */
+.flow-search-input::placeholder { color: #58270E; opacity: 1; }
 .flow-btn:focus-visible,
 .flow-theme-toggle:focus-visible,
 .flow-breadcrumb:focus-visible,

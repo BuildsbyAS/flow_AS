@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom";
+import { motion as Motion } from "framer-motion";
 import { c, typo, layout, space, motion, btnVariants, entityColors } from "../styles/theme";
 import useDevLabel from "../hooks/useDevLabel";
 import useExitAnimation from "../hooks/useExitAnimation";
@@ -157,7 +158,7 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
 // Props: open, onClose, title?, accent?, width=460, children, style,
 //        headerless? (omit the built-in header bar — content has its own)
 // ══════════════════════════════════════════════════════════════
-export const SideSheet = ({ open, onClose, title, accent, width = 460, children, style: s, headerless = false }) => {
+export const SideSheet = ({ open, onClose, title, accent, width = 460, children, style: s, headerless = false, floating = false }) => {
   const panelRef = React.useRef(null);
   const previousFocusRef = React.useRef(null);
   const { mounted, visible } = useExitAnimation(open, 300);
@@ -199,53 +200,55 @@ export const SideSheet = ({ open, onClose, title, accent, width = 460, children,
   return ReactDOM.createPortal(
     <div style={{ position: "fixed", inset: 0, zIndex: 999 }}>
       {/* Backdrop */}
-      <div
+      <Motion.div
         onClick={onClose}
         aria-hidden="true"
-        style={{
-          position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)",
-          opacity: visible ? 1 : 0,
-          transition: `opacity ${motion.normal.duration} ${motion.normal.easing}`,
-        }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: visible ? 1 : 0 }}
+        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        style={{ position: "absolute", inset: 0, background: "rgba(20,12,6,0.42)" }}
       />
-      {/* Panel */}
-      <div
+      {/* Panel — framer-motion spring slide */}
+      <Motion.div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
         onClick={e => e.stopPropagation()}
+        initial={{ x: "100%" }}
+        animate={{ x: visible ? 0 : "100%" }}
+        transition={{ type: "spring", stiffness: 420, damping: 40, mass: 0.9 }}
         style={{
-          position: "absolute", top: 0, right: 0, bottom: 0,
+          position: "absolute",
+          top: floating ? 16 : 0, right: floating ? 16 : 0, bottom: floating ? 16 : 0,
           width: `min(${width}px, calc(100vw - ${space[7]}px))`,
-          background: c.surfaceSolid || "#FFFFFF",
-          borderLeft: accent ? `3px solid ${accent}` : `1px solid ${c.border}`,
-          boxShadow: c.shadowElevated || c.shadowOverlay,
+          background: "#FFFFFF",
+          ...(floating
+            ? { border: "1px solid #F1EAE4", borderRadius: 18, boxShadow: "0 30px 80px rgba(20,12,6,0.28), 0 6px 20px rgba(20,12,6,0.10)", overflow: "hidden" }
+            : { borderLeft: accent ? `3px solid ${accent}` : `1px solid #EAECF0`, boxShadow: "-16px 0 48px rgba(20,12,6,0.12)" }),
           display: "flex", flexDirection: "column", outline: "none",
-          transform: visible ? "translateX(0)" : "translateX(100%)",
-          transition: `transform ${motion.normal.duration} ${motion.normal.easing}`,
           ...s,
         }}
       >
         {!headerless && (
           <div style={{
             display: "flex", alignItems: "center", justifyContent: "space-between", gap: space[3],
-            padding: `${space[4]}px ${space[5]}px`, borderBottom: `1px solid ${c.border}`, flexShrink: 0,
+            padding: "20px 24px", borderBottom: "1px solid #F1EAE4", flexShrink: 0,
           }}>
-            <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>{title || ""}</span>
+            <span style={{ fontFamily: "Geist, system-ui, -apple-system, sans-serif", fontSize: 20, fontWeight: 600, letterSpacing: "-0.2px", color: "#1D2539" }}>{title || ""}</span>
             <button onClick={onClose} aria-label="Close" style={{
-              width: 30, height: 30, borderRadius: layout.radiusSm, flexShrink: 0,
-              border: `1px solid ${c.border}`, background: c.surfaceAlt, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", color: c.textMid,
+              width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+              border: "1px solid #F1EAE4", background: "#FBF9F8", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", color: "#7E5E4E",
             }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
             </button>
           </div>
         )}
         <div style={{ flex: 1, overflowY: "auto", padding: `${space[5]}px` }}>
           {children}
         </div>
-      </div>
+      </Motion.div>
     </div>,
     document.body
   );
@@ -280,10 +283,10 @@ export const Tooltip = ({ label, children, style: s }) => {
         <span style={{
           position: "fixed", left: pos.x, top: pos.y - 8,
           transform: "translate(-50%, -100%)",
-          background: "#1d2539", color: "#ffffff",
+          background: "#ffffff", color: "#1d2539",
           fontSize: 12, fontWeight: 500, lineHeight: 1.4, letterSpacing: "-0.1px",
-          padding: "5px 9px", borderRadius: 7, whiteSpace: "nowrap", pointerEvents: "none",
-          boxShadow: "0 6px 18px rgba(16,22,40,0.28)", border: "1px solid rgba(255,255,255,0.10)",
+          padding: "6px 10px", borderRadius: 8, whiteSpace: "nowrap", pointerEvents: "none",
+          boxShadow: "0 4px 16px rgba(16,22,40,0.12)", border: "1px solid #eaecf0",
           zIndex: 10000,
         }}>{label}</span>,
         document.body
@@ -524,7 +527,7 @@ export const Sel = ({ children, style: s, ...rest }) => (
 // ══════════════════════════════════════════════════════════════
 // SearchSelect — filterable dropdown with keyboard nav
 // ══════════════════════════════════════════════════════════════
-export const SearchSelect = ({ value, onChange, options, placeholder = "Search..." }) => {
+export const SearchSelect = ({ value, onChange, options, placeholder = "Search...", tone }) => {
   const devRef = useDevLabel('Filterable dropdown with keyboard navigation and portal menu');
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -580,19 +583,29 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
     }
   }, [open]);
 
+  const T = {
+    border: tone?.border || c.border,
+    bg: tone?.bg || c.surfaceSolid,
+    text: tone?.text || c.text,
+    muted: tone?.muted || c.textDim,
+    accent: tone?.accent || c.accent,
+    accentDim: tone?.accentDim || c.accentDim,
+    fieldBg: tone?.fieldBg || c.bg,
+  };
+
   return (
     <div ref={(el) => { containerRef.current = el; if (devRef) devRef.current = el; }} style={{ position: "relative" }}>
       <button onClick={() => setOpen(!open)} className="flow-input" style={{
         width: "100%", height: 40, padding: `0 ${space[3]}px`,
         borderRadius: layout.radiusSm,
-        border: `1px solid ${open ? c.accent : c.border}`, background: c.surfaceSolid,
-        color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
+        border: `1px solid ${open ? T.accent : T.border}`, background: T.bg,
+        color: T.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
         cursor: "pointer", textAlign: "left", boxSizing: "border-box",
         display: "flex", alignItems: "center", justifyContent: "space-between",
         transition: `border-color ${motion.interaction.duration} ${motion.interaction.easing}, box-shadow ${motion.interaction.duration} ${motion.interaction.easing}`,
       }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || placeholder}</span>
-        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke={c.textDim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke={T.muted} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
           style={{ flexShrink: 0, marginLeft: space[2], transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: `transform ${motion.fast.duration} ${motion.fast.easing}` }}>
           <polyline points="4 6 8 10 12 6" />
         </svg>
@@ -600,7 +613,7 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
       {open && ReactDOM.createPortal(
         <div ref={dropdownRef} style={{
           position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width,
-          background: c.surfaceSolid, border: `1px solid ${c.border}`,
+          background: T.bg, border: `1px solid ${T.border}`,
           borderRadius: layout.radiusSm, boxShadow: c.shadowOverlay,
           zIndex: 10000, maxHeight: 240, display: "flex", flexDirection: "column",
         }}>
@@ -611,8 +624,8 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
               style={{
                 width: "100%", padding: `${space[2]}px ${space[3]}px`,
                 borderRadius: layout.radiusTag + 2,
-                border: `1px solid ${c.border}`, background: c.bg,
-                color: c.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodySm.size,
+                border: `1px solid ${T.border}`, background: T.fieldBg,
+                color: T.text, fontFamily: typo.bodyMd.font, fontSize: typo.bodySm.size,
                 outline: "none", boxSizing: "border-box",
               }} />
           </div>
@@ -625,9 +638,9 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
                 onMouseEnter={() => setFocusIdx(i)}
                 style={{
                   padding: `${space[2]}px ${space[4]}px`, cursor: "pointer",
-                  background: i === focusIdx ? c.accentDim : opt === value ? `${c.accent}08` : "transparent",
+                  background: i === focusIdx ? T.accentDim : opt === value ? `${T.accent}14` : "transparent",
                   fontFamily: typo.bodyMd.font, fontSize: typo.bodySm.size,
-                  color: opt === value ? c.accent : c.text,
+                  color: opt === value ? T.accent : T.text,
                   fontWeight: opt === value ? 600 : 400,
                   transition: `background ${motion.interaction.duration} ${motion.interaction.easing}, color ${motion.interaction.duration} ${motion.interaction.easing}`,
                 }}>{opt}</div>

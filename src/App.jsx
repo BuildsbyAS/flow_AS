@@ -199,7 +199,11 @@ function FlowDashboard({ auth }) {
 
   const [detailLabel, setDetailLabel] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    try { return localStorage.getItem("flow_sidebar_collapsed") === "1"; } catch { return false; }
+    try {
+      const stored = localStorage.getItem("flow_sidebar_collapsed");
+      if (stored === null) return true; // default collapsed (icons + tiny labels)
+      return stored === "1";
+    } catch { return true; }
   });
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed(v => { const n = !v; try { localStorage.setItem("flow_sidebar_collapsed", n ? "1" : "0"); } catch {} return n; });
@@ -584,7 +588,7 @@ function FlowDashboard({ auth }) {
   }
 
   return (
-    <div style={{ height: "100vh", background: themes.dark.bg, color: c.text, fontFamily: body, position: "relative", display: "flex", gap: 8, padding: activeTab === "terminal" ? 0 : 8, boxSizing: "border-box" }}>
+    <div style={{ height: "100vh", background: "linear-gradient(120deg, #100a06, #470d0c, #3d1602, #241308)", backgroundSize: "300% 300%", animation: "flow-bg-gradient 24s ease-in-out infinite", color: c.text, fontFamily: body, position: "relative", isolation: "isolate", display: "flex", gap: 8, padding: activeTab === "terminal" ? 0 : 8, boxSizing: "border-box" }}>
       <AnimStyles />
 
       {/* ═══ SIDEBAR ═══ (hidden for dark-themed Terminal view) */}
@@ -645,7 +649,7 @@ function FlowDashboard({ auth }) {
       )}
 
       {/* ═══ CONTENT COLUMN — white rounded container on the grey app canvas ═══ */}
-      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRadius: activeTab === "terminal" ? 0 : 16, background: activeTab === "terminal" ? "transparent" : c.surface, border: activeTab === "terminal" ? "none" : `1px solid ${c.border}`, overflow: "hidden", ["--flow-sticky-top"]: "0px", ["--flow-header-h"]: "0px" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", borderRadius: activeTab === "terminal" ? 0 : 16, background: activeTab === "terminal" ? "transparent" : "#fff", border: activeTab === "terminal" ? "none" : `1px solid ${c.border}`, overflow: "hidden", ["--flow-sticky-top"]: "0px", ["--flow-header-h"]: "0px" }}>
       <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflowY: "auto" }}>
 
       {/* Detail back-bar (project / person deep-dive) */}
@@ -672,7 +676,7 @@ function FlowDashboard({ auth }) {
         style={{ width: "100%", maxWidth: activeTab === "projects" ? "none" : 1440, margin: "0 auto", padding: activeTab === "projects" ? "24px" : `${space[7] - 4}px ${space[7]}px ${space[8] + 20}px` }}>
         <ErrorCatcher key={activeTab}>
           {activeTab === "summary" && <SummaryView loading={loading} error={error} projects={projects} people={people} squads={squads} globalFilters={globalFilters} onNavigate={handleNavigate} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} timeframe={timeframe} />}
-          {activeTab === "projects" && <ProjectsView key={navPayload || `proj-${projResetKey}`} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAdmin={isAdmin} permCan={permCan} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} timeframe={timeframe} setTimeframe={setTimeframe} />}
+          {activeTab === "projects" && <ProjectsView key={navPayload || `proj-${projResetKey}`} projects={projects} setProjects={setProjects} people={people} squads={squads} history={history} personProfile={viewerProfile} isAdmin={isAdmin} permCan={permCan} initialId={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} suppressBackRef={suppressBackRef} projectLinks={projectLinks} setProjectLinks={setProjectLinks} phaseDurationDefaults={phaseDurationDefaults} myLens={myLens} toggleMyLens={toggleMyLens} followedProjects={followedProjects} toggleFollowProject={toggleFollowProject} timeframe={timeframe} setTimeframe={setTimeframe} />}
 
           {activeTab === "people" && <PeopleDeepDive key={navPayload || "ppl"} loading={loading} error={error} people={people} setPeople={setPeople} projects={projects} history={history} initialPerson={navPayload} onNavigate={handleNavigate} setDetailLabel={setDetailLabel} setGoBack={setGoBack} searchRef={searchRef} globalFilters={globalFilters} myLens={myLens} followedProjects={followedProjects} viewerSquad={viewerProfile?.squad} viewerName={viewerProfile?.name} isAdmin={isAdmin} timeframe={timeframe} />}
           {activeTab === "settings" && <SettingsView squads={squads} setSquads={setSquads} roles={roles} setRoles={setRoles} people={people} setPeople={setPeople} projects={projects} setProjects={setProjects} permConfig={permConfig} setPermConfig={handleSetPermConfig} />}

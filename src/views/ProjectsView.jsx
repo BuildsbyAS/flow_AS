@@ -14,6 +14,8 @@ import FlowLogo from "../components/FlowLogo";
 import ProjectActivity from "../components/ProjectActivity";
 import ProjectTimeline from "../components/ProjectTimeline";
 import TrackGantt from "../components/TrackGantt";
+import ProjectDetailSheet from "../components/project-detail/ProjectDetailSheet.jsx";
+import { mapProjectSections } from "../components/project-detail/mapProject.js";
 import { isDevSeedMode, devStore } from "../data/devSeed";
 import { getProjectRole, can as defaultCan } from "../lib/permissions";
 import { initialsOf } from "../lib/names";
@@ -273,6 +275,11 @@ function sortList(list, key, dir, metrics, today) {
         return d * ((order[a.priority] ?? 2) - (order[b.priority] ?? 2));
       }
       case "people": return d * ((metrics[a.id]?.teamMembers.length || 0) - (metrics[b.id]?.teamMembers.length || 0));
+      case "updated": {
+        const aT = a.lastActivityAt ? new Date(a.lastActivityAt).getTime() : 0;
+        const bT = b.lastActivityAt ? new Date(b.lastActivityAt).getTime() : 0;
+        return d * (aT - bT);
+      }
       case "last": {
         // Sort by the project's actual lastActivityAt timestamp (newest first
         // when dir=asc=−1). Missing timestamps sort to the end.
@@ -331,6 +338,17 @@ const FD = {
   get surface3() { return c.surfaceAlt; },
   get border() { return c.border; },
   get borderDark() { return c.text; },
+  get accent() { return c.accent || "#E8590C"; },
+};
+
+// Track icons — shared by the registry "Status" cells and the Track filter chips
+const TRACK_GLYPHS = {
+  PRD: <svg width="15" height="15" viewBox="0 0 24 24" fill="#2D7FF9"><path d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" opacity="0.18"/><path d="M14 2v4a2 2 0 0 0 2 2h4" fill="none" stroke="#2D7FF9" strokeWidth="1.6"/><path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="none" stroke="#2D7FF9" strokeWidth="1.6"/><line x1="8" y1="13" x2="16" y2="13" stroke="#2D7FF9" strokeWidth="1.6" strokeLinecap="round"/><line x1="8" y1="16.5" x2="13.5" y2="16.5" stroke="#2D7FF9" strokeWidth="1.6" strokeLinecap="round"/></svg>,
+  Design: <svg width="14" height="14" viewBox="0 0 38 57"><path fill="#1abcfe" d="M19 28.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z"/><path fill="#0acf83" d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5a9.5 9.5 0 0 1-19 0z"/><path fill="#ff7262" d="M19 0v19h9.5a9.5 9.5 0 0 0 0-19H19z"/><path fill="#f24e1e" d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5z"/><path fill="#a259ff" d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5z"/></svg>,
+  Dev: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>,
+  QA: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9747FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>,
+  Alpha: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0F8857" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7"/></svg>,
+  Beta: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0F8857" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7"/></svg>,
 };
 
 // ── Project deep-dive sidebar card (Figma): header (title + Add) · divider · body ──
@@ -394,7 +412,7 @@ const FdStatusIcon = ({ kind, pct = 0 }) => {
   );
   if (kind === "atrisk") return (
     <svg width="18" height="18" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
-      <path d="M12 2.8l9.63 16.7a1.05 1.05 0 0 1-.9 1.57H3.27a1.05 1.05 0 0 1-.9-1.57z" fill={FD.warning} />
+      <path d="M12 2.8l9.63 16.7a1.05 1.05 0 0 1-.9 1.57H3.27a1.05 1.05 0 0 1-.9-1.57z" fill={FD.error} />
       <path d="M12 8.8v4.4" stroke="#fff" strokeWidth="2.1" strokeLinecap="round" />
       <circle cx="12" cy="16.8" r="1.15" fill="#fff" />
     </svg>
@@ -549,14 +567,14 @@ const FD_TONE = {
 function FdKpiCard({ label, value, onClick, active }) {
   return (
     <div onClick={onClick} style={{
-      flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8,
-      justifyContent: "center", alignItems: "flex-start",
-      background: FD.surface, border: `1px solid ${active ? FD.borderDark : FD.border}`,
-      borderRadius: 16, padding: 24, overflow: "hidden",
+      width: 128, flexShrink: 0, display: "flex", flexDirection: "column", gap: 8,
+      justifyContent: "center", alignItems: "flex-end",
+      background: FD.surface2, border: `1px solid ${active ? FD.borderDark : FD.border}`,
+      borderRadius: 16, padding: "12px 16px 16px", overflow: "hidden",
       cursor: onClick ? "pointer" : "default",
     }}>
-      <span style={{ minWidth: "100%", fontSize: 28, fontWeight: 700, lineHeight: "36px", letterSpacing: "-0.25px", color: FD.textPrimary }}>{value}</span>
-      <span style={{ fontSize: 13, fontWeight: 500, lineHeight: "16px", letterSpacing: "3px", textTransform: "uppercase", whiteSpace: "nowrap", color: FD.textTertiary }}>{label}</span>
+      <span style={{ fontFamily: "Geist, system-ui, -apple-system, sans-serif", fontSize: 13, fontWeight: 500, lineHeight: "16px", whiteSpace: "nowrap", color: FD.textMuted || FD.textTertiary }}>{label}</span>
+      <span style={{ minWidth: "100%", textAlign: "right", fontSize: 28, fontWeight: 700, lineHeight: "36px", letterSpacing: "-0.25px", color: FD.textPrimary }}>{value}</span>
     </div>
   );
 }
@@ -619,8 +637,8 @@ function FdQuarterPicker({ timeframe, setTimeframe }) {
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button type="button" onClick={() => setOpen(o => !o)} style={{
-        display: "flex", alignItems: "center", gap: 8, height: 44, padding: "0 12px",
-        borderRadius: 8, background: FD.surface, border: `1px solid ${FD.border}`, cursor: "pointer",
+        display: "flex", alignItems: "center", gap: 4, height: 44, padding: "0 12px",
+        borderRadius: 8, background: "#FBF9F8", border: "1px solid #F1EAE4", cursor: "pointer",
       }}>
         <span style={{ fontSize: 14, fontWeight: 500, color: FD.textPrimary }}>{timeframe.label} {timeframe.year}</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={FD.textTertiary} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
@@ -650,13 +668,13 @@ function FdQuarterPicker({ timeframe, setTimeframe }) {
                     <button key={qm.q} type="button" onClick={() => pick(qi)} style={{
                       display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "10px 8px",
                       borderRadius: 8, cursor: "pointer",
-                      border: sel ? `1.5px solid ${FD.action}` : cur ? `1px solid ${FD.border}` : "1px solid transparent",
-                      background: sel ? FD.actionSubtle : "transparent",
+                      border: sel ? "1.5px solid #8F583D" : cur ? `1px solid ${FD.border}` : "1px solid transparent",
+                      background: sel ? "#FBF9F8" : "transparent",
                     }}
                       onMouseEnter={e => { if (!sel) e.currentTarget.style.background = FD.surface2; }}
                       onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "transparent"; }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: sel ? FD.action : FD.textPrimary }}>{qm.q}</span>
-                      <span style={{ fontSize: 11, color: sel ? FD.action : FD.textTertiary }}>{qm.months}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: sel ? "#58270E" : FD.textPrimary }}>{qm.q}</span>
+                      <span style={{ fontSize: 11, color: sel ? "#8F583D" : FD.textTertiary }}>{qm.months}</span>
                     </button>
                   );
                 })}
@@ -713,7 +731,7 @@ export default function ProjectsView({
   initialId, onNavigate, setDetailLabel, setGoBack, searchRef, globalFilters = {},
   suppressBackRef,
   projectLinks, setProjectLinks, phaseDurationDefaults,
-  myLens = false, followedProjects = [], toggleFollowProject,
+  myLens = false, toggleMyLens, followedProjects = [], toggleFollowProject,
   timeframe, setTimeframe,
 }) {
   const can = permCan || defaultCan;
@@ -792,6 +810,14 @@ export default function ProjectsView({
   const [sortKey, setSortKey] = useState("squad");
   const [sortDir, setSortDir] = useState("asc");
   const [hoveredProject, setHoveredProject] = useState(null);
+  // Project detail side sheet (ported from flow_AS) — opens on row click
+  const [detailSheetId, setDetailSheetId] = useState(null);
+  useEffect(() => {
+    if (!detailSheetId) return;
+    const onKey = (e) => { if (e.key === "Escape") setDetailSheetId(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [detailSheetId]);
   const [activityTip, setActivityTip] = useState(null); // { projId, rect }
   const activityTipTimer = useRef(null);
   const showActivityTip = (data) => { clearTimeout(activityTipTimer.current); setActivityTip(data); };
@@ -809,6 +835,21 @@ export default function ProjectsView({
   const toastAnim = useExitAnimation(!!createError, 150);
   const successToastAnim = useExitAnimation(!!createSuccess, 200);
   const [listSquadFilter, setListSquadFilter] = useState("");
+  // ── Registry filter dropdown (Squad / Owner / Track / Status) ──
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [fSquads, setFSquads] = useState([]);
+  const [fOwners, setFOwners] = useState([]);
+  const [fTracks, setFTracks] = useState([]);
+  const [fStatuses, setFStatuses] = useState([]);
+  const filterRef = useRef(null);
+  const activeFilterCount = fSquads.length + fOwners.length + fTracks.length + fStatuses.length;
+  const clearAllFilters = () => { setFSquads([]); setFOwners([]); setFTracks([]); setFStatuses([]); };
+  useEffect(() => {
+    if (!filterOpen) return;
+    const h = (e) => { if (filterRef.current && !filterRef.current.contains(e.target)) setFilterOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [filterOpen]);
   const [pinnedIds, setPinnedIds] = useState(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem("flow_pinned_projects") || "[]")); }
     catch { return new Set(); }
@@ -919,6 +960,12 @@ export default function ProjectsView({
     if ((globalFilters.track || []).length > 0) {
       list = list.filter(p => globalFilters.track.some(t => (metrics[p.id]?.activeTracks || []).includes(t)));
     }
+    // Registry filter dropdown (view-local: Squad / Owner / Track / Status)
+    if (fSquads.length) list = list.filter(p => fSquads.includes(p.squad));
+    if (fOwners.length) list = list.filter(p => fOwners.includes(p.owner));
+    if (fTracks.length) list = list.filter(p => fTracks.some(t => (metrics[p.id]?.activeTracks || []).includes(t)));
+    if (fStatuses.length) list = list.filter(p => fStatuses.some(s =>
+      s === "blocked" ? (p.status === "blocked" || metrics[p.id]?.isBlocked) : p.status === s));
     // My Lens: show only followed projects (auto-followed squad + explicit follows)
     if (myLens) {
       list = list.filter(p => followedProjects.includes(p.id));
@@ -936,7 +983,7 @@ export default function ProjectsView({
       });
     }
     return list;
-  }, [projects, search, globalFilters, metrics, listSquadFilter, myLens, personProfile, followedProjects, timeframe]);
+  }, [projects, search, globalFilters, metrics, listSquadFilter, fSquads, fOwners, fTracks, fStatuses, myLens, personProfile, followedProjects, timeframe]);
 
   // ── Tab splits ──
   // When a search query is active, bypass the tab filter so results surface
@@ -968,7 +1015,16 @@ export default function ProjectsView({
     const depri = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "deprioritized");
     const upcoming = sorted.filter(p => !pinnedIds.has(p.id) && p.status === "upcoming")
       .sort((a, b) => (a.tentativeStartDate || "9999").localeCompare(b.tentativeStartDate || "9999"));
-    return [...pinned, ...shipped, ...regular, ...blocked, ...depri, ...upcoming];
+    const ordered = [...pinned, ...shipped, ...regular, ...blocked, ...depri, ...upcoming];
+    // Demo arrangement: surface "Refund automation" (X13) as the 7th row.
+    if (!search.trim() && activeTab === "all") {
+      const i = ordered.findIndex(p => p.id === "X13");
+      if (i > -1 && ordered.length >= 7) {
+        const [x] = ordered.splice(i, 1);
+        ordered.splice(6, 0, x);
+      }
+    }
+    return ordered;
   }, [filtered, activeTab, sortKey, sortDir, metrics, today, search, pinnedIds]);
 
   // ── KPI summary (from filtered data) ──
@@ -1005,6 +1061,19 @@ export default function ProjectsView({
     [squads, projects]
   );
   const allOwners = useMemo(() => people ? people.map(p => p.name).sort() : [...new Set(projects.map(p => p.owner).filter(Boolean))].sort(), [projects, people]);
+  // Options for the registry filter dropdown
+  const filterSections = useMemo(() => [
+    { key: "squad", label: "Squad", selected: fSquads, setter: setFSquads, options: allSquads.map(s => ({ value: s, label: s })) },
+    { key: "owner", label: "Owner", selected: fOwners, setter: setFOwners, options: allOwners.map(o => ({ value: o, label: o })) },
+    { key: "track", label: "Track", selected: fTracks, setter: setFTracks, options: trackNames.map(t => ({ value: t, label: t })) },
+    { key: "status", label: "Status", selected: fStatuses, setter: setFStatuses, options: [
+      { value: "in_flight", label: "Active" },
+      { value: "upcoming", label: "Upcoming" },
+      { value: "blocked", label: "Blocked" },
+      { value: "shipped", label: "Shipped" },
+      { value: "deprioritized", label: "Deprioritised" },
+    ] },
+  ], [allSquads, allOwners, fSquads, fOwners, fTracks, fStatuses]);
   const ganttProjects = useMemo(() => {
     let list = projects;
     if (ganttSearch.trim()) {
@@ -1182,22 +1251,21 @@ export default function ProjectsView({
   );
 
   return (
-    <div ref={devRef} style={{ position: "relative", display: "flex", flexDirection: "column", gap: space[3] }}>
+    <div ref={devRef} style={{ position: "relative", display: "flex", flexDirection: "column", gap: 4, ["--flow-sticky-top"]: "142px" }}>
 
-      {/* ── PRAIRIE BACKGROUND (Figma 175:2272) — top-of-page landscape fading into the surface ── */}
+      {/* ── GRAPH-PAPER GRID BACKGROUND — behind the PROJECTS headline ── */}
       {viewMode !== "board" && viewMode !== "gantt" && (
         <div ref={bgRef} aria-hidden="true" style={{
-          position: "absolute", top: -24, left: -24, right: -24,
+          position: "absolute", top: -24, left: -24, right: -24, height: 220,
           overflow: "hidden", pointerEvents: "none", zIndex: 0, lineHeight: 0,
-          willChange: "transform",
+          backgroundImage: `linear-gradient(${FD.border} 1px, transparent 1px), linear-gradient(90deg, ${FD.border} 1px, transparent 1px)`,
+          backgroundSize: "22px 22px",
+          backgroundPosition: "-1px -1px",
+          opacity: 0.6,
         }}>
-          <img src={isDark ? "/prairie-dark.png" : "/prairie.png"} alt="" style={{
-            width: "100%", height: "auto", display: "block", transform: "scaleX(-1)",
-            opacity: 1,
-          }} />
           <div style={{
             position: "absolute", inset: 0,
-            background: `linear-gradient(to bottom, ${rgbaFromColor(c.surface, 0)} 0%, ${rgbaFromColor(c.surface, 0)} 50%, ${c.surface} 95%)`,
+            background: `linear-gradient(to bottom, ${rgbaFromColor(c.surface, 0)} 0%, ${rgbaFromColor(c.surface, 0)} 40%, ${c.surface} 100%)`,
           }} />
         </div>
       )}
@@ -1288,112 +1356,254 @@ export default function ProjectsView({
         </div>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════
-          Summary + tabs — scrolls with the page
-          ═══════════════════════════════════════════════════════════ */}
-      <div style={{
-        position: "relative", zIndex: 1,
-        display: "flex", flexDirection: "column", gap: 24,
+      {/* ── PAGE TITLE — pixel-mosaic "PROJECTS" SVG over the grid ── */}
+      <Motion.div
+        initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 24, flexWrap: "wrap", minHeight: 92 }}>
+        <img src="/projects-title.svg?v=2" alt="Projects" style={{ height: 84, width: "auto", display: "block" }} />
+      </Motion.div>
+
+      {/* ── HEADER ROW — full-width search · quarter · view · filter · add (sticky, white bar) ── */}
+      <Motion.div
+        initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.06 }}
+        style={{
+        position: "sticky", top: 0, zIndex: 60,
+        display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+        padding: 16,
+        margin: "0 -24px",
+        background: FD.surface,
       }}>
-
-        {/* ── TOP BAR — Quarter (left) · Release day (right) ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-          {timeframe ? (
-            <FdQuarterPicker timeframe={timeframe} setTimeframe={setTimeframe} />
-          ) : <span />}
-          <FdSprintDayPill />
-        </div>
-
-        {/* ── PAGE TITLE ── */}
-        <h1 style={{ margin: 0, marginTop: 4, fontSize: 60, fontWeight: 500, lineHeight: "72px", letterSpacing: "-0.03em", color: FD.textPrimary }}>Projects</h1>
-
-        {/* ── KPI CARDS — Active · Shipped · At risk (Figma 175:2692) ── */}
-        {viewMode !== "board" && viewMode !== "gantt" && (
-          <div style={{ display: "flex", gap: 16, marginTop: 36 }}>
-            <FdKpiCard
-              label="Active" value={summary.active}
-              onClick={() => setActiveTab(activeTab === "in_flight" ? "all" : "in_flight")}
-              active={activeTab === "in_flight"}
+          {/* Search — fixed width, rest of cluster pushed right */}
+          <div style={{ position: "relative", display: "flex", alignItems: "center", width: 532, marginRight: "auto" }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={FD.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", left: 14, pointerEvents: "none" }}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+            <input
+              className="flow-search-input"
+              ref={localSearchRef}
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setFocusIdx(0); }}
+              placeholder="Search across projects, people & more"
+              style={{
+                height: 48,
+                width: "100%",
+                padding: "0 56px 0 42px",
+                borderRadius: 12,
+                border: `1px solid ${searchGlow ? "#8F583D" : "#F8F4F1"}`,
+                background: "#FBF9F8",
+                fontSize: 14,
+                color: "#58270E",
+                outline: "none",
+                transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
+              }}
             />
-            <FdKpiCard
-              label="Shipped" value={summary.shipped}
-              onClick={() => setActiveTab(activeTab === "shipped" ? "all" : "shipped")}
-              active={activeTab === "shipped"}
-            />
-            <FdKpiCard
-              label="At risk" value={summary.atRiskCount}
-              onClick={() => setActiveTab(activeTab === "blocked" ? "all" : "blocked")}
-              active={activeTab === "blocked"}
-            />
-            <div style={{ flex: 1, minWidth: 0 }} />
-            <div style={{ flex: 1, minWidth: 0 }} />
+            <span style={{ position: "absolute", right: 12, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12, fontWeight: 500, color: "#6E5649", padding: "4px 8px", borderRadius: 8, background: "#F4EEEB" }}>⌘K</span>
           </div>
-        )}
+          {/* Quarter picker */}
+          {timeframe && (
+            <FdQuarterPicker timeframe={timeframe} setTimeframe={setTimeframe} />
+          )}
+          {/* View switch */}
+          <div style={{ display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 8, background: "#FBF9F8", border: "1px solid #F8F4F1" }}>
+            {[
+              { key: "registry", icon: <><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></> },
+              { key: "board", icon: <><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></> },
+              { key: "gantt", icon: <><line x1="6" y1="20" x2="6" y2="11"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></> },
+            ].map(v => {
+              const on = viewMode === v.key;
+              return (
+                <button key={v.key} onClick={() => { setViewMode(v.key); setBoardFullscreen(false); setGanttFullscreen(false); }}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 8, borderRadius: 6, border: "none", cursor: "pointer",
+                    background: on ? FD.surface : "transparent", boxShadow: on ? "0 1px 1px rgba(14,14,14,0.08)" : "none" }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={on ? FD.textPrimary : FD.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{v.icon}</svg>
+                </button>
+              );
+            })}
+          </div>
+          {/* My Lens pill — far right */}
+          {toggleMyLens && (
+            <button
+              type="button"
+              onClick={toggleMyLens}
+              title={myLens ? "My Lens ON — showing your squad + followed projects" : "My Lens — filter to your squad + followed projects"}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                height: 44, padding: "0 6px 0 14px",
+                borderRadius: 8,
+                border: "1px solid transparent",
+                background: "transparent",
+                cursor: "pointer",
+                fontSize: 14, fontWeight: 500,
+                color: FD.textPrimary,
+              }}
+            >
+              <span>My Lens</span>
+              <span style={{
+                display: "inline-block",
+                width: 34, height: 20, borderRadius: 4,
+                background: myLens ? "#280E01" : "#F4EEEB",
+                position: "relative",
+                transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
+              }}>
+                <span style={{
+                  position: "absolute", top: 2, left: myLens ? 16 : 2,
+                  width: 16, height: 16, borderRadius: 2,
+                  background: "#fff",
+                  boxShadow: "0 0 4.8px rgba(14,14,14,0.07)",
+                  transition: `left ${motion.fast.duration} ${motion.fast.easing}`,
+                }} />
+              </span>
+            </button>
+          )}
+      </Motion.div>
 
-        {/* ── FILTER TABS + view switch + Filter + Add Project (Figma 152:5143) ── */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 36 }}>
+      {/* ═══════════════════════════════════════════════════════════
+          Filter tabs — sticky below the toolbar
+          ═══════════════════════════════════════════════════════════ */}
+        {/* ── FILTER DROPDOWN + TABS + NEW PROJECT (sticky below the toolbar) ── */}
+        <Motion.div
+          initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
+          style={{
+            position: "sticky", top: 80, zIndex: 55,
+            display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap",
+            padding: "10px 24px", margin: "0 -24px",
+            background: FD.surface,
+          }}>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            {/* Filter dropdown — Squad / Owner / Track / Status */}
+            <div ref={filterRef} style={{ position: "relative" }}>
+              <button type="button" onClick={() => setFilterOpen(o => !o)} style={{
+                display: "flex", alignItems: "center", gap: 6,
+                padding: "8px 10px", borderRadius: 12, cursor: "pointer",
+                border: `1px solid ${activeFilterCount ? "#8F583D" : "#F1EAE4"}`,
+                background: activeFilterCount ? "#FBF4EF" : FD.surface,
+                fontSize: 14, fontWeight: 400, color: "#7E5E4E",
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="17" x2="14" y2="17"/></svg>
+                Filter
+                {activeFilterCount > 0 && (
+                  <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11, fontWeight: 600, lineHeight: 1, color: "#fff", background: "#8F583D", borderRadius: 9999, minWidth: 16, height: 16, padding: "0 5px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{activeFilterCount}</span>
+                )}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7E5E4E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: filterOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              {filterOpen && (
+                <div style={{
+                  position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 200,
+                  background: FD.surface, border: "1px solid #F1EAE4", borderRadius: 14,
+                  boxShadow: c.shadowFloat || "0 12px 40px rgba(14,14,14,0.16)",
+                  width: 308, maxHeight: 480, display: "flex", flexDirection: "column", overflow: "hidden",
+                }}>
+                  <div style={{ overflowY: "auto", padding: "6px 6px 2px" }}>
+                    {filterSections.map(sec => (
+                      <div key={sec.key} style={{ padding: "8px 8px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                          <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9C8576" }}>{sec.label}</span>
+                          {sec.selected.length > 0 && (
+                            <button type="button" onClick={() => sec.setter([])} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 12, color: "#8F583D", padding: 0 }}>Clear</button>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {sec.options.map(opt => {
+                            const on = sec.selected.includes(opt.value);
+                            return (
+                              <button key={opt.value} type="button" onClick={() => toggleFilter(sec.setter, opt.value)} style={{
+                                display: "inline-flex", alignItems: "center", gap: 4,
+                                padding: "5px 10px", borderRadius: 9999, cursor: "pointer",
+                                border: `1px solid ${on ? "#8F583D" : "#F1EAE4"}`,
+                                background: on ? "#280E01" : FD.surface,
+                                color: on ? "#fff" : "#7E5E4E",
+                                fontSize: 13, fontWeight: on ? 500 : 400, lineHeight: 1.4,
+                                transition: "background 120ms, border-color 120ms",
+                              }}>{sec.key === "track" && TRACK_GLYPHS[opt.value]}{opt.label}</button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderTop: "1px solid #F4EEEB", background: "#FBF9F8" }}>
+                    <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12, color: "#6E5649" }}>{tabProjects.length} project{tabProjects.length === 1 ? "" : "s"}</span>
+                    <button type="button" onClick={clearAllFilters} disabled={!activeFilterCount} style={{
+                      border: "none", background: "transparent",
+                      cursor: activeFilterCount ? "pointer" : "default",
+                      fontSize: 13, fontWeight: 500, color: activeFilterCount ? "#8F583D" : "#C9BAB0", padding: 0,
+                    }}>Clear all</button>
+                  </div>
+                </div>
+              )}
+            </div>
             {[
               { key: "all", label: "All", count: summary.all },
-              { key: "active", label: "In flight", count: summary.active },
+              { key: "active", label: "Active", count: summary.active },
               { key: "shipped", label: "Shipped", count: summary.shipped },
               { key: "blocked", label: "Blocked", count: summary.blocked },
-              { key: "at_risk", label: "At risk", count: summary.atRisk },
               { key: "deprioritized", label: "Deprioritised", count: summary.depri },
               { key: "overdue", label: "Overdue", count: summary.overdue },
             ].map(opt => {
               const isActive = activeTab === opt.key;
               return (
-                <button key={opt.key} onClick={() => setActiveTab(opt.key)} style={{
+                <Motion.button key={opt.key} onClick={() => setActiveTab(opt.key)}
+                  whileTap={{ scale: 0.94 }}
+                  whileHover={isActive ? undefined : { y: -1 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                  style={{
+                  position: "relative",
                   display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 8px 8px 12px", borderRadius: 9999, cursor: "pointer",
-                  border: `1px solid ${isActive ? FD.borderDark : FD.border}`,
-                  background: FD.surface,
-                  fontSize: 14, fontWeight: isActive ? 600 : 500, letterSpacing: "-0.1px",
-                  color: FD.textSecondary,
+                  padding: "8px 8px 8px 12px", borderRadius: 12, cursor: "pointer",
+                  border: `1px solid ${isActive ? "transparent" : "#F1EAE4"}`,
+                  background: isActive ? "transparent" : FD.surface,
+                  fontSize: 14, fontWeight: isActive ? 500 : 400, letterSpacing: "-0.1px",
+                  color: isActive ? "#58270E" : "#7E5E4E",
                 }}>
-                  {opt.label}
-                  <span style={{ padding: "2px 8px", borderRadius: 9999, background: FD.surface3, fontSize: 13, fontWeight: 500, color: isActive ? FD.textSecondary : FD.textTertiary }}>{opt.count}</span>
-                </button>
+                  {isActive && (
+                    <Motion.span layoutId="tabActiveHighlight"
+                      transition={{ type: "spring", stiffness: 480, damping: 38 }}
+                      style={{ position: "absolute", inset: 0, borderRadius: 12, border: "1px solid #8F583D", background: "#FBF9F8", zIndex: 0 }} />
+                  )}
+                  <span style={{ position: "relative", zIndex: 1 }}>{opt.label}</span>
+                  <span style={{ position: "relative", zIndex: 1, padding: "2px 8px", borderRadius: 9999, background: "#F4EEEB", fontSize: 13, fontWeight: isActive ? 500 : 400, color: "#6E5649" }}>{opt.count}</span>
+                </Motion.button>
               );
             })}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {/* View switch */}
-            <div style={{ display: "flex", alignItems: "center", gap: 2, padding: 4, borderRadius: 8, background: FD.surface2, border: `1px solid ${FD.surface3}` }}>
-              {[
-                { key: "registry", icon: <><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></> },
-                { key: "board", icon: <><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></> },
-                { key: "gantt", icon: <><line x1="6" y1="20" x2="6" y2="11"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></> },
-              ].map(v => {
-                const on = viewMode === v.key;
-                return (
-                  <button key={v.key} onClick={() => { setViewMode(v.key); setBoardFullscreen(false); setGanttFullscreen(false); }}
-                    style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 8, borderRadius: 6, border: on ? `1px solid ${FD.border}` : "1px solid transparent", cursor: "pointer",
-                      background: on ? FD.surface : "transparent" }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={on ? FD.textPrimary : FD.textTertiary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{v.icon}</svg>
-                  </button>
-                );
-              })}
-            </div>
-            {/* Filter */}
-            <button onClick={() => localSearchRef.current?.focus()} style={{ display: "flex", alignItems: "center", gap: 4, padding: "10px 12px 10px 10px", borderRadius: 8, border: `1px solid ${FD.border}`, background: FD.surface, cursor: "pointer", fontSize: 12, fontWeight: 600, color: FD.textPrimary }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-              Filter
-            </button>
-            {/* Add Project */}
-            <button onClick={() => setShowCreate(true)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "10px 12px", borderRadius: 8, border: "none", background: FD.borderDark, cursor: "pointer", fontSize: 12, fontWeight: 600, color: FD.surface }}>
-              Add Project
-            </button>
-          </div>
-        </div>
-      </div>
+          {/* New Project */}
+          <button onClick={() => setShowCreate(true)} style={{ display: "flex", alignItems: "center", gap: 4, padding: "10px 16px", borderRadius: 8, border: "none", background: "#280E01", cursor: "pointer", fontSize: 14, fontWeight: 600, color: "#fff", flexShrink: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Project
+          </button>
+        </Motion.div>
       {/* end frozen top */}
+
+      {/* Project detail side sheet (ported from flow_AS) — opens on row click with the real project's data, closes on backdrop/Esc */}
+      {detailSheetId && (() => {
+        const p = projects.find(x => x.id === detailSheetId);
+        if (!p) return null;
+        const statusMap = { in_flight: "inflight", shipped: "done", blocked: "paused", deprioritized: "cancelled", upcoming: "discovery" };
+        const sheetProject = {
+          name: p.name,
+          code: p.id,
+          updatedAt: p.lastActivityAt ? timeAgo(p.lastActivityAt) : "just now",
+          createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+          dueDate: p.endDate ? new Date(p.endDate) : null,
+          statusKey: statusMap[p.status] || "inflight",
+          squads: p.squad ? [p.squad] : [],
+          bookmarked: (followedProjects || []).includes(p.id),
+          ...mapProjectSections(p, metrics[p.id], people, projectLinks),
+        };
+        return createPortal(
+          <div style={{ position: "fixed", inset: 0, zIndex: 999, pointerEvents: "none" }}>
+            <div aria-hidden="true" style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,0.14)", backdropFilter: "blur(0.5px)" }} />
+            <ProjectDetailSheet project={sheetProject} onClose={() => setDetailSheetId(null)} />
+          </div>,
+          document.body
+        );
+      })()}
 
       {/* ═══════════════════════════════════════════════════════════
           SCROLLABLE CONTENT
           ═══════════════════════════════════════════════════════════ */}
-      <div style={{ position: "relative", zIndex: 1 }}>
+      <div style={{ position: "relative", zIndex: 1, marginTop: -4 }}>
 
       {/* ── INLINE BOARD VIEW ── */}
       {viewMode === "board" ? (() => {
@@ -1948,31 +2158,32 @@ export default function ProjectsView({
         }
         return <EmptyState icon="folder" title={title} message={message} action={action} onAction={onAction} />;
       })() : (
-        <div style={{ marginTop: 12, overflow: "visible", borderRadius: 12 }}>
+        <div style={{ marginTop: 0, marginLeft: -24, marginRight: -24, overflow: "visible" }}>
           <table style={{ width: "100%", minWidth: 1080, borderCollapse: "collapse" }}>
             <thead>
                 <tr>
                   {[
-                    { label: "Name", w: null, col: "project" },
+                    { label: "Project Name", w: null, col: "project" },
                     { label: "Squad", w: 148, col: "squad" },
-                    { label: "Priority", w: 69, col: "priority" },
-                    { label: "Active Tracks", w: 152, col: "tracks" },
-                    { label: "Team", w: 184, col: "people" },
+                    { label: "Team", w: 220, col: "people" },
+                    { label: "Status", w: 140, col: "tracks" },
                     { label: "Timeline", w: 168, col: "timeline" },
-                    { label: "", w: 52, col: null },
-                  ].map((h, hi) => {
+                    { label: "Updated", w: 130, col: "updated" },
+                  ].map((h, hi, arr) => {
                     const sortable = !!h.col;
                     const sorted = sortable && sortKey === h.col;
+                    const isFirst = hi === 0;
+                    const isLast = hi === arr.length - 1;
                     return (
                     <th key={h.col || `c${hi}`} onClick={sortable ? () => toggleSort(h.col) : undefined} style={{
                       position: "sticky", top: "var(--flow-sticky-top, 0px)", zIndex: 50,
-                      width: h.w || undefined, textAlign: "left", padding: "12px 10px",
-                      background: FD.surface2, color: sorted ? FD.textPrimary : FD.textTertiary,
-                      fontSize: 13, fontWeight: 600, letterSpacing: "-0.1px",
+                      width: h.w || undefined, textAlign: "left",
+                      padding: `12px ${isLast ? 34 : 10}px 12px ${isFirst ? 34 : 10}px`,
+                      background: "#FBF9F8", color: sorted ? "#58270E" : "#7E5E4E",
+                      fontSize: 13, fontWeight: 500, letterSpacing: "-0.1px",
                       whiteSpace: "nowrap", cursor: sortable ? "pointer" : "default", userSelect: "none",
                     }}>
                       {h.label}
-                      {sortable && <span style={{ marginLeft: 4, opacity: sorted ? 1 : 0.25 }}>{sorted ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>}
                     </th>
                     );
                   })}
@@ -1983,6 +2194,7 @@ export default function ProjectsView({
                   const m = metrics[proj.id] || {};
                   const isFocused = kbActive && fi === focusIdx;
                   const isHovered = hoveredProject === proj.id;
+                  const isFollowed = (followedProjects || []).includes(proj.id);
                   const isDimmed = proj.status === "deprioritized";
                   const st = fdStatus(proj, m);
                   const pri = proj.priority || "P2";
@@ -2007,148 +2219,230 @@ export default function ProjectsView({
                       if (p) allTeam.push(p);
                     }
                   });
-                  const showTeam = allTeam.slice(0, 4);
+                  const showTeam = allTeam.slice(0, 1);
                   const extra = allTeam.length - showTeam.length;
 
                   const rowBg = isFocused ? FD.actionSubtle : isHovered ? FD.surface2 : FD.surface;
                   const cell = { padding: "0 10px", height: 60, color: FD.textSecondary, fontSize: 14, letterSpacing: "-0.1px", verticalAlign: "middle" };
+                  const cellFirst = { ...cell, padding: "0 10px 0 34px" };
+                  const cellLast = { ...cell, padding: "0 34px 0 10px" };
                   const isWatched = (followedProjects || []).includes(proj.id);
 
                   return (
-                    <tr
+                    <Motion.tr
                       key={proj.id}
                       ref={el => { if (el) el.__projId = proj.id; }}
                       {...(fi === 0 ? { "data-tour": "project-row" } : {})}
                       className={isFocused ? "flow-kb-focus" : undefined}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: isDimmed ? 0.55 : 1, y: 0 }}
+                      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: Math.min(fi * 0.022, 0.45) }}
                       onMouseEnter={() => setHoveredProject(proj.id)}
                       onMouseLeave={() => setHoveredProject(null)}
-                      onClick={() => openProject(proj.id)}
-                      style={{ cursor: "pointer", background: rowBg, opacity: isDimmed ? 0.55 : 1, transition: `background ${motion.fast.duration} ${motion.fast.easing}` }}
+                      onClick={() => setDetailSheetId(proj.id)}
+                      style={{ cursor: "pointer", background: rowBg, transition: `background ${motion.fast.duration} ${motion.fast.easing}` }}
                     >
-                      {/* Name = status icon + ID + project name */}
-                      <td style={cell}>
+                      {/* Name = status icon + ID + project name (+ at-risk badge if applicable) */}
+                      <td style={cellFirst}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 10, whiteSpace: "nowrap" }}>
                           <Tooltip label={st.label}>
                             <FdStatusIcon kind={st.kind} pct={progressPct} />
                           </Tooltip>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontWeight: 600, color: FD.textPrimary }}>
-                            <span>{proj.id}</span>
-                            <span>{proj.name}</span>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: FD.textPrimary }}>
+                            <span style={{ fontWeight: 600, opacity: 0.7 }}>{proj.id}</span>
+                            <span style={{ fontWeight: 500 }}>{proj.name}</span>
                           </span>
+                          {st.kind === "atrisk" && (
+                            <Tooltip label={m.overdue ? "Overdue — past expected end date" : "At risk — phase is running longer than the healthy threshold"}>
+                              <span style={{
+                                flexShrink: 0,
+                                display: "inline-flex", alignItems: "center", gap: 4,
+                                padding: "2px 8px",
+                                borderRadius: 6,
+                                background: "rgba(220, 38, 38, 0.10)",
+                                color: FD.error,
+                                border: "none",
+                                fontSize: 11,
+                                fontWeight: 700,
+                                letterSpacing: "0.2px",
+                                textTransform: "uppercase",
+                                cursor: "default",
+                              }}>
+                                <span style={{ width: 5, height: 5, borderRadius: "50%", background: FD.error }} />
+                                At risk
+                              </span>
+                            </Tooltip>
+                          )}
                         </span>
                       </td>
 
-                      {/* Squad */}
-                      <td style={cell}>{proj.squad || "—"}</td>
-
-                      {/* Priority */}
+                      {/* Squad — leading squad + collaborating squads overflow */}
                       <td style={cell}>
-                        <span style={{ display: "inline-flex", alignItems: "center", padding: "4px 6px", borderRadius: 8, background: priStyle.bg, color: priStyle.color, fontSize: 14, fontWeight: 600 }}>{pri}</span>
-                      </td>
-
-                      {/* Active Tracks */}
-                      <td style={cell}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 4, overflow: "hidden" }}>
-                          {tracks.length === 0 && <span style={{ color: FD.textTertiary }}>—</span>}
-                          {tracks.slice(0, 3).map(t => (
-                            <span key={t} style={{ flexShrink: 0, padding: "2px 6px", borderRadius: 8, background: FD.surface2, color: FD.textTertiary, fontSize: 14, fontWeight: 500 }}>{t}</span>
-                          ))}
-                        </div>
-                      </td>
-
-                      {/* Team — overlapping avatars (owner highlighted first) + overflow */}
-                      <td style={cell}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div style={{ display: "flex", alignItems: "center" }}>
-                            {showTeam.map((person, idx) => {
-                              const isOwner = ownerPerson && person.id === ownerPerson.id;
-                              return (
-                                <Tooltip key={person.id} style={{ marginLeft: idx > 0 ? -9 : 0, position: "relative", zIndex: isOwner ? 20 : 10 - idx }} label={
+                        {(() => {
+                          const collab = (proj.collabSquads || []).filter(s => s && s !== proj.squad);
+                          if (!proj.squad) return "—";
+                          return (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+                              <span style={{ fontWeight: 400 }}>{proj.squad}</span>
+                              {collab.length > 0 && (
+                                <Tooltip label={
                                   <span style={{ display: "flex", flexDirection: "column", gap: 1, textAlign: "left" }}>
-                                    <span style={{ fontWeight: 600 }}>{person.name}{isOwner ? " · Owner" : ""}</span>
-                                    {person.role && <span style={{ fontWeight: 400, opacity: 0.7 }}>{person.role}</span>}
+                                    <span style={{ fontWeight: 600 }}>Also collaborating</span>
+                                    {collab.map(s => <span key={s} style={{ fontWeight: 400 }}>{s}</span>)}
                                   </span>
                                 }>
-                                  <span
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.transform = "scale(1.18)";
-                                      e.currentTarget.style.borderColor = FD.textPrimary;
-                                      e.currentTarget.style.color = FD.textPrimary;
-                                      if (e.currentTarget.parentElement) e.currentTarget.parentElement.style.zIndex = "30";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.transform = "scale(1)";
-                                      e.currentTarget.style.borderColor = isOwner ? FD.textPrimary : FD.surface;
-                                      e.currentTarget.style.color = isOwner ? FD.textPrimary : FD.textTertiary;
-                                      if (e.currentTarget.parentElement) e.currentTarget.parentElement.style.zIndex = String(isOwner ? 20 : 10 - idx);
-                                    }}
-                                    style={{
-                                      boxSizing: "border-box", cursor: "pointer",
-                                      width: 32, height: 32, borderRadius: "50%",
-                                      background: FD.surface3,
-                                      border: `1px solid ${isOwner ? FD.textPrimary : FD.surface}`,
-                                      display: "flex", alignItems: "center", justifyContent: "center",
-                                      fontSize: 12, fontWeight: 600, color: isOwner ? FD.textPrimary : FD.textTertiary,
-                                      transition: `transform ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
-                                    }}>{initialsOf(person.name)}</span>
+                                  <span style={{
+                                    flexShrink: 0,
+                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                    width: 28, height: 28, borderRadius: "50%",
+                                    border: "1px dashed #D0D4DD",
+                                    background: "transparent",
+                                    color: FD.textPrimary,
+                                    fontSize: 12,
+                                    fontWeight: 400,
+                                    cursor: "default",
+                                  }}>+{collab.length}</span>
                                 </Tooltip>
-                              );
-                            })}
-                          </div>
-                          {extra > 0 && <span style={{ fontSize: 13, fontWeight: 600, color: FD.textMuted }}>+{extra}</span>}
-                          {allTeam.length === 0 && <span style={{ color: FD.textTertiary }}>—</span>}
-                        </div>
-                      </td>
-
-                      {/* Timeline + Updated combined — dates show first; recency reveals on hover */}
-                      <td style={cell}>
-                        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 1, whiteSpace: "nowrap", height: "100%" }}>
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: FD.textPrimary, fontWeight: 500 }}>
-                            <span>{fdDate(proj.startDate)} – {fdDate(displayEnd)}</span>
-                            {stale && !isHovered && <span title="Stale — no recent activity" style={{ width: 6, height: 6, borderRadius: "50%", background: FD.error, flexShrink: 0 }} />}
-                          </span>
-                          {isHovered && (
-                            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, color: stale ? FD.error : FD.textTertiary }}>
-                              <span title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : "No activity yet"}>Updated {proj.lastActivityAt ? timeAgo(proj.lastActivityAt) : "—"}</span>
-                              {latestActivity[proj.id] && (
-                                <span
-                                  style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 15, height: 15, opacity: 0.55, cursor: "default", flexShrink: 0 }}
-                                  onMouseEnter={(e) => { e.stopPropagation(); e.currentTarget.style.opacity = "0.9"; showActivityTip({ projId: proj.id, rect: e.currentTarget.getBoundingClientRect() }); }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.55"; hideActivityTip(); }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6.5" /><line x1="8" y1="7" x2="8" y2="11" /><circle cx="8" cy="5" r="0.5" fill="currentColor" stroke="none" /></svg>
-                                </span>
                               )}
                             </span>
+                          );
+                        })()}
+                      </td>
+
+                      {/* Team — lead avatar + lead name + remaining members count */}
+                      <td style={cell}>
+                        {(() => {
+                          const leadName = ownerPerson?.name || proj.owner;
+                          const others = allTeam.filter(p => !ownerPerson || p.id !== ownerPerson.id);
+                          if (!leadName && allTeam.length === 0) return <span style={{ color: FD.textTertiary }}>—</span>;
+                          return (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+                              <Tooltip label={
+                                <span style={{ display: "flex", flexDirection: "column", gap: 1, textAlign: "left" }}>
+                                  <span style={{ fontWeight: 600 }}>{leadName} · Lead</span>
+                                  {ownerPerson?.role && <span style={{ fontWeight: 400, opacity: 0.7 }}>{ownerPerson.role}</span>}
+                                </span>
+                              }>
+                                <span style={{ fontWeight: 400 }}>{leadName || "—"}</span>
+                              </Tooltip>
+                              {others.length > 0 && (
+                                <Tooltip label={
+                                  <span style={{ display: "flex", flexDirection: "column", gap: 1, textAlign: "left" }}>
+                                    {others.map(p => <span key={p.id} style={{ fontWeight: 500 }}>{p.name}</span>)}
+                                  </span>
+                                }>
+                                  <span style={{
+                                    flexShrink: 0,
+                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                    width: 28, height: 28, borderRadius: "50%",
+                                    border: "1px dashed #D0D4DD",
+                                    background: "transparent",
+                                    color: FD.textPrimary,
+                                    fontSize: 12,
+                                    fontWeight: 400,
+                                    cursor: "default",
+                                  }}>+{others.length}</span>
+                                </Tooltip>
+                              )}
+                            </span>
+                          );
+                        })()}
+                      </td>
+
+                      {/* Active Tracks — dashed chips with phase-colour icon (shipped = green tag) */}
+                      <td style={cell}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, overflow: "hidden" }}>
+                          {st.kind === "shipped" && (
+                            <Tooltip label="Shipped">
+                              <span style={{
+                                flexShrink: 0,
+                                display: "inline-flex", alignItems: "center", gap: 5,
+                                padding: "3px 10px",
+                                borderRadius: 8,
+                                background: "rgba(5, 150, 105, 0.06)",
+                                color: FD.success,
+                                fontSize: 13,
+                                fontWeight: 500,
+                                letterSpacing: "-0.1px",
+                                cursor: "default",
+                              }}>
+                                Shipped
+                              </span>
+                            </Tooltip>
                           )}
+                          {st.kind !== "shipped" && tracks.length === 0 && <span style={{ color: FD.textTertiary }}>—</span>}
+                          {st.kind !== "shipped" && trackNames.filter(t => tracks.includes(t)).map(t => {
+                            const glyph = TRACK_GLYPHS[t];
+                            return (
+                              <Tooltip key={t} label={`${t} — in progress`}>
+                                <span style={{
+                                  flexShrink: 0,
+                                  display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                  width: 34, height: 34,
+                                  borderRadius: "50%",
+                                  background: FD.surface,
+                                  border: "1px dashed #EEE4DD",
+                                  cursor: "default",
+                                }}>
+                                  <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, flexShrink: 0 }}>{glyph}</span>
+                                </span>
+                              </Tooltip>
+                            );
+                          })}
                         </div>
                       </td>
 
-                      {/* Bookmark / watchlist toggle — end of row */}
-                      <td style={{ ...cell, textAlign: "right", padding: "0 14px 0 0" }}>
-                        {toggleFollowProject && (
+                      {/* Timeline — matches secondary text (shipped final date keeps a tooltip) */}
+                      <td style={cell}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: FD.textSecondary, fontWeight: 400, whiteSpace: "nowrap" }}>
+                          <span>{fdDate(proj.startDate)} – {st.kind === "shipped" ? (
+                            <Tooltip label={`Successfully published on ${fdDate(displayEnd)}`}>
+                              <span>{fdDate(displayEnd)}</span>
+                            </Tooltip>
+                          ) : fdDate(displayEnd)}</span>
+                        </span>
+                      </td>
+
+                      {/* Last updated — always visible */}
+                      <td style={{ ...cellLast, position: "relative" }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 13, color: stale ? FD.error : FD.textSecondary, whiteSpace: "nowrap" }}>
+                          <span title={proj.lastActivityAt ? fmtAbsolute(proj.lastActivityAt) : "No activity yet"}>{proj.lastActivityAt ? timeAgo(proj.lastActivityAt) : "—"}</span>
+                          {latestActivity[proj.id] && (
+                            <span
+                              style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 15, height: 15, opacity: 0.55, cursor: "default", flexShrink: 0 }}
+                              onMouseEnter={(e) => { e.stopPropagation(); e.currentTarget.style.opacity = "0.9"; showActivityTip({ projId: proj.id, rect: e.currentTarget.getBoundingClientRect() }); }}
+                              onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.55"; hideActivityTip(); }}
+                            >
+                              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="8" r="6.5" /><line x1="8" y1="7" x2="8" y2="11" /><circle cx="8" cy="5" r="0.5" fill="currentColor" stroke="none" /></svg>
+                            </span>
+                          )}
+                        </span>
+                        {/* My Lens star — follow toggle, revealed on row hover (stays filled when followed) */}
+                        {(isHovered || isFollowed) && (
                           <button
                             type="button"
-                            title={isWatched ? "Remove from watchlist" : "Save to watchlist"}
-                            onClick={(e) => { e.stopPropagation(); toggleFollowProject(proj.id); }}
+                            title={isFollowed ? "Remove from My Lens" : "Add to My Lens"}
+                            aria-label={isFollowed ? "Remove from My Lens" : "Add to My Lens"}
+                            aria-pressed={isFollowed}
+                            onClick={(e) => { e.stopPropagation(); toggleFollowProject?.(proj.id); }}
                             style={{
+                              position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                              width: 32, height: 32, flexShrink: 0,
                               display: "inline-flex", alignItems: "center", justifyContent: "center",
-                              background: "none", border: "none", cursor: "pointer", padding: 4, borderRadius: 6,
-                              transition: `transform ${motion.fast.duration} ${motion.fast.easing}`,
+                              border: "none", borderRadius: "50%", cursor: "pointer", padding: 0,
+                              background: isFollowed ? "#F4EEEB" : "transparent",
+                              transition: "background 120ms ease, transform 120ms ease",
                             }}
-                            onMouseEnter={(e) => { e.currentTarget.style.transform = "scale(1.18)"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.transform = "scale(1)"; }}
+                            onMouseEnter={(e) => { e.stopPropagation(); e.currentTarget.style.background = "#F4EEEB"; e.currentTarget.style.transform = "translateY(-50%) scale(1.08)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = isFollowed ? "#F4EEEB" : "transparent"; e.currentTarget.style.transform = "translateY(-50%) scale(1)"; }}
                           >
-                            <svg width="17" height="17" viewBox="0 0 24 24"
-                              fill={isWatched ? FD.textPrimary : "none"}
-                              stroke={isWatched ? FD.textPrimary : FD.textTertiary}
-                              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                            <svg width="12" height="14" viewBox="0 0 14 16.5" fill={isFollowed ? "#8F583D" : "none"} stroke="#8F583D" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11.6611 1.01867C12.5783 1.12511 13.25 1.91583 13.25 2.83916V15.75L7 12.625L0.75 15.75V2.83916C0.75 1.91583 1.42173 1.12511 2.3389 1.01867C3.86797 0.841221 5.42333 0.75 7 0.75C8.57667 0.75 10.132 0.841222 11.6611 1.01867Z" />
                             </svg>
                           </button>
                         )}
                       </td>
-                    </tr>
+                    </Motion.tr>
                   );
                 })}
               </tbody>
@@ -2207,22 +2501,6 @@ export default function ProjectsView({
           document.body
         );
       })()}
-
-      {/* FAB — Add Project (hidden in historical mode) */}
-      {<Motion.button data-tour="add-project" onClick={() => setShowCreate(true)} aria-label="Add project" title="Add project"
-        initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 420, damping: 24, delay: 0.15 }}
-        whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.94 }}
-        style={{
-          position: "fixed", bottom: 28, right: 28, zIndex: 50,
-          width: 60, height: 60, borderRadius: "50%", border: "none", cursor: "pointer",
-          background: c.accent, color: c.textOnAccent,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: c.shadowFloat,
-        }}
-      >
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-      </Motion.button>}
 
       {/* Create Project Overlay */}
       {showCreate && <CreateProjectOverlay
@@ -2327,9 +2605,6 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
   const [owner, setOwner] = useState(personProfile?.name || "");
   const [squad, setSquad] = useState(personProfile?.squad || "");
   const [priority, setPriority] = useState("P2");
-  const [complexity, setComplexity] = useState("");
-  const [startNow, setStartNow] = useState(false);
-  const [selectedTracks, setSelectedTracks] = useState(["PRD"]);
   const [tentativeStart, setTentativeStart] = useState("");
   const [endDate, setEndDate] = useState("");
   const [dependencies, setDependencies] = useState([]);
@@ -2353,7 +2628,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }, []);
 
-  const startDate = startNow ? todayStr : tentativeStart;
+  const startDate = tentativeStart;
   const canSave = name.trim() && owner && squad;
 
   const handleCreate = () => {
@@ -2361,20 +2636,13 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
     setSaving(true);
     const tempId = previewId;
     const now = new Date().toISOString();
-    const tracks = {};
-    if (startNow && selectedTracks.length > 0) {
-      for (const t of selectedTracks) {
-        tracks[t] = { periods: [{ started_at: now, completed_at: null }], owner: null };
-      }
-    }
-    const primaryPhase = startNow && selectedTracks.length > 0 ? selectedTracks[selectedTracks.length - 1] : null;
     const newProj = {
       id: tempId, name: name.trim(), description: null,
-      owner, squad, phase: primaryPhase, startDate: startNow ? (startDate || null) : null, endDate: endDate || null,
-      status: startNow ? "in_flight" : "upcoming",
-      tracks,
-      tentativeStartDate: startNow ? null : (tentativeStart || null),
-      priority, complexity: complexity || null,
+      owner, squad, phase: null, startDate: null, endDate: endDate || null,
+      status: "upcoming",
+      tracks: {},
+      tentativeStartDate: tentativeStart || null,
+      priority, complexity: null,
       isBlocked: false, blockedReason: null, blockedAt: null,
       lastActivityAt: now, createdAt: now,
       phaseDurationOverrides: null,
@@ -2385,15 +2653,29 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
     if (onCreated) onCreated(tempId, name.trim());
   };
 
+  // Warm "brown tone" palette — matches the Projects toolbar / filter dropdown
+  const B = {
+    ink: "#58270E",       // headings + input text
+    body: "#7E5E4E",      // labels + secondary text
+    muted: "#9C8576",     // optional suffixes + counters
+    border: "#F1EAE4",    // input + chip borders
+    inset: "#FBF9F8",     // input background
+    insetAlt: "#F4EEEB",  // disabled / muted chip background
+    surface: "#FFFFFF",   // unselected chip background
+    accent: "#8F583D",    // warm accent
+    primary: "#280E01",   // primary button + selected chip
+  };
+  const brownTone = { border: B.border, bg: B.inset, text: B.ink, muted: B.muted, accent: B.accent, accentDim: B.insetAlt, fieldBg: B.inset };
+
   const inputStyle = {
     width: "100%", height: 40, padding: `0 ${space[3]}px`,
-    borderRadius: layout.radiusSm, border: `1px solid ${c.border}`,
-    background: c.surfaceSolid, color: c.text,
+    borderRadius: layout.radiusSm, border: `1px solid ${B.border}`,
+    background: B.inset, color: B.ink,
     fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
     outline: "none", boxSizing: "border-box",
   };
 
-  const fieldLabel = { fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 600, color: c.textMid, marginBottom: space[1], letterSpacing: 0 };
+  const fieldLabel = { fontFamily: typo.bodyXs.font, fontSize: 12, fontWeight: 600, color: B.ink, marginBottom: space[1], letterSpacing: 0 };
 
   const PillSelector = ({ options, value, onChange }) => (
     <div style={{ display: "flex", flexWrap: "wrap", gap: space[1] }}>
@@ -2409,9 +2691,9 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
               fontFamily: typo.bodySm.font,
               fontSize: 13,
               fontWeight: 600,
-              border: `1px solid ${selected ? opt.color : c.border}`,
-              background: selected ? opt.color : c.surfaceAlt,
-              color: selected ? "#fff" : c.textMid,
+              border: `1px solid ${selected ? B.primary : B.border}`,
+              background: selected ? B.primary : B.surface,
+              color: selected ? "#fff" : B.body,
               cursor: "pointer",
               transition: `background ${motion.fast.duration} ${motion.fast.easing}, border-color ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}`,
               lineHeight: 1,
@@ -2460,238 +2742,60 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
   }, [depOpen]);
 
   return (
-    <SideSheet open onClose={onClose} width={540} title="New project">
-      <div data-suppress-shortcuts style={{ width: "100%" }}>
-        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: space[4] }}>
-          <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.textMid }}>
-            Create a new project for your squad
-          </div>
-          <span style={{
-            fontFamily: typo.monoMd.font, fontSize: 12, fontWeight: 700,
-            color: c.amber, letterSpacing: "0.02em",
-            padding: `3px 8px`, borderRadius: layout.radiusXs,
-            background: c.amberDim,
-          }}>{previewId}</span>
-        </div>
-
+    <SideSheet open onClose={onClose} width={540} title="New project" floating>
+      <div data-suppress-shortcuts style={{ width: "100%", minHeight: "100%", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
           {/* Name */}
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
               <div style={fieldLabel}>Name</div>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: name.length > 100 ? c.red : c.textDim, fontVariantNumeric: "tabular-nums" }}>{name.length}/100</span>
+              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: name.length > 100 ? c.red : B.muted, fontVariantNumeric: "tabular-nums" }}>{name.length}/100</span>
             </div>
-            <Inp value={name} onChange={e => { if (e.target.value.length <= 100) setName(e.target.value); }} placeholder="e.g. Checkout Redesign" style={{ width: "100%" }} autoFocus maxLength={100} />
+            <Inp value={name} onChange={e => { if (e.target.value.length <= 100) setName(e.target.value); }} placeholder="e.g. Checkout Redesign" style={{ width: "100%", border: `1px solid ${B.border}`, background: B.inset, color: B.ink }} autoFocus maxLength={100} />
           </div>
 
           {/* Owner + Squad */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
             <div>
               <div style={fieldLabel}>Owner</div>
-              <SearchSelect value={owner} onChange={setOwner} options={allOwners} placeholder="Search people..." />
+              <SearchSelect value={owner} onChange={setOwner} options={allOwners} placeholder="Search people..." tone={brownTone} />
             </div>
             <div>
               <div style={fieldLabel}>Squad</div>
-              <SearchSelect value={squad} onChange={setSquad} options={allSquads} placeholder="Search squads..." />
+              <SearchSelect value={squad} onChange={setSquad} options={allSquads} placeholder="Search squads..." tone={brownTone} />
             </div>
           </div>
 
-          {/* Priority + Complexity side by side */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
-            <div>
-              <div style={fieldLabel}>Priority</div>
-              <PillSelector options={priorityOpts} value={priority} onChange={setPriority} />
-            </div>
-            <div>
-              <div style={fieldLabel}>Complexity <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
-              <PillSelector options={complexityOpts} value={complexity} onChange={v => setComplexity(prev => prev === v ? "" : v)} />
-            </div>
-          </div>
-
-          {/* Timeline — toggle + dates */}
+          {/* Tentative dates */}
           <div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: space[1] }}>
-              <div style={{ ...fieldLabel, marginBottom: 0 }}>Timeline</div>
-              <div style={{ display: "flex", alignItems: "center", gap: space[2] }}>
-                <span style={{ fontFamily: typo.bodySm.font, fontSize: 12, color: startNow ? c.text : c.textDim, fontWeight: 500 }}>
-                  Start immediately
-                </span>
-                <button
-                  onClick={() => { setStartNow(v => { setTentativeStart(v ? "" : todayStr); return !v; }); }}
-                  style={{
-                    width: 36, height: 20, borderRadius: 10, border: "none", cursor: "pointer",
-                    background: startNow ? c.accent : c.border,
-                    position: "relative", flexShrink: 0,
-                    transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
-                  }}
-                >
-                  <div style={{
-                    width: 16, height: 16, borderRadius: 8,
-                    background: "#fff",
-                    position: "absolute", top: 2,
-                    left: startNow ? 18 : 2,
-                    transition: `left ${motion.fast.duration} ${motion.fast.easing}`,
-                    boxShadow: "0 1px 3px rgba(0,0,0,0.18)",
-                  }} />
-                </button>
-              </div>
-            </div>
-
-            {/* Track pills — revealed when starting immediately (multiselect) */}
-            <div style={{
-              overflow: "hidden",
-              maxHeight: startNow ? 70 : 0,
-              opacity: startNow ? 1 : 0,
-              marginTop: startNow ? space[2] : 0,
-              transition: `max-height ${motion.normal.duration} ${motion.normal.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}, margin-top ${motion.normal.duration} ${motion.normal.easing}`,
-            }}>
-              <div style={fieldLabel}>Starting Tracks <span style={{ fontWeight: 400, color: c.textDim }}>— select one or more</span></div>
-              <div style={{ display: "flex", gap: space[2], flexWrap: "wrap" }}>
-                {trackNames.map(t => {
-                  const isSelected = selectedTracks.includes(t);
-                  const phColor = getPhaseColors()[t] || c.textMid;
-                  return (
-                    <button key={t} type="button" onClick={() => {
-                      setSelectedTracks(prev => isSelected ? prev.filter(x => x !== t) : [...prev, t]);
-                    }} style={{
-                      padding: `4px 12px`, borderRadius: 999,
-                      background: isSelected ? phColor : c.surfaceAlt,
-                      color: isSelected ? "#fff" : c.textMid,
-                      border: `1px solid ${isSelected ? phColor : c.border}`,
-                      fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700,
-                      cursor: "pointer", transition: "all 120ms ease",
-                    }}>{t}</button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Dates row — always side by side */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3], marginTop: space[2] }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
               <div>
-                <div style={fieldLabel}>Tentative start date <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
-                <input
-                  type="date"
-                  value={startNow ? todayStr : tentativeStart}
-                  onChange={e => { if (!startNow) setTentativeStart(e.target.value); }}
-                  readOnly={startNow}
-                  style={{ ...inputStyle, ...(startNow ? { background: c.surfaceAlt, color: c.textDim, cursor: "default" } : {}) }}
-                />
+                <div style={fieldLabel}>Tentative start date <span style={{ fontWeight: 400, color: B.muted }}>— optional</span></div>
+                <input type="date" value={tentativeStart} onChange={e => setTentativeStart(e.target.value)} style={inputStyle} />
               </div>
               <div>
-                <div style={fieldLabel}>Tentative end date <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} min={startDate || undefined} style={{ ...inputStyle }} />
+                <div style={fieldLabel}>Tentative end date <span style={{ fontWeight: 400, color: B.muted }}>— optional</span></div>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} min={startDate || undefined} style={inputStyle} />
               </div>
             </div>
             {startDate && endDate && endDate <= startDate && (
               <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.red, marginTop: space[1] }}>End date must be after start date</div>
             )}
           </div>
+        </div>
 
-          {/* Project Dependencies */}
-          <div ref={depRef} style={{ position: "relative" }}>
-            <div style={fieldLabel}>Dependencies <span style={{ fontWeight: 400, color: c.textDim }}>— optional</span></div>
-            <div
-              onClick={() => setDepOpen(true)}
-              style={{
-                ...inputStyle,
-                height: "auto", minHeight: 40,
-                display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4,
-                padding: `4px ${space[2]}px`,
-                cursor: "text",
-              }}
-            >
-              {dependencies.map(depId => {
-                const dp = projects.find(p => p.id === depId);
-                return (
-                  <span key={depId} style={{
-                    display: "inline-flex", alignItems: "center", gap: 4,
-                    padding: "2px 8px", borderRadius: layout.radiusXs,
-                    background: c.surfaceAlt, border: `1px solid ${c.border}`,
-                    fontFamily: typo.bodySm.font, fontSize: 12, color: c.text, lineHeight: 1,
-                  }}>
-                    <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.amber, fontWeight: 700 }}>{depId}</span>
-                    {dp?.name && <span style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{dp.name}</span>}
-                    <button onClick={(e) => { e.stopPropagation(); setDependencies(prev => prev.filter(id => id !== depId)); }} style={{
-                      background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 1,
-                      color: c.textDim, fontSize: 14, fontWeight: 400,
-                    }}>&times;</button>
-                  </span>
-                );
-              })}
-              <input
-                value={depSearch}
-                onChange={e => { setDepSearch(e.target.value); setDepOpen(true); }}
-                onFocus={() => setDepOpen(true)}
-                placeholder={dependencies.length === 0 ? "Search projects..." : ""}
-                style={{
-                  border: "none", outline: "none", background: "transparent",
-                  fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.text,
-                  flex: 1, minWidth: 80, height: 30, padding: 0,
-                }}
-              />
-            </div>
-            {depOpen && depCandidates.length > 0 && (
-              <div style={{
-                position: "absolute", top: "100%", left: 0, right: 0,
-                marginTop: 4, maxHeight: 180, overflowY: "auto",
-                background: c.surfaceSolid, border: `1px solid ${c.border}`,
-                borderRadius: layout.radiusSm, boxShadow: c.shadowFloat,
-                zIndex: 20,
-              }}>
-                {(() => {
-                  const mySquad = squad || personProfile?.squad;
-                  const items = depCandidates.slice(0, 25);
-                  let shownSeparator = false;
-                  return items.map((p, idx) => {
-                    const isSquad = mySquad && p.squad === mySquad;
-                    const prevIsSquad = idx > 0 && mySquad && items[idx - 1].squad === mySquad;
-                    const needSep = mySquad && !isSquad && !shownSeparator && idx > 0 && prevIsSquad;
-                    if (needSep) shownSeparator = true;
-                    return (
-                      <React.Fragment key={p.id}>
-                        {needSep && (
-                          <div style={{ padding: `${space[1]}px ${space[3]}px`, display: "flex", alignItems: "center", gap: space[2] }}>
-                            <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>All projects</span>
-                            <span style={{ flex: 1, height: 1, background: c.border }} />
-                          </div>
-                        )}
-                        <div
-                          onClick={() => { setDependencies(prev => [...prev, p.id]); setDepSearch(""); }}
-                          style={{
-                            padding: `${space[2]}px ${space[3]}px`,
-                            display: "flex", alignItems: "center", gap: space[2],
-                            cursor: "pointer",
-                            transition: `background ${motion.instant.duration} ${motion.instant.easing}`,
-                          }}
-                          onMouseEnter={e => { e.currentTarget.style.background = c.surfaceAlt; }}
-                          onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-                        >
-                          <span style={{ fontFamily: typo.monoSm.font, fontSize: 11, fontWeight: 700, color: c.amber }}>{p.id}</span>
-                          <span style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.text, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.name}</span>
-                          <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, color: c.textDim }}>{p.squad}</span>
-                        </div>
-                      </React.Fragment>
-                    );
-                  });
-                })()}
-              </div>
-            )}
-          </div>
-
-          {/* Actions */}
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: space[2], marginTop: space[3] }}>
-            <Btn variant="secondary" size="sm" onClick={onClose}>Cancel</Btn>
-            <button onClick={handleCreate} disabled={!canSave || saving} style={{
-              height: 36, padding: `0 ${space[4]}px`, borderRadius: layout.radiusSm,
-              border: "none", cursor: canSave && !saving ? "pointer" : "default",
-              background: canSave && !saving ? c.accent : c.surfaceAlt,
-              color: canSave && !saving ? c.textOnAccent : c.textDim,
-              fontFamily: typo.bodyMd.font, fontSize: 14, fontWeight: 600,
-              opacity: canSave && !saving ? 1 : 0.6,
-              transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}`,
-            }}>{saving ? "Creating..." : "Create project"}</button>
-          </div>
+        {/* Actions — pinned to the bottom of the sheet */}
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: space[2], marginTop: "auto", paddingTop: space[5] }}>
+          <Btn variant="secondary" size="sm" onClick={onClose} style={{ border: `1px solid ${B.border}`, background: B.surface, color: B.body }}>Cancel</Btn>
+          <button onClick={handleCreate} disabled={!canSave || saving} style={{
+            height: 40, padding: "0 16px", borderRadius: 8,
+            border: "none", cursor: canSave && !saving ? "pointer" : "default",
+            background: canSave && !saving ? B.primary : B.insetAlt,
+            color: canSave && !saving ? "#fff" : B.muted,
+            fontFamily: "Geist, system-ui, -apple-system, sans-serif", fontSize: 14, fontWeight: 600,
+            opacity: canSave && !saving ? 1 : 0.6,
+            transition: `background ${motion.fast.duration} ${motion.fast.easing}, color ${motion.fast.duration} ${motion.fast.easing}, opacity ${motion.fast.duration} ${motion.fast.easing}`,
+          }}>{saving ? "Creating..." : "Create project"}</button>
         </div>
       </div>
     </SideSheet>
