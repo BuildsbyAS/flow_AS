@@ -107,9 +107,9 @@ body::before {
 
 /* Animated app-canvas gradient — replaces the background video (lighter, no asset) */
 @keyframes flow-bg-gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
 }
 
 /* ── Glass utility classes ── */
