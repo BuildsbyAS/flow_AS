@@ -85,8 +85,8 @@ export default function ProjectHeader({
   onDueDateChange,
   statusKey,
   onStatusKeyChange,
-  squad,
-  onSquadChange,
+  squads,
+  onSquadsChange,
 }) {
   return (
     <header style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -151,7 +151,7 @@ export default function ProjectHeader({
           <StatusField statusKey={statusKey} onChange={onStatusKeyChange} />
         </span>
         <span style={{ justifySelf: 'start', alignSelf: 'center' }}>
-          <SquadField squad={squad} onChange={onSquadChange} />
+          <SquadField squads={squads} onChange={onSquadsChange} />
         </span>
       </div>
     </header>
@@ -265,21 +265,25 @@ function StatusPill({ statusKey, small }) {
   );
 }
 
-// ── Editable squad ───────────────────────────────────────────────────────
-function SquadField({ squad, onChange }) {
+// ── Editable squads (multi-select) ───────────────────────────────────────
+// Project can belong to multiple service squads — checkbox list, no auto-close.
+function SquadField({ squads, onChange }) {
+  function toggleSquad(s) {
+    const next = squads.includes(s) ? squads.filter((x) => x !== s) : [...squads, s];
+    onChange(next);
+  }
+  const displayValue = squads.length === 0 ? 'None' : squads.join(', ');
   return (
     <EditableValue
-      ariaLabel="Change squad"
+      ariaLabel="Change squads"
       hoverIcon={<DownChevronIconButton size={24} />}
       renderPopover={({ anchor, close }) => (
-        <FloatingPopover anchor={anchor} onClose={close} width={200}>
+        <FloatingPopover anchor={anchor} onClose={close} width={220}>
           <ListPicker
             items={availableSquads}
-            value={squad}
-            onSelect={(s) => {
-              onChange(s);
-              close();
-            }}
+            value={squads}
+            multi
+            onSelect={toggleSquad}
             renderItem={(it) => (
               <span style={{ fontSize: 13, color: 'var(--c-text-primary)' }}>{it}</span>
             )}
@@ -287,7 +291,7 @@ function SquadField({ squad, onChange }) {
         </FloatingPopover>
       )}
     >
-      <span style={valueStyle}>{squad}</span>
+      <span style={valueStyle}>{displayValue}</span>
     </EditableValue>
   );
 }

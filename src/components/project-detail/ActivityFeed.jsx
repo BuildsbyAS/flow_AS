@@ -20,7 +20,12 @@ const COLOR = {
   cocoaText2: '#7E6454',
   cocoaMuted: '#937562', // disabled / muted warm brown (Figma 634:16871)
   cocoaMeta: '#A89889', // warm meta text replacing cool grey
-  postBtn: '#F1EAE4',
+  // Post button per Figma 645:16880 / 645:16882:
+  //   inactive: bg #FBF9F8, 1px border #F1EAE4, text #937562
+  //   active:   bg #280E01 (very dark warm brown), text #fff
+  postInactiveBg: '#FBF9F8',
+  postInactiveBorder: '#F1EAE4',
+  postActiveBg: '#280E01',
   switchTrack: '#F4EEEB',
   switchActive: '#FFFFFF',
   switchTextActive: '#1B1410',
@@ -29,8 +34,8 @@ const COLOR = {
   cardBorder: '#F2F3F7',
   success: '#0F8857',
   thumbsBg: '#131313',
-  // Warm taupe avatar bg replacing the cool #989FB3 grey
-  avatarBg: '#A89889',
+  // Warm brown avatar (matches the composer's AJ avatar #6E5649 — Retune feedback)
+  avatarBg: '#6E5649',
 };
 
 export default function ActivityFeed() {
@@ -287,18 +292,19 @@ function Composer({ value, onChange, focused, onFocus, onBlur, onPost }) {
         onClick={onPost}
         disabled={!hasText}
         style={{
-          // Figma 634:16870 — disabled keeps the warm cream bg, only text dims.
+          // Figma 645:16880 (inactive) + 645:16882 (active).
           padding: '10px 24px',
           borderRadius: 8,
-          background: COLOR.postBtn,
-          color: hasText ? COLOR.warmBrown : COLOR.cocoaMuted,
+          background: hasText ? COLOR.postActiveBg : COLOR.postInactiveBg,
+          color: hasText ? '#fff' : COLOR.cocoaMuted,
+          border: hasText ? '1px solid transparent' : `1px solid ${COLOR.postInactiveBorder}`,
           fontFamily: 'var(--f-sans)',
           fontSize: 14,
           fontWeight: 500,
           lineHeight: '20px',
           letterSpacing: '-0.1px',
           cursor: hasText ? 'pointer' : 'not-allowed',
-          transition: 'color 160ms var(--ease-out), transform 120ms var(--ease-out)',
+          transition: 'background 160ms var(--ease-out), color 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 120ms var(--ease-out)',
           flexShrink: 0,
         }}
         onPointerDown={(e) => hasText && (e.currentTarget.style.transform = 'scale(0.97)')}
@@ -417,10 +423,8 @@ function Post({ post, onHeart, onThumbs }) {
         )}
       </div>
 
-      {/* floating reply/emoji on hover (updates only, no progress card) */}
-      {post.type === 'update' && !post.progress && (
-        <FloatingActions hover={hover} />
-      )}
+      {/* floating reply/emoji on hover (all updates, Figma 624:16732) */}
+      {post.type === 'update' && <FloatingActions hover={hover} />}
     </div>
   );
 }
@@ -630,6 +634,8 @@ function AddEmojiBtn() {
 }
 
 // ─── Floating reply/emoji bubble on hover ───────────────────────────────
+// Figma 624:16732 — white pill, drop-shadow 0 2 6 rgba(14,14,14,0.08),
+// gap 4, horizontal padding 4, no vertical padding, fully rounded.
 function FloatingActions({ hover }) {
   return (
     <div
@@ -641,10 +647,10 @@ function FloatingActions({ hover }) {
         display: 'inline-flex',
         alignItems: 'center',
         gap: 4,
-        padding: 4,
+        padding: '0 4px',
         background: '#fff',
-        borderRadius: 999,
-        boxShadow: '0 2px 6px rgba(14,14,14,0.08)',
+        borderRadius: 9999,
+        filter: 'drop-shadow(0 2px 6px rgba(14, 14, 14, 0.08))',
         opacity: hover ? 1 : 0,
         transform: hover ? 'translateY(0) scale(1)' : 'translateY(-4px) scale(0.96)',
         pointerEvents: hover ? 'auto' : 'none',

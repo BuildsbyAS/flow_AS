@@ -243,17 +243,21 @@ function ChevronBtn({ onClick, dir }) {
 }
 
 // ── ListPicker ──────────────────────────────────────────────────────────
-// Generic single-select list. Pass items[], current value, renderItem callback.
-export function ListPicker({ items, value, onSelect, renderItem, getKey, getLabel }) {
+// Single-select by default. Pass `multi` and an array `value` to switch to
+// checkbox-style multi-select. Multi mode does not auto-close — caller
+// decides when the picker dismisses (typically click outside).
+export function ListPicker({ items, value, onSelect, renderItem, getKey, getLabel, multi = false }) {
+  const selectedSet = multi ? new Set(value || []) : null;
   return (
     <div style={{ padding: 6, minWidth: 200 }}>
       {items.map((it) => {
         const key = getKey ? getKey(it) : (typeof it === 'object' ? it.key : it);
-        const isSel = key === value;
+        const isSel = multi ? selectedSet.has(key) : key === value;
         return (
           <ListItem
             key={key}
             selected={isSel}
+            multi={multi}
             onSelect={() => onSelect(key)}
             renderItem={() => (renderItem ? renderItem(it, isSel) : getLabel ? getLabel(it) : String(it))}
           />
@@ -263,7 +267,7 @@ export function ListPicker({ items, value, onSelect, renderItem, getKey, getLabe
   );
 }
 
-function ListItem({ selected, onSelect, renderItem }) {
+function ListItem({ selected, onSelect, renderItem, multi }) {
   const [hover, setHover] = useState(false);
   return (
     <button
@@ -280,13 +284,14 @@ function ListItem({ selected, onSelect, renderItem }) {
         width: '100%',
         padding: '8px 10px',
         borderRadius: 6,
-        background: hover ? WARM_HOVER : selected ? WARM_BG : 'transparent',
+        background: hover ? WARM_HOVER : selected && !multi ? WARM_BG : 'transparent',
         textAlign: 'left',
         transition: 'background 120ms var(--ease-out)',
       }}
     >
+      {multi && <Checkbox checked={selected} />}
       {renderItem()}
-      {selected && (
+      {selected && !multi && (
         <span aria-hidden style={{ marginLeft: 'auto', color: 'var(--c-text-action)' }}>
           <svg width={14} height={14} viewBox="0 0 16 16" fill="none">
             <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -294,6 +299,33 @@ function ListItem({ selected, onSelect, renderItem }) {
         </span>
       )}
     </button>
+  );
+}
+
+function Checkbox({ checked }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        width: 16,
+        height: 16,
+        borderRadius: 4,
+        flexShrink: 0,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: checked ? 'var(--c-text-action)' : 'var(--c-surface-primary)',
+        border: checked ? '1px solid var(--c-text-action)' : '1.5px solid var(--c-border-strong)',
+        color: '#fff',
+        transition: 'background 120ms var(--ease-out), border-color 120ms var(--ease-out)',
+      }}
+    >
+      {checked && (
+        <svg width={11} height={11} viewBox="0 0 16 16" fill="none">
+          <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </span>
   );
 }
 

@@ -13,7 +13,7 @@ export default function ProjectDetailSheet() {
   const [createdAt, setCreatedAt] = useState(mockProject.createdAt);
   const [dueDate, setDueDate] = useState(mockProject.dueDate);
   const [statusKey, setStatusKey] = useState(mockProject.statusKey);
-  const [squad, setSquad] = useState(mockProject.squad);
+  const [squads, setSquads] = useState(mockProject.squads);
 
   // Sheet width is calibrated against Figma frame 486:13097 (1512×982 MacBook 14"):
   //   sheet 1056px / viewport 1512px ≈ 69.84% → 70vw
@@ -69,8 +69,8 @@ export default function ProjectDetailSheet() {
             onDueDateChange={setDueDate}
             statusKey={statusKey}
             onStatusKeyChange={setStatusKey}
-            squad={squad}
-            onSquadChange={setSquad}
+            squads={squads}
+            onSquadsChange={setSquads}
           />
           <TeamSection />
           <ResourcesSection />

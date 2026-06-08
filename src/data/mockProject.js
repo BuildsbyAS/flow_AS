@@ -8,7 +8,7 @@ export const mockProject = {
   createdAt: new Date(2026, 4, 12), // May 12, 2026
   dueDate: new Date(2026, 5, 23), // Jun 23, 2026
   statusKey: 'inflight',
-  squad: 'Customer',
+  squads: ['Customer'],
   bookmarked: false,
 };
 
