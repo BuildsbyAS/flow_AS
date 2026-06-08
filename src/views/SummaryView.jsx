@@ -1,23 +1,134 @@
 // Flow — Summary View (Project-centric)
-// Product head dashboard — answers in 30s:
-//   1) Weekly digest 2) Pipeline shape 3) What needs attention?
-import React, { useState, useMemo } from "react";
-import { c, typo, space, layout, motion, shipPhases, phaseColors, allPhases, phaseNames, trackNames } from "../styles/theme";
-import { getActiveTracks, getTrackActiveDays } from "../lib/tracks";
-import { Surface, Label, EmptyState } from "../components/shared";
-import { Icon } from "../components/icons";
-import { KpiGrid, KpiCard, SectionHead, Pill, PillRow } from "../components/kpi";
+// Redesigned to match Figma node 528-32300:
+//   • Dot-matrix "SUMMARY" wordmark hero
+//   • Overview card: per-phase dot-plot density + nested "Recently shipped"
+//   • Week at a glance card: P0 / blocked / upcoming / most-active / completed
+//   • The Squad Report: squad × phase table with colored count pills
+import React, { useMemo } from "react";
+import { c, typo, space, body, allPhases } from "../styles/theme";
+import { EmptyState } from "../components/shared";
 import { isDevSeedMode, devStore } from "../data/devSeed";
 import useDevLabel from "../hooks/useDevLabel";
 
-const PRIORITY_COLORS = { P0: c.red, P1: c.orange || c.amber, P2: c.textMid, P3: c.textDim };
 const FROZEN_DAYS = 7;
 
-function computeProjectMetrics(projects, phaseDurationDefaults) {
-  const today = new Date();
-  const todayMs = today.getTime();
-  const weekAgo = new Date(todayMs - 7 * 86_400_000);
+// ── Palette (Figma tokens, matching the app design system) ──
+const COL = {
+  text: "#1d2539", textMid: "#475067", textDim: "#666d85", ghost: "#989fb3",
+  border: "#eaecf0", borderSoft: "#f2f3f7",
+  card: "#ffffff", header: "#fafafb",
+  red: "#d92626", green: "#26b57c", gold: "#e0a020", amber: "#e5641a",
+  shippedSquad: "#c2410c",
+  dotLight: "#cdd2dd", dotDark: "#1d2539", dotEmpty: "#e2e6ec",
+};
 
+// Squad-report column pill tints (light fill + navy count)
+const PILL = {
+  PRD:     "#efeafb",
+  Design:  "#e4ecfd",
+  Dev:     "#d2f4e3",
+  QA:      "#fadcec",
+  Shipped: "#d4eef7",
+};
+
+// Phase glyphs — reused from the Projects view for visual consistency
+const PHASE_GLYPHS = {
+  PRD: <svg width="15" height="15" viewBox="0 0 24 24" fill="#2D7FF9"><path d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" opacity="0.18"/><path d="M14 2v4a2 2 0 0 0 2 2h4" fill="none" stroke="#2D7FF9" strokeWidth="1.6"/><path d="M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="none" stroke="#2D7FF9" strokeWidth="1.6"/><line x1="8" y1="13" x2="16" y2="13" stroke="#2D7FF9" strokeWidth="1.6" strokeLinecap="round"/><line x1="8" y1="16.5" x2="13.5" y2="16.5" stroke="#2D7FF9" strokeWidth="1.6" strokeLinecap="round"/></svg>,
+  Design: <svg width="14" height="14" viewBox="0 0 38 57"><path fill="#1abcfe" d="M19 28.5a9.5 9.5 0 1 1 19 0 9.5 9.5 0 0 1-19 0z"/><path fill="#0acf83" d="M0 47.5A9.5 9.5 0 0 1 9.5 38H19v9.5a9.5 9.5 0 0 1-19 0z"/><path fill="#ff7262" d="M19 0v19h9.5a9.5 9.5 0 0 0 0-19H19z"/><path fill="#f24e1e" d="M0 9.5A9.5 9.5 0 0 0 9.5 19H19V0H9.5A9.5 9.5 0 0 0 0 9.5z"/><path fill="#a259ff" d="M0 28.5A9.5 9.5 0 0 0 9.5 38H19V19H9.5A9.5 9.5 0 0 0 0 28.5z"/></svg>,
+  Dev: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>,
+  QA: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9747FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>,
+};
+
+const RocketIcon = ({ size = 15, color = COL.amber }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
+    <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+    <path d="M12 15l-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+    <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+    <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+  </svg>
+);
+
+const WarnIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={COL.red} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+  </svg>
+);
+
+const CaretIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "block" }}>
+    <polyline points="6 9 12 15 18 9"/>
+  </svg>
+);
+
+// Best-effort playful squad icon (matches Figma's per-squad glyphs); falls back to a folder.
+const SQUAD_EMOJI = {
+  "AFS": "🐷", "Customer": "👥", "Financial Service": "🏦", "Gaming": "🎮",
+  "NSO": "🧭", "O2D": "🚚", "Platform": "🧱", "Sales": "💸",
+  "Special Projects": "✨", "Storefront": "🏪", "Logistics": "📦", "Marketing": "📣",
+};
+const squadEmoji = (sq) => SQUAD_EMOJI[sq] || "🗂️";
+
+// ── Per-phase dot-plot (length encodes count; light→navy left→right gradient) ──
+function hexToRgb(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function lerpColor(a, b, t) {
+  const A = hexToRgb(a), B = hexToRgb(b);
+  return `rgb(${Math.round(A[0] + (B[0] - A[0]) * t)},${Math.round(A[1] + (B[1] - A[1]) * t)},${Math.round(A[2] + (B[2] - A[2]) * t)})`;
+}
+
+function DotPlot({ count, perProject = 3.4 }) {
+  const ROWS = 3, MAX_COLS = 32;
+  const D = 5, HGAP = 7, VGAP = 6;
+  const cols = count <= 0 ? 1 : Math.min(MAX_COLS, Math.max(2, Math.round(count * perProject)));
+  const colEls = [];
+  for (let cI = 0; cI < cols; cI++) {
+    const t = cols <= 1 ? 0 : cI / (cols - 1);
+    const color = count <= 0 ? COL.dotEmpty : lerpColor(COL.dotLight, COL.dotDark, t);
+    const dots = [];
+    for (let r = 0; r < ROWS; r++) {
+      dots.push(<span key={r} style={{ width: D, height: D, borderRadius: 2, background: color, display: "block", marginBottom: r < ROWS - 1 ? VGAP : 0 }} />);
+    }
+    colEls.push(<div key={cI} style={{ display: "flex", flexDirection: "column", marginRight: cI < cols - 1 ? HGAP : 0 }}>{dots}</div>);
+  }
+  return <div style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>{colEls}</div>;
+}
+
+// ── Card primitives ──
+function Card({ children, style }) {
+  return (
+    <div style={{
+      background: COL.card, border: `1px solid ${COL.border}`, borderRadius: 18,
+      overflow: "hidden", boxShadow: "0 1px 3px rgba(16,24,40,0.05), 0 1px 2px rgba(16,24,40,0.03)",
+      ...style,
+    }}>{children}</div>
+  );
+}
+function CardHeader({ title, right }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "16px 20px", background: COL.header, borderBottom: `1px solid ${COL.border}` }}>
+      <span style={{ fontFamily: body, fontSize: 18, fontWeight: 700, color: COL.text, letterSpacing: "-0.01em" }}>{title}</span>
+      {right}
+    </div>
+  );
+}
+function SelectChip({ label }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", border: `1px solid ${COL.border}`, borderRadius: 10, background: COL.card, fontFamily: body, fontSize: 14, fontWeight: 600, color: COL.textMid, whiteSpace: "nowrap" }}>
+      {label}<span style={{ color: COL.ghost, display: "inline-flex" }}><CaretIcon /></span>
+    </span>
+  );
+}
+function Tag({ children }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", padding: "4px 10px", background: "#f3eeea", borderRadius: 999, fontFamily: body, fontSize: 13, fontWeight: 500, color: COL.textMid, whiteSpace: "nowrap" }}>
+      {children}
+    </span>
+  );
+}
+
+const plural = (n) => (n === 1 ? "" : "s");
+
+function computeProjectMetrics(projects, phaseDurationDefaults) {
+  const todayMs = Date.now();
   const active = projects.filter(p => p.status === "in_flight");
   const shipped = projects.filter(p => p.status === "shipped");
   const blocked = projects.filter(p => p.status === "blocked" || p.isBlocked);
@@ -33,103 +144,18 @@ function computeProjectMetrics(projects, phaseDurationDefaults) {
 
   const frozen = active.filter(p => {
     if (!p.lastActivityAt) return true;
-    const diff = (todayMs - new Date(p.lastActivityAt).getTime()) / 86_400_000;
-    return diff > FROZEN_DAYS;
+    return (todayMs - new Date(p.lastActivityAt).getTime()) / 86_400_000 > FROZEN_DAYS;
   });
-
   const phaseOverstay = active.filter(p => {
     const overrides = p.phaseDurationOverrides || {};
     const threshold = overrides[p.phase] ?? phaseDurationDefaults?.[p.phase];
-    if (!threshold) return false;
-    if (!p.lastActivityAt) return false;
-    const daysInPhase = Math.floor((todayMs - new Date(p.lastActivityAt).getTime()) / 86_400_000);
-    return daysInPhase > threshold;
+    if (!threshold || !p.lastActivityAt) return false;
+    return Math.floor((todayMs - new Date(p.lastActivityAt).getTime()) / 86_400_000) > threshold;
   });
+  const overdue = active.filter(p => p.endDate && new Date(p.endDate + "T00:00:00").getTime() < todayMs);
 
-  const overdue = active.filter(p => {
-    if (!p.endDate) return false;
-    const end = new Date(p.endDate + "T00:00:00");
-    return end.getTime() < todayMs;
-  });
-
-  const needsAttention = blocked.length + frozen.length + phaseOverstay.length + overdue.length;
-
-  return {
-    active, shipped, blocked, deprioritized, upcoming,
-    byPhase, byPriority,
-    frozen, phaseOverstay, overdue,
-    needsAttention,
-  };
+  return { active, shipped, blocked, deprioritized, upcoming, byPhase, byPriority, frozen, phaseOverstay, overdue, needsAttention: blocked.length + frozen.length + phaseOverstay.length + overdue.length };
 }
-
-function generateWeeklyDigest(projects, allEvents) {
-  const now = Date.now();
-  const weekAgo = now - 7 * 86_400_000;
-  const recentEvents = allEvents.filter(e => new Date(e.created_at).getTime() >= weekAgo);
-
-  const phaseChanges = recentEvents.filter(e => e.action === "project_phase_changed");
-  const newProjects = recentEvents.filter(e => e.action === "project_created");
-  const blockerEvents = recentEvents.filter(e => e.action === "project_blocked");
-
-  const shipEvents = phaseChanges.filter(e => ["Alpha", "Beta", "GA"].includes(e.details?.to));
-  const p0Projects = projects.filter(p => p.priority === "P0" && (p.status === "in_flight" || p.status === "blocked"));
-  const blockedProjects = projects.filter(p => p.isBlocked);
-
-  const squadActivity = {};
-  recentEvents.forEach(e => {
-    const proj = projects.find(p => p.id === e.entity_id);
-    if (proj?.squad) squadActivity[proj.squad] = (squadActivity[proj.squad] || 0) + 1;
-  });
-  const mostActiveSquad = Object.entries(squadActivity).sort((a, b) => b[1] - a[1])[0];
-
-  const lines = [];
-
-  if (p0Projects.length > 0) {
-    const p0Names = p0Projects.map(p => p.name).slice(0, 3);
-    const p0Blocked = p0Projects.filter(p => p.isBlocked);
-    lines.push(`**P0 Watch:** ${p0Projects.length} critical project${p0Projects.length > 1 ? "s" : ""} active — ${p0Names.join(", ")}${p0Projects.length > 3 ? ` +${p0Projects.length - 3} more` : ""}.${p0Blocked.length > 0 ? ` ⚠ ${p0Blocked.length} blocked.` : " All moving."}`);
-  }
-
-
-  if (shipEvents.length > 0) {
-    const shipped = shipEvents.map(e => {
-      const proj = projects.find(p => p.id === e.entity_id);
-      return proj ? `${proj.name} → ${e.details.to}` : null;
-    }).filter(Boolean);
-    lines.push(`**Shipping:** ${shipped.join(", ")}.`);
-  }
-
-  if (blockedProjects.length > 0) {
-    lines.push(`**Blockers:** ${blockedProjects.length} project${blockedProjects.length > 1 ? "s" : ""} blocked — ${blockedProjects.map(p => p.name).slice(0, 3).join(", ")}.`);
-  }
-
-  if (newProjects.length > 0) {
-    lines.push(`**New:** ${newProjects.length} project${newProjects.length > 1 ? "s" : ""} created this week.`);
-  }
-
-  const upcomingProjects = projects.filter(p => p.status === "upcoming");
-  if (upcomingProjects.length > 0) {
-    const overdueStart = upcomingProjects.filter(p => p.tentativeStartDate && new Date(p.tentativeStartDate + "T00:00:00").getTime() < now);
-    lines.push(`**Upcoming:** ${upcomingProjects.length} project${upcomingProjects.length > 1 ? "s" : ""} in the pipeline.${overdueStart.length > 0 ? ` ⚠ ${overdueStart.length} past tentative start date.` : ""}`);
-  }
-
-  if (mostActiveSquad) {
-    lines.push(`**Most Active Squad:** ${mostActiveSquad[0]} with ${mostActiveSquad[1]} events.`);
-  }
-
-  if (lines.length === 0) {
-    lines.push("Quiet week across all squads. No major movements or blockers detected.");
-  }
-
-  return lines;
-}
-
-const TIMELINE_OPTIONS = [
-  { key: "7d", label: "7 days", ms: 7 * 86_400_000 },
-  { key: "30d", label: "30 days", ms: 30 * 86_400_000 },
-  { key: "90d", label: "90 days", ms: 90 * 86_400_000 },
-];
-
 
 const SummaryView = ({
   loading, error,
@@ -158,48 +184,14 @@ const SummaryView = ({
     return p;
   }, [projects, gf.squad, gf.owner, myLens, viewerSquad, followedProjects, timeframe]);
 
-  const metrics = useMemo(
-    () => computeProjectMetrics(filteredProjects, phaseDurationDefaults),
-    [filteredProjects, phaseDurationDefaults]
-  );
+  const metrics = useMemo(() => computeProjectMetrics(filteredProjects, phaseDurationDefaults), [filteredProjects, phaseDurationDefaults]);
 
   const allSquadNames = useMemo(() =>
     (squads && squads.length ? [...squads] : [...new Set(filteredProjects.map(p => p.squad).filter(Boolean))]).sort(),
     [squads, filteredProjects]
   );
 
-  const allEvents = useMemo(() => {
-    if (isDevSeedMode()) return devStore.listAllEvents();
-    return [];
-  }, [filteredProjects]);
-
-  const digest = useMemo(() => generateWeeklyDigest(filteredProjects, allEvents), [filteredProjects, allEvents]);
-
-  const [timelineRange, setTimelineRange] = useState("30d");
-  const [sortCol, setSortCol] = useState(null);
-  const [sortDir, setSortDir] = useState("desc");
-  const handleSortKey = (key) => {
-    if (sortCol === key) setSortDir(d => d === "asc" ? "desc" : "asc");
-    else { setSortCol(key); setSortDir("desc"); }
-  };
-
-  const timelineMs = TIMELINE_OPTIONS.find(t => t.key === timelineRange)?.ms || 30 * 86_400_000;
-  const timelineCutoff = Date.now() - timelineMs;
-
-  const heatmapData = useMemo(() => {
-    const activeProjs = filteredProjects.filter(p => p.status === "in_flight" || p.status === "blocked");
-    const grid = {};
-    let maxCount = 0;
-    allSquadNames.forEach(sq => {
-      grid[sq] = {};
-      allPhases.forEach(ph => {
-        const count = activeProjs.filter(p => p.squad === sq && p.phase === ph).length;
-        grid[sq][ph] = count;
-        if (count > maxCount) maxCount = count;
-      });
-    });
-    return { grid, maxCount };
-  }, [filteredProjects, allSquadNames]);
+  const allEvents = useMemo(() => (isDevSeedMode() ? devStore.listAllEvents() : []), [filteredProjects]);
 
   const phaseBarData = useMemo(() => {
     const activeProjs = filteredProjects.filter(p => p.status === "in_flight" || p.status === "blocked");
@@ -207,6 +199,17 @@ const SummaryView = ({
     allPhases.forEach(ph => { counts[ph] = activeProjs.filter(p => p.phase === ph).length; });
     return counts;
   }, [filteredProjects]);
+
+  const squadGrid = useMemo(() => {
+    const activeProjs = filteredProjects.filter(p => p.status === "in_flight" || p.status === "blocked");
+    const grid = {};
+    allSquadNames.forEach(sq => {
+      grid[sq] = {};
+      allPhases.forEach(ph => { grid[sq][ph] = activeProjs.filter(p => p.squad === sq && p.phase === ph).length; });
+      grid[sq].Shipped = filteredProjects.filter(p => p.squad === sq && p.status === "shipped").length;
+    });
+    return grid;
+  }, [filteredProjects, allSquadNames]);
 
   if (loading) {
     return (
@@ -216,7 +219,6 @@ const SummaryView = ({
       </div>
     );
   }
-
   if (error) {
     return (
       <div ref={devRef} style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 240px)" }}>
@@ -224,7 +226,6 @@ const SummaryView = ({
       </div>
     );
   }
-
   if (filteredProjects.length === 0) {
     const hasFilter = gf.squad?.length || gf.owner?.length;
     return (
@@ -239,403 +240,246 @@ const SummaryView = ({
     );
   }
 
-  const pc = phaseColors();
+  // ── derived figures for the cards ──
+  const now = new Date();
+  const nowMs = now.getTime();
+  const weekAgoMs = nowMs - 7 * 86_400_000;
+  const quarterLabel = `Q${Math.floor(now.getMonth() / 3) + 1} ${now.getFullYear()}`;
+  const squadLabel = gf.squad?.length === 1 ? gf.squad[0] : "All squads";
+  const timeLabel = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
-  const thStyle = {
-    padding: `${space[2]}px ${space[3]}px`, textAlign: "left",
-    fontFamily: typo.bodyMd.font, fontSize: 12, fontWeight: 600,
-    letterSpacing: "0.03em", textTransform: "uppercase",
-    color: c.textDim, borderBottom: `1px solid ${c.border}`,
-    background: c.tableHeader, whiteSpace: "nowrap", cursor: "pointer", userSelect: "none",
-  };
-  const tdBase = {
-    padding: `${space[2]}px ${space[3]}px`,
-    fontFamily: typo.monoMd.font, fontSize: 13, fontWeight: 600,
-    letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums",
-    textAlign: "center", borderBottom: `1px dotted ${c.border}`,
-  };
+  const p0Projects = filteredProjects.filter(p => p.priority === "P0" && (p.status === "in_flight" || p.status === "blocked"));
+  const blockedProjects = metrics.blocked;
+  const upcomingCount = metrics.upcoming.length;
+  const overdueStartCount = metrics.upcoming.filter(p => p.tentativeStartDate && new Date(p.tentativeStartDate + "T00:00:00").getTime() < nowMs).length;
 
-  const maxPhaseBar = Math.max(1, ...Object.values(phaseBarData));
+  const squadActivity = {};
+  allEvents.forEach(e => {
+    if (new Date(e.created_at).getTime() < weekAgoMs) return;
+    const proj = filteredProjects.find(p => p.id === e.entity_id);
+    if (proj?.squad) squadActivity[proj.squad] = (squadActivity[proj.squad] || 0) + 1;
+  });
+  const mostActive = Object.entries(squadActivity).sort((a, b) => b[1] - a[1])[0];
+
+  const completedThisWeek = filteredProjects.filter(p => p.status === "shipped" && p.shipped_at && new Date(p.shipped_at).getTime() >= weekAgoMs).length;
+
+  const recentlyShipped = [...metrics.shipped]
+    .sort((a, b) => new Date(b.shipped_at || b.lastActivityAt || b.createdAt || 0).getTime() - new Date(a.shipped_at || a.lastActivityAt || a.createdAt || 0).getTime())
+    .slice(0, 10);
+
+  const ov = (ph) => phaseBarData[ph] || 0;
+  // Proportional dot density: longest phase fills the track; small datasets keep a
+  // Figma-like ~4 dots/project so they don't look sparse.
+  const dotMax = Math.max(1, ...allPhases.map(ph => ov(ph)));
+  const dotK = Math.min(4, 14 / dotMax);
+  const phaseRows = [
+    { key: "PRD", label: "PRD", icon: PHASE_GLYPHS.PRD },
+    { key: "Design", label: "Design", icon: PHASE_GLYPHS.Design },
+    { key: "Dev", label: "Dev", icon: PHASE_GLYPHS.Dev },
+    { key: "QA", label: "QA", icon: PHASE_GLYPHS.QA },
+  ];
+  const shipRows = [
+    { key: "Alpha", label: "Alpha rollout" },
+    { key: "Beta", label: "Beta rollout" },
+    { key: "GA", label: "General access" },
+  ];
+
+  const SQUAD_COLS = ["PRD", "Design", "Dev", "QA", "Shipped"];
+
+  // ── render helpers ──
+  const phaseRow = (label, icon, count) => (
+    <div key={label} style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 38, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, width: 112, flexShrink: 0 }}>
+        <span style={{ display: "inline-flex", width: 16, justifyContent: "center" }}>{icon}</span>
+        <span style={{ fontFamily: body, fontSize: 14, fontWeight: 600, color: COL.text }}>{label}</span>
+      </div>
+      <DotPlot count={count} perProject={dotK} />
+      <span style={{ fontFamily: body, fontSize: 14, color: COL.textDim, whiteSpace: "nowrap" }}>{count} project{plural(count)}</span>
+    </div>
+  );
+  const shipSubRow = (label, count) => (
+    <div key={label} style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 36, minWidth: 0 }}>
+      <span style={{ width: 104, flexShrink: 0, fontFamily: body, fontSize: 14, fontWeight: 500, color: COL.textMid }}>{label}</span>
+      <DotPlot count={count} perProject={dotK} />
+      <span style={{ fontFamily: body, fontSize: 14, color: COL.textDim, whiteSpace: "nowrap" }}>{count} project{plural(count)}</span>
+    </div>
+  );
+  const glanceLeft = (dot, label) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, width: 124, flexShrink: 0 }}>
+      <span style={{ width: 8, height: 8, borderRadius: 999, background: dot, flexShrink: 0 }} />
+      <span style={{ fontFamily: body, fontSize: 15, fontWeight: 600, color: COL.text }}>{label}</span>
+    </div>
+  );
 
   return (
-    <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: space[4] }}>
+    <div ref={devRef} style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
-      {/* ═══ WEEKLY DIGEST ═══ */}
-      <div>
-        <SectionHead title="Weekly Digest" right={
-          <span style={{ fontFamily: typo.bodySm.font, fontSize: typo.bodySm.size, color: c.textDim }}>
-            Auto-generated from project activity
-          </span>
-        } />
-        <Surface variant="data" compact style={{ padding: space[6], borderLeft: `3px solid ${c.accent}` }}>
-          <div style={{ display: "flex", alignItems: "center", gap: space[2], marginBottom: space[3] }}>
-            <span style={{ display: "inline-flex", color: c.accent }}><Icon name="bar-chart" size={18} /></span>
-            <span style={{ fontFamily: typo.displaySm.font, fontSize: typo.displaySm.size, fontWeight: typo.displaySm.weight, color: c.text }}>
-              This Week at a Glance
-            </span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: space[2] }}>
-            {digest.map((line, i) => (
-              <div key={i} style={{
-                fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size,
-                color: c.text, lineHeight: 1.6,
-              }}
-                dangerouslySetInnerHTML={{
-                  __html: line
-                    .replace(/\*\*(.*?)\*\*/g, `<span style="font-weight:700;color:${c.text}">$1</span>`)
-                    .replace(/⚠/g, `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${c.red}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`)
-                }}
-              />
-            ))}
-          </div>
-        </Surface>
+      {/* ═══ SUMMARY wordmark (exact Figma export) ═══ */}
+      <div style={{ overflow: "hidden", height: 128, marginBottom: 4 }}>
+        <img src="/summary-title.svg?v=1" alt="Summary" width="1408" height="351" style={{ display: "block", maxWidth: "none", marginTop: -24, marginLeft: -18 }} />
       </div>
 
-      {/* ═══ HEATMAP + BAR CHART ROW ═══ */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[4] }}>
+      {/* ═══ OVERVIEW + WEEK AT A GLANCE ═══ */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 416px", gap: 22, alignItems: "start" }}>
 
-        {/* ── Squad × Phase Heatmap ── */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <SectionHead title="Squad × Phase" />
-          <Surface variant="data" compact style={{ padding: 0, overflow: "hidden" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={{ ...thStyle, cursor: "default", minWidth: 90 }}>Squad</th>
-                  {allPhases.map(ph => (
-                    <th key={ph} style={{ ...thStyle, textAlign: "center", cursor: "default", fontSize: 10, padding: `${space[1]}px ${space[2]}px` }}>
-                      {ph}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {allSquadNames.map((sq, i) => (
-                  <tr key={sq} style={{ animation: `rowSlideIn 0.3s ${motion.normal.easing} both`, animationDelay: `${Math.min(i * 40, 200)}ms` }}>
-                    <td style={{
-                      padding: `${space[2]}px ${space[3]}px`,
-                      fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600,
-                      color: c.text, borderBottom: `1px dotted ${c.border}`,
-                    }}>{sq}</td>
-                    {allPhases.map(ph => {
-                      const count = heatmapData.grid[sq]?.[ph] || 0;
-                      const intensity = heatmapData.maxCount > 0 ? count / heatmapData.maxCount : 0;
-                      const alpha = count > 0 ? Math.max(0.12, intensity * 0.6) : 0;
-                      const bgColor = count > 0 ? `${pc[ph]}${Math.round(alpha * 255).toString(16).padStart(2, "0")}` : "transparent";
-                      return (
-                        <td key={ph} style={{
-                          ...tdBase,
-                          padding: `${space[2]}px ${space[2]}px`,
-                          fontSize: 12,
-                          background: bgColor,
-                          color: count > 0 ? pc[ph] : c.textGhost,
-                          fontWeight: count > 0 ? 700 : 400,
-                          borderBottom: `1px dotted ${c.border}`,
-                        }}>
-                          {count > 0 ? count : "·"}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Surface>
-        </div>
-
-        {/* ── Phase Bar Chart (vertical) ── */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <SectionHead title="Pipeline Distribution" />
-          <Surface variant="data" compact style={{ padding: space[5], flex: 1, display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 6, flex: 1, minHeight: 120 }}>
-              {allPhases.map(ph => {
-                const count = phaseBarData[ph] || 0;
-                const pct = maxPhaseBar > 0 ? (count / maxPhaseBar) * 100 : 0;
-                const barH = `${Math.max(count > 0 ? 8 : 4, pct)}%`;
-                return (
-                  <div key={ph} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, height: "100%", justifyContent: "flex-end" }}>
-                    <span style={{
-                      fontFamily: typo.monoSm.font, fontSize: 12, fontWeight: 700,
-                      color: count > 0 ? pc[ph] : c.textGhost,
-                      fontVariantNumeric: "tabular-nums",
-                    }}>{count}</span>
-                    <div style={{
-                      width: "100%", maxWidth: 48, height: barH,
-                      background: count > 0 ? `${pc[ph]}30` : `${c.textGhost}15`,
-                      borderTop: count > 0 ? `3px solid ${pc[ph]}` : "none",
-                      borderRadius: `${layout.radiusXs}px ${layout.radiusXs}px 0 0`,
-                      transition: `height ${motion.normal.duration} ${motion.normal.easing}`,
-                    }} />
-                    <span style={{
-                      fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
-                      color: count > 0 ? c.textMid : c.textGhost,
-                      textTransform: "uppercase", letterSpacing: "0.04em",
-                    }}>{ph}</span>
-                  </div>
-                );
-              })}
+        {/* ── Overview ── */}
+        <Card>
+          <CardHeader title="Overview" right={
+            <div style={{ display: "flex", gap: 10 }}>
+              <SelectChip label={quarterLabel} />
+              <SelectChip label={squadLabel} />
             </div>
-          </Surface>
-        </div>
-      </div>
+          } />
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 180px", gap: 20, padding: "20px 20px 24px" }}>
 
-      {/* ═══ SCROLLABLE SECTIONS ═══ */}
-      <div style={{ display: "flex", flexDirection: "column", gap: space[7] }}>
+            {/* phase dot-plots */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
+              {phaseRows.map(r => phaseRow(r.label, r.icon, ov(r.key)))}
 
-        {/* ── Recently Shipped ── */}
-        {(() => {
-          // Alpha: in_flight with Alpha track active
-          const alphaProjects = filteredProjects.filter(p => p.status === "in_flight" && (p.tracks ? Object.keys(p.tracks).some(t => t === "Alpha" && p.tracks[t]?.periods?.some(per => per.completed_at === null)) : p.phase === "Alpha"));
-          // Beta: in_flight with Beta track active
-          const betaProjects = filteredProjects.filter(p => p.status === "in_flight" && (p.tracks ? Object.keys(p.tracks).some(t => t === "Beta" && p.tracks[t]?.periods?.some(per => per.completed_at === null)) : p.phase === "Beta"));
-          const shippedProjects = metrics.shipped;
-          const total = alphaProjects.length + betaProjects.length + shippedProjects.length;
-          if (total === 0) return null;
+              {/* Shipped group */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 34, marginTop: 6 }}>
+                <span style={{ display: "inline-flex", width: 16, justifyContent: "center" }}><RocketIcon /></span>
+                <span style={{ fontFamily: body, fontSize: 14, fontWeight: 700, color: COL.text }}>Shipped</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, paddingLeft: 8, marginLeft: 7, borderLeft: `1px solid ${COL.border}` }}>
+                {shipRows.map(r => shipSubRow(r.label, ov(r.key)))}
+              </div>
+            </div>
 
-          const Chip = ({ p, label, labelColor, accentColor, rolloutPct }) => (
-            <button key={p.id} type="button" onClick={() => onNavigate?.("projects", p.id)} style={{
-              display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
-              padding: `${space[2]}px ${space[3]}px`,
-              borderRadius: layout.radiusSm,
-              background: `${accentColor}10`,
-              border: `1px solid ${accentColor}25`, cursor: "pointer",
-              transition: `border-color ${motion.fast.duration} ${motion.fast.easing}`,
-            }}
-              onMouseEnter={e => e.currentTarget.style.borderColor = accentColor}
-              onMouseLeave={e => e.currentTarget.style.borderColor = `${accentColor}25`}
-            >
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700, color: labelColor, letterSpacing: "0.05em" }}>
-                {label}{rolloutPct != null ? ` | ${rolloutPct}% rollout` : ""}
-              </span>
-              <span style={{ display: "flex", alignItems: "center", gap: space[1] }}>
-                <span style={{ fontFamily: typo.monoSm.font, color: c.amber, fontSize: 11 }}>{p.id}</span>
-                <span style={{ fontFamily: typo.bodyMd.font, fontSize: 13, fontWeight: 600, color: c.text }}>{p.name}</span>
-              </span>
-            </button>
-          );
-
-          return (
-            <div>
-              <SectionHead title={`Recently Shipped (${total})`} />
-              <div style={{ display: "flex", flexWrap: "wrap", gap: space[2] }}>
-                {alphaProjects.slice(0, 6).map(p => (
-                  <Chip key={p.id} p={p} label="Alpha Release" labelColor="#6D28D9" accentColor="#6D28D9" rolloutPct={p.shipPct ?? null} />
-                ))}
-                {betaProjects.slice(0, 6).map(p => (
-                  <Chip key={p.id} p={p} label="Beta Release" labelColor="#0E7490" accentColor="#0E7490" rolloutPct={p.shipPct ?? null} />
-                ))}
-                {shippedProjects.slice(0, 12).map(p => (
-                  <Chip key={p.id} p={p} label="Shipped" labelColor={c.green} accentColor={c.green} rolloutPct={null} />
+            {/* Recently shipped */}
+            <div style={{ display: "flex", flexDirection: "column", background: COL.card, border: `1px solid ${COL.border}`, borderRadius: 12, overflow: "hidden", maxHeight: 372 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "12px 14px", flexShrink: 0 }}>
+                <span style={{ fontFamily: body, fontSize: 14, fontWeight: 700, color: COL.text }}>Recently shipped</span>
+                <RocketIcon size={14} />
+              </div>
+              <div style={{ overflowY: "auto", borderTop: `1px solid ${COL.border}` }}>
+                {recentlyShipped.length === 0 ? (
+                  <div style={{ padding: "16px 14px", fontFamily: body, fontSize: 13, color: COL.textDim }}>Nothing shipped yet.</div>
+                ) : recentlyShipped.map((p, i) => (
+                  <button key={p.id} type="button" className="flow-row" onClick={() => onNavigate?.("projects", p.id)} style={{
+                    display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 3, width: "100%", textAlign: "left",
+                    padding: "11px 14px", background: "transparent", border: "none", cursor: "pointer",
+                    borderBottom: i < recentlyShipped.length - 1 ? `1px solid ${COL.border}` : "none",
+                  }}>
+                    <span style={{ fontFamily: body, fontSize: 14, fontWeight: 600, color: COL.text, lineHeight: 1.25, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "100%" }}>{p.name}</span>
+                    <span style={{ fontFamily: body, fontSize: 13, fontWeight: 600, color: COL.shippedSquad }}>{p.squad || "—"}</span>
+                  </button>
                 ))}
               </div>
             </div>
-          );
-        })()}
-
-        {/* ── Needs Attention ── */}
-        {metrics.needsAttention > 0 && (
-          <div>
-            <SectionHead title={`Needs Attention (${metrics.needsAttention})`} />
-            <Surface variant="data" compact style={{ padding: 0, overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={{ ...thStyle, textAlign: "left", cursor: "default" }}>Project</th>
-                    <th style={{ ...thStyle, textAlign: "left", cursor: "default" }}>Squad</th>
-                    <th style={{ ...thStyle, textAlign: "center", cursor: "default" }}>Issue</th>
-                    <th style={{ ...thStyle, textAlign: "left", cursor: "default" }}>Detail</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* Overdue */}
-                  {metrics.overdue.map(p => {
-                    const daysOver = Math.floor((Date.now() - new Date(p.endDate + "T00:00:00").getTime()) / 86_400_000);
-                    return (
-                      <tr key={`overdue-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
-                        <td style={{ ...tdBase, textAlign: "left" }}>
-                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
-                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-
-                        <td style={{ ...tdBase }}>
-                          <span style={{
-                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
-                            color: c.red, background: `${c.red}12`,
-                            padding: "2px 8px", borderRadius: layout.radiusXs,
-                          }}>OVERDUE</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.red }}>+{daysOver}d past deadline</td>
-                      </tr>
-                    );
-                  })}
-                  {/* Blocked */}
-                  {metrics.blocked.map(p => {
-                    const days = p.blockedAt ? Math.floor((Date.now() - new Date(p.blockedAt).getTime()) / 86_400_000) : "?";
-                    return (
-                      <tr key={`blocked-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
-                        <td style={{ ...tdBase, textAlign: "left" }}>
-                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
-                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-
-                        <td style={{ ...tdBase }}>
-                          <span style={{
-                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
-                            color: "#FFFFFF", background: c.red,
-                            padding: "2px 8px", borderRadius: layout.radiusXs,
-                          }}>BLOCKED</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid, maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {p.blockedReason || "—"} ({days}d)
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {/* Frozen (no update in 7d) */}
-                  {metrics.frozen.map(p => {
-                    const daysSince = p.lastActivityAt ? Math.floor((Date.now() - new Date(p.lastActivityAt).getTime()) / 86_400_000) : "?";
-                    return (
-                      <tr key={`frozen-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
-                        <td style={{ ...tdBase, textAlign: "left" }}>
-                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
-                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-
-                        <td style={{ ...tdBase }}>
-                          <span style={{
-                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
-                            color: c.cyan, background: `${c.cyan}12`,
-                            padding: "2px 8px", borderRadius: layout.radiusXs,
-                          }}>FROZEN</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>No update in {daysSince}d</td>
-                      </tr>
-                    );
-                  })}
-                  {/* Sloth / Phase Overstay */}
-                  {metrics.phaseOverstay.filter(p => !metrics.blocked.includes(p)).map(p => {
-                    const overrides = p.phaseDurationOverrides || {};
-                    const threshold = overrides[p.phase] ?? phaseDurationDefaults?.[p.phase];
-                    const days = p.lastActivityAt ? Math.floor((Date.now() - new Date(p.lastActivityAt).getTime()) / 86_400_000) : "?";
-                    return (
-                      <tr key={`sloth-${p.id}`} className="flow-row" style={{ cursor: "pointer" }} onClick={() => onNavigate?.("projects", p.id)}>
-                        <td style={{ ...tdBase, textAlign: "left" }}>
-                          <span style={{ fontFamily: typo.monoSm.font, color: c.amber, marginRight: 6 }}>{p.id}</span>
-                          <span style={{ fontFamily: typo.bodyMd.font, color: c.text }}>{p.name}</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{p.squad}</td>
-
-                        <td style={{ ...tdBase }}>
-                          <span style={{
-                            fontFamily: typo.bodySm.font, fontSize: 11, fontWeight: 700,
-                            color: c.amber, background: `${c.amber}12`,
-                            padding: "2px 8px", borderRadius: layout.radiusXs,
-                          }}>SLOTH</span>
-                        </td>
-                        <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, color: c.textMid }}>{days}d in {p.phase} (threshold: {threshold}d)</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </Surface>
           </div>
-        )}
+        </Card>
 
-        {/* ═══ SQUAD ROLLUP ═══ */}
-        <div>
-          <SectionHead title="Squad Rollup" />
-          <Surface variant="data" compact style={{ padding: 0, overflow: "hidden" }}>
-            <div style={{ overflowX: "auto", maxWidth: "100%" }}>
-              {allSquadNames.length === 0 ? (
-                <div style={{ padding: space[7], textAlign: "center", fontFamily: typo.bodyMd.font, fontSize: typo.bodyMd.size, color: c.textMid }}>
-                  No squads defined yet.
+        {/* ── Week at a glance ── */}
+        <Card>
+          <CardHeader title="Week at a glance" right={
+            <span style={{ fontFamily: body, fontSize: 13, color: COL.textDim, whiteSpace: "nowrap" }}>Last updated at {timeLabel}</span>
+          } />
+
+          {/* P0 + blocked */}
+          <div style={{ display: "flex", gap: 16, padding: "18px 20px", alignItems: "flex-start" }}>
+            {glanceLeft(COL.red, "P0")}
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <div style={{ fontFamily: body, fontSize: 15, fontWeight: 700, color: COL.text, marginBottom: 10 }}>{p0Projects.length} critical project{plural(p0Projects.length)} active</div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {p0Projects.slice(0, 4).map(p => <Tag key={p.id}>{p.name}</Tag>)}
+                  {p0Projects.length > 4 && <Tag>+{p0Projects.length - 4} more</Tag>}
                 </div>
-              ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 600 }}>
-                  <thead>
-                    <tr>
-                      {[
-                        { key: "squad", label: "Squad", align: "left" },
-                        { key: "inflight", label: "In Flight" },
-                        { key: "shipped", label: "Shipped" },
-                        { key: "blocked", label: "Blocked" },
-                        { key: "byPhase", label: "Phase Breakdown", align: "left", noSort: true },
-                      ].map(col => {
-                        const isSorted = sortCol === col.key;
-                        return (
-                          <th key={col.key} role={col.noSort ? undefined : "button"} tabIndex={col.noSort ? undefined : 0}
-                            onClick={col.noSort ? undefined : () => handleSortKey(col.key)}
-                            style={{ ...thStyle, textAlign: col.align || "center", ...(isSorted ? { color: c.accent } : {}), ...(col.noSort ? { cursor: "default" } : {}) }}>
-                            {col.label}
-                            {!col.noSort && <span style={{ display: "inline-block", width: 10, marginLeft: 4, opacity: isSorted ? 1 : 0.25 }}>{isSorted ? (sortDir === "asc" ? "↑" : "↓") : "↕"}</span>}
-                          </th>
-                        );
-                      })}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const rows = allSquadNames.map(sq => {
-                        const sqProjects = filteredProjects.filter(p => p.squad === sq && (p.status === "in_flight" || p.status === "blocked" || p.status === "shipped"));
-                        const byPhase = {};
-                        allPhases.forEach(ph => { byPhase[ph] = 0; });
-                        sqProjects.forEach(p => { byPhase[p.phase] = (byPhase[p.phase] || 0) + 1; });
-                        const inflightCount = sqProjects.filter(p => p.status === "in_flight").length;
-                        const shippedCount = sqProjects.filter(p => p.status === "shipped").length;
-                        const blockedCount = sqProjects.filter(p => p.isBlocked).length;
-                        return { sq, inflight: inflightCount, shipped: shippedCount, blockedCount, byPhase };
-                      });
+              </div>
+              <div>
+                <div style={{ fontFamily: body, fontSize: 15, fontWeight: 700, color: COL.text, marginBottom: 10 }}>{blockedProjects.length} project{plural(blockedProjects.length)} blocked</div>
+                {blockedProjects.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {blockedProjects.slice(0, 4).map(p => <Tag key={p.id}>{p.name}</Tag>)}
+                    {blockedProjects.length > 4 && <Tag>+{blockedProjects.length - 4} more</Tag>}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
 
-                      if (sortCol) {
-                        const valFor = (r) => {
-                          switch (sortCol) {
-                            case "squad": return r.sq;
-                            case "inflight": return r.inflight;
-                            case "shipped": return r.shipped;
-                            case "blocked": return r.blockedCount;
-                            default: return 0;
-                          }
-                        };
-                        rows.sort((a, b) => {
-                          const av = valFor(a), bv = valFor(b);
-                          const cmp = typeof av === "string" ? av.localeCompare(bv) : av - bv;
-                          return sortDir === "asc" ? cmp : -cmp;
-                        });
-                      }
-
-                      return rows.map((r, i) => (
-                        <tr key={r.sq} className="flow-row" style={{ animation: `rowSlideIn 0.3s ${motion.normal.easing} both`, animationDelay: `${Math.min(i * 50, 300)}ms` }}>
-                          <td style={{ ...tdBase, textAlign: "left", fontFamily: typo.bodyMd.font, fontWeight: 600, color: c.text }}>{r.sq}</td>
-                          <td style={{ ...tdBase, color: c.text }}>{r.inflight}</td>
-                          <td style={{ ...tdBase, color: r.shipped > 0 ? c.green : c.textDim }}>{r.shipped}</td>
-                          <td style={{ ...tdBase, color: r.blockedCount > 0 ? c.red : c.textDim, fontWeight: r.blockedCount > 0 ? 700 : 500 }}>{r.blockedCount}</td>
-                          <td style={{ ...tdBase, textAlign: "left", padding: `${space[1]}px ${space[2]}px` }}>
-                            <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-                              {allPhases.filter(ph => r.byPhase[ph] > 0).map(ph => (
-                                <span key={ph} style={{
-                                  fontFamily: typo.monoSm.font, fontSize: 10, fontWeight: 700,
-                                  color: pc[ph], background: `${pc[ph]}15`,
-                                  padding: "1px 5px", borderRadius: layout.radiusXs,
-                                  letterSpacing: "0.04em",
-                                }}>{r.byPhase[ph]} {ph}</span>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      ));
-                    })()}
-                  </tbody>
-                </table>
+          {/* Upcoming */}
+          <div style={{ borderTop: `1px dashed ${COL.border}`, margin: "0 20px" }} />
+          <div style={{ display: "flex", gap: 16, padding: "16px 20px", alignItems: "flex-start" }}>
+            {glanceLeft(COL.gold, "Upcoming")}
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontFamily: body, fontSize: 15, fontWeight: 700, color: COL.text }}>{upcomingCount} project{plural(upcomingCount)} in pipeline</div>
+              {overdueStartCount > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <WarnIcon />
+                  <span style={{ fontFamily: body, fontSize: 13, fontWeight: 500, color: COL.red }}>{overdueStartCount} project{plural(overdueStartCount)} with a past tentative start date</span>
+                </div>
               )}
             </div>
-          </Surface>
-        </div>
+          </div>
 
+          {/* Most active */}
+          <div style={{ borderTop: `1px dashed ${COL.border}`, margin: "0 20px" }} />
+          <div style={{ display: "flex", gap: 16, padding: "16px 20px", alignItems: "flex-start" }}>
+            {glanceLeft(COL.green, "Most active")}
+            <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontFamily: body, fontSize: 15, fontWeight: 700, color: COL.text }}>{mostActive ? mostActive[0] : "—"}</span>
+              {mostActive && <>
+                <span style={{ width: 3, height: 3, borderRadius: 999, background: COL.ghost }} />
+                <span style={{ fontFamily: body, fontSize: 14, fontWeight: 500, color: COL.textDim }}>{mostActive[1]} event{plural(mostActive[1])} this week</span>
+              </>}
+            </div>
+          </div>
+
+          {/* Completed */}
+          <div style={{ borderTop: `1px dashed ${COL.border}`, margin: "0 20px" }} />
+          <div style={{ display: "flex", gap: 16, padding: "16px 20px", alignItems: "flex-start" }}>
+            {glanceLeft(COL.green, "Completed")}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ fontFamily: body, fontSize: 15, fontWeight: 700, color: COL.text }}>{completedThisWeek} project{plural(completedThisWeek)} shipped this week</span>
+            </div>
+          </div>
+        </Card>
       </div>
+
+      {/* ═══ THE SQUAD REPORT ═══ */}
+      <Card>
+        <CardHeader title="The Squad Report" right={<SelectChip label={quarterLabel} />} />
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse" }}>
+            <colgroup>
+              <col style={{ width: "32%" }} />
+              {SQUAD_COLS.map(col => <col key={col} style={{ width: `${68 / SQUAD_COLS.length}%` }} />)}
+            </colgroup>
+            <thead>
+              <tr>
+                <th style={{ textAlign: "left", padding: "12px 16px", fontFamily: body, fontSize: 13, fontWeight: 600, color: COL.textDim, borderBottom: `1px solid ${COL.border}` }}>Squad</th>
+                {SQUAD_COLS.map(col => (
+                  <th key={col} style={{ textAlign: "center", padding: "12px 10px", fontFamily: body, fontSize: 13, fontWeight: 600, color: COL.textDim, borderBottom: `1px solid ${COL.border}` }}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {allSquadNames.map(sq => (
+                <tr key={sq} className="flow-row" style={{ borderBottom: `1px solid ${COL.borderSoft}` }}>
+                  <td style={{ padding: "0 16px", height: 56 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 16, lineHeight: 1, width: 20, textAlign: "center" }}>{squadEmoji(sq)}</span>
+                      <span style={{ fontFamily: body, fontSize: 14, fontWeight: 600, color: COL.text }}>{sq}</span>
+                    </div>
+                  </td>
+                  {SQUAD_COLS.map(col => {
+                    const n = squadGrid[sq]?.[col] || 0;
+                    return (
+                      <td key={col} style={{ padding: "8px 10px", height: 56 }}>
+                        {n > 0 ? (
+                          <div style={{ height: 36, borderRadius: 8, background: PILL[col], display: "flex", alignItems: "center", justifyContent: "center", fontFamily: body, fontSize: 14, fontWeight: 600, color: COL.text }}>{n}</div>
+                        ) : null}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 };

@@ -555,7 +555,7 @@ function FlowDashboard({ auth }) {
         }}>
           <div style={{
             width: "100%", height: "100%",
-            background: `linear-gradient(90deg, ${c.accent}00, ${c.accent}, ${c.accent}00)`,
+            backgroundImage: `linear-gradient(90deg, ${c.accent}00, ${c.accent}, ${c.accent}00)`,
             backgroundSize: "200% 100%",
             animation: "flow-load-bar 1.4s cubic-bezier(0.22, 1, 0.36, 1) infinite",
           }} />
@@ -588,7 +588,7 @@ function FlowDashboard({ auth }) {
   }
 
   return (
-    <div style={{ height: "100vh", background: "linear-gradient(135deg, #000000 0%, #470d0c 28%, #6b3012 52%, #3d1602 78%, #120a06 100%)", backgroundSize: "300% 300%", animation: "flow-bg-gradient 10s ease-in-out infinite", color: c.text, fontFamily: body, position: "relative", isolation: "isolate", display: "flex", gap: 8, padding: activeTab === "terminal" ? 0 : 8, boxSizing: "border-box" }}>
+    <div style={{ height: "100vh", backgroundColor: "#000000", backgroundImage: "linear-gradient(135deg, #000000 0%, #470d0c 28%, #6b3012 52%, #3d1602 78%, #120a06 100%)", backgroundSize: "300% 300%", animation: "flow-bg-gradient 10s ease-in-out infinite", color: c.text, fontFamily: body, position: "relative", isolation: "isolate", display: "flex", gap: 8, padding: activeTab === "terminal" ? 0 : 8, boxSizing: "border-box" }}>
       <AnimStyles />
 
       {/* ═══ SIDEBAR ═══ (hidden for dark-themed Terminal view) */}
