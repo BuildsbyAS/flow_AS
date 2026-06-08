@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { forwardRef } from 'react';
 import {
   PlusIcon,
-  ArrowUpRight,
+  AddIconButton,
+  ExternalLinkIcon,
   FigmaLogo,
   CategoryCool,
   CategoryWarm,
@@ -229,7 +230,7 @@ function ResourceCard({ resource }) {
         </span>
       </div>
 
-      {/* "Open external" — hover-only, top-right */}
+      {/* "Open external" — hover-only, top-right (Figma ExternalLinkIcon) */}
       <span
         aria-hidden
         style={{
@@ -241,14 +242,14 @@ function ResourceCard({ resource }) {
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: 'var(--c-text-secondary)',
+          color: '#3D1602',
           opacity: hover ? 1 : 0,
           transform: hover ? 'translateY(0)' : 'translateY(-2px)',
           transition: 'opacity 160ms var(--ease-out), transform 160ms var(--ease-out)',
           pointerEvents: 'none',
         }}
       >
-        <ArrowUpRight size={14} />
+        <ExternalLinkIcon size={18} />
       </span>
     </a>
   );
@@ -267,10 +268,9 @@ const AddButton = forwardRef(function AddButton({ visible, open, onClick }, ref)
       style={{
         width: 24,
         height: 24,
-        padding: 4,
+        padding: 0,
         borderRadius: 9999,
-        background: WARM_BG,
-        color: 'var(--c-text-primary)',
+        background: 'transparent',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -278,14 +278,12 @@ const AddButton = forwardRef(function AddButton({ visible, open, onClick }, ref)
         transform: visible ? 'scale(1)' : 'scale(0.92)',
         pointerEvents: visible ? 'auto' : 'none',
         transition:
-          'opacity 160ms var(--ease-out), transform 200ms var(--ease-out), background 160ms var(--ease-out)',
+          'opacity 160ms var(--ease-out), transform 200ms var(--ease-out), filter 160ms var(--ease-out)',
       }}
       onMouseEnter={(e) => {
-        if (visible) e.currentTarget.style.background = WARM_HOVER;
+        if (visible) e.currentTarget.style.filter = 'brightness(0.95)';
       }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = WARM_BG;
-      }}
+      onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
       onPointerDown={(e) => {
         if (visible) e.currentTarget.style.transform = 'scale(0.94)';
       }}
@@ -300,7 +298,7 @@ const AddButton = forwardRef(function AddButton({ visible, open, onClick }, ref)
           transform: open ? 'rotate(45deg)' : 'rotate(0deg)',
         }}
       >
-        <PlusIcon size={16} />
+        <AddIconButton size={24} />
       </span>
     </button>
   );

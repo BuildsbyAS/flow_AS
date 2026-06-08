@@ -299,8 +299,16 @@ function ListItem({ selected, onSelect, renderItem }) {
 
 // ── EditableValue wrapper ────────────────────────────────────────────────
 // Wraps a value in a button-like trigger with hover affordance + opens a
-// FloatingPopover whose content is supplied by render(close).
-export function EditableValue({ children, ariaLabel, renderPopover, style = {}, dense = false }) {
+// FloatingPopover. Optional `hoverIcon` renders on the right with an
+// opacity/translate transition driven by hover/open state.
+export function EditableValue({
+  children,
+  ariaLabel,
+  renderPopover,
+  style = {},
+  dense = false,
+  hoverIcon = null,
+}) {
   const triggerRef = useRef(null);
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState(null);
@@ -315,6 +323,8 @@ export function EditableValue({ children, ariaLabel, renderPopover, style = {}, 
     if (rect) setAnchor(rect);
     setOpen(true);
   }
+
+  const active = hover || open;
 
   return (
     <>
@@ -332,18 +342,34 @@ export function EditableValue({ children, ariaLabel, renderPopover, style = {}, 
         style={{
           display: 'inline-flex',
           alignItems: 'center',
-          gap: 6,
+          gap: 4,
           padding: dense ? '2px 6px' : '4px 8px',
           margin: dense ? '-2px -6px' : '-4px -8px',
           borderRadius: 6,
-          background: hover || open ? WARM_HOVER : 'transparent',
+          // No hover background — only the trailing icon reveals on hover
+          background: 'transparent',
           color: 'inherit',
-          transition: 'background 160ms var(--ease-out), transform 120ms var(--ease-out)',
+          transition: 'transform 120ms var(--ease-out)',
           cursor: 'pointer',
           ...style,
         }}
       >
         {children}
+        {hoverIcon && (
+          <span
+            aria-hidden
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: active ? 1 : 0,
+              transform: active ? 'translateX(0) scale(1)' : 'translateX(-2px) scale(0.92)',
+              transition: 'opacity 160ms var(--ease-out), transform 200ms var(--ease-out)',
+            }}
+          >
+            {hoverIcon}
+          </span>
+        )}
       </button>
       {open && anchor &&
         renderPopover({

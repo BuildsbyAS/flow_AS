@@ -73,13 +73,26 @@ export const mockResources = [
   { id: 'r5', type: 'category-warm', title: 'Q3 OKR doc', href: '#' },
 ];
 
+// Phase order is the visual row order in the Gantt and the left-to-right
+// order of the phase chip strip. PRD first → Beta last; QA sits between Dev
+// and Alpha to match Figma 583:12380.
+export const PHASE_ORDER = ['prd', 'design', 'dev', 'qa', 'alpha', 'beta'];
+export const PHASE_LABELS = {
+  prd: 'PRD',
+  design: 'Design',
+  dev: 'Dev',
+  qa: 'QA',
+  alpha: 'Alpha',
+  beta: 'Beta',
+};
+
 export const mockPhases = [
   { key: 'prd', label: 'PRD', active: false, status: null },
   { key: 'design', label: 'Design', active: true, status: { kind: 'live', text: 'Live for 12d' } },
   { key: 'dev', label: 'Dev', active: true, status: { kind: 'live', text: 'Live for 4d' } },
+  { key: 'qa', label: 'QA', active: true, status: { kind: 'reopened', text: 'Re-opened 2d ago' } },
   { key: 'alpha', label: 'Alpha', active: false, status: null },
   { key: 'beta', label: 'Beta', active: false, status: null },
-  { key: 'qa', label: 'QA', active: true, status: { kind: 'reopened', text: 'Re-opened 2d ago' } },
 ];
 
 // Bars positioned in week units. Total span ≈ 24 weeks (Jan W1 → Jul W4).
@@ -100,6 +113,54 @@ export const mockMonths = [
   { key: 'jun', label: 'JUN', weeks: 4 },
 ];
 
+// Activity feed v2 (Figma 624:16078) — posts with progress cards + reactions.
+export const mockActivityPosts = [
+  {
+    id: 'a-sara',
+    author: 'Sara',
+    initials: 'SA',
+    type: 'update',
+    time: '4:54 pm',
+    content:
+      'On track for Design review. Pushing dev in parallel to claw back the design slip — vendor contract is the one thing that can still derail the back half.',
+    reactions: { heart: 0, heartLiked: false, thumbs: 0, thumbsLiked: false, emojis: [] },
+  },
+  {
+    id: 'a-hassan',
+    author: 'Hassan',
+    initials: 'HA',
+    type: 'update',
+    time: '12:03 pm',
+    content:
+      'On track for Design review. Pushing dev in parallel to claw back the design slip — vendor contract is the one thing that can still derail the back half.',
+    progress: [
+      { label: 'Progress', from: '38%', to: '51%' },
+      { label: 'Design', from: '30%', to: '60%' },
+      { label: 'Priority', from: 'P1', to: 'P0' },
+    ],
+    reactions: { heart: 12, heartLiked: false, thumbs: 5, thumbsLiked: true, emojis: [] },
+  },
+  {
+    id: 'a-ayush',
+    author: 'Ayush',
+    initials: 'AY',
+    type: 'comment',
+    time: '4:55 pm, May 2, 2026',
+    content: 'API spike saved us a week — unblocked the whole dev track 👌🏻',
+    reactions: { heart: 12, heartLiked: false, thumbs: 5, thumbsLiked: true, emojis: [] },
+  },
+  {
+    id: 'a-ibrahim',
+    author: 'Ibrahim',
+    initials: 'IM',
+    type: 'comment',
+    time: '4:23 am, May 4, 2026',
+    content: null,
+    reactions: { heart: 0, heartLiked: false, thumbs: 0, thumbsLiked: false, emojis: [] },
+  },
+];
+
+// Legacy activity items (unused now that v2 is in place — kept for compat)
 export const mockActivity = [
   {
     id: 'a1',

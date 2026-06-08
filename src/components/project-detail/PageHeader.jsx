@@ -1,5 +1,8 @@
-import { ExpandIcon, ContractIcon, ChevronDown } from '../icons.jsx';
+import { ExpandIcon, ContractIcon } from '../icons.jsx';
 import { mockProject } from '../../data/mockProject.js';
+
+// Hover color for breadcrumb items — warm brown (#7E5E4E)
+const BREADCRUMB_HOVER_FG = '#7E5E4E';
 
 // PageHeader
 // ----------
@@ -80,11 +83,17 @@ export default function PageHeader({ expanded, onToggleExpand, onProjectsClick, 
             ...crumbTextStyle,
             padding: 0,
             background: 'transparent',
-            transition: 'opacity 160ms var(--ease-interaction)',
-            opacity: 0.72,
+            transition: 'color 160ms var(--ease-out), opacity 160ms var(--ease-out)',
+            opacity: 0.78,
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
-          onMouseLeave={(e) => (e.currentTarget.style.opacity = 0.72)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.opacity = 1;
+            e.currentTarget.style.color = BREADCRUMB_HOVER_FG;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.opacity = 0.78;
+            e.currentTarget.style.color = 'var(--c-text-primary)';
+          }}
         >
           Projects
         </button>
@@ -99,27 +108,16 @@ export default function PageHeader({ expanded, onToggleExpand, onProjectsClick, 
           style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 2,
             padding: 0,
             background: 'transparent',
             color: 'var(--c-text-primary)',
-            transition: 'color 160ms var(--ease-interaction)',
+            transition: 'color 160ms var(--ease-out)',
             minWidth: 0,
           }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--c-text-action)')}
+          onMouseEnter={(e) => (e.currentTarget.style.color = BREADCRUMB_HOVER_FG)}
           onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--c-text-primary)')}
-          aria-haspopup="menu"
         >
           <span style={{ ...crumbTextStyle, color: 'inherit' }}>{mockProject.name}</span>
-          <span
-            style={{
-              display: 'inline-flex',
-              transition: 'transform 200ms var(--ease-interaction)',
-              color: 'currentColor',
-            }}
-          >
-            <ChevronDown size={18} />
-          </span>
         </button>
       </nav>
     </div>

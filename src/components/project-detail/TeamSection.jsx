@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { PlusIcon, ArrowRight } from '../icons.jsx';
+import { PlusIcon, AddIconButton, ArrowRightIcon } from '../icons.jsx';
 import { mockTeam, mockAvailableMembers } from '../../data/mockProject.js';
 
 // TeamSection — Figma 583:12302 + tooltip 607:16032
@@ -510,27 +510,20 @@ function Tooltip({ member, anchor, instant, onEnter, onLeave, onArrow }) {
         style={{
           width: 24,
           height: 24,
-          padding: 4,
+          padding: 0,
           borderRadius: 9999,
-          background: WARM_BG,
-          color: 'var(--c-text-secondary)',
+          background: 'transparent',
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          transition: 'background 160ms var(--ease-out), transform 160ms var(--ease-out)',
+          transition: 'transform 160ms var(--ease-out), filter 160ms var(--ease-out)',
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = WARM_HOVER;
-          e.currentTarget.style.color = 'var(--c-text-primary)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = WARM_BG;
-          e.currentTarget.style.color = 'var(--c-text-secondary)';
-        }}
+        onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(0.96)')}
+        onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
         onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.92)')}
         onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
       >
-        <ArrowRight size={16} />
+        <ArrowRightIcon size={24} />
       </button>
     </div>
   );
@@ -550,10 +543,9 @@ const AddButton = forwardRef(function AddButton({ visible, open, onClick }, ref)
       style={{
         width: 24,
         height: 24,
-        padding: 4,
+        padding: 0,
         borderRadius: 9999,
-        background: WARM_BG,
-        color: 'var(--c-text-primary)',
+        background: 'transparent',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -561,14 +553,12 @@ const AddButton = forwardRef(function AddButton({ visible, open, onClick }, ref)
         transform: visible ? 'scale(1)' : 'scale(0.92)',
         pointerEvents: visible ? 'auto' : 'none',
         transition:
-          'opacity 160ms var(--ease-out), transform 200ms var(--ease-out), background 160ms var(--ease-out)',
+          'opacity 160ms var(--ease-out), transform 200ms var(--ease-out), filter 160ms var(--ease-out)',
       }}
       onMouseEnter={(e) => {
-        if (visible) e.currentTarget.style.background = WARM_HOVER;
+        if (visible) e.currentTarget.style.filter = 'brightness(0.95)';
       }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.background = WARM_BG;
-      }}
+      onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
       onPointerDown={(e) => {
         if (visible) e.currentTarget.style.transform = 'scale(0.94)';
       }}
@@ -583,7 +573,7 @@ const AddButton = forwardRef(function AddButton({ visible, open, onClick }, ref)
           transform: open ? 'rotate(45deg)' : 'rotate(0deg)',
         }}
       >
-        <PlusIcon size={16} />
+        <AddIconButton size={24} />
       </span>
     </button>
   );

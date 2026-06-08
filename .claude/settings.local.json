@@ -6,7 +6,16 @@
       "mcp__953b2fcc-a923-4f07-9dbd-c447da7bd569__get_screenshot",
       "mcp__953b2fcc-a923-4f07-9dbd-c447da7bd569__get_variable_defs",
       "Bash(curl -s -o /tmp/team-tooltip.png \"https://www.figma.com/api/mcp/asset/2de53d48-f2b7-449e-988a-194368116707\")",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "Bash(gh auth *)",
+      "Bash(git fetch *)",
+      "Bash(gh api *)",
+      "Bash(file \"/Users/ashastri/Desktop/Screen Recording 2026-06-08 at 6.27.12 PM.mov\" 2>&1)",
+      "Bash(curl -s http://localhost:5183/)",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }

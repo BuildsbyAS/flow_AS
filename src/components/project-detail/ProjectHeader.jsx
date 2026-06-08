@@ -1,4 +1,10 @@
-import { DirectionFilled, WatchlistOff, WatchlistOn } from '../icons.jsx';
+import {
+  DirectionFilled,
+  WatchlistOff,
+  WatchlistOn,
+  CalendarIconButton,
+  DownChevronIconButton,
+} from '../icons.jsx';
 import {
   mockProject,
   availableStatuses,
@@ -157,6 +163,7 @@ function DateField({ value, onChange, ariaLabel }) {
   return (
     <EditableValue
       ariaLabel={ariaLabel}
+      hoverIcon={<CalendarIconButton size={24} />}
       renderPopover={({ anchor, close }) => (
         <FloatingPopover anchor={anchor} onClose={close} width={280}>
           <Calendar
@@ -180,6 +187,7 @@ function StatusField({ statusKey, onChange }) {
     <EditableValue
       ariaLabel="Change status"
       dense
+      hoverIcon={<DownChevronIconButton size={24} />}
       renderPopover={({ anchor, close }) => (
         <FloatingPopover anchor={anchor} onClose={close} width={220}>
           <ListPicker
@@ -262,6 +270,7 @@ function SquadField({ squad, onChange }) {
   return (
     <EditableValue
       ariaLabel="Change squad"
+      hoverIcon={<DownChevronIconButton size={24} />}
       renderPopover={({ anchor, close }) => (
         <FloatingPopover anchor={anchor} onClose={close} width={200}>
           <ListPicker
