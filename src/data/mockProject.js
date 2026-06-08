@@ -5,27 +5,72 @@ export const mockProject = {
   code: 'X15',
   name: 'Vendor portal redesign',
   updatedAt: '3h ago',
-  createdAt: 'May 12, 2026',
-  dueDate: 'Jun 23, 2026',
-  status: { label: 'In flight', tone: 'inflight' },
+  createdAt: new Date(2026, 4, 12), // May 12, 2026
+  dueDate: new Date(2026, 5, 23), // Jun 23, 2026
+  statusKey: 'inflight',
   squad: 'Customer',
   bookmarked: false,
 };
 
+export const availableStatuses = [
+  { key: 'discovery', label: 'Discovery' },
+  { key: 'inflight', label: 'In flight' },
+  { key: 'review', label: 'In review' },
+  { key: 'live', label: 'Live' },
+  { key: 'paused', label: 'Paused' },
+  { key: 'done', label: 'Done' },
+  { key: 'cancelled', label: 'Cancelled' },
+];
+
+// Visual tone (bg + fg) per status key — kept here so renderers stay dumb.
+export const statusTone = {
+  discovery: { bg: '#F3F0FF', fg: '#6D28D9' },
+  inflight: { bg: '#F5FAFF', fg: '#0F7EFF' },
+  review: { bg: '#FFF7E0', fg: '#B45309' },
+  live: { bg: '#E6FBF1', fg: '#007A4A' },
+  paused: { bg: '#FEF3C7', fg: '#92400E' },
+  done: { bg: '#F1F5F9', fg: '#475569' },
+  cancelled: { bg: '#FBE7E7', fg: '#B91C1C' },
+};
+
+export const availableSquads = [
+  'Customer',
+  'Vendor',
+  'Internal',
+  'Platform',
+  'Growth',
+  'Marketing',
+  'Operations',
+  'Finance',
+];
+
 export const mockTeam = [
-  { id: 'u1', name: 'Saumya Garg', roles: ['Owner', 'SPM'] },
-  { id: 'u2', name: 'Anurag Shastri', roles: ['Motion Designer'] },
-  { id: 'u3', name: 'Faraz Khan', roles: ['Engineering manager'] },
-  { id: 'u4', name: 'Riya Kapoor', roles: ['Product Designer'] },
-  { id: 'u5', name: 'Vikram Sethi', roles: ['Frontend lead'] },
+  { id: 'u1', name: 'Saumya Garg', roles: ['Owner', 'SPM'], email: 'saumya@flow.app' },
+  { id: 'u2', name: 'Anurag Shastri', roles: ['Motion Designer'], email: 'anurag@flow.app' },
+  { id: 'u3', name: 'Faraz Khan', roles: ['Engineering manager'], email: 'faraz@flow.app' },
+  { id: 'u4', name: 'Riya Kapoor', roles: ['Product Designer'], email: 'riya@flow.app' },
+  { id: 'u5', name: 'Vikram Sethi', roles: ['Frontend lead'], email: 'vikram@flow.app' },
+];
+
+// Org-wide members the user can add — kept separate so the picker can suggest
+// people not already on the project.
+export const mockAvailableMembers = [
+  { id: 'p1', name: 'Diya Ramesh', roles: ['UX Researcher'], email: 'diya@flow.app' },
+  { id: 'p2', name: 'Karan Mehta', roles: ['Data Analyst'], email: 'karan@flow.app' },
+  { id: 'p3', name: 'Maya Iyer', roles: ['QA Engineer'], email: 'maya@flow.app' },
+  { id: 'p4', name: 'Suresh Altman', roles: ['Staff Engineer'], email: 'suresh@flow.app' },
+  { id: 'p5', name: 'Blake Cooper', roles: ['Brand Designer'], email: 'blake@flow.app' },
+  { id: 'p6', name: 'Sami Koushik', roles: ['Backend lead'], email: 'sami@flow.app' },
+  { id: 'p7', name: 'Aanya Joshi', roles: ['Content Strategist'], email: 'aanya@flow.app' },
+  { id: 'p8', name: 'Rohan Patel', roles: ['Mobile Engineer'], email: 'rohan@flow.app' },
 ];
 
 export const mockResources = [
-  { id: 'r1', type: 'figma', title: 'Portal flows v3', subtitle: 'Figma • 32 frames', href: '#' },
-  { id: 'r2', type: 'data', title: 'Vendor data XML', subtitle: 'Schema • 0.4MB', href: '#' },
-  { id: 'r3', type: 'deck', title: 'Faraz V3 deck', subtitle: 'Slides • 18 pg', href: '#' },
-  { id: 'r4', type: 'pdf', title: 'PRD draft', subtitle: 'PDF • 12 pg', href: '#' },
-  { id: 'r5', type: 'link', title: 'Q3 OKR doc', subtitle: 'Linear • Doc', href: '#' },
+  { id: 'r1', type: 'figma', title: 'Portal flows v3', href: '#' },
+  { id: 'r2', type: 'category-cool', title: 'Data XML', href: '#' },
+  { id: 'r3', type: 'category-warm', title: 'Faraz V3 deck', href: '#' },
+  { id: 'r4', type: 'category-cool', title: 'PRD draft', href: '#' },
+  { id: 'r5', type: 'category-warm', title: 'Q3 OKR doc', href: '#' },
 ];
 
 export const mockPhases = [

@@ -121,10 +121,31 @@ export function ArrowUpRight({ size = 14 }) {
   );
 }
 
-export function DirectionFilled({ size = 12 }) {
+// ArrowRight — matches Figma M-Icon/System-Icon/arrow-right (16×16 frame,
+// vector inset ~21.87% all sides → arrow spans the center ~56% of the box).
+export function ArrowRight({ size = 16 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 12 12" fill="currentColor">
-      <path d="M2 6l5-4v3h3v2H7v3z" />
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M3.5 8H12.5M8.5 4L12.5 8L8.5 12"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+// DirectionFilled — exact path data from /assets/M-Icon/System-Icon/direction-filled.svg
+// Original fill="#0F7EFF" replaced with currentColor so the badge controls the color.
+export function DirectionFilled({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path
+        d="M8.03528 13.1591C7.42934 13.1591 6.85767 12.9534 6.38226 12.5641C6.12121 12.3504 5.84851 12.1193 5.52403 11.8356C5.28559 11.6271 5.17767 11.3055 5.2433 10.9956C5.35121 10.4852 5.44746 9.97407 5.52913 9.47459C5.57507 9.19314 5.48611 8.91605 5.28413 8.7148C5.08288 8.51282 4.8058 8.42386 4.52434 8.4698C4.02486 8.55147 3.51371 8.64772 3.0033 8.75564C2.6934 8.82126 2.37111 8.71334 2.1633 8.47491C1.88111 8.15189 1.64996 7.87918 1.43559 7.61668C0.893818 6.95459 0.710069 6.10074 0.931736 5.27459C1.1534 4.44845 1.73892 3.80095 2.53882 3.49834C4.72048 2.67366 6.99403 2.06407 9.29673 1.68782C10.1411 1.55001 10.9716 1.81761 11.5768 2.42209C12.1813 3.02657 12.4497 3.85782 12.3111 4.7022C11.9349 7.00418 11.3253 9.27772 10.5006 11.4601C10.198 12.26 9.55049 12.8463 8.72434 13.0672C8.4983 13.1277 8.26642 13.1583 8.03601 13.1583L8.03528 13.1591Z"
+        fill="currentColor"
+      />
     </svg>
   );
 }
@@ -289,6 +310,30 @@ export function FileData({ size = 14 }) {
       <ellipse cx="8" cy="4" rx="5" ry="1.6" fill="#00BF7C" />
       <path d="M3 4v8c0 .9 2.2 1.6 5 1.6s5-.7 5-1.6V4" fill="none" stroke="#00BF7C" strokeWidth="1.4" />
       <path d="M3 8c0 .9 2.2 1.6 5 1.6s5-.7 5-1.6" fill="none" stroke="#00BF7C" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+// CategoryFilled (cool variant) — 2×2 colored squares, matches Figma category-filled.
+export function CategoryCool({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="6" height="6" rx="1.5" fill="#0F61FF" />
+      <rect x="10" y="2" width="6" height="6" rx="1.5" fill="#00BF7C" />
+      <rect x="2" y="10" width="6" height="6" rx="1.5" fill="#EC4899" />
+      <rect x="10" y="10" width="6" height="6" rx="1.5" fill="#F59E0B" />
+    </svg>
+  );
+}
+
+// CategoryFilled (warm variant) — orange-red palette.
+export function CategoryWarm({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="6" height="6" rx="1.5" fill="#F97316" />
+      <rect x="10" y="2" width="6" height="6" rx="1.5" fill="#EF4444" />
+      <rect x="2" y="10" width="6" height="6" rx="1.5" fill="#F59E0B" />
+      <rect x="10" y="10" width="6" height="6" rx="1.5" fill="#FB923C" />
     </svg>
   );
 }
