@@ -158,10 +158,10 @@ export const Modal = ({ open, onClose, title, accent, width = 460, blur = 4, chi
 // Props: open, onClose, title?, accent?, width=460, children, style,
 //        headerless? (omit the built-in header bar — content has its own)
 // ══════════════════════════════════════════════════════════════
-export const SideSheet = ({ open, onClose, title, accent, width = 460, children, style: s, headerless = false, floating = false }) => {
+export const SideSheet = ({ open, onClose, title, accent, width = 460, children, style: s, headerless = false, floating = false, autoFocusContent = true }) => {
   const panelRef = React.useRef(null);
   const previousFocusRef = React.useRef(null);
-  const { mounted, visible } = useExitAnimation(open, 300);
+  const { mounted, visible } = useExitAnimation(open, 220);
 
   React.useEffect(() => {
     if (!open) return;
@@ -186,7 +186,7 @@ export const SideSheet = ({ open, onClose, title, accent, width = 460, children,
       if (!panelRef.current) return;
       const auto = panelRef.current.querySelector('[autofocus],[data-autofocus]');
       const focusable = panelRef.current.querySelectorAll('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
-      (auto || focusable[0] || panelRef.current).focus?.();
+      (auto || (autoFocusContent ? focusable[0] : null) || panelRef.current).focus?.();
     }, 40);
     return () => clearTimeout(t);
   }, [open]);
@@ -205,10 +205,10 @@ export const SideSheet = ({ open, onClose, title, accent, width = 460, children,
         aria-hidden="true"
         initial={{ opacity: 0 }}
         animate={{ opacity: visible ? 1 : 0 }}
-        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
         style={{ position: "absolute", inset: 0, background: "rgba(20,12,6,0.42)" }}
       />
-      {/* Panel — framer-motion spring slide */}
+      {/* Panel — snappy ease-out slide */}
       <Motion.div
         ref={panelRef}
         role="dialog"
@@ -217,7 +217,7 @@ export const SideSheet = ({ open, onClose, title, accent, width = 460, children,
         onClick={e => e.stopPropagation()}
         initial={{ x: "100%" }}
         animate={{ x: visible ? 0 : "100%" }}
-        transition={{ type: "spring", stiffness: 420, damping: 40, mass: 0.9 }}
+        transition={{ type: "tween", duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         style={{
           position: "absolute",
           top: floating ? 16 : 0, right: floating ? 16 : 0, bottom: floating ? 16 : 0,
@@ -527,7 +527,7 @@ export const Sel = ({ children, style: s, ...rest }) => (
 // ══════════════════════════════════════════════════════════════
 // SearchSelect — filterable dropdown with keyboard nav
 // ══════════════════════════════════════════════════════════════
-export const SearchSelect = ({ value, onChange, options, placeholder = "Search...", tone }) => {
+export const SearchSelect = ({ value, onChange, options, placeholder = "Search...", tone, inline = false, icon = null, emptyLabel = null }) => {
   const devRef = useDevLabel('Filterable dropdown with keyboard navigation and portal menu');
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -579,7 +579,7 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
   React.useEffect(() => {
     if (open && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
-      setDropPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      setDropPos({ top: rect.bottom + 4, left: rect.left, width: inline ? Math.max(rect.width, 240) : rect.width });
     }
   }, [open]);
 
@@ -595,6 +595,21 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
 
   return (
     <div ref={(el) => { containerRef.current = el; if (devRef) devRef.current = el; }} style={{ position: "relative" }}>
+      {inline ? (
+        <button onClick={() => setOpen(!open)} style={{
+          width: "100%", minHeight: 32, padding: "5px 8px", borderRadius: 7,
+          border: "1px solid transparent", background: open ? T.accentDim : "transparent",
+          color: value ? T.text : T.muted, fontFamily: typo.bodyMd.font, fontSize: 14,
+          cursor: "pointer", textAlign: "left", boxSizing: "border-box",
+          display: "flex", alignItems: "center", gap: 8,
+          transition: `background ${motion.fast.duration} ${motion.fast.easing}`,
+        }}
+          onMouseEnter={e => { if (!open) e.currentTarget.style.background = T.accentDim; }}
+          onMouseLeave={e => { if (!open) e.currentTarget.style.background = "transparent"; }}>
+          {icon && <span style={{ display: "inline-flex", flexShrink: 0 }}>{icon}</span>}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value || emptyLabel || placeholder}</span>
+        </button>
+      ) : (
       <button onClick={() => setOpen(!open)} className="flow-input" style={{
         width: "100%", height: 40, padding: `0 ${space[3]}px`,
         borderRadius: layout.radiusSm,
@@ -610,6 +625,7 @@ export const SearchSelect = ({ value, onChange, options, placeholder = "Search..
           <polyline points="4 6 8 10 12 6" />
         </svg>
       </button>
+      )}
       {open && ReactDOM.createPortal(
         <div ref={dropdownRef} style={{
           position: "fixed", top: dropPos.top, left: dropPos.left, width: dropPos.width,

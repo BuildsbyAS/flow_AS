@@ -166,6 +166,13 @@ body::before {
 
 /* Global search placeholder — branded brown instead of muted gray */
 .flow-search-input::placeholder { color: #58270E; opacity: 1; }
+/* New-project date rows: overlay a calendar hint over the empty native date input.
+   White (sheet-matched) background hides the browser's "dd/mm/yyyy"; hidden on focus so the
+   native editor stays usable. pointer-events:none lets clicks reach the input. */
+.flow-date-ph { position: absolute; left: 1px; top: 1px; bottom: 1px; right: 1px; display: flex; align-items: center; padding-left: 8px; background: #fff; border-radius: 7px; font-family: Geist, system-ui, -apple-system, sans-serif; font-size: 14px; color: #9C8576; pointer-events: none; }
+.flow-date-input:focus ~ .flow-date-ph { display: none; }
+/* New-project title placeholder — muted brown to match the warm sheet */
+.flow-np-title::placeholder { color: #C2B0A4; opacity: 1; }
 .flow-btn:focus-visible,
 .flow-theme-toggle:focus-visible,
 .flow-breadcrumb:focus-visible,

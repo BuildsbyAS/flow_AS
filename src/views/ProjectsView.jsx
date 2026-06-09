@@ -2597,14 +2597,107 @@ export default function ProjectsView({
 
 
 /* ══════════════════════════════════════════════════════════════════
-   CREATE PROJECT OVERLAY
+   CREATE PROJECT OVERLAY — Linear-style properties layout (light/brown tone)
    ══════════════════════════════════════════════════════════════════ */
+// Warm "brown tone" palette — matches the Projects toolbar / filter dropdown
+const BTONE = {
+  ink: "#58270E", body: "#7E5E4E", muted: "#9C8576",
+  border: "#F1EAE4", inset: "#FBF9F8", insetAlt: "#F4EEEB",
+  surface: "#FFFFFF", accent: "#8F583D", primary: "#280E01",
+};
+const NP_FONT = "Geist, system-ui, -apple-system, sans-serif";
+
+// Initials avatar for the Lead row
+const NpAvatar = ({ name }) => {
+  const initials = (name || "").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?";
+  return (
+    <span style={{ width: 20, height: 20, borderRadius: 999, background: BTONE.insetAlt, color: BTONE.accent,
+      fontSize: 9.5, fontWeight: 700, fontFamily: NP_FONT, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      {initials}
+    </span>
+  );
+};
+
+// 18px line icons for the property rows
+const NpIcon = {
+  personAdd: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9C8576" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.2" /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" /><path d="M18 8v6M21 11h-6" /></svg>),
+  squad: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8F583D" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="8" cy="9" r="2.6" /><circle cx="16" cy="9" r="2.6" /><path d="M3.5 18.5a4.5 4.5 0 0 1 9 0M11.5 18.5a4.5 4.5 0 0 1 9 0" /></svg>),
+  calPlus: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9C8576" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5" /><path d="M3.5 9h17M8 3v3M16 3v3M12 13v4M10 15h4" /></svg>),
+};
+const npStatusIcon = (key) => key === "in_flight"
+  ? (<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="#2D7FF9" strokeWidth="2" /><path d="M8 8V2.2a5.8 5.8 0 0 1 5 5.8 5.8 5.8 0 0 1-5 5.8z" fill="#2D7FF9" /></svg>)
+  : (<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="#E5641A" strokeWidth="2" strokeDasharray="2.2 2.4" /></svg>);
+const npPrioIcon = (color, level) => (
+  <svg width="15" height="15" viewBox="0 0 15 15">
+    <rect x="1" y="9" width="3" height="5" rx="1" fill={level >= 1 ? color : "#DDD3CC"} />
+    <rect x="6" y="6" width="3" height="8" rx="1" fill={level >= 2 ? color : "#DDD3CC"} />
+    <rect x="11" y="3" width="3" height="11" rx="1" fill={level >= 3 ? color : "#DDD3CC"} />
+  </svg>
+);
+
+// One property row: muted label (left, fixed) + control (right, flexible)
+function NpRow({ label, children }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", minHeight: 40, gap: 12 }}>
+      <div style={{ width: 104, flexShrink: 0, fontFamily: NP_FONT, fontSize: 13, color: BTONE.body }}>{label}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    </div>
+  );
+}
+
+// Compact icon-led option menu (Status, Priority) — borderless trigger + light popover
+function NpMenuSelect({ value, options, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+  const cur = options.find(o => o.value === value);
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button type="button" onClick={() => setOpen(o => !o)} style={{
+        display: "flex", alignItems: "center", gap: 8, width: "100%", minHeight: 32, padding: "5px 8px",
+        borderRadius: 7, border: "1px solid transparent", background: open ? BTONE.insetAlt : "transparent",
+        color: cur ? BTONE.ink : BTONE.muted, cursor: "pointer", textAlign: "left",
+        fontFamily: NP_FONT, fontSize: 14, boxSizing: "border-box", transition: "background 150ms",
+      }}
+        onMouseEnter={e => { if (!open) e.currentTarget.style.background = BTONE.insetAlt; }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.background = "transparent"; }}>
+        {cur?.icon && <span style={{ display: "inline-flex", flexShrink: 0 }}>{cur.icon}</span>}
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cur ? cur.label : "Select"}</span>
+      </button>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: 210, zIndex: 60,
+          background: "#fff", border: `1px solid ${BTONE.border}`, borderRadius: 10, padding: 4,
+          boxShadow: "0 14px 36px rgba(20,12,6,0.16)" }}>
+          {options.map(o => (
+            <button key={o.value} type="button" onClick={() => { onChange(o.value); setOpen(false); }} style={{
+              display: "flex", alignItems: "center", gap: 9, width: "100%", padding: "8px", borderRadius: 7,
+              border: "none", background: o.value === value ? BTONE.insetAlt : "transparent", cursor: "pointer",
+              color: BTONE.ink, fontFamily: NP_FONT, fontSize: 14, textAlign: "left",
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = BTONE.insetAlt}
+              onMouseLeave={e => e.currentTarget.style.background = o.value === value ? BTONE.insetAlt : "transparent"}>
+              {o.icon && <span style={{ display: "inline-flex", flexShrink: 0 }}>{o.icon}</span>}
+              <span>{o.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, onCreated, personProfile }) {
   useDevLabel('CreateProjectOverlay', 'src/views/ProjectsView.jsx', 'Modal overlay form for creating new projects with all field inputs');
   const [name, setName] = useState("");
   const [owner, setOwner] = useState(personProfile?.name || "");
   const [squad, setSquad] = useState(personProfile?.squad || "");
   const [priority, setPriority] = useState("P2");
+  const [status, setStatus] = useState("upcoming");
   const [tentativeStart, setTentativeStart] = useState("");
   const [endDate, setEndDate] = useState("");
   const [dependencies, setDependencies] = useState([]);
@@ -2639,7 +2732,7 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
     const newProj = {
       id: tempId, name: name.trim(), description: null,
       owner, squad, phase: null, startDate: null, endDate: endDate || null,
-      status: "upcoming",
+      status,
       tracks: {},
       tentativeStartDate: tentativeStart || null,
       priority, complexity: null,
@@ -2666,6 +2759,22 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
     primary: "#280E01",   // primary button + selected chip
   };
   const brownTone = { border: B.border, bg: B.inset, text: B.ink, muted: B.muted, accent: B.accent, accentDim: B.insetAlt, fieldBg: B.inset };
+
+  const statusOpts = [
+    { value: "upcoming", label: "Upcoming", icon: npStatusIcon("upcoming") },
+    { value: "in_flight", label: "In flight", icon: npStatusIcon("in_flight") },
+  ];
+  const prioOpts = [
+    { value: "P0", label: "Urgent", icon: npPrioIcon(c.red, 3) },
+    { value: "P1", label: "High", icon: npPrioIcon(c.amber, 3) },
+    { value: "P2", label: "Medium", icon: npPrioIcon(B.body, 2) },
+    { value: "P3", label: "Low", icon: npPrioIcon(B.muted, 1) },
+  ];
+  const npDateStyle = {
+    width: "100%", minHeight: 32, padding: "5px 8px", border: "1px solid transparent",
+    borderRadius: 7, background: "transparent", color: B.ink,
+    fontFamily: NP_FONT, fontSize: 14, outline: "none", boxSizing: "border-box",
+  };
 
   const inputStyle = {
     width: "100%", height: 40, padding: `0 ${space[3]}px`,
@@ -2742,46 +2851,56 @@ function CreateProjectOverlay({ projects, people, squads, setProjects, onClose, 
   }, [depOpen]);
 
   return (
-    <SideSheet open onClose={onClose} width={540} title="New project" floating>
+    <SideSheet open onClose={onClose} width={330} floating headerless autoFocusContent={false}>
       <div data-suppress-shortcuts style={{ width: "100%", minHeight: "100%", display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: space[3] }}>
-          {/* Name */}
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-              <div style={fieldLabel}>Name</div>
-              <span style={{ fontFamily: typo.monoSm.font, fontSize: typo.monoSm.size, color: name.length > 100 ? c.red : B.muted, fontVariantNumeric: "tabular-nums" }}>{name.length}/100</span>
-            </div>
-            <Inp value={name} onChange={e => { if (e.target.value.length <= 100) setName(e.target.value); }} placeholder="e.g. Checkout Redesign" style={{ width: "100%", border: `1px solid ${B.border}`, background: B.inset, color: B.ink }} autoFocus maxLength={100} />
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {/* Title (project name) + close */}
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: space[5] }}>
+            <input
+              className="flow-np-title"
+              value={name}
+              onChange={e => { if (e.target.value.length <= 100) setName(e.target.value); }}
+              placeholder="Project name"
+              maxLength={100}
+              style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent",
+                fontFamily: NP_FONT, fontSize: 22, fontWeight: 600, letterSpacing: "-0.3px", color: B.ink, padding: 0 }}
+            />
+            <button type="button" onClick={onClose} aria-label="Close" style={{
+              flexShrink: 0, width: 30, height: 30, marginTop: 3, borderRadius: 8,
+              border: `1px solid ${B.border}`, background: B.surface, color: B.body, cursor: "pointer",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 5l14 14M19 5L5 19" /></svg>
+            </button>
           </div>
 
-          {/* Owner + Squad */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
-            <div>
-              <div style={fieldLabel}>Owner</div>
-              <SearchSelect value={owner} onChange={setOwner} options={allOwners} placeholder="Search people..." tone={brownTone} />
-            </div>
-            <div>
-              <div style={fieldLabel}>Squad</div>
-              <SearchSelect value={squad} onChange={setSquad} options={allSquads} placeholder="Search squads..." tone={brownTone} />
-            </div>
-          </div>
-
-          {/* Tentative dates */}
-          <div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: space[3] }}>
-              <div>
-                <div style={fieldLabel}>Tentative start date <span style={{ fontWeight: 400, color: B.muted }}>— optional</span></div>
-                <input type="date" value={tentativeStart} onChange={e => setTentativeStart(e.target.value)} style={inputStyle} />
+          {/* Properties */}
+          <div style={{ fontFamily: NP_FONT, fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: B.muted, marginBottom: space[2] }}>Properties</div>
+          <div style={{ display: "flex", flexDirection: "column", borderTop: `1px solid ${B.border}`, paddingTop: space[2] }}>
+            <NpRow label="Status"><NpMenuSelect value={status} onChange={setStatus} options={statusOpts} /></NpRow>
+            <NpRow label="Priority"><NpMenuSelect value={priority} onChange={setPriority} options={prioOpts} /></NpRow>
+            <NpRow label="Lead">
+              <SearchSelect inline value={owner} onChange={setOwner} options={allOwners} placeholder="Search people..." emptyLabel="Set lead" icon={owner ? <NpAvatar name={owner} /> : NpIcon.personAdd} tone={brownTone} />
+            </NpRow>
+            <NpRow label="Squad">
+              <SearchSelect inline value={squad} onChange={setSquad} options={allSquads} placeholder="Search squads..." emptyLabel="Set squad" icon={NpIcon.squad} tone={brownTone} />
+            </NpRow>
+            <NpRow label="Start date">
+              <div style={{ position: "relative" }}>
+                <input type="date" className="flow-date-input" value={tentativeStart} onChange={e => setTentativeStart(e.target.value)} style={npDateStyle} />
+                {!tentativeStart && <span className="flow-date-ph">{NpIcon.calPlus}<span style={{ marginLeft: 6 }}>Set start date</span></span>}
               </div>
-              <div>
-                <div style={fieldLabel}>Tentative end date <span style={{ fontWeight: 400, color: B.muted }}>— optional</span></div>
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} min={startDate || undefined} style={inputStyle} />
+            </NpRow>
+            <NpRow label="Target date">
+              <div style={{ position: "relative" }}>
+                <input type="date" className="flow-date-input" value={endDate} min={startDate || undefined} onChange={e => setEndDate(e.target.value)} style={npDateStyle} />
+                {!endDate && <span className="flow-date-ph">{NpIcon.calPlus}<span style={{ marginLeft: 6 }}>Set target date</span></span>}
               </div>
-            </div>
-            {startDate && endDate && endDate <= startDate && (
-              <div style={{ fontFamily: typo.bodySm.font, fontSize: 13, color: c.red, marginTop: space[1] }}>End date must be after start date</div>
-            )}
+            </NpRow>
           </div>
+          {startDate && endDate && endDate <= startDate && (
+            <div style={{ fontFamily: NP_FONT, fontSize: 13, color: c.red, marginTop: space[2] }}>Target date must be after the start date</div>
+          )}
         </div>
 
         {/* Actions — pinned to the bottom of the sheet */}
