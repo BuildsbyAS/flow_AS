@@ -133,37 +133,42 @@ export default function ProjectHeader({
           display: 'inline-grid',
           alignSelf: 'stretch',
           padding: 0,
-          rowGap: 6,
-          columnGap: 24,
+          rowGap: 4,
+          columnGap: 0,
           gridTemplateRows: 'repeat(2, fit-content(100%))',
-          gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+          // Uniform 168px tracks, no gutter. The multi-select Squad value
+          // truncates within its single track; Tags overflow freely.
+          gridTemplateColumns: 'repeat(6, 168px)',
         }}
       >
         {/* Labels */}
-        <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Created on</span>
-        <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Due date</span>
-        <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Status</span>
-        <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Complexity</span>
-        <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Squad</span>
-        <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Additional tag</span>
+        <span style={{ ...labelStyle, gridColumn: 1, justifySelf: 'start', alignSelf: 'center' }}>Created on</span>
+        <span style={{ ...labelStyle, gridColumn: 2, justifySelf: 'start', alignSelf: 'center' }}>Due date</span>
+        <span style={{ ...labelStyle, gridColumn: 3, justifySelf: 'start', alignSelf: 'center' }}>Status</span>
+        <span style={{ ...labelStyle, gridColumn: 4, justifySelf: 'start', alignSelf: 'center' }}>Complexity</span>
+        <span style={{ ...labelStyle, gridColumn: 5, justifySelf: 'start', alignSelf: 'center' }}>Squad</span>
+        <span style={{ ...labelStyle, gridColumn: 6, justifySelf: 'start', alignSelf: 'center' }}>Additional tag</span>
 
         {/* Values */}
-        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
+        <span style={{ gridColumn: 1, gridRow: 2, justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
           <DateField ariaLabel={`Created on ${fmtDate(createdAt)}`} value={createdAt} onChange={onCreatedAtChange} />
         </span>
-        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
+        <span style={{ gridColumn: 2, gridRow: 2, justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
           <DateField ariaLabel={`Due date ${fmtDate(dueDate)}`} value={dueDate} onChange={onDueDateChange} />
         </span>
-        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
+        <span style={{ gridColumn: 3, gridRow: 2, justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
           <StatusField statusKey={statusKey} onChange={onStatusKeyChange} />
         </span>
-        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
+        <span style={{ gridColumn: 4, gridRow: 2, justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
           <ComplexityField complexity={complexity} onChange={onComplexityChange} />
         </span>
-        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
-          <SquadField squads={squads} onChange={onSquadsChange} />
+        {/* Squad — multi-select. Truncates within its 168px track, with 12px
+            of right padding so the ellipsis lands clear of the next column. */}
+        <span style={{ gridColumn: 5, gridRow: 2, justifySelf: 'stretch', alignSelf: 'center', minWidth: 0, overflow: 'hidden', paddingRight: 12 }}>
+          <SquadField squads={squads} onChange={onSquadsChange} truncate />
         </span>
-        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
+        {/* Tag — multi-select. Anchored to col 6 and free to overflow. */}
+        <span style={{ gridColumn: 6, gridRow: 2, justifySelf: 'start', alignSelf: 'center', minWidth: 0, overflow: 'visible' }}>
           <TagField tags={tags} onChange={onTagsChange} />
         </span>
       </div>
@@ -280,7 +285,7 @@ function StatusPill({ statusKey, small }) {
 
 // ── Editable squads (multi-select) ───────────────────────────────────────
 // Project can belong to multiple service squads — checkbox list, no auto-close.
-function SquadField({ squads, onChange }) {
+function SquadField({ squads, onChange, truncate = false }) {
   function toggleSquad(s) {
     const next = squads.includes(s) ? squads.filter((x) => x !== s) : [...squads, s];
     onChange(next);
@@ -290,6 +295,7 @@ function SquadField({ squads, onChange }) {
     <EditableValue
       ariaLabel="Change squads"
       hoverIcon={<DownChevronIconButton size={24} />}
+      style={truncate ? { maxWidth: '100%', minWidth: 0 } : undefined}
       renderPopover={({ anchor, close }) => (
         <FloatingPopover anchor={anchor} onClose={close} width={220}>
           <ListPicker
@@ -304,7 +310,16 @@ function SquadField({ squads, onChange }) {
         </FloatingPopover>
       )}
     >
-      <span style={valueStyle}>{displayValue}</span>
+      <span
+        style={{
+          ...valueStyle,
+          ...(truncate
+            ? { display: 'block', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }
+            : {}),
+        }}
+      >
+        {displayValue}
+      </span>
     </EditableValue>
   );
 }
@@ -336,8 +351,9 @@ function ComplexityField({ complexity, onChange }) {
 }
 
 // ── Additional tags (max 3) ──────────────────────────────────────────────
-// Pills + a hover-reveal + to add. No remove cross — right-click a pill for a
-// Remove / Replace menu, both routed through the same tag picker.
+// Pills + a hover-reveal + to add. No remove cross — click a pill for a
+// Replace / Remove menu, both routed through the same tag picker. The picker
+// also lets you filter the preset tags or create a brand-new custom tag.
 const TAG_FALLBACK = { bg: '#F1F5F9', fg: '#475569' };
 
 function TagField({ tags, onChange }) {
@@ -364,7 +380,7 @@ function TagField({ tags, onChange }) {
       const next = tags.slice();
       next[picker.replaceIndex] = key;
       onChange(next);
-    } else if (tags.length < 3) {
+    } else if (tags.length < 3 && !tags.includes(key)) {
       onChange([...tags, key]);
     }
     setPicker(null);
@@ -385,10 +401,7 @@ function TagField({ tags, onChange }) {
         <TagPill
           key={`${key}-${i}`}
           tagKey={key}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            setCtx({ x: e.clientX, y: e.clientY, index: i });
-          }}
+          onActivate={(rect) => setCtx({ x: rect.left, y: rect.bottom + 6, index: i })}
         />
       ))}
 
@@ -454,25 +467,8 @@ function TagField({ tags, onChange }) {
 
       {picker &&
         createPortal(
-          <FloatingPopover anchor={picker.anchor} onClose={() => setPicker(null)} width={200}>
-            {choices.length ? (
-              <ListPicker
-                items={choices}
-                value={null}
-                onSelect={pick}
-                renderItem={(it) => {
-                  const tone = tagTone[it.key] || TAG_FALLBACK;
-                  return (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                      <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: tone.fg, flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, color: 'var(--c-text-primary)' }}>{it.label}</span>
-                    </span>
-                  );
-                }}
-              />
-            ) : (
-              <div style={{ padding: 14, fontSize: 12, color: 'var(--c-text-muted)' }}>No more tags</div>
-            )}
+          <FloatingPopover anchor={picker.anchor} onClose={() => setPicker(null)} width={220}>
+            <TagPicker choices={choices} usedKeys={tags} onPick={pick} />
           </FloatingPopover>,
           document.body
         )}
@@ -491,13 +487,28 @@ function TagField({ tags, onChange }) {
   );
 }
 
-function TagPill({ tagKey, onContextMenu }) {
+function TagPill({ tagKey, onActivate }) {
   const tag = availableTags.find((t) => t.key === tagKey);
   const tone = tagTone[tagKey] || TAG_FALLBACK;
+  const [hover, setHover] = useState(false);
+  function activate(e) {
+    onActivate(e.currentTarget.getBoundingClientRect());
+  }
   return (
     <span
-      onContextMenu={onContextMenu}
-      title="Right-click to replace or remove"
+      role="button"
+      tabIndex={0}
+      aria-haspopup="menu"
+      onClick={activate}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          activate(e);
+        }
+      }}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      title="Click to replace or remove"
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -511,12 +522,136 @@ function TagPill({ tagKey, onContextMenu }) {
         lineHeight: '20px',
         letterSpacing: '-0.1px',
         whiteSpace: 'nowrap',
-        cursor: 'context-menu',
+        cursor: 'pointer',
         userSelect: 'none',
+        boxShadow: hover ? 'inset 0 0 0 1px rgba(0, 0, 0, 0.1)' : 'inset 0 0 0 1px transparent',
+        transition: 'box-shadow 120ms var(--ease-out)',
       }}
     >
       {tag?.label || tagKey}
     </span>
+  );
+}
+
+// ── Tag picker (filter + create custom) ──────────────────────────────────
+// A search box filters the preset choices as you type. When the query doesn't
+// exactly match an existing tag, a "Create <query>" row appears so the user can
+// mint a custom tag on the fly. Custom tags use the typed text as both key and
+// label and render with the neutral fallback tone.
+function TagPicker({ choices, usedKeys, onPick }) {
+  const inputRef = useRef(null);
+  const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const q = query.trim();
+  const ql = q.toLowerCase();
+  const filtered = q ? choices.filter((t) => t.label.toLowerCase().includes(ql)) : choices;
+
+  // Don't offer "Create" if the text already matches a preset label or an
+  // already-applied tag (case-insensitive).
+  const matchesExisting =
+    availableTags.some((t) => t.label.toLowerCase() === ql) ||
+    (usedKeys || []).some((k) => k.toLowerCase() === ql);
+  const canCreate = q.length > 0 && !matchesExisting;
+
+  function submit() {
+    if (filtered.length) onPick(filtered[0].key);
+    else if (canCreate) onPick(q);
+  }
+
+  return (
+    <div>
+      <div style={{ padding: 8, borderBottom: '1px solid var(--c-border-primary)' }}>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          placeholder="Find or create a tag…"
+          aria-label="Find or create a tag"
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '7px 10px',
+            borderRadius: 8,
+            border: '1px solid var(--c-border-primary)',
+            background: 'var(--c-surface-inset, #F3F3F6)',
+            fontFamily: 'var(--f-sans)',
+            fontSize: 13,
+            color: 'var(--c-text-primary)',
+            outline: 'none',
+          }}
+        />
+      </div>
+
+      <div style={{ maxHeight: 220, overflowY: 'auto', padding: 6 }}>
+        {filtered.map((it) => {
+          const tone = tagTone[it.key] || TAG_FALLBACK;
+          return (
+            <TagOption
+              key={it.key}
+              onClick={() => onPick(it.key)}
+              icon={<span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: tone.fg, flexShrink: 0 }} />}
+              label={it.label}
+            />
+          );
+        })}
+
+        {canCreate && (
+          <TagOption
+            onClick={() => onPick(q)}
+            icon={
+              <span aria-hidden style={{ color: 'var(--c-text-action)', fontSize: 15, lineHeight: 1, fontWeight: 600, width: 8, textAlign: 'center' }}>+</span>
+            }
+            label={
+              <span style={{ color: 'var(--c-text-secondary)' }}>
+                Create <strong style={{ color: 'var(--c-text-primary)', fontWeight: 600 }}>“{q}”</strong>
+              </span>
+            }
+          />
+        )}
+
+        {!filtered.length && !canCreate && (
+          <div style={{ padding: 12, fontSize: 12, color: 'var(--c-text-muted)' }}>No more tags</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TagOption({ onClick, icon, label }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      role="option"
+      onClick={onClick}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        width: '100%',
+        padding: '8px 10px',
+        borderRadius: 6,
+        background: hover ? '#F4EEEB' : 'transparent',
+        textAlign: 'left',
+        transition: 'background 120ms var(--ease-out)',
+      }}
+    >
+      {icon}
+      <span style={{ fontSize: 13, color: 'var(--c-text-primary)' }}>{label}</span>
+    </button>
   );
 }
 

@@ -319,8 +319,8 @@ function Checkbox({ checked }) {
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: checked ? 'var(--c-text-action)' : 'var(--c-surface-primary)',
-        border: checked ? '1px solid var(--c-text-action)' : '1.5px solid var(--c-border-strong)',
+        background: checked ? '#3D1602' : 'var(--c-surface-primary)',
+        border: checked ? '1px solid #3D1602' : '1.5px solid var(--c-border-strong)',
         color: '#fff',
         transition: 'background 120ms var(--ease-out), border-color 120ms var(--ease-out)',
       }}

@@ -264,7 +264,7 @@ export const layout = {
 
 // ── Button variant tokens ──
 export const btnVariants = () => ({
-  primary:   { bg: c.accent,      color: c.textOnAccent, border: "none",                            hoverBg: c.accentHover },
+  primary:   { bg: "#3D1602",     color: c.textOnAccent, border: "none",                            hoverBg: "#52210A" },
   secondary: { bg: c.surfaceSolid, color: c.textMid,   border: `1px solid ${c.border}`,             hoverBg: c.surfaceAlt },
   ghost:     { bg: "transparent", color: c.textDim,    border: "1px solid transparent",             hoverBg: c.surfaceAlt },
   danger:    { bg: c.redDim,      color: c.red,        border: `1px solid ${c.red}30`,              hoverBg: `${c.red}18` },
