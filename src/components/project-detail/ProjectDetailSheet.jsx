@@ -15,6 +15,8 @@ export default function ProjectDetailSheet({ project = mockProject, onClose }) {
   const [dueDate, setDueDate] = useState(project.dueDate);
   const [statusKey, setStatusKey] = useState(project.statusKey);
   const [squads, setSquads] = useState(project.squads);
+  const [complexity, setComplexity] = useState(project.complexity);
+  const [tags, setTags] = useState(project.tags || []);
 
   // When switching to a different project the sheet stays mounted (no re-slide);
   // refresh the editable header fields in place.
@@ -24,6 +26,8 @@ export default function ProjectDetailSheet({ project = mockProject, onClose }) {
     setDueDate(project.dueDate);
     setStatusKey(project.statusKey);
     setSquads(project.squads);
+    setComplexity(project.complexity);
+    setTags(project.tags || []);
   }, [project.code]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sheet width is calibrated against Figma frame 486:13097 (1512×982 MacBook 14"):
@@ -33,6 +37,25 @@ export default function ProjectDetailSheet({ project = mockProject, onClose }) {
   // visual gutters rather than stretching whitespace.
   //   half-open: width = min(70vw, 1600px)  (1600px cap protects ultrawides)
   //   full:      width = 100vw, edge-to-edge, no rounding
+  function handleQuickAction(key) {
+    if (key === 'copy') {
+      try {
+        navigator.clipboard?.writeText(window.location.href);
+      } catch {
+        /* clipboard unavailable */
+      }
+    } else if (key === 'ship') {
+      setStatusKey('live');
+    } else if (key === 'deprioritize') {
+      setStatusKey('paused');
+    } else if (key === 'block') {
+      setStatusKey('review');
+    } else if (key === 'delete') {
+      onClose?.();
+    }
+    // 'duplicate' is a no-op in this mock
+  }
+
   const positioning = expanded
     ? { top: 0, right: 0, bottom: 0, width: '100vw', borderRadius: 0 }
     : { top: 16, right: 16, bottom: 16, width: 'min(70vw, 1600px)', borderRadius: 24 };
@@ -61,6 +84,7 @@ export default function ProjectDetailSheet({ project = mockProject, onClose }) {
         onToggleExpand={() => setExpanded((v) => !v)}
         projectName={project.name}
         onClose={onClose}
+        onQuickAction={handleQuickAction}
       />
 
       <div
@@ -72,7 +96,9 @@ export default function ProjectDetailSheet({ project = mockProject, onClose }) {
           padding: '24px 32px 64px',
         }}
       >
-        <div key={project.code} style={{ display: 'flex', flexDirection: 'column', gap: 40 }}>
+        {/* Cap content at 1200px and center it so it stays readable when the
+            sheet is expanded edge-to-edge. */}
+        <div key={project.code} style={{ display: 'flex', flexDirection: 'column', gap: 40, width: '100%', maxWidth: 1200, margin: '0 auto' }}>
           <ProjectHeader
             name={project.name}
             code={project.code}
@@ -87,6 +113,10 @@ export default function ProjectDetailSheet({ project = mockProject, onClose }) {
             onStatusKeyChange={setStatusKey}
             squads={squads}
             onSquadsChange={setSquads}
+            complexity={complexity}
+            onComplexityChange={setComplexity}
+            tags={tags}
+            onTagsChange={setTags}
           />
           <TeamSection initialTeam={project.team} availableMembers={project.availableMembers} />
           <ResourcesSection resources={project.resources} />

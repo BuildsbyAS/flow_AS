@@ -9,7 +9,38 @@ export const mockProject = {
   dueDate: new Date(2026, 5, 23), // Jun 23, 2026
   statusKey: 'inflight',
   squads: ['Customer'],
+  complexity: 'medium',
+  tags: ['enhancement'],
   bookmarked: false,
+};
+
+export const availableComplexity = [
+  { key: 'low', label: 'Low' },
+  { key: 'medium', label: 'Medium' },
+  { key: 'high', label: 'High' },
+];
+
+// Extra tags a project can carry (max 3). Tone mirrors the status pill style.
+export const availableTags = [
+  { key: 'enhancement', label: 'Enhancement' },
+  { key: 'bug', label: 'Bug' },
+  { key: 'feature', label: 'Feature' },
+  { key: 'research', label: 'Research' },
+  { key: 'techdebt', label: 'Tech debt' },
+  { key: 'compliance', label: 'Compliance' },
+  { key: 'experiment', label: 'Experiment' },
+  { key: 'revenue', label: 'Revenue' },
+];
+
+export const tagTone = {
+  enhancement: { bg: '#F5FAFF', fg: '#0F7EFF' },
+  bug: { bg: '#FBE7E7', fg: '#B91C1C' },
+  feature: { bg: '#E6FBF1', fg: '#007A4A' },
+  research: { bg: '#F3F0FF', fg: '#6D28D9' },
+  techdebt: { bg: '#FFF7E0', fg: '#B45309' },
+  compliance: { bg: '#E0F7FA', fg: '#0E7490' },
+  experiment: { bg: '#FCE7F3', fg: '#DB2777' },
+  revenue: { bg: '#ECFDF5', fg: '#047857' },
 };
 
 export const availableStatuses = [
@@ -101,7 +132,7 @@ export const mockBars = [
   { key: 'design-pre', phase: 'design', label: 'Discovery', startWeek: 0, spanWeeks: 4, dateRange: '4 Jan → 1 Feb', light: true },
   { key: 'design', phase: 'design', label: 'Design', startWeek: 4, spanWeeks: 8, dateRange: '4 Jan → 12 Feb' },
   { key: 'dev', phase: 'dev', label: 'Dev', startWeek: 10, spanWeeks: 7, dateRange: '8 Mar → 26 Apr' },
-  { key: 'qa', phase: 'qa', label: 'QA', startWeek: 16, spanWeeks: 5, dateRange: '26 Apr → 1 Jun' },
+  { key: 'qa', phase: 'qa', label: 'QA', startWeek: 16, spanWeeks: 7, dateRange: '26 Apr → 1 Jun' },
 ];
 
 export const mockMonths = [

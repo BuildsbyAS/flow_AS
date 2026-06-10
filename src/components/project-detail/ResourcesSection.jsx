@@ -3,11 +3,14 @@ import { createPortal } from 'react-dom';
 import { forwardRef } from 'react';
 import {
   PlusIcon,
-  AddIconButton,
   ExternalLinkIcon,
   FigmaLogo,
   CategoryCool,
   CategoryWarm,
+  FilePdf,
+  FileDeck,
+  FileLink,
+  FileData,
 } from './icons.jsx';
 import { mockResources } from './mockProject.js';
 
@@ -25,44 +28,69 @@ const WARM_HOVER = '#F4EEEB';
 
 const TYPE_ICON = {
   figma: FigmaLogo,
+  sheet: FileData,
+  doc: FileDeck,
+  link: FileLink,
+  custom: CategoryWarm,
+  prd: FilePdf,
+  design: CategoryCool,
   'category-cool': CategoryCool,
   'category-warm': CategoryWarm,
 };
 
-const ADD_OPTIONS = [
-  { key: 'figma', label: 'Connect Figma file', hint: 'Paste a figma.com URL' },
-  { key: 'upload', label: 'Upload file', hint: 'PDF, deck, image, doc' },
-  { key: 'link', label: 'Add link', hint: 'Linear, Notion, doc URL' },
+// Type chips in the add panel. A Figma file is just a design file; prototype
+// gets an emoji; the last chip lets the user name any custom resource.
+const RESOURCE_TYPES = [
+  { key: 'figma', label: 'Design', placeholder: 'Paste a design file link', fallback: 'Design file' },
+  { key: 'sheet', label: 'Spreadsheet', placeholder: 'Paste a spreadsheet link', fallback: 'Spreadsheet' },
+  { key: 'doc', label: 'Doc', placeholder: 'Paste a doc link', fallback: 'Document' },
+  { key: 'link', emoji: '▶️', label: 'Prototype', placeholder: 'Paste a prototype link', fallback: 'Prototype' },
+  { key: 'custom', label: 'Custom', placeholder: 'Name this resource', fallback: 'Resource', custom: true },
 ];
+
+function titleFromLink(url) {
+  try {
+    const u = new URL(url.includes('://') ? url : `https://${url}`);
+    const path = u.pathname.split('/').filter(Boolean).pop();
+    return path ? decodeURIComponent(path).replace(/[-_]/g, ' ') : u.hostname.replace(/^www\./, '');
+  } catch {
+    return url.slice(0, 40);
+  }
+}
 
 export default function ResourcesSection({ resources: initialResources = mockResources }) {
   const [resources, setResources] = useState(initialResources);
   const [sectionHovered, setSectionHovered] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerAnchor, setPickerAnchor] = useState(null);
+  const [menu, setMenu] = useState(null); // { id, x, y }
 
   const addBtnRef = useRef(null);
   const sectionRef = useRef(null);
 
+  function removeResource(id) {
+    setResources((r) => r.filter((x) => x.id !== id));
+  }
+  function updateResource(id, patch) {
+    setResources((r) => r.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  }
+
+  function openPicker(rect) {
+    if (rect) setPickerAnchor(rect);
+    setPickerOpen(true);
+  }
   function togglePicker() {
     if (pickerOpen) {
       setPickerOpen(false);
       return;
     }
-    const rect = addBtnRef.current?.getBoundingClientRect();
-    if (rect) setPickerAnchor(rect);
-    setPickerOpen(true);
+    openPicker(addBtnRef.current?.getBoundingClientRect());
   }
-  function addResource(key) {
-    const samples = {
-      figma: { type: 'figma', title: 'New Figma file' },
-      upload: { type: 'category-cool', title: 'Untitled doc' },
-      link: { type: 'category-warm', title: 'External link' },
-    };
-    const sample = samples[key] || samples.link;
+  function addResource(type, title) {
+    const def = RESOURCE_TYPES.find((t) => t.key === type);
     setResources((r) => [
       ...r,
-      { id: `r-${Date.now()}`, href: '#', ...sample },
+      { id: `r-${Date.now()}`, href: '#', type, title: title || def?.fallback || 'New resource' },
     ]);
     setPickerOpen(false);
   }
@@ -132,7 +160,8 @@ export default function ResourcesSection({ resources: initialResources = mockRes
         />
       </div>
 
-      {/* Cards — wrap, gap 8 row / 12 col */}
+      {/* Cards — wrap, gap 8 row / 12 col. A persistent "New resource" card
+          trails the list (and is the whole view when empty). */}
       <div
         style={{
           display: 'flex',
@@ -144,14 +173,41 @@ export default function ResourcesSection({ resources: initialResources = mockRes
         }}
       >
         {resources.map((r) => (
-          <ResourceCard key={r.id} resource={r} />
+          <ResourceCard
+            key={r.id}
+            resource={r}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setMenu({ id: r.id, x: e.clientX, y: e.clientY });
+            }}
+          />
         ))}
+        {resources.length === 0 && <NewResourceCard onOpen={openPicker} />}
       </div>
 
       {pickerOpen &&
         pickerAnchor &&
         createPortal(
-          <AddPicker anchor={pickerAnchor} onPick={addResource} onClose={() => setPickerOpen(false)} />,
+          <AddResourcePanel anchor={pickerAnchor} onAdd={addResource} onClose={() => setPickerOpen(false)} />,
+          document.body
+        )}
+
+      {menu &&
+        resources.some((x) => x.id === menu.id) &&
+        createPortal(
+          <ResourceMenu
+            anchor={menu}
+            resource={resources.find((x) => x.id === menu.id)}
+            onClose={() => setMenu(null)}
+            onChangeLink={(href) => {
+              updateResource(menu.id, { href });
+              setMenu(null);
+            }}
+            onDelete={() => {
+              removeResource(menu.id);
+              setMenu(null);
+            }}
+          />,
           document.body
         )}
     </section>
@@ -159,7 +215,7 @@ export default function ResourcesSection({ resources: initialResources = mockRes
 }
 
 // ── Resource card ────────────────────────────────────────────────────────
-function ResourceCard({ resource }) {
+function ResourceCard({ resource, onContextMenu }) {
   const [hover, setHover] = useState(false);
   const Icon = TYPE_ICON[resource.type] || CategoryCool;
 
@@ -171,8 +227,9 @@ function ResourceCard({ resource }) {
       onClick={(e) => {
         // demo only — don't actually navigate
         if (resource.href === '#') e.preventDefault();
-        console.info('open resource:', resource.title);
       }}
+      onContextMenu={onContextMenu}
+      title="Right-click for options"
       onPointerEnter={() => setHover(true)}
       onPointerLeave={() => setHover(false)}
       onPointerDown={(e) => (e.currentTarget.style.transform = 'translateY(-1px) scale(0.99)')}
@@ -186,7 +243,7 @@ function ResourceCard({ resource }) {
         width: 200,
         padding: '10px 16px 10px 12px',
         background: hover ? WARM_HOVER : WARM_BG,
-        border: '1px solid #FFFFFF',
+        border: 'none',
         borderRadius: 10,
         textDecoration: 'none',
         color: 'inherit',
@@ -255,7 +312,7 @@ function ResourceCard({ resource }) {
   );
 }
 
-// ── + button (mirrors Team) ──────────────────────────────────────────────
+// ── + button (mirrors Team; solid brown bg, cream icon — no hover state) ──
 const AddButton = forwardRef(function AddButton({ visible, open, onClick }, ref) {
   return (
     <button
@@ -265,30 +322,22 @@ const AddButton = forwardRef(function AddButton({ visible, open, onClick }, ref)
       aria-label={open ? 'Close picker' : 'Add resource'}
       aria-expanded={open}
       tabIndex={visible ? 0 : -1}
+      onPointerDown={(e) => visible && (e.currentTarget.style.transform = 'scale(0.94)')}
+      onPointerUp={(e) => visible && (e.currentTarget.style.transform = 'scale(1)')}
       style={{
         width: 24,
         height: 24,
         padding: 0,
         borderRadius: 9999,
-        background: 'transparent',
+        background: '#3D1602',
+        color: WARM_BG,
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
         opacity: visible ? 1 : 0,
         transform: visible ? 'scale(1)' : 'scale(0.92)',
         pointerEvents: visible ? 'auto' : 'none',
-        transition:
-          'opacity 160ms var(--ease-out), transform 200ms var(--ease-out), filter 160ms var(--ease-out)',
-      }}
-      onMouseEnter={(e) => {
-        if (visible) e.currentTarget.style.filter = 'brightness(0.95)';
-      }}
-      onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
-      onPointerDown={(e) => {
-        if (visible) e.currentTarget.style.transform = 'scale(0.94)';
-      }}
-      onPointerUp={(e) => {
-        if (visible) e.currentTarget.style.transform = 'scale(1)';
+        transition: 'opacity 160ms var(--ease-out), transform 200ms var(--ease-out)',
       }}
     >
       <span
@@ -298,57 +347,191 @@ const AddButton = forwardRef(function AddButton({ visible, open, onClick }, ref)
           transform: open ? 'rotate(45deg)' : 'rotate(0deg)',
         }}
       >
-        <AddIconButton size={24} />
+        <PlusIcon size={14} />
       </span>
     </button>
   );
 });
 
-// ── Picker dropdown ──────────────────────────────────────────────────────
-function AddPicker({ anchor, onPick }) {
+// ── Empty / add-resource card (dashed) ───────────────────────────────────
+function NewResourceCard({ onOpen }) {
   const ref = useRef(null);
-  const [pos, setPos] = useState({ top: anchor.bottom + 8, left: anchor.left });
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={() => onOpen(ref.current?.getBoundingClientRect())}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.99)')}
+      onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 16,
+        padding: '10px 16px 10px 12px',
+        border: `1px dashed ${hover ? '#3D1602' : '#F1EAE4'}`,
+        borderRadius: 10,
+        background: hover ? WARM_BG : 'transparent',
+        cursor: 'pointer',
+        textAlign: 'left',
+        transition: 'border-color 160ms var(--ease-out), background 160ms var(--ease-out), transform 160ms var(--ease-out)',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 10,
+          background: WARM_BG,
+          color: '#3D1602',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+      >
+        <PlusIcon size={20} />
+      </span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
+        <span style={{ fontFamily: 'var(--f-sans)', fontSize: 12, fontWeight: 500, lineHeight: '16px', color: 'var(--c-text-primary)', whiteSpace: 'nowrap' }}>
+          Add a resource
+        </span>
+        <span style={{ fontFamily: 'var(--f-sans)', fontSize: 12, fontWeight: 400, lineHeight: '16px', color: '#6E5649', whiteSpace: 'nowrap' }}>
+          Add a PDF, link, doc or deck
+        </span>
+      </span>
+    </button>
+  );
+}
+
+// ── Resource right-click menu (Change link · Delete) ─────────────────────
+function ResourceMenu({ anchor, resource, onClose, onChangeLink, onDelete }) {
+  const ref = useRef(null);
+  const inputRef = useRef(null);
+  const [view, setView] = useState('menu');
+  const [link, setLink] = useState(resource?.href && resource.href !== '#' ? resource.href : '');
+  const [pos, setPos] = useState({ x: anchor.x, y: anchor.y });
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    let left = anchor.left;
-    let top = anchor.bottom + 8;
-    if (left + r.width > window.innerWidth - 8) left = window.innerWidth - r.width - 8;
-    if (top + r.height > window.innerHeight - 8) top = anchor.top - r.height - 8;
-    setPos({ top, left });
-  }, [anchor.left, anchor.bottom, anchor.top]);
+    let x = anchor.x;
+    let y = anchor.y;
+    if (x + r.width > window.innerWidth - 8) x = window.innerWidth - r.width - 8;
+    if (y + r.height > window.innerHeight - 8) y = window.innerHeight - r.height - 8;
+    setPos({ x, y });
+  }, [anchor.x, anchor.y, view]);
+
+  useEffect(() => {
+    if (view === 'link') inputRef.current?.focus();
+  }, [view]);
+
+  useEffect(() => {
+    function onDoc(e) {
+      if (!ref.current?.contains(e.target)) onClose();
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    function onScroll() {
+      onClose();
+    }
+    document.addEventListener('pointerdown', onDoc);
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDoc);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('scroll', onScroll, true);
+    };
+  }, [onClose]);
+
+  if (!resource) return null;
 
   return (
     <div
       ref={ref}
-      role="menu"
       data-resources-portal
+      role="menu"
       style={{
         position: 'fixed',
-        top: pos.top,
-        left: pos.left,
+        top: pos.y,
+        left: pos.x,
         zIndex: 1000,
-        width: 260,
+        width: view === 'link' ? 280 : 196,
+        padding: view === 'link' ? 10 : 6,
         background: 'var(--c-surface-primary)',
-        border: '1px solid var(--c-border-primary)',
-        borderRadius: 12,
-        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.12), 0 6px 12px rgba(15, 23, 42, 0.06)',
-        padding: 6,
+        borderRadius: 14,
+        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.16), 0 4px 10px rgba(15, 23, 42, 0.08)',
         transformOrigin: 'top left',
-        animation: 'flow-pop-out 180ms var(--ease-out) both',
+        animation: 'flow-pop-out 150ms var(--ease-out) both',
+        fontFamily: 'var(--f-sans)',
       }}
     >
-      {ADD_OPTIONS.map((opt) => (
-        <PickerItem key={opt.key} opt={opt} onClick={() => onPick(opt.key)} />
-      ))}
+      {view === 'menu' ? (
+        <>
+          <ResMenuRow icon={<LinkIcn />} label="Change link" onClick={() => setView('link')} />
+          <div aria-hidden style={{ height: 1, margin: '4px 6px', background: 'var(--c-border-primary)' }} />
+          <ResMenuRow icon={<TrashIcn />} label="Delete resource" tone="danger" onClick={onDelete} />
+        </>
+      ) : (
+        <div>
+          <input
+            ref={inputRef}
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && link.trim() && onChangeLink(link.trim())}
+            placeholder="Paste a link"
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              borderRadius: 8,
+              border: '1px solid var(--c-border-primary)',
+              background: WARM_BG,
+              fontFamily: 'var(--f-sans)',
+              fontSize: 13,
+              color: 'var(--c-text-primary)',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button
+              type="button"
+              onClick={() => setView('menu')}
+              style={{ flex: 1, padding: '8px 10px', borderRadius: 8, background: WARM_BG, color: 'var(--c-text-secondary)', fontSize: 13, fontWeight: 600 }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => onChangeLink(link.trim())}
+              disabled={!link.trim()}
+              style={{
+                flex: 1,
+                padding: '8px 10px',
+                borderRadius: 8,
+                background: link.trim() ? '#3D1602' : 'var(--c-border-strong)',
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: link.trim() ? 'pointer' : 'not-allowed',
+              }}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function PickerItem({ opt, onClick }) {
+function ResMenuRow({ icon, label, onClick, tone }) {
   const [hover, setHover] = useState(false);
+  const danger = tone === 'danger';
   return (
     <button
       type="button"
@@ -358,21 +541,189 @@ function PickerItem({ opt, onClick }) {
       onPointerLeave={() => setHover(false)}
       style={{
         display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        gap: 2,
+        alignItems: 'center',
+        gap: 10,
         width: '100%',
         padding: '8px 10px',
-        borderRadius: 6,
-        background: hover ? WARM_HOVER : 'transparent',
-        transition: 'background 120ms var(--ease-out)',
+        borderRadius: 8,
+        background: hover ? (danger ? '#FBE7E7' : WARM_HOVER) : 'transparent',
+        color: danger ? '#C13B3B' : 'var(--c-text-primary)',
+        fontSize: 13,
+        fontWeight: 500,
         textAlign: 'left',
+        transition: 'background 120ms var(--ease-out)',
       }}
     >
-      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-text-primary)' }}>
-        {opt.label}
-      </span>
-      <span style={{ fontSize: 11, color: 'var(--c-text-tertiary)' }}>{opt.hint}</span>
+      <span style={{ display: 'inline-flex', width: 16, justifyContent: 'center', color: danger ? '#C13B3B' : 'var(--c-text-secondary)' }}>{icon}</span>
+      {label}
     </button>
+  );
+}
+
+const resIc = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round' };
+function LinkIcn() {
+  return <svg width="15" height="15" viewBox="0 0 16 16" {...resIc}><path d="M7 9a3 3 0 0 0 4.2.2l2-2a3 3 0 0 0-4.2-4.2L7.6 4.4" /><path d="M9 7a3 3 0 0 0-4.2-.2l-2 2a3 3 0 0 0 4.2 4.2l1.4-1.4" /></svg>;
+}
+function TrashIcn() {
+  return <svg width="15" height="15" viewBox="0 0 16 16" {...resIc}><path d="M3 4.5h10M6.5 4V2.8h3V4M5 4.5l.5 8.2a1 1 0 0 0 1 .9h3a1 1 0 0 0 1-.9L11 4.5" /></svg>;
+}
+
+// ── Add-resource panel ────────────────────────────────────────────────────
+// Pick a type, paste a link, or drop / upload a file.
+function AddResourcePanel({ anchor, onAdd, onClose }) {
+  const ref = useRef(null);
+  const fileRef = useRef(null);
+  const [pos, setPos] = useState({ top: anchor.bottom + 8, left: anchor.left });
+  const [type, setType] = useState('figma');
+  const [link, setLink] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+
+  const typeDef = RESOURCE_TYPES.find((t) => t.key === type);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    let left = anchor.left;
+    let top = anchor.bottom + 8;
+    if (left + r.width > window.innerWidth - 8) left = window.innerWidth - r.width - 8;
+    if (left < 8) left = 8;
+    if (top + r.height > window.innerHeight - 8) top = Math.max(8, anchor.top - r.height - 8);
+    setPos({ top, left });
+  }, [anchor.left, anchor.bottom, anchor.top]);
+
+  function submitLink() {
+    const v = link.trim();
+    if (!v) return;
+    onAdd(type, typeDef?.custom ? v : titleFromLink(v));
+  }
+  function onFiles(list) {
+    if (list && list[0]) onAdd(type, list[0].name);
+    else onAdd(type);
+  }
+
+  return (
+    <div
+      ref={ref}
+      data-resources-portal
+      style={{
+        position: 'fixed',
+        top: pos.top,
+        left: pos.left,
+        zIndex: 1000,
+        width: 320,
+        background: 'var(--c-surface-primary)',
+        borderRadius: 16,
+        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.12), 0 6px 12px rgba(15, 23, 42, 0.06)',
+        padding: 14,
+        transformOrigin: 'top left',
+        animation: 'flow-pop-out 180ms var(--ease-out) both',
+        fontFamily: 'var(--f-sans)',
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text-primary)', marginBottom: 10 }}>Add resource</div>
+
+      {/* Type chips */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+        {RESOURCE_TYPES.map((t) => {
+          const Icon = TYPE_ICON[t.key];
+          const on = t.key === type;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setType(t.key)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '5px 10px 5px 8px',
+                borderRadius: 999,
+                border: `1px solid ${on ? '#3D1602' : 'var(--c-border-primary)'}`,
+                background: on ? '#FBF1EC' : '#fff',
+                color: 'var(--c-text-primary)',
+                fontSize: 12,
+                fontWeight: 500,
+                transition: 'border-color 120ms var(--ease-out), background 120ms var(--ease-out)',
+              }}
+            >
+              {t.emoji ? <span style={{ fontSize: 13 }}>{t.emoji}</span> : Icon && <Icon size={14} />}
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Link input */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+        <input
+          autoFocus
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submitLink()}
+          placeholder={typeDef?.placeholder}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: '8px 10px',
+            borderRadius: 8,
+            border: '1px solid var(--c-border-primary)',
+            background: WARM_BG,
+            fontFamily: 'var(--f-sans)',
+            fontSize: 13,
+            color: 'var(--c-text-primary)',
+          }}
+        />
+        <button
+          type="button"
+          onClick={submitLink}
+          disabled={!link.trim()}
+          style={{
+            padding: '8px 14px',
+            borderRadius: 8,
+            background: link.trim() ? '#3D1602' : 'var(--c-border-strong)',
+            color: '#fff',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: link.trim() ? 'pointer' : 'not-allowed',
+            transition: 'background 140ms var(--ease-out)',
+          }}
+        >
+          Add
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 12px', color: 'var(--c-text-muted)', fontSize: 11 }}>
+        <span style={{ flex: 1, height: 1, background: 'var(--c-border-primary)' }} />
+        or
+        <span style={{ flex: 1, height: 1, background: 'var(--c-border-primary)' }} />
+      </div>
+
+      {/* Drop zone / upload */}
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); setDragOver(false); onFiles(e.dataTransfer.files); }}
+        style={{
+          width: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 2,
+          padding: '16px 12px',
+          borderRadius: 10,
+          border: `1px dashed ${dragOver ? '#3D1602' : '#E0D7D0'}`,
+          background: dragOver ? '#FBF1EC' : WARM_BG,
+          cursor: 'pointer',
+          transition: 'border-color 140ms var(--ease-out), background 140ms var(--ease-out)',
+        }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--c-text-primary)' }}>Drag a file here, or click to upload</span>
+        <span style={{ fontSize: 11, color: 'var(--c-text-tertiary)', letterSpacing: '0.2px' }}>PDF, XML, DOC, PPT</span>
+      </button>
+      <input ref={fileRef} type="file" hidden onChange={(e) => onFiles(e.target.files)} />
+    </div>
   );
 }

@@ -73,6 +73,10 @@
 .flow-rise { animation: flow-rise 320ms var(--ease-out) both; }
 .flow-pulse-dot { animation: flow-pulse-dot 1600ms var(--ease-ambient) infinite; }
 
+/* Odometer digit column — rolls between digits as a date changes during drag */
+.flow-odo-col { transition: transform 340ms var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .flow-odo-col { transition: none; } }
+
 /* Side-sheet entry — slide in from the right edge */
 @keyframes pd-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
 .pd-slide-in { animation: pd-slide-in 360ms var(--ease-drawer) both; }

@@ -1,16 +1,21 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DirectionFilled,
   WatchlistOff,
   WatchlistOn,
   CalendarIconButton,
   DownChevronIconButton,
+  AddIconButton,
 } from './icons.jsx';
 import {
   mockProject,
   availableStatuses,
   statusTone,
   availableSquads,
+  availableComplexity,
+  availableTags,
+  tagTone,
 } from './mockProject.js';
 import {
   FloatingPopover,
@@ -91,6 +96,10 @@ export default function ProjectHeader({
   onStatusKeyChange,
   squads,
   onSquadsChange,
+  complexity,
+  onComplexityChange,
+  tags = [],
+  onTagsChange,
 }) {
   return (
     <header style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -125,37 +134,37 @@ export default function ProjectHeader({
           alignSelf: 'stretch',
           padding: 0,
           rowGap: 6,
-          columnGap: 40,
+          columnGap: 24,
           gridTemplateRows: 'repeat(2, fit-content(100%))',
-          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
         }}
       >
         {/* Labels */}
         <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Created on</span>
         <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Due date</span>
         <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Status</span>
+        <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Complexity</span>
         <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Squad</span>
+        <span style={{ ...labelStyle, justifySelf: 'start', alignSelf: 'center' }}>Additional tag</span>
 
         {/* Values */}
-        <span style={{ justifySelf: 'start', alignSelf: 'center' }}>
-          <DateField
-            ariaLabel={`Created on ${fmtDate(createdAt)}`}
-            value={createdAt}
-            onChange={onCreatedAtChange}
-          />
+        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
+          <DateField ariaLabel={`Created on ${fmtDate(createdAt)}`} value={createdAt} onChange={onCreatedAtChange} />
         </span>
-        <span style={{ justifySelf: 'start', alignSelf: 'center' }}>
-          <DateField
-            ariaLabel={`Due date ${fmtDate(dueDate)}`}
-            value={dueDate}
-            onChange={onDueDateChange}
-          />
+        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
+          <DateField ariaLabel={`Due date ${fmtDate(dueDate)}`} value={dueDate} onChange={onDueDateChange} />
         </span>
-        <span style={{ justifySelf: 'start', alignSelf: 'center' }}>
+        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
           <StatusField statusKey={statusKey} onChange={onStatusKeyChange} />
         </span>
-        <span style={{ justifySelf: 'start', alignSelf: 'center' }}>
+        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
+          <ComplexityField complexity={complexity} onChange={onComplexityChange} />
+        </span>
+        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
           <SquadField squads={squads} onChange={onSquadsChange} />
+        </span>
+        <span style={{ justifySelf: 'start', alignSelf: 'center', minWidth: 0 }}>
+          <TagField tags={tags} onChange={onTagsChange} />
         </span>
       </div>
     </header>
@@ -297,6 +306,298 @@ function SquadField({ squads, onChange }) {
     >
       <span style={valueStyle}>{displayValue}</span>
     </EditableValue>
+  );
+}
+
+// ── Editable complexity (radio: low / medium / high) ─────────────────────
+function ComplexityField({ complexity, onChange }) {
+  const current = availableComplexity.find((c) => c.key === complexity);
+  return (
+    <EditableValue
+      ariaLabel="Change complexity"
+      hoverIcon={<DownChevronIconButton size={24} />}
+      renderPopover={({ anchor, close }) => (
+        <FloatingPopover anchor={anchor} onClose={close} width={180}>
+          <ListPicker
+            items={availableComplexity}
+            value={complexity}
+            onSelect={(k) => {
+              onChange(k);
+              close();
+            }}
+            renderItem={(it) => <span style={{ fontSize: 13, color: 'var(--c-text-primary)' }}>{it.label}</span>}
+          />
+        </FloatingPopover>
+      )}
+    >
+      <span style={valueStyle}>{current?.label || 'Not set'}</span>
+    </EditableValue>
+  );
+}
+
+// ── Additional tags (max 3) ──────────────────────────────────────────────
+// Pills + a hover-reveal + to add. No remove cross — right-click a pill for a
+// Remove / Replace menu, both routed through the same tag picker.
+const TAG_FALLBACK = { bg: '#F1F5F9', fg: '#475569' };
+
+function TagField({ tags, onChange }) {
+  const addRef = useRef(null);
+  const [hovered, setHovered] = useState(false);
+  const [picker, setPicker] = useState(null); // { anchor, replaceIndex }
+  const [ctx, setCtx] = useState(null); // { x, y, index }
+
+  const choices = picker
+    ? availableTags.filter((t) => !tags.some((tk, i) => i !== picker.replaceIndex && tk === t.key))
+    : [];
+
+  function openAdd() {
+    if (tags.length >= 3) return;
+    const r = addRef.current?.getBoundingClientRect();
+    if (r) setPicker({ anchor: r, replaceIndex: null });
+  }
+  function openReplace(index, rect) {
+    setCtx(null);
+    setPicker({ anchor: rect, replaceIndex: index });
+  }
+  function pick(key) {
+    if (picker?.replaceIndex != null) {
+      const next = tags.slice();
+      next[picker.replaceIndex] = key;
+      onChange(next);
+    } else if (tags.length < 3) {
+      onChange([...tags, key]);
+    }
+    setPicker(null);
+  }
+  function remove(index) {
+    onChange(tags.filter((_, i) => i !== index));
+    setCtx(null);
+  }
+
+  const canAdd = tags.length < 3;
+  return (
+    <span
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minHeight: 28 }}
+    >
+      {tags.map((key, i) => (
+        <TagPill
+          key={`${key}-${i}`}
+          tagKey={key}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setCtx({ x: e.clientX, y: e.clientY, index: i });
+          }}
+        />
+      ))}
+
+      {canAdd && tags.length === 0 && (
+        <button
+          ref={addRef}
+          type="button"
+          onClick={openAdd}
+          aria-label="Add tag"
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#FBF9F8')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            flexShrink: 0,
+            padding: '3px 9px 3px 7px',
+            borderRadius: 8,
+            border: '1px dashed #F1EAE4',
+            background: 'transparent',
+            color: '#6E5649',
+            fontFamily: 'var(--f-sans)',
+            fontWeight: 500,
+            fontSize: 14,
+            lineHeight: '20px',
+            letterSpacing: '-0.1px',
+            whiteSpace: 'nowrap',
+            cursor: 'pointer',
+            transition: 'background 140ms var(--ease-out)',
+          }}
+        >
+          <span aria-hidden style={{ fontSize: 16, lineHeight: 1, fontWeight: 400 }}>+</span>
+          New tag
+        </button>
+      )}
+
+      {canAdd && tags.length > 0 && (
+        <button
+          ref={addRef}
+          type="button"
+          onClick={openAdd}
+          aria-label="Add tag"
+          onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.92)')}
+          onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            padding: 0,
+            background: 'transparent',
+            lineHeight: 0,
+            cursor: 'pointer',
+            // Only revealed on hover of the whole Additional-tag cell.
+            opacity: hovered || picker ? 1 : 0,
+            pointerEvents: hovered || picker ? 'auto' : 'none',
+            transition: 'opacity 160ms var(--ease-out), transform 160ms var(--ease-out)',
+          }}
+        >
+          <AddIconButton size={24} />
+        </button>
+      )}
+
+      {picker &&
+        createPortal(
+          <FloatingPopover anchor={picker.anchor} onClose={() => setPicker(null)} width={200}>
+            {choices.length ? (
+              <ListPicker
+                items={choices}
+                value={null}
+                onSelect={pick}
+                renderItem={(it) => {
+                  const tone = tagTone[it.key] || TAG_FALLBACK;
+                  return (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: tone.fg, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: 'var(--c-text-primary)' }}>{it.label}</span>
+                    </span>
+                  );
+                }}
+              />
+            ) : (
+              <div style={{ padding: 14, fontSize: 12, color: 'var(--c-text-muted)' }}>No more tags</div>
+            )}
+          </FloatingPopover>,
+          document.body
+        )}
+
+      {ctx &&
+        createPortal(
+          <TagContextMenu
+            anchor={ctx}
+            onClose={() => setCtx(null)}
+            onReplace={() => openReplace(ctx.index, { left: ctx.x, right: ctx.x, top: ctx.y, bottom: ctx.y })}
+            onRemove={() => remove(ctx.index)}
+          />,
+          document.body
+        )}
+    </span>
+  );
+}
+
+function TagPill({ tagKey, onContextMenu }) {
+  const tag = availableTags.find((t) => t.key === tagKey);
+  const tone = tagTone[tagKey] || TAG_FALLBACK;
+  return (
+    <span
+      onContextMenu={onContextMenu}
+      title="Right-click to replace or remove"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '4px 8px',
+        borderRadius: 6,
+        background: tone.bg,
+        color: tone.fg,
+        fontFamily: 'var(--f-sans)',
+        fontWeight: 600,
+        fontSize: 14,
+        lineHeight: '20px',
+        letterSpacing: '-0.1px',
+        whiteSpace: 'nowrap',
+        cursor: 'context-menu',
+        userSelect: 'none',
+      }}
+    >
+      {tag?.label || tagKey}
+    </span>
+  );
+}
+
+function TagContextMenu({ anchor, onClose, onReplace, onRemove }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState({ x: anchor.x, y: anchor.y });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    let x = anchor.x;
+    let y = anchor.y;
+    if (x + r.width > window.innerWidth - 8) x = window.innerWidth - r.width - 8;
+    if (y + r.height > window.innerHeight - 8) y = window.innerHeight - r.height - 8;
+    setPos({ x, y });
+  }, [anchor.x, anchor.y]);
+  useEffect(() => {
+    function onDoc(e) {
+      if (!ref.current?.contains(e.target)) onClose();
+    }
+    function onKey(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('pointerdown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      style={{
+        position: 'fixed',
+        top: pos.y,
+        left: pos.x,
+        zIndex: 1000,
+        minWidth: 160,
+        padding: 6,
+        background: 'var(--c-surface-primary)',
+        border: '1px solid var(--c-border-primary)',
+        borderRadius: 10,
+        boxShadow: '0 18px 40px rgba(15, 23, 42, 0.16), 0 4px 10px rgba(15, 23, 42, 0.08)',
+        transformOrigin: 'top left',
+        animation: 'flow-pop-out 150ms var(--ease-out) both',
+        fontFamily: 'var(--f-sans)',
+      }}
+    >
+      <TagMenuItem label="Replace tag" onClick={onReplace} />
+      <TagMenuItem label="Remove tag" tone="danger" onClick={onRemove} />
+    </div>
+  );
+}
+
+function TagMenuItem({ label, onClick, tone }) {
+  const [hover, setHover] = useState(false);
+  const danger = tone === 'danger';
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      style={{
+        display: 'flex',
+        width: '100%',
+        padding: '8px 10px',
+        borderRadius: 6,
+        background: hover ? (danger ? '#FBE7E7' : '#F4EEEB') : 'transparent',
+        color: danger ? '#C13B3B' : 'var(--c-text-primary)',
+        fontSize: 13,
+        fontWeight: 500,
+        textAlign: 'left',
+        transition: 'background 120ms var(--ease-out)',
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
