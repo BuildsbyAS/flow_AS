@@ -4,6 +4,7 @@ import { forwardRef } from 'react';
 import {
   PlusIcon,
   ExternalLinkIcon,
+  DeleteIcon,
   FigmaLogo,
   CategoryCool,
   CategoryWarm,
@@ -11,6 +12,7 @@ import {
   FileDeck,
   FileLink,
   FileData,
+  FilePrototype,
 } from './icons.jsx';
 import { mockResources } from './mockProject.js';
 
@@ -30,32 +32,180 @@ const TYPE_ICON = {
   figma: FigmaLogo,
   sheet: FileData,
   doc: FileDeck,
+  prd: FilePdf,
+  prototype: FilePrototype,
   link: FileLink,
   custom: CategoryWarm,
-  prd: FilePdf,
   design: CategoryCool,
   'category-cool': CategoryCool,
   'category-warm': CategoryWarm,
 };
 
-// Type chips in the add panel. A Figma file is just a design file; prototype
-// gets an emoji; the last chip lets the user name any custom resource.
+// The recognised resource buckets. These double as the override chips in the
+// add panel AND as the targets `detectResourceType` resolves a pasted link to.
+// Order = chip order. `link` is the catch-all and always lives last.
 const RESOURCE_TYPES = [
-  { key: 'figma', label: 'Design', placeholder: 'Paste a design file link', fallback: 'Design file' },
-  { key: 'sheet', label: 'Spreadsheet', placeholder: 'Paste a spreadsheet link', fallback: 'Spreadsheet' },
-  { key: 'doc', label: 'Doc', placeholder: 'Paste a doc link', fallback: 'Document' },
-  { key: 'link', emoji: '▶️', label: 'Prototype', placeholder: 'Paste a prototype link', fallback: 'Prototype' },
-  { key: 'custom', label: 'Custom', placeholder: 'Name this resource', fallback: 'Resource', custom: true },
+  { key: 'figma', label: 'Design', fallback: 'Design file' },
+  { key: 'prototype', label: 'Prototype', fallback: 'Prototype' },
+  { key: 'prd', label: 'PRD', fallback: 'PRD' },
+  { key: 'doc', label: 'Doc', fallback: 'Document' },
+  { key: 'sheet', label: 'Spreadsheet', fallback: 'Spreadsheet' },
+  { key: 'link', label: 'Link', fallback: 'Link' },
 ];
 
-function titleFromLink(url) {
+// A string looks like a URL if it has a scheme or a dotted host. Bare text
+// (e.g. "Design review notes") is treated as a custom name, not a link.
+function isUrlish(v) {
+  return /:\/\//.test(v) || /\.[a-z]{2,}(?:[/?#:]|$)/i.test(v);
+}
+
+// Turn a free-form input into a canonical href, or '#' when it isn't a link.
+function normalizeHref(raw) {
+  const v = (raw || '').trim();
+  if (!isUrlish(v)) return '#';
   try {
-    const u = new URL(url.includes('://') ? url : `https://${url}`);
-    const path = u.pathname.split('/').filter(Boolean).pop();
-    return path ? decodeURIComponent(path).replace(/[-_]/g, ' ') : u.hostname.replace(/^www\./, '');
+    return new URL(v.includes('://') ? v : `https://${v}`).href;
   } catch {
-    return url.slice(0, 40);
+    return '#';
   }
+}
+
+// Smart type detection — figures out whether a pasted link (or filename) is a
+// design file, prototype, PRD, doc, spreadsheet, or just a generic link.
+// Order matters: prototype is checked before design (Figma proto shares the
+// figma.com host), and the PRD keyword sweep runs before the generic doc host
+// list so "…/product-spec" lands on PRD rather than Doc.
+function detectResourceType(raw) {
+  const v = (raw || '').trim();
+  if (!v) return null;
+
+  let host = '';
+  let path = '';
+  if (isUrlish(v)) {
+    try {
+      const u = new URL(v.includes('://') ? v : `https://${v}`);
+      host = u.hostname.replace(/^www\./, '').toLowerCase();
+      path = (u.pathname + u.search + u.hash).toLowerCase();
+    } catch {
+      path = v.toLowerCase();
+    }
+  } else {
+    // Bare filename like "Q3 PRD.pdf" — match on the text alone.
+    path = v.toLowerCase();
+  }
+
+  const hp = host + path;
+  const ext = (path.match(/\.([a-z0-9]+)(?:[?#:]|$)/) || [])[1] || '';
+
+  // Prototype — interactive/clickable artefacts.
+  if (
+    /\/proto(?:type)?(?:[/?#]|$)/.test(path) ||
+    /\bprototype\b/.test(path) ||
+    host.includes('framer') ||
+    host.includes('invision') ||
+    host.includes('marvelapp') ||
+    host === 'proto.io' ||
+    host.includes('protopie') ||
+    host.includes('principle')
+  ) return 'prototype';
+
+  // Design files.
+  if (
+    host.includes('figma.com') ||
+    host.includes('sketch.com') ||
+    host.includes('zeplin.io') ||
+    host.includes('abstract.com') ||
+    ['fig', 'sketch', 'xd', 'psd', 'ai'].includes(ext)
+  ) return 'figma';
+
+  // Spreadsheets.
+  if (
+    /docs\.google\.com\/spreadsheets/.test(hp) ||
+    host.includes('sheets.google') ||
+    host.includes('airtable.com') ||
+    host.includes('smartsheet.com') ||
+    ['csv', 'tsv', 'xls', 'xlsx', 'numbers'].includes(ext)
+  ) return 'sheet';
+
+  // PRD — semantic keyword sweep (works regardless of host). Boundaries are
+  // "any non-alphanumeric" so we catch prd/spec across -, _, /, +, spaces, dots
+  // without false-firing on substrings ("respect", "inspector").
+  if (PRD_KEYWORDS.test(hp)) return 'prd';
+
+  // Docs & decks.
+  if (
+    /docs\.google\.com\/(?:document|presentation)/.test(hp) ||
+    host.includes('notion.so') ||
+    host.includes('notion.site') ||
+    host.includes('coda.io') ||
+    host.includes('quip.com') ||
+    host.includes('confluence') ||
+    host.includes('atlassian.net') ||
+    (host.includes('dropbox.com') && /paper/.test(path)) ||
+    ['doc', 'docx', 'rtf', 'txt', 'md', 'pdf', 'ppt', 'pptx', 'key', 'pages'].includes(ext)
+  ) return 'doc';
+
+  // Anything else is just a link (or, if it isn't a URL, a custom name).
+  return 'link';
+}
+
+// PRD keyword test. Leading boundary consumes a non-alnum char (or start);
+// trailing boundary is a lookahead so it never eats the next separator.
+const PRD_KEYWORDS = /(?:^|[^a-z0-9])(?:prd|spec|specification|requirements?|brief|rfc|one[\s_-]?pager)(?=[^a-z0-9]|$)/;
+
+// Detect a resource type from a *file* (drop / upload). Files are matched on
+// their extension — never routed through URL parsing, where a name like
+// "report.ai" would be mistaken for an .ai design file vs an .ai domain.
+function detectFileType(name) {
+  const lower = String(name || '').toLowerCase();
+  const ext = (lower.match(/\.([a-z0-9]+)$/) || [])[1] || '';
+  if (['fig', 'sketch', 'xd', 'psd', 'ai'].includes(ext)) return 'figma';
+  if (['csv', 'tsv', 'xls', 'xlsx', 'numbers'].includes(ext)) return 'sheet';
+  if (PRD_KEYWORDS.test(lower)) return 'prd';
+  if (['doc', 'docx', 'rtf', 'txt', 'md', 'pdf', 'ppt', 'pptx', 'key', 'pages'].includes(ext)) return 'doc';
+  return 'link';
+}
+
+// Path segments that carry no human meaning — skip them when guessing a title.
+const GENERIC_SEGMENTS = new Set([
+  'edit', 'view', 'd', 'file', 'design', 'proto', 'document', 'presentation',
+  'spreadsheets', 'spreadsheet', 'folders', 'drive', 'u', 'home', 's', 'p',
+  'wiki', 'pages', 'dashboard', 'docs', 'doc',
+]);
+
+// Derive a readable title from a link, falling back to the type's label when
+// the URL has nothing human-friendly to offer (e.g. a Notion id, /d/<id>/edit).
+function smartTitle(raw, type) {
+  const def = RESOURCE_TYPES.find((t) => t.key === type);
+  const fallback = def?.fallback || 'Resource';
+  const v = (raw || '').trim();
+
+  if (!isUrlish(v)) return v ? v.slice(0, 48) : fallback;
+
+  let u;
+  try {
+    u = new URL(v.includes('://') ? v : `https://${v}`);
+  } catch {
+    return v.slice(0, 48) || fallback;
+  }
+
+  const segs = u.pathname.split('/').filter(Boolean);
+  for (let i = segs.length - 1; i >= 0; i--) {
+    const seg = decodeURIComponent(segs[i]);
+    if (GENERIC_SEGMENTS.has(seg.toLowerCase())) continue;
+    // Drop a trailing Notion-style hex id, then normalise separators (slugs use
+    // "-"/"_", Confluence encodes spaces as "+").
+    const cleaned = seg.replace(/[-_][0-9a-f]{8,}$/i, '').replace(/[-_+]+/g, ' ').trim();
+    if (!cleaned) continue;
+    // A slug splits into words (has a space); an opaque id stays one token.
+    // Skip bare numbers and long random single tokens (Google/Drive ids).
+    const single = !/\s/.test(cleaned);
+    if (single && /^\d+$/.test(cleaned)) continue;
+    if (single && cleaned.length >= 16 && /\d/.test(cleaned)) continue;
+    return cleaned.length > 48 ? `${cleaned.slice(0, 47)}…` : cleaned;
+  }
+
+  return fallback;
 }
 
 export default function ResourcesSection({ resources: initialResources = mockResources }) {
@@ -86,11 +236,11 @@ export default function ResourcesSection({ resources: initialResources = mockRes
     }
     openPicker(addBtnRef.current?.getBoundingClientRect());
   }
-  function addResource(type, title) {
+  function addResource({ type, title, href }) {
     const def = RESOURCE_TYPES.find((t) => t.key === type);
     setResources((r) => [
       ...r,
-      { id: `r-${Date.now()}`, href: '#', type, title: title || def?.fallback || 'New resource' },
+      { id: `r-${Date.now()}`, href: href || '#', type, title: title || def?.fallback || 'New resource' },
     ]);
     setPickerOpen(false);
   }
@@ -105,18 +255,25 @@ export default function ResourcesSection({ resources: initialResources = mockRes
       const inSection = sectionRef.current?.contains(e.target);
       if (!inPortal && !inSection) setPickerOpen(false);
     }
-    function onScroll() {
+    function onScroll(e) {
+      // Ignore scrolls that come from inside the panel itself — e.g. pasting a
+      // long URL scrolls the input horizontally and would otherwise close it.
+      const t = e?.target;
+      if (t?.closest?.('[data-resources-portal]') || sectionRef.current?.contains?.(t)) return;
+      setPickerOpen(false);
+    }
+    function onResize() {
       setPickerOpen(false);
     }
     document.addEventListener('keydown', onKey);
     document.addEventListener('pointerdown', onDocPointer);
     document.addEventListener('scroll', onScroll, true);
-    window.addEventListener('resize', onScroll);
+    window.addEventListener('resize', onResize);
     return () => {
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('pointerdown', onDocPointer);
       document.removeEventListener('scroll', onScroll, true);
-      window.removeEventListener('resize', onScroll);
+      window.removeEventListener('resize', onResize);
     };
   }, []);
 
@@ -176,6 +333,7 @@ export default function ResourcesSection({ resources: initialResources = mockRes
           <ResourceCard
             key={r.id}
             resource={r}
+            onDelete={() => removeResource(r.id)}
             onContextMenu={(e) => {
               e.preventDefault();
               setMenu({ id: r.id, x: e.clientX, y: e.clientY });
@@ -200,7 +358,12 @@ export default function ResourcesSection({ resources: initialResources = mockRes
             resource={resources.find((x) => x.id === menu.id)}
             onClose={() => setMenu(null)}
             onChangeLink={(href) => {
-              updateResource(menu.id, { href });
+              // Re-detect the type from the new link, but only adopt a
+              // confident guess — never downgrade a known type to a bare link.
+              const detected = detectResourceType(href);
+              const patch = { href };
+              if (detected && detected !== 'link') patch.type = detected;
+              updateResource(menu.id, patch);
               setMenu(null);
             }}
             onDelete={() => {
@@ -215,7 +378,7 @@ export default function ResourcesSection({ resources: initialResources = mockRes
 }
 
 // ── Resource card ────────────────────────────────────────────────────────
-function ResourceCard({ resource, onContextMenu }) {
+function ResourceCard({ resource, onDelete, onContextMenu }) {
   const [hover, setHover] = useState(false);
   const Icon = TYPE_ICON[resource.type] || CategoryCool;
 
@@ -287,28 +450,77 @@ function ResourceCard({ resource, onContextMenu }) {
         </span>
       </div>
 
-      {/* "Open external" — hover-only, top-right (Figma ExternalLinkIcon) */}
-      <span
-        aria-hidden
+      {/* Hover actions — delete then open-external (Figma 907:17472 / 907:17470).
+          Delete sits 6px to the left of the external-link icon. */}
+      <div
         style={{
           position: 'absolute',
           top: 7,
           right: 7,
-          width: 18,
-          height: 18,
           display: 'inline-flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          color: '#3D1602',
+          gap: 6,
           opacity: hover ? 1 : 0,
           transform: hover ? 'translateY(0)' : 'translateY(-2px)',
           transition: 'opacity 160ms var(--ease-out), transform 160ms var(--ease-out)',
-          pointerEvents: 'none',
+          pointerEvents: hover ? 'auto' : 'none',
         }}
       >
-        <ExternalLinkIcon size={18} />
-      </span>
+        <DeleteAction onDelete={onDelete} />
+        {/* External link is decorative — clicking the card already opens it. */}
+        <span
+          aria-hidden
+          style={{
+            width: 18,
+            height: 18,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#3D1602',
+            pointerEvents: 'none',
+          }}
+        >
+          <ExternalLinkIcon size={18} />
+        </span>
+      </div>
     </a>
+  );
+}
+
+// Delete affordance on a card. A span (not a <button>) so it's valid inside the
+// card's <a>; it swallows the click so the link never fires.
+function DeleteAction({ onDelete }) {
+  const [hover, setHover] = useState(false);
+  function trigger(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    onDelete?.();
+  }
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      aria-label="Delete resource"
+      title="Delete resource"
+      onClick={trigger}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') trigger(e);
+      }}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      style={{
+        width: 18,
+        height: 18,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: hover ? '#C13B3B' : '#3D1602',
+        cursor: 'pointer',
+        transition: 'color 140ms var(--ease-out)',
+      }}
+    >
+      <DeleteIcon size={18} />
+    </span>
   );
 }
 
@@ -400,7 +612,7 @@ function NewResourceCard({ onOpen }) {
           Add a resource
         </span>
         <span style={{ fontFamily: 'var(--f-sans)', fontSize: 12, fontWeight: 400, lineHeight: '16px', color: '#6E5649', whiteSpace: 'nowrap' }}>
-          Add a PDF, link, doc or deck
+          Paste a link — we’ll detect the type
         </span>
       </span>
     </button>
@@ -569,16 +781,23 @@ function TrashIcn() {
 }
 
 // ── Add-resource panel ────────────────────────────────────────────────────
-// Pick a type, paste a link, or drop / upload a file.
+// Link-first: paste anything and the type is detected live. Chips below show
+// the guess and let the user override it; files are detected the same way.
 function AddResourcePanel({ anchor, onAdd, onClose }) {
   const ref = useRef(null);
   const fileRef = useRef(null);
   const [pos, setPos] = useState({ top: anchor.bottom + 8, left: anchor.left });
-  const [type, setType] = useState('figma');
   const [link, setLink] = useState('');
+  const [type, setType] = useState('link'); // only used once `manual` is true
+  const [manual, setManual] = useState(false); // did the user override the guess?
   const [dragOver, setDragOver] = useState(false);
 
-  const typeDef = RESOURCE_TYPES.find((t) => t.key === type);
+  const trimmed = link.trim();
+  const detected = trimmed ? detectResourceType(trimmed) : null;
+  // Active type = the user's pick if they overrode, else the live guess.
+  const activeType = manual ? type : detected || 'link';
+  const typeDef = RESOURCE_TYPES.find((t) => t.key === activeType) || RESOURCE_TYPES[RESOURCE_TYPES.length - 1];
+  const DetectedIcon = TYPE_ICON[activeType] || FileLink;
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -592,14 +811,30 @@ function AddResourcePanel({ anchor, onAdd, onClose }) {
     setPos({ top, left });
   }, [anchor.left, anchor.bottom, anchor.top]);
 
+  function onLinkChange(v) {
+    setLink(v);
+    if (!v.trim()) setManual(false); // cleared → resume auto-detect
+  }
+  function pickType(key) {
+    setManual(true);
+    setType(key);
+  }
   function submitLink() {
-    const v = link.trim();
-    if (!v) return;
-    onAdd(type, typeDef?.custom ? v : titleFromLink(v));
+    if (!trimmed) return;
+    onAdd({ type: activeType, title: smartTitle(trimmed, activeType), href: normalizeHref(trimmed) });
   }
   function onFiles(list) {
-    if (list && list[0]) onAdd(type, list[0].name);
-    else onAdd(type);
+    const file = list && list[0];
+    if (!file) {
+      onAdd({ type: activeType, title: typeDef?.fallback, href: '#' });
+      return;
+    }
+    const fileType = manual ? type : detectFileType(file.name);
+    onAdd({
+      type: fileType,
+      title: file.name.replace(/\.[a-z0-9]+$/i, ''),
+      href: '#',
+    });
   }
 
   return (
@@ -623,45 +858,14 @@ function AddResourcePanel({ anchor, onAdd, onClose }) {
     >
       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text-primary)', marginBottom: 10 }}>Add resource</div>
 
-      {/* Type chips */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-        {RESOURCE_TYPES.map((t) => {
-          const Icon = TYPE_ICON[t.key];
-          const on = t.key === type;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setType(t.key)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '5px 10px 5px 8px',
-                borderRadius: 999,
-                border: `1px solid ${on ? '#3D1602' : 'var(--c-border-primary)'}`,
-                background: on ? '#FBF1EC' : '#fff',
-                color: 'var(--c-text-primary)',
-                fontSize: 12,
-                fontWeight: 500,
-                transition: 'border-color 120ms var(--ease-out), background 120ms var(--ease-out)',
-              }}
-            >
-              {t.emoji ? <span style={{ fontSize: 13 }}>{t.emoji}</span> : Icon && <Icon size={14} />}
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Link input */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      {/* Link input — the smart entry point */}
+      <div style={{ display: 'flex', gap: 8 }}>
         <input
           autoFocus
           value={link}
-          onChange={(e) => setLink(e.target.value)}
+          onChange={(e) => onLinkChange(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submitLink()}
-          placeholder={typeDef?.placeholder}
+          placeholder="Paste a link"
           style={{
             flex: 1,
             minWidth: 0,
@@ -677,20 +881,73 @@ function AddResourcePanel({ anchor, onAdd, onClose }) {
         <button
           type="button"
           onClick={submitLink}
-          disabled={!link.trim()}
+          disabled={!trimmed}
           style={{
             padding: '8px 14px',
             borderRadius: 8,
-            background: link.trim() ? '#3D1602' : 'var(--c-border-strong)',
+            background: trimmed ? '#3D1602' : 'var(--c-border-strong)',
             color: '#fff',
             fontSize: 13,
             fontWeight: 600,
-            cursor: link.trim() ? 'pointer' : 'not-allowed',
+            cursor: trimmed ? 'pointer' : 'not-allowed',
             transition: 'background 140ms var(--ease-out)',
           }}
         >
           Add
         </button>
+      </div>
+
+      {/* Detection read-out — only once there's a link, so the empty state stays clean */}
+      {trimmed && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            margin: '8px 2px 10px',
+            fontSize: 11.5,
+            color: '#6E4A36',
+          }}
+        >
+          <DetectedIcon size={14} />
+          <span>
+            {manual ? 'Saving as' : 'Looks like a'}{' '}
+            <strong style={{ fontWeight: 600, color: 'var(--c-text-primary)' }}>{typeDef?.fallback}</strong>
+          </span>
+        </div>
+      )}
+
+      {/* Type chips — confirm or override the guess */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: trimmed ? '0 0 12px' : '10px 0 12px' }}>
+        {RESOURCE_TYPES.map((t) => {
+          const Icon = TYPE_ICON[t.key];
+          const on = t.key === activeType;
+          const auto = on && !manual && !!trimmed;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => pickType(t.key)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '5px 10px 5px 8px',
+                borderRadius: 999,
+                border: `1px solid ${on ? '#3D1602' : 'var(--c-border-primary)'}`,
+                background: on ? '#FBF1EC' : '#fff',
+                color: 'var(--c-text-primary)',
+                fontSize: 12,
+                fontWeight: 500,
+                boxShadow: auto ? '0 0 0 2px rgba(61, 22, 2, 0.12)' : 'none',
+                transition: 'border-color 120ms var(--ease-out), background 120ms var(--ease-out), box-shadow 120ms var(--ease-out)',
+              }}
+            >
+              {Icon && <Icon size={14} />}
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 12px', color: 'var(--c-text-muted)', fontSize: 11 }}>
