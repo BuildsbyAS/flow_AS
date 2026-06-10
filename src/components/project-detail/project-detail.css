@@ -29,6 +29,10 @@
   --c-phase-alpha: #f59e0b;
   --c-phase-beta: #ec4899;
   --c-phase-qa: #e10078;
+  /* project-state accents (Track timeline) */
+  --c-block: #d8632e;
+  --c-held: #b45309;
+  --c-park: #6b7280;
   /* shadow */
   --sh-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px rgba(15, 23, 42, 0.04);
   --sh-elevated: 0 8px 24px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
@@ -80,6 +84,12 @@
 /* Side-sheet entry — slide in from the right edge */
 @keyframes pd-slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
 .pd-slide-in { animation: pd-slide-in 360ms var(--ease-drawer) both; }
+
+/* Track timeline — orange 45° hatch for blocked / overdue tails */
+.flow-tt-hatch { background-image: repeating-linear-gradient(45deg, rgba(216, 99, 46, 0.16) 0 1.5px, transparent 1.5px 9px); }
+/* Bottom-centre toast entry */
+@keyframes flow-toast-in { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.flow-toast { animation: flow-toast-in 220ms var(--ease-out) both; }
 .flow-watchlist-btn:focus-visible { outline: 2px solid var(--c-text-action); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {

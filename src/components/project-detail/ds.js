@@ -43,6 +43,36 @@ export const color = {
     beta: 'rgba(236, 72, 153, 0.18)',
     qa: 'rgba(225, 0, 120, 0.18)',
   },
+  // Solid node fills (Figma 905:14954 v4) — saturated block colour + darker
+  // same-hue border, designed to carry dark text (#131313 / rgba(0,0,0,.8)).
+  phaseFill: {
+    prd: '#B6A1F7',
+    design: '#8AAEFF',
+    dev: '#54D6A2',
+    qa: '#FF6FAB',
+    alpha: '#FFB15C',
+    beta: '#F7A7D1',
+  },
+  phaseFillBorder: {
+    prd: '#9C84F3',
+    design: '#5E8DFF',
+    dev: '#18C98D',
+    qa: '#EE3A8C',
+    alpha: '#FF9B2F',
+    beta: '#EE7CBC',
+  },
+  // Project-state accents: blocked (orange), held (amber), parked (grey).
+  // Used by the Track timeline when project.status overrides node colour.
+  state: {
+    block: '#D8632E',
+    held: '#B45309',
+    park: '#6B7280',
+    inprogress: '#0F61FF',
+    planned: '#989FB3',
+    done: '#00A86B',
+    early: '#00A86B',
+    late: '#D8632E',
+  },
 };
 
 export const space = {

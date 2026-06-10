@@ -8,6 +8,8 @@ import GanttTimeline from './GanttTimeline.jsx';
 import ActivityFeed from './ActivityFeed.jsx';
 import { mockProject } from './mockProject.js';
 
+const fmtClock = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+
 export default function ProjectDetailSheet({ project = mockProject, onClose }) {
   const [expanded, setExpanded] = useState(false);
   const [bookmarked, setBookmarked] = useState(project.bookmarked);
@@ -17,6 +19,17 @@ export default function ProjectDetailSheet({ project = mockProject, onClose }) {
   const [squads, setSquads] = useState(project.squads);
   const [complexity, setComplexity] = useState(project.complexity);
   const [tags, setTags] = useState(project.tags || []);
+
+  // Track-timeline audit log — every timeline edit is recorded here (with who +
+  // recorded-at) and surfaced live in the Activity feed below.
+  const [timelineLog, setTimelineLog] = useState([]);
+  function handleTimelineLog(entry) {
+    const now = new Date();
+    setTimelineLog((prev) => [{ id: `tl-${now.getTime()}-${prev.length}`, time: fmtClock(now), ...entry }, ...prev]);
+  }
+  const timelineEvents = timelineLog.map((e) => ({
+    id: e.id, type: 'event', author: e.user.name, initials: e.user.initials, time: e.time, meta: e.meta, content: e.content, progress: e.progress,
+  }));
 
   // When switching to a different project the sheet stays mounted (no re-slide);
   // refresh the editable header fields in place.
@@ -120,8 +133,8 @@ export default function ProjectDetailSheet({ project = mockProject, onClose }) {
           />
           <TeamSection initialTeam={project.team} availableMembers={project.availableMembers} />
           <ResourcesSection resources={project.resources} />
-          <GanttTimeline phases={project.phases} bars={project.bars} months={project.months} rangeLabel={project.rangeLabel} />
-          <ActivityFeed posts={project.activity} />
+          <GanttTimeline nodes={project.nodes} projectState={project.projectState} shipDate={project.shipDate} dueDate={dueDate} team={project.team} onLog={handleTimelineLog} />
+          <ActivityFeed posts={project.activity} timelineEvents={timelineEvents} />
         </div>
       </div>
     </aside>

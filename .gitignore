@@ -21,3 +21,4 @@ docs/
 snapshot*.md
 test-screenshots/
 .playwright-mcp/
+.vercel

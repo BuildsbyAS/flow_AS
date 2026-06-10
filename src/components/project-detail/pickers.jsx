@@ -36,7 +36,8 @@ export function FloatingPopover({ anchor, onClose, children, width }) {
 
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape') onClose();
+      // Dismiss only the popover — don't let Escape bubble up and close the whole side sheet.
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
     }
     function onPointer(e) {
       const inPopover = e.target.closest?.('[data-floating-popover]');
@@ -243,6 +244,123 @@ function ChevronBtn({ onClick, dir }) {
           strokeLinejoin="round"
         />
       </svg>
+    </button>
+  );
+}
+
+// ── RangeCalendar ─────────────────────────────────────────────────────────
+// Start/End range picker used by the Track timeline (add node / edit dates).
+// Two chips switch which end is being picked; the grid highlights the inclusive
+// span. `start`/`end` are Date|null; `onChange(start, end)` fires on each pick.
+const RANGE_HL = 'rgba(124, 92, 255, 0.12)';
+
+export function RangeCalendar({ start, end, onChange, onApply, applyLabel = 'Apply' }) {
+  const [display, setDisplay] = useState(() => startOfMonth(start || new Date()));
+  const [mode, setMode] = useState('start');
+  const today = new Date();
+
+  const year = display.getFullYear();
+  const month = display.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const dim = daysInMonth(display);
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push(null);
+  for (let d = 1; d <= dim; d++) cells.push(d);
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  function pick(d) {
+    if (d == null) return;
+    const picked = new Date(year, month, d);
+    if (mode === 'start') {
+      onChange(picked, end && picked > end ? null : end);
+      setMode('end');
+    } else {
+      if (start && picked < start) onChange(picked, start);
+      else onChange(start, picked);
+      setMode('start');
+    }
+  }
+
+  const valid = start && end && end >= start; // end === start is a single-day node
+  const fmtChip = (d) => (d ? `${d.getDate()} ${d.toLocaleDateString('en', { month: 'short' })}` : '—');
+
+  return (
+    <div style={{ width: 256, padding: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <ChevronBtn onClick={() => setDisplay(new Date(year, month - 1, 1))} dir="prev" />
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-text-primary)' }}>
+          {display.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+        </span>
+        <ChevronBtn onClick={() => setDisplay(new Date(year, month + 1, 1))} dir="next" />
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+        {[['start', 'Start', start], ['end', 'End', end]].map(([k, lbl, d]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setMode(k)}
+            style={{
+              flex: 1, display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'flex-start', padding: '6px 8px', borderRadius: 8,
+              border: `1px solid ${mode === k ? 'var(--c-text-action)' : 'var(--c-border-primary)'}`,
+              background: mode === k ? 'rgba(15,97,255,0.06)' : '#fff', transition: 'border-color 120ms var(--ease-out)',
+            }}
+          >
+            <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.3px', textTransform: 'uppercase', color: 'var(--c-text-tertiary)' }}>{lbl}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: d ? 'var(--c-text-primary)' : 'var(--c-text-muted)', fontVariantNumeric: 'tabular-nums' }}>{fmtChip(d)}</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+        {DAY_LABELS.map((d, i) => (
+          <span key={i} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, letterSpacing: '0.4px', color: 'var(--c-text-muted)', padding: '4px 0' }}>{d}</span>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+        {cells.map((d, i) => {
+          if (d == null) return <span key={i} aria-hidden style={{ visibility: 'hidden' }}>·</span>;
+          const cell = new Date(year, month, d);
+          const isSel = (start && sameDay(cell, start)) || (end && sameDay(cell, end));
+          const between = start && end && cell > start && cell < end;
+          return <RangeDay key={i} day={d} isSel={isSel} between={between} isToday={sameDay(cell, today)} onClick={() => pick(d)} />;
+        })}
+      </div>
+
+      <button
+        type="button"
+        disabled={!valid}
+        onClick={() => valid && onApply(start, end)}
+        style={{
+          marginTop: 12, width: '100%', padding: '9px 14px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+          background: valid ? '#3D1602' : 'var(--c-border-strong)', color: '#fff', cursor: valid ? 'pointer' : 'not-allowed',
+          transition: 'background 140ms var(--ease-out)',
+        }}
+      >
+        {applyLabel}
+      </button>
+    </div>
+  );
+}
+
+function RangeDay({ day, isSel, between, isToday, onClick }) {
+  const [hover, setHover] = useState(false);
+  const bg = isSel ? '#3D1602' : between ? RANGE_HL : hover ? WARM_HOVER : 'transparent';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
+      style={{
+        aspectRatio: '1 / 1', borderRadius: between && !isSel ? 0 : 8, background: bg,
+        color: isSel ? '#fff' : 'var(--c-text-primary)', fontSize: 12, fontWeight: isSel ? 600 : 500, fontVariantNumeric: 'tabular-nums',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: isToday && !isSel ? 'inset 0 0 0 1px var(--c-border-strong)' : 'none', transition: 'background 120ms var(--ease-out)',
+      }}
+    >
+      {day}
     </button>
   );
 }

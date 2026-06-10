@@ -130,6 +130,25 @@ export function mapGantt(p) {
   return { bars, months, rangeLabel: `${fmtShort(start)} — ${fmtShort(end)}` };
 }
 
+// ── Track-timeline nodes (date-range runs from real track periods) ──────────
+const toISODate = (d) => { const x = new Date(d); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+export function mapNodes(p) {
+  const now = Date.now();
+  const out = [];
+  let i = 0;
+  for (const [key, label] of PHASES) {
+    for (const per of periodsOf(p, label)) {
+      if (!per.started_at) continue;
+      const start = new Date(per.started_at);
+      const completed = per.completed_at ? new Date(per.completed_at) : null;
+      const end = completed || new Date(Math.max(now, start.getTime() + MS_DAY));
+      const state = completed ? 'done' : (start.getTime() <= now ? 'inprogress' : 'planned');
+      out.push({ id: `${key}-${i++}`, lane: key, start: toISODate(start), end: toISODate(end), plannedEnd: toISODate(end), state, upd: null });
+    }
+  }
+  return out;
+}
+
 // ── Activity feed (derived from real track + project events) ────────────────
 export function mapActivity(p) {
   const owner = p.owner || 'System';
@@ -166,6 +185,9 @@ export function mapProjectSections(p, m, people, projectLinks) {
     bars,
     months,
     rangeLabel,
+    nodes: mapNodes(p),
+    projectState: { status: 'active', blockPhase: null, blockReason: null },
+    shipDate: null,
     activity: mapActivity(p),
   };
 }

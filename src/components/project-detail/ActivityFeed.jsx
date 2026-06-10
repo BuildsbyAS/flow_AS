@@ -38,7 +38,7 @@ const COLOR = {
   avatarBg: '#6E5649',
 };
 
-export default function ActivityFeed({ posts: initialPosts = mockActivityPosts }) {
+export default function ActivityFeed({ posts: initialPosts = mockActivityPosts, timelineEvents = [] }) {
   const [posts, setPosts] = useState(initialPosts);
   const [filter, setFilter] = useState('all'); // 'all' | 'updates'
   const [composer, setComposer] = useState('');
@@ -96,7 +96,10 @@ export default function ActivityFeed({ posts: initialPosts = mockActivityPosts }
     );
   }
 
-  const visiblePosts = filter === 'all' ? posts : posts.filter((p) => p.type === 'update');
+  // Timeline-change events (logged from the Track timeline) are live-merged on top
+  // of the seeded posts so every edit shows up in the audit feed immediately.
+  const merged = [...timelineEvents, ...posts];
+  const visiblePosts = filter === 'all' ? merged : merged.filter((p) => p.type === 'update' || p.type === 'event');
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -388,6 +391,12 @@ function Post({ post, onHeart, onThumbs }) {
               <Dot3 />
             </>
           )}
+          {post.type === 'event' && post.meta && (
+            <>
+              <span style={metaText}>{post.meta}</span>
+              <Dot3 />
+            </>
+          )}
           <span style={metaText}>{post.time}</span>
         </div>
 
@@ -413,8 +422,8 @@ function Post({ post, onHeart, onThumbs }) {
         {/* progress card */}
         {post.progress && <ProgressCard rows={post.progress} />}
 
-        {/* reactions */}
-        {post.content && (
+        {/* reactions — only on user updates, not on logged timeline events */}
+        {post.type === 'update' && post.content && post.reactions && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 8 }}>
             <HeartPill count={post.reactions.heart} liked={post.reactions.heartLiked} onClick={onHeart} />
             <ThumbsPill count={post.reactions.thumbs} liked={post.reactions.thumbsLiked} onClick={onThumbs} />

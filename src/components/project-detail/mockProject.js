@@ -117,32 +117,32 @@ export const PHASE_LABELS = {
   beta: 'Beta',
 };
 
-export const mockPhases = [
-  { key: 'prd', label: 'PRD', active: false, status: null },
-  { key: 'design', label: 'Design', active: true, status: { kind: 'live', text: 'Live for 12d' } },
-  { key: 'dev', label: 'Dev', active: true, status: { kind: 'live', text: 'Live for 4d' } },
-  { key: 'qa', label: 'QA', active: true, status: { kind: 'reopened', text: 'Re-opened 2d ago' } },
-  { key: 'alpha', label: 'Alpha', active: false, status: null },
-  { key: 'beta', label: 'Beta', active: false, status: null },
+// ── Track-timeline node model (Figma 850:14954, v2) ───────────────────────
+// Each node is a date-range "run" inside a phase lane. Dates are ISO strings
+// (inclusive start, exclusive end). `plannedEnd` freezes when a node is marked
+// done so the timeline can show an early/late ghost. `state` drives the
+// solid/dashed split-at-today rendering; `upd` is the latest change stamp.
+//
+// Seeded so today (≈ 10 Jun 2026) lands inside the Design run → it renders as a
+// solid "elapsed" head + dashed "remaining" tail. Window derives to Jun–Sep.
+// `running: true` = an open-ended phase that keeps ticking to "today" until the
+// user completes, changes, or pauses it (the start/stop model). A paused phase
+// has state 'paused' and a frozen end.
+export const mockNodes = [
+  { id: 'prd-1', lane: 'prd', start: '2026-06-01', end: '2026-06-05', plannedEnd: '2026-06-05', state: 'done', upd: { who: 'Saumya Garg', label: 'Marked done', at: '5d ago' } },
+  { id: 'prd-2', lane: 'prd', start: '2026-06-06', end: '2026-06-09', plannedEnd: '2026-06-08', state: 'done', upd: { who: 'Saumya Garg', label: 'Marked done', at: '1d ago' } },
+  { id: 'des-1', lane: 'design', start: '2026-06-08', end: '2026-06-08', plannedEnd: '2026-06-08', state: 'inprogress', running: true, upd: { who: 'Faraz Khan', label: 'Started', at: '3d ago' } },
+  { id: 'des-2', lane: 'design', start: '2026-08-08', end: '2026-09-04', plannedEnd: '2026-09-04', state: 'planned', upd: null },
+  { id: 'dev-1', lane: 'dev', start: '2026-06-24', end: '2026-08-09', plannedEnd: '2026-08-09', state: 'planned', upd: null },
+  { id: 'qa-1', lane: 'qa', start: '2026-09-02', end: '2026-09-26', plannedEnd: '2026-09-26', state: 'planned', upd: null },
 ];
 
-// Bars positioned in week units. Total span ≈ 24 weeks (Jan W1 → Jul W4).
-// startWeek + spanWeeks define horizontal placement on the Gantt.
-export const mockBars = [
-  { key: 'design-pre', phase: 'design', label: 'Discovery', startWeek: 0, spanWeeks: 4, dateRange: '4 Jan → 1 Feb', light: true },
-  { key: 'design', phase: 'design', label: 'Design', startWeek: 4, spanWeeks: 8, dateRange: '4 Jan → 12 Feb' },
-  { key: 'dev', phase: 'dev', label: 'Dev', startWeek: 10, spanWeeks: 7, dateRange: '8 Mar → 26 Apr' },
-  { key: 'qa', phase: 'qa', label: 'QA', startWeek: 16, spanWeeks: 7, dateRange: '26 Apr → 1 Jun' },
-];
+// Project-level state — separate from individual node state. A blocked/parked
+// project recolours every node but never mutates node records.
+export const mockProjectState = { status: 'active', blockPhase: null, blockReason: null };
 
-export const mockMonths = [
-  { key: 'jan', label: 'JAN', weeks: 4 },
-  { key: 'feb', label: 'FEB', weeks: 4 },
-  { key: 'mar', label: 'MAR', weeks: 4 },
-  { key: 'apr', label: 'APR', weeks: 4 },
-  { key: 'may', label: 'MAY', weeks: 4 },
-  { key: 'jun', label: 'JUN', weeks: 4 },
-];
+// Set when Beta is marked done (or the project is explicitly shipped). Null = projected.
+export const mockShipDate = null;
 
 // Activity feed v2 (Figma 624:16078) — posts with progress cards + reactions.
 export const mockActivityPosts = [
