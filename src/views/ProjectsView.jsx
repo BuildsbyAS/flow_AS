@@ -351,6 +351,91 @@ const TRACK_GLYPHS = {
   Beta: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0F8857" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 13l4 4L19 7"/></svg>,
 };
 
+// Category icons for the registry filter panel (left rail). stroke=currentColor
+// so the active/inactive tint is driven by the parent's color.
+const CAT_ICONS = {
+  squad: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+  owner: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+  track: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+  status: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>,
+  phase: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="20" x2="4" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="20" y1="20" x2="20" y2="14"/></svg>,
+  name: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>,
+};
+
+/* ══════════════════════════════════════════════════════════════════
+   REGISTRY FILTER QUERY-BUILDER (ClickUp-style: Field · Operator · Value)
+   ══════════════════════════════════════════════════════════════════ */
+// Status values mirror the project status vocabulary (see CLAUDE.md).
+const FD_STATUS_FILTER_OPTS = [
+  { value: "in_flight", label: "Active" },
+  { value: "upcoming", label: "Upcoming" },
+  { value: "blocked", label: "Blocked" },
+  { value: "shipped", label: "Shipped" },
+  { value: "deprioritized", label: "Deprioritised" },
+];
+// Field definitions. `type` drives which operators + value control render.
+// Dynamic option lists (squad/owner) are resolved at render via fieldOptions.
+const FILTER_FIELD_DEFS = [
+  { key: "squad",  label: "Squad",  icon: CAT_ICONS.squad,  type: "enum", valueIcon: CAT_ICONS.squad },
+  { key: "owner",  label: "Owner",  icon: CAT_ICONS.owner,  type: "enum", valueIcon: CAT_ICONS.owner },
+  { key: "track",  label: "Track",  icon: CAT_ICONS.track,  type: "enum" },
+  { key: "status", label: "Status", icon: CAT_ICONS.status, type: "enum" },
+  { key: "phase",  label: "Phase",  icon: CAT_ICONS.phase,  type: "enum" },
+  { key: "name",   label: "Name",   icon: CAT_ICONS.name,   type: "text" },
+];
+const FILTER_OPERATORS = {
+  enum: [{ key: "is", label: "Is" }, { key: "is_not", label: "Is not" }],
+  text: [{ key: "contains", label: "Contains" }, { key: "not_contains", label: "Doesn't contain" }],
+};
+const filterFieldDef = (key) => FILTER_FIELD_DEFS.find(f => f.key === key) || FILTER_FIELD_DEFS[0];
+const defaultOpForField = (key) => FILTER_OPERATORS[filterFieldDef(key).type][0].key;
+let _rowSeq = 0;
+const newFilterRow = (field = "squad") => ({
+  id: `fr_${Date.now()}_${_rowSeq++}`,
+  field,
+  op: defaultOpForField(field),
+  value: filterFieldDef(field).type === "text" ? "" : [],
+});
+// A row only constrains results once it has a value.
+const filterRowIsActive = (row) => {
+  const def = filterFieldDef(row.field);
+  return def.type === "text" ? (row.value || "").toString().trim().length > 0
+                             : Array.isArray(row.value) && row.value.length > 0;
+};
+// Does a single project satisfy one row? (metrics needed for track/status)
+const projectMatchesRow = (p, row, metrics) => {
+  const v = row.value;
+  switch (row.field) {
+    case "squad":  { const hit = (v || []).includes(p.squad); return row.op === "is_not" ? !hit : hit; }
+    case "owner":  { const hit = (v || []).includes(p.owner); return row.op === "is_not" ? !hit : hit; }
+    case "phase":  { const hit = (v || []).includes(p.phase); return row.op === "is_not" ? !hit : hit; }
+    case "track":  { const tr = metrics[p.id]?.activeTracks || []; const hit = (v || []).some(t => tr.includes(t)); return row.op === "is_not" ? !hit : hit; }
+    case "status": { const hit = (v || []).some(s => s === "blocked" ? (p.status === "blocked" || metrics[p.id]?.isBlocked) : p.status === s); return row.op === "is_not" ? !hit : hit; }
+    case "name":   { const q = (v || "").toString().trim().toLowerCase(); if (!q) return true; const inc = (p.name || "").toLowerCase().includes(q) || (p.id || "").toLowerCase().includes(q); return row.op === "not_contains" ? !inc : inc; }
+    default: return true;
+  }
+};
+// Apply a set of rows to a list with all/any combination. Inactive rows ignored.
+const applyFilterRows = (list, rows, mode, metrics) => {
+  const active = (rows || []).filter(filterRowIsActive);
+  if (!active.length) return list;
+  return list.filter(p => mode === "any"
+    ? active.some(r => projectMatchesRow(p, r, metrics))
+    : active.every(r => projectMatchesRow(p, r, metrics)));
+};
+// Shared styling for the query-builder controls (brown-tone palette).
+const fbTriggerStyle = (open, { placeholder = false, flex = false } = {}) => ({
+  display: "flex", alignItems: "center", gap: 6, height: 36,
+  padding: "0 10px", borderRadius: 9, cursor: "pointer",
+  border: `1px solid ${open ? "#8F583D" : "#EBDFD6"}`,
+  background: "#fff", fontSize: 14, color: placeholder ? "#A8917F" : "#58270E",
+  fontFamily: "inherit", whiteSpace: "nowrap", ...(flex ? { flex: 1, minWidth: 0 } : {}),
+});
+const FB_MENU_STYLE = { position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 60, background: "#fff", border: "1px solid #F1EAE4", borderRadius: 12, boxShadow: "0 14px 40px rgba(14,14,14,0.16)", maxHeight: 300, display: "flex", flexDirection: "column", overflow: "hidden" };
+const FB_ITEM_STYLE = { display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", padding: "8px 9px", borderRadius: 8, border: "none", background: "transparent", fontSize: 14, color: "#58270E", cursor: "pointer", fontFamily: "inherit" };
+const FB_CHECK = <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+const FbChevron = ({ open }) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A8917F" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 150ms" }}><polyline points="6 9 12 15 18 9"/></svg>;
+
 // ── Project deep-dive sidebar card (Figma): header (title + Add) · divider · body ──
 function SidebarCard({ title, onAdd, children }) {
   return (
@@ -835,21 +920,76 @@ export default function ProjectsView({
   const toastAnim = useExitAnimation(!!createError, 150);
   const successToastAnim = useExitAnimation(!!createSuccess, 200);
   const [listSquadFilter, setListSquadFilter] = useState("");
-  // ── Registry filter dropdown (Squad / Owner / Track / Status) ──
+  // ── Registry filter — ClickUp-style query builder (Field · Operator · Value) ──
+  // Committed rows drive the table; the panel edits a *draft* (rows + match mode)
+  // that is only written to the committed state on "Apply".
   const [filterOpen, setFilterOpen] = useState(false);
-  const [fSquads, setFSquads] = useState([]);
-  const [fOwners, setFOwners] = useState([]);
-  const [fTracks, setFTracks] = useState([]);
-  const [fStatuses, setFStatuses] = useState([]);
-  const filterRef = useRef(null);
-  const activeFilterCount = fSquads.length + fOwners.length + fTracks.length + fStatuses.length;
-  const clearAllFilters = () => { setFSquads([]); setFOwners([]); setFTracks([]); setFStatuses([]); };
+  const [appliedRows, setAppliedRows] = useState([]);          // committed
+  const [appliedMatchMode, setAppliedMatchMode] = useState("all"); // "all" | "any"
+  const [draftRows, setDraftRows] = useState([]);              // panel-local
+  const [draftMatchMode, setDraftMatchMode] = useState("all");
+  const [openMenu, setOpenMenu] = useState(null);             // { rowId, which: "field"|"op"|"value" } | "saved"
+  const [menuSearch, setMenuSearch] = useState("");           // search inside the open field/value menu
+  const [savingName, setSavingName] = useState(null);         // string while naming a save, else null
+  const [savedFilters, setSavedFilters] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("flow_saved_filters") || "[]"); } catch { return []; }
+  });
+  const filterRef = useRef(null);     // whole panel (for outside-click → close panel)
+  const openWrapRef = useRef(null);   // the currently-open control wrapper (for outside-click → close menu)
+  const activeFilterCount = appliedRows.filter(filterRowIsActive).length;
+  const draftActiveCount = draftRows.filter(filterRowIsActive).length;
+
+  const persistSaved = useCallback((next) => {
+    setSavedFilters(next);
+    try { localStorage.setItem("flow_saved_filters", JSON.stringify(next)); } catch { /* ignore */ }
+  }, []);
+  // Row mutations (all operate on the draft)
+  const updateRow = (id, patch) => setDraftRows(rows => rows.map(r => r.id === id ? { ...r, ...patch } : r));
+  const changeRowField = (id, field) => updateRow(id, { field, op: defaultOpForField(field), value: filterFieldDef(field).type === "text" ? "" : [] });
+  const toggleRowValue = (id, val) => setDraftRows(rows => rows.map(r => {
+    if (r.id !== id) return r;
+    const arr = Array.isArray(r.value) ? r.value : [];
+    return { ...r, value: arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val] };
+  }));
+  const deleteRow = (id) => setDraftRows(rows => rows.filter(r => r.id !== id));
+  const addRow = () => setDraftRows(rows => [...rows, newFilterRow()]);
+  const clearDraftFilters = () => { setDraftRows([newFilterRow()]); setDraftMatchMode("all"); setOpenMenu(null); };
+  const applyDraftFilters = () => {
+    setAppliedRows(draftRows.map(r => ({ ...r })));
+    setAppliedMatchMode(draftMatchMode);
+    setFilterOpen(false);
+  };
+  const loadSavedFilter = (sf) => {
+    setDraftRows((sf.rows || []).map(r => ({ ...r, id: newFilterRow().id })));
+    setDraftMatchMode(sf.matchMode || "all");
+    setOpenMenu(null);
+  };
+  const saveCurrentFilter = (name) => {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    const entry = { id: `sf_${Date.now()}`, name: trimmed, matchMode: draftMatchMode, rows: draftRows.filter(filterRowIsActive).map(r => ({ field: r.field, op: r.op, value: r.value })) };
+    persistSaved([...savedFilters, entry]);
+    setSavingName(null);
+  };
+  const deleteSavedFilter = (id) => persistSaved(savedFilters.filter(s => s.id !== id));
+
+  // On open: seed the draft from committed rows (or a single empty row), and
+  // wire outside-click — outside the panel closes the panel; inside the panel
+  // but outside the open menu closes just that menu.
   useEffect(() => {
     if (!filterOpen) return;
-    const h = (e) => { if (filterRef.current && !filterRef.current.contains(e.target)) setFilterOpen(false); };
+    setDraftRows(appliedRows.length ? appliedRows.map(r => ({ ...r })) : [newFilterRow()]);
+    setDraftMatchMode(appliedMatchMode);
+    setOpenMenu(null); setMenuSearch(""); setSavingName(null);
+    const h = (e) => {
+      if (!filterRef.current?.contains(e.target)) { setFilterOpen(false); return; }
+      if (openWrapRef.current && !openWrapRef.current.contains(e.target)) setOpenMenu(null);
+    };
     document.addEventListener("mousedown", h);
     return () => document.removeEventListener("mousedown", h);
-  }, [filterOpen]);
+  }, [filterOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Reset the per-menu search whenever the open menu changes.
+  useEffect(() => { setMenuSearch(""); }, [openMenu]);
   const [pinnedIds, setPinnedIds] = useState(() => {
     try { return new Set(JSON.parse(sessionStorage.getItem("flow_pinned_projects") || "[]")); }
     catch { return new Set(); }
@@ -873,7 +1013,6 @@ export default function ProjectsView({
   const [ganttSquads, setGanttSquads] = useState([]);
   const [ganttOwners, setGanttOwners] = useState([]);
   const [ganttPhases, setGanttPhases] = useState([]);
-  const toggleFilter = (setter, val) => setter(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
   const ganttSearchRef = useRef(null);
   const localSearchRef = useRef(null);
   // Drag-and-drop state for board view (must be at component level, not inside conditional IIFE)
@@ -941,8 +1080,8 @@ export default function ProjectsView({
     }
   }, [initialId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Filter (search + global) ──
-  const filtered = useMemo(() => {
+  // ── Base filter (search + global + lens + timeframe), EXCLUDING the panel filters ──
+  const baseFiltered = useMemo(() => {
     let list = projects;
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -960,12 +1099,6 @@ export default function ProjectsView({
     if ((globalFilters.track || []).length > 0) {
       list = list.filter(p => globalFilters.track.some(t => (metrics[p.id]?.activeTracks || []).includes(t)));
     }
-    // Registry filter dropdown (view-local: Squad / Owner / Track / Status)
-    if (fSquads.length) list = list.filter(p => fSquads.includes(p.squad));
-    if (fOwners.length) list = list.filter(p => fOwners.includes(p.owner));
-    if (fTracks.length) list = list.filter(p => fTracks.some(t => (metrics[p.id]?.activeTracks || []).includes(t)));
-    if (fStatuses.length) list = list.filter(p => fStatuses.some(s =>
-      s === "blocked" ? (p.status === "blocked" || metrics[p.id]?.isBlocked) : p.status === s));
     // My Lens: show only followed projects (auto-followed squad + explicit follows)
     if (myLens) {
       list = list.filter(p => followedProjects.includes(p.id));
@@ -983,7 +1116,18 @@ export default function ProjectsView({
       });
     }
     return list;
-  }, [projects, search, globalFilters, metrics, listSquadFilter, fSquads, fOwners, fTracks, fStatuses, myLens, personProfile, followedProjects, timeframe]);
+  }, [projects, search, globalFilters, metrics, listSquadFilter, myLens, personProfile, followedProjects, timeframe]);
+
+  // Committed query-builder rows → drives the table.
+  const filtered = useMemo(
+    () => applyFilterRows(baseFiltered, appliedRows, appliedMatchMode, metrics),
+    [baseFiltered, appliedRows, appliedMatchMode, metrics]
+  );
+  // Draft rows → live "Apply" preview count in the panel footer.
+  const draftMatchCount = useMemo(
+    () => applyFilterRows(baseFiltered, draftRows, draftMatchMode, metrics).length,
+    [baseFiltered, draftRows, draftMatchMode, metrics]
+  );
 
   // ── Tab splits ──
   // When a search query is active, bypass the tab filter so results surface
@@ -1061,19 +1205,24 @@ export default function ProjectsView({
     [squads, projects]
   );
   const allOwners = useMemo(() => people ? people.map(p => p.name).sort() : [...new Set(projects.map(p => p.owner).filter(Boolean))].sort(), [projects, people]);
-  // Options for the registry filter dropdown
-  const filterSections = useMemo(() => [
-    { key: "squad", label: "Squad", selected: fSquads, setter: setFSquads, options: allSquads.map(s => ({ value: s, label: s })) },
-    { key: "owner", label: "Owner", selected: fOwners, setter: setFOwners, options: allOwners.map(o => ({ value: o, label: o })) },
-    { key: "track", label: "Track", selected: fTracks, setter: setFTracks, options: trackNames.map(t => ({ value: t, label: t })) },
-    { key: "status", label: "Status", selected: fStatuses, setter: setFStatuses, options: [
-      { value: "in_flight", label: "Active" },
-      { value: "upcoming", label: "Upcoming" },
-      { value: "blocked", label: "Blocked" },
-      { value: "shipped", label: "Shipped" },
-      { value: "deprioritized", label: "Deprioritised" },
-    ] },
-  ], [allSquads, allOwners, fSquads, fOwners, fTracks, fStatuses]);
+  // Value options per filter field (the query-builder's third control).
+  const fieldOptions = useMemo(() => ({
+    squad: allSquads.map(s => ({ value: s, label: s })),
+    owner: allOwners.map(o => ({ value: o, label: o })),
+    track: trackNames.map(t => ({ value: t, label: t })),
+    status: FD_STATUS_FILTER_OPTS,
+    phase: allPhases.map(p => ({ value: p, label: p })),
+  }), [allSquads, allOwners]);
+  // Compact label for a row's value-control trigger.
+  const rowValueSummary = (row) => {
+    const def = filterFieldDef(row.field);
+    if (def.type === "text") return (row.value || "").trim();
+    const sel = row.value || [];
+    if (!sel.length) return "";
+    const opts = fieldOptions[row.field] || [];
+    if (sel.length === 1) return (opts.find(o => o.value === sel[0])?.label) || sel[0];
+    return `${sel.length} selected`;
+  };
   const ganttProjects = useMemo(() => {
     let list = projects;
     if (ganttSearch.trim()) {
@@ -1487,51 +1636,250 @@ export default function ProjectsView({
                 )}
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7E5E4E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: filterOpen ? "rotate(180deg)" : "none", transition: "transform 150ms" }}><polyline points="6 9 12 15 18 9"/></svg>
               </button>
-              {filterOpen && (
-                <div style={{
-                  position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 200,
-                  background: FD.surface, border: "1px solid #F1EAE4", borderRadius: 14,
-                  boxShadow: c.shadowFloat || "0 12px 40px rgba(14,14,14,0.16)",
-                  width: 308, maxHeight: 480, display: "flex", flexDirection: "column", overflow: "hidden",
-                }}>
-                  <div style={{ overflowY: "auto", padding: "6px 6px 2px" }}>
-                    {filterSections.map(sec => (
-                      <div key={sec.key} style={{ padding: "8px 8px 12px" }}>
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                          <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9C8576" }}>{sec.label}</span>
-                          {sec.selected.length > 0 && (
-                            <button type="button" onClick={() => sec.setter([])} style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 12, color: "#8F583D", padding: 0 }}>Clear</button>
-                          )}
+              {filterOpen && (() => {
+                const isSavedOpen = openMenu === "saved";
+                const canClear = draftActiveCount > 0 || draftRows.length > 1 || draftMatchMode !== "all";
+                return (
+                <Motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.985 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+                  style={{
+                    position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 200,
+                    background: FD.surface, border: "1px solid #F1EAE4", borderRadius: 16,
+                    boxShadow: c.shadowFloat || "0 16px 48px rgba(14,14,14,0.18)",
+                    width: 700, maxWidth: "calc(100vw - 48px)", display: "flex", flexDirection: "column",
+                  }}>
+                  {/* ── Header: title + saved filters ── */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px 10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: 15, fontWeight: 600, color: "#3D1F12" }}>Filters</span>
+                      {draftActiveCount > 0 && (
+                        <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11, fontWeight: 600, lineHeight: 1, color: "#fff", background: "#8F583D", borderRadius: 9999, minWidth: 18, height: 18, padding: "0 5px", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{draftActiveCount}</span>
+                      )}
+                    </div>
+                    <div ref={isSavedOpen ? openWrapRef : null} style={{ position: "relative" }}>
+                      <button type="button" onClick={() => setOpenMenu(m => m === "saved" ? null : "saved")} style={{ ...fbTriggerStyle(isSavedOpen), gap: 7 }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8F583D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                        Saved filters
+                        <FbChevron open={isSavedOpen} />
+                      </button>
+                      {isSavedOpen && (
+                        <div style={{ ...FB_MENU_STYLE, left: "auto", right: 0, width: 252 }}>
+                          <div style={{ overflowY: "auto", padding: 6, maxHeight: 248 }}>
+                            {savedFilters.length ? savedFilters.map(sf => (
+                              <div key={sf.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                                <button type="button" onClick={() => loadSavedFilter(sf)}
+                                  onMouseEnter={e => { e.currentTarget.style.background = "#FAF7F5"; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+                                  style={{ ...FB_ITEM_STYLE, flex: 1, minWidth: 0 }}>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#A8917F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{sf.name}</span>
+                                  <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11, color: "#A8917F" }}>{(sf.rows || []).length}</span>
+                                </button>
+                                <button type="button" onClick={() => deleteSavedFilter(sf.id)} aria-label="Delete saved filter"
+                                  onMouseEnter={e => { e.currentTarget.style.color = "#C0492B"; }}
+                                  onMouseLeave={e => { e.currentTarget.style.color = "#C9BAB0"; }}
+                                  style={{ flexShrink: 0, width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "transparent", color: "#C9BAB0", cursor: "pointer", borderRadius: 7 }}>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                              </div>
+                            )) : <div style={{ padding: "18px 12px", textAlign: "center", color: "#A8917F", fontSize: 13 }}>No saved filters yet.</div>}
+                          </div>
                         </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                          {sec.options.map(opt => {
-                            const on = sec.selected.includes(opt.value);
-                            return (
-                              <button key={opt.value} type="button" onClick={() => toggleFilter(sec.setter, opt.value)} style={{
-                                display: "inline-flex", alignItems: "center", gap: 4,
-                                padding: "5px 10px", borderRadius: 9999, cursor: "pointer",
-                                border: `1px solid ${on ? "#8F583D" : "#F1EAE4"}`,
-                                background: on ? "#280E01" : FD.surface,
-                                color: on ? "#fff" : "#7E5E4E",
-                                fontSize: 13, fontWeight: on ? 500 : 400, lineHeight: 1.4,
-                                transition: "background 120ms, border-color 120ms",
-                              }}>{sec.key === "track" && TRACK_GLYPHS[opt.value]}{opt.label}</button>
-                            );
-                          })}
-                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ── Match mode (And/Or) — shown once there are 2+ rows ── */}
+                  {draftRows.length > 1 && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 16px 12px", fontSize: 13, color: "#7E5E4E" }}>
+                      <span>Match</span>
+                      <div style={{ display: "inline-flex", background: "#F4EEEB", borderRadius: 8, padding: 2 }}>
+                        {[["all", "All"], ["any", "Any"]].map(([k, lbl]) => {
+                          const on = draftMatchMode === k;
+                          return (
+                            <button key={k} type="button" onClick={() => setDraftMatchMode(k)} style={{
+                              padding: "4px 12px", borderRadius: 6, border: "none", cursor: "pointer",
+                              fontSize: 13, fontWeight: on ? 600 : 400, fontFamily: "inherit",
+                              background: on ? "#fff" : "transparent", color: on ? "#58270E" : "#9C8576",
+                              boxShadow: on ? "0 1px 1px rgba(14,14,14,0.08)" : "none",
+                            }}>{lbl}</button>
+                          );
+                        })}
                       </div>
-                    ))}
+                      <span>of the following</span>
+                    </div>
+                  )}
+
+                  {/* ── Filter rows ── */}
+                  <div style={{ padding: "0 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                    {draftRows.length === 0 && (
+                      <div style={{ padding: "10px 2px 4px", color: "#A8917F", fontSize: 13 }}>No filters yet — add one to narrow the list.</div>
+                    )}
+                    {draftRows.map(row => {
+                      const def = filterFieldDef(row.field);
+                      const ops = FILTER_OPERATORS[def.type];
+                      const valOpts = fieldOptions[row.field] || [];
+                      const isFieldOpen = openMenu?.rowId === row.id && openMenu?.which === "field";
+                      const isOpOpen = openMenu?.rowId === row.id && openMenu?.which === "op";
+                      const isValOpen = openMenu?.rowId === row.id && openMenu?.which === "value";
+                      const opLabel = (ops.find(o => o.key === row.op) || ops[0]).label;
+                      const summary = rowValueSummary(row);
+                      const mq = menuSearch.trim().toLowerCase();
+                      return (
+                        <div key={row.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          {/* FIELD (Category) */}
+                          <div ref={isFieldOpen ? openWrapRef : null} style={{ position: "relative", width: 168, flexShrink: 0 }}>
+                            <button type="button" onClick={() => setOpenMenu(m => (m?.rowId === row.id && m?.which === "field") ? null : { rowId: row.id, which: "field" })} style={{ ...fbTriggerStyle(isFieldOpen), width: "100%" }}>
+                              <span style={{ display: "flex", color: "#8F583D" }}>{def.icon}</span>
+                              <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{def.label}</span>
+                              <FbChevron open={isFieldOpen} />
+                            </button>
+                            {isFieldOpen && (
+                              <div style={{ ...FB_MENU_STYLE, width: 244 }}>
+                                <div style={{ padding: 8, borderBottom: "1px solid #F4EEEB" }}>
+                                  <input autoFocus value={menuSearch} onChange={e => setMenuSearch(e.target.value)} placeholder="Search…" style={{ width: "100%", height: 32, border: "1px solid #EBDFD6", borderRadius: 8, padding: "0 10px", fontSize: 14, color: "#58270E", outline: "none", fontFamily: "inherit", background: "#FBF9F8", boxSizing: "border-box" }} />
+                                </div>
+                                <div style={{ overflowY: "auto", padding: 6 }}>
+                                  {FILTER_FIELD_DEFS.filter(f => f.label.toLowerCase().includes(mq)).map(f => {
+                                    const sel = f.key === row.field;
+                                    return (
+                                      <button key={f.key} type="button" onClick={() => { changeRowField(row.id, f.key); setOpenMenu(null); }}
+                                        onMouseEnter={e => { if (!sel) e.currentTarget.style.background = "#FAF7F5"; }}
+                                        onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "transparent"; }}
+                                        style={{ ...FB_ITEM_STYLE, background: sel ? "#FBF4EF" : "transparent", fontWeight: sel ? 600 : 400 }}>
+                                        <span style={{ display: "flex", color: "#8F583D" }}>{f.icon}</span>
+                                        <span style={{ flex: 1 }}>{f.label}</span>
+                                        {sel && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8F583D" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {/* OPERATOR */}
+                          <div ref={isOpOpen ? openWrapRef : null} style={{ position: "relative", width: 124, flexShrink: 0 }}>
+                            <button type="button" onClick={() => setOpenMenu(m => (m?.rowId === row.id && m?.which === "op") ? null : { rowId: row.id, which: "op" })} style={{ ...fbTriggerStyle(isOpOpen), width: "100%" }}>
+                              <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis" }}>{opLabel}</span>
+                              <FbChevron open={isOpOpen} />
+                            </button>
+                            {isOpOpen && (
+                              <div style={{ ...FB_MENU_STYLE, width: 180 }}>
+                                <div style={{ padding: 6 }}>
+                                  {ops.map(o => {
+                                    const sel = o.key === row.op;
+                                    return (
+                                      <button key={o.key} type="button" onClick={() => { updateRow(row.id, { op: o.key }); setOpenMenu(null); }}
+                                        onMouseEnter={e => { if (!sel) e.currentTarget.style.background = "#FAF7F5"; }}
+                                        onMouseLeave={e => { if (!sel) e.currentTarget.style.background = "transparent"; }}
+                                        style={{ ...FB_ITEM_STYLE, background: sel ? "#FBF4EF" : "transparent", fontWeight: sel ? 600 : 400 }}>
+                                        <span style={{ flex: 1 }}>{o.label}</span>
+                                        {sel && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8F583D" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {/* VALUE (Attribute) */}
+                          {def.type === "text" ? (
+                            <input value={row.value || ""} onChange={e => updateRow(row.id, { value: e.target.value })} placeholder="Enter text…" style={{ flex: 1, minWidth: 0, height: 36, border: "1px solid #EBDFD6", borderRadius: 9, padding: "0 12px", fontSize: 14, color: "#58270E", outline: "none", fontFamily: "inherit", background: "#fff", boxSizing: "border-box" }} />
+                          ) : (
+                            <div ref={isValOpen ? openWrapRef : null} style={{ position: "relative", flex: 1, minWidth: 0 }}>
+                              <button type="button" onClick={() => setOpenMenu(m => (m?.rowId === row.id && m?.which === "value") ? null : { rowId: row.id, which: "value" })} style={fbTriggerStyle(isValOpen, { placeholder: !summary, flex: true })}>
+                                {def.valueIcon && <span style={{ display: "flex", color: "#A8917F" }}>{def.valueIcon}</span>}
+                                <span style={{ flex: 1, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary || `Select ${def.label.toLowerCase()}`}</span>
+                                <FbChevron open={isValOpen} />
+                              </button>
+                              {isValOpen && (
+                                <div style={{ ...FB_MENU_STYLE, left: 0, right: 0, minWidth: 220 }}>
+                                  <div style={{ padding: 8, borderBottom: "1px solid #F4EEEB" }}>
+                                    <input autoFocus value={menuSearch} onChange={e => setMenuSearch(e.target.value)} placeholder={`Search ${def.label.toLowerCase()}…`} style={{ width: "100%", height: 32, border: "1px solid #EBDFD6", borderRadius: 8, padding: "0 10px", fontSize: 14, color: "#58270E", outline: "none", fontFamily: "inherit", background: "#FBF9F8", boxSizing: "border-box" }} />
+                                  </div>
+                                  <div style={{ overflowY: "auto", padding: 6 }}>
+                                    {valOpts.filter(o => o.label.toLowerCase().includes(mq)).map(o => {
+                                      const checked = (row.value || []).includes(o.value);
+                                      return (
+                                        <button key={o.value} type="button" onClick={() => toggleRowValue(row.id, o.value)}
+                                          onMouseEnter={e => { if (!checked) e.currentTarget.style.background = "#FAF7F5"; }}
+                                          onMouseLeave={e => { if (!checked) e.currentTarget.style.background = "transparent"; }}
+                                          style={{ ...FB_ITEM_STYLE, background: checked ? "#FBF4EF" : "transparent" }}>
+                                          <span style={{ width: 18, height: 18, borderRadius: 6, flexShrink: 0, border: `1.5px solid ${checked ? "#280E01" : "#D8C8BC"}`, background: checked ? "#280E01" : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{checked && FB_CHECK}</span>
+                                          {row.field === "track" && <span style={{ display: "flex" }}>{TRACK_GLYPHS[o.value]}</span>}
+                                          <span style={{ flex: 1, fontWeight: checked ? 500 : 400 }}>{o.label}</span>
+                                        </button>
+                                      );
+                                    })}
+                                    {!valOpts.filter(o => o.label.toLowerCase().includes(mq)).length && (
+                                      <div style={{ padding: "16px 10px", textAlign: "center", color: "#A8917F", fontSize: 13 }}>No matches</div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {/* DELETE ROW */}
+                          <button type="button" onClick={() => deleteRow(row.id)} aria-label="Delete filter" title="Delete this filter"
+                            onMouseEnter={e => { e.currentTarget.style.background = "#FBEAE6"; e.currentTarget.style.borderColor = "#E6C3B8"; e.currentTarget.style.color = "#C0492B"; }}
+                            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "#EBDFD6"; e.currentTarget.style.color = "#A8917F"; }}
+                            style={{ flexShrink: 0, width: 36, height: 36, display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #EBDFD6", borderRadius: 9, background: "transparent", color: "#A8917F", cursor: "pointer", transition: "background 120ms, color 120ms, border-color 120ms" }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {/* Add another */}
+                    <button type="button" onClick={addRow} style={{ display: "inline-flex", alignItems: "center", gap: 7, alignSelf: "flex-start", marginTop: 2, padding: "8px 12px", borderRadius: 9, border: "1px dashed #D8C8BC", background: "transparent", color: "#8F583D", fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      Add another
+                    </button>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderTop: "1px solid #F4EEEB", background: "#FBF9F8" }}>
-                    <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12, color: "#6E5649" }}>{tabProjects.length} project{tabProjects.length === 1 ? "" : "s"}</span>
-                    <button type="button" onClick={clearAllFilters} disabled={!activeFilterCount} style={{
+
+                  {/* ── Inline "save this filter" naming row ── */}
+                  {savingName !== null && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px 0", marginTop: 12, borderTop: "1px solid #F4EEEB", paddingTop: 12 }}>
+                      <input autoFocus value={savingName} onChange={e => setSavingName(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") saveCurrentFilter(savingName); if (e.key === "Escape") setSavingName(null); }}
+                        placeholder="Name this filter…" style={{ flex: 1, height: 36, border: "1px solid #EBDFD6", borderRadius: 9, padding: "0 12px", fontSize: 14, color: "#58270E", outline: "none", fontFamily: "inherit", background: "#FBF9F8", boxSizing: "border-box" }} />
+                      <button type="button" onClick={() => setSavingName(null)} style={{ height: 36, padding: "0 12px", borderRadius: 9, border: "1px solid #EBDFD6", background: "#fff", color: "#7E5E4E", fontSize: 14, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                      <button type="button" onClick={() => saveCurrentFilter(savingName)} disabled={!savingName.trim()} style={{ height: 36, padding: "0 14px", borderRadius: 9, border: "none", background: savingName.trim() ? "#280E01" : "#E3D7CE", color: savingName.trim() ? "#fff" : "#B7A597", fontSize: 14, fontWeight: 600, cursor: savingName.trim() ? "pointer" : "default", fontFamily: "inherit" }}>Save</button>
+                    </div>
+                  )}
+
+                  {/* ── Footer: clear · save · apply ── */}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", marginTop: 14, borderTop: "1px solid #F4EEEB", background: "#FBF9F8", borderRadius: "0 0 16px 16px" }}>
+                    <button type="button" onClick={clearDraftFilters} disabled={!canClear} style={{
                       border: "none", background: "transparent",
-                      cursor: activeFilterCount ? "pointer" : "default",
-                      fontSize: 13, fontWeight: 500, color: activeFilterCount ? "#8F583D" : "#C9BAB0", padding: 0,
+                      cursor: canClear ? "pointer" : "default",
+                      fontSize: 14, fontWeight: 500, color: canClear ? "#8F583D" : "#C9BAB0",
+                      padding: "8px 4px", textDecoration: canClear ? "underline" : "none", textUnderlineOffset: 3, fontFamily: "inherit",
                     }}>Clear all</button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <button type="button" onClick={() => setSavingName(savingName === null ? "" : null)} disabled={!draftActiveCount} style={{
+                        display: "inline-flex", alignItems: "center", gap: 7,
+                        height: 38, padding: "0 14px", borderRadius: 10, border: "1px solid #EBDFD6",
+                        background: "#fff", color: draftActiveCount ? "#7E5E4E" : "#C9BAB0",
+                        fontSize: 14, fontWeight: 500, cursor: draftActiveCount ? "pointer" : "default", fontFamily: "inherit",
+                      }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                        Save
+                      </button>
+                      <button type="button" onClick={applyDraftFilters} style={{
+                        display: "inline-flex", alignItems: "center", gap: 8,
+                        height: 38, padding: "0 18px", borderRadius: 10, cursor: "pointer", border: "none",
+                        background: "#280E01", color: "#fff", fontSize: 14, fontWeight: 600, fontFamily: "inherit",
+                      }}>
+                        Apply
+                        <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.62)" }}>{draftMatchCount}</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                </Motion.div>
+                );
+              })()}
             </div>
             {[
               { key: "all", label: "All", count: summary.all },
